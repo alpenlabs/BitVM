@@ -362,6 +362,7 @@ mod tests {
     use num_bigint::RandBigInt;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
+    use seq_macro::seq;
 
     use super::*;
 
@@ -403,5 +404,43 @@ mod tests {
         }
 
         println!("{:?}", res.stats);
+    }
+
+    #[test]
+    fn test_254_bit_windowed_op_tmul_fuzzy() {
+        type W<const WINDOW: u32> = WinBigIntImpl<254, 30, WINDOW>;
+
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+
+        seq!(WINDOW in 1..=4 {
+            print!("254-bit-windowed-op-tmul-{}-bit-window, script_size: {}", WINDOW, W::<WINDOW>::OP_TMUL().len());
+
+            let mut max_stack_items: usize = 0;
+
+            for _ in 0..100 {
+                let p = W::<WINDOW>::modulus();
+                let x = prng.gen_biguint_below(&p);
+                let y = prng.gen_biguint_below(&p);
+                let c = &x * &y;
+                let q = &c / &p;
+                let r = &c % &p;
+
+                let script = script! {
+                    { W::<WINDOW>::U::push_u32_le(&q.to_u32_digits()) }
+                    { W::<WINDOW>::U::push_u32_le(&x.to_u32_digits()) }
+                    { W::<WINDOW>::U::push_u32_le(&y.to_u32_digits()) }
+                    { W::<WINDOW>::OP_TMUL() }
+                    { W::<WINDOW>::U::push_u32_le(&r.to_u32_digits()) }
+                    { W::<WINDOW>::U::equalverify(1, 0) }
+                    OP_TRUE
+                };
+
+                let res = execute_script(script);
+                assert!(res.success);
+                max_stack_items = res.stats.max_nb_stack_items;
+            }
+
+            println!(", max_stack_usage: {}", max_stack_items);
+        });
     }
 }
