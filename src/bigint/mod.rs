@@ -3,6 +3,7 @@ pub mod bits;
 pub mod cmp;
 pub mod inv;
 pub mod mul;
+pub mod op_tmul;
 pub mod std;
 pub mod sub;
 pub mod u29x9;

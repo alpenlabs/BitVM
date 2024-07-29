@@ -1,3 +1,6 @@
+#![feature(generic_const_exprs)]
+#![feature(inherent_associated_types)]
+
 #[allow(dead_code)]
 // Re-export what is needed to write treepp scripts
 pub mod treepp {
@@ -93,7 +96,6 @@ impl fmt::Display for ExecuteInfo {
     }
 }
 
-
 pub fn execute_script(script: treepp::Script) -> ExecuteInfo {
     let mut exec = Exec::new(
         ExecCtx::Tapscript,
@@ -130,11 +132,13 @@ pub fn execute_script(script: treepp::Script) -> ExecuteInfo {
     }
 }
 
-
-pub fn run(script: treepp::Script){
+pub fn run(script: treepp::Script) {
     let exec_result = execute_script(script);
     if !exec_result.success {
-        println!("ERROR: {:?} <--- \n STACK: {:4} ", exec_result.last_opcode, exec_result.final_stack);
+        println!(
+            "ERROR: {:?} <--- \n STACK: {:4} ",
+            exec_result.last_opcode, exec_result.final_stack
+        );
     }
     assert!(exec_result.success);
 }
@@ -184,7 +188,11 @@ pub fn execute_script_without_stack_limit(script: treepp::Script) -> ExecuteInfo
     }
 }
 
-pub fn execute_script_as_chunks(script: treepp::Script, target_chunk_size: usize, tolerance: usize) -> ExecuteInfo {
+pub fn execute_script_as_chunks(
+    script: treepp::Script,
+    target_chunk_size: usize,
+    tolerance: usize,
+) -> ExecuteInfo {
     let (chunks, script) = script.compile_to_chunks(target_chunk_size, tolerance);
     //TODO: Rerun for all the slices constructed with chunks entries
     let mut exec = Exec::new(
@@ -201,7 +209,7 @@ pub fn execute_script_as_chunks(script: treepp::Script, target_chunk_size: usize
             input_idx: 0,
             taproot_annex_scriptleaf: Some((TapLeafHash::all_zeros(), None)),
         },
-        script,
+        script[0].clone(),
         vec![],
     )
     .expect("error creating exec");
