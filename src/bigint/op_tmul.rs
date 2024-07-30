@@ -97,6 +97,9 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32>
 {
     pub const N_BITS: u32 = N_BITS;
     pub const LIMB_SIZE: u32 = LIMB_SIZE;
+    pub const N_LIMBS: u32 = (N_BITS + LIMB_SIZE - 1) / LIMB_SIZE;
+    pub const N_WINDOW: u32 = (N_BITS + WINDOW - 1) / WINDOW;
+
     pub const DECOMPOSITION_SIZE: u32 = Self::decomposition_size(Self::N_BITS, WINDOW); // num coefficients in w-width form
 
     type U = BigIntImpl<N_BITS, LIMB_SIZE>; // unsigned BigInt
@@ -122,61 +125,66 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32>
             .expect("bit_decomp_modulus: should not fail")
     }
 
-    fn bit_decomp_script(index: u32, src_depth: u32) -> Script {
-        let n_limbs = (Self::N_BITS + Self::LIMB_SIZE - 1) / Self::LIMB_SIZE;
-        let n_window = (Self::N_BITS + WINDOW - 1) / WINDOW;
+    fn bit_decomp_script_generator() -> impl FnMut(u32) -> Script {
+        let n_limbs = Self::N_LIMBS;
+        let n_window = Self::N_WINDOW;
         let limb_size = Self::LIMB_SIZE;
 
-        let index = n_window - index;
-        let lookup_offset = n_limbs * src_depth;
+        let mut index = n_window + 1;
 
-        let s_bit = index * WINDOW - 1; // start bit
-        let e_bit = (index - 1) * WINDOW; // end bit
+        move |src_depth: u32| {
+            index -= 1;
 
-        let s_limb = s_bit / limb_size; // start bit limb
-        let e_limb = e_bit / limb_size; // end bit limb
+            let lookup_offset = n_limbs * src_depth;
 
-        script! {
-            { 0 }
-            if index == n_window { // initialize accumulator to track reduced limb
+            let s_bit = index * WINDOW - 1; // start bit
+            let e_bit = (index - 1) * WINDOW; // end bit
 
-                { lookup_offset + s_limb + 1 } OP_PICK
+            let s_limb = s_bit / limb_size; // start bit limb
+            let e_limb = e_bit / limb_size; // end bit limb
 
-            } else if (s_bit + 1) % limb_size == 0  { // drop current and initialize next accumulator
+            script! {
+                { 0 }
+                if index == n_window { // initialize accumulator to track reduced limb
 
-                OP_FROMALTSTACK OP_DROP
-                { lookup_offset + s_limb + 1 } OP_PICK
+                    { lookup_offset + s_limb + 1 } OP_PICK
 
-            } else {
-                OP_FROMALTSTACK // load accumulator from altstack
-            }
+                } else if (s_bit + 1) % limb_size == 0  { // drop current and initialize next accumulator
 
-            for i in 0..WINDOW {
-                if s_limb > e_limb {
-                    if i % limb_size == (s_bit % limb_size) + 1 {
-                        // window is split between multiple limbs
-                        OP_DROP
-                        { lookup_offset + e_limb + 1 } OP_PICK
+                    OP_FROMALTSTACK OP_DROP
+                    { lookup_offset + s_limb + 1 } OP_PICK
+
+                } else {
+                    OP_FROMALTSTACK // load accumulator from altstack
+                }
+
+                for i in 0..WINDOW {
+                    if s_limb > e_limb {
+                        if i % limb_size == (s_bit % limb_size) + 1 {
+                            // window is split between multiple limbs
+                            OP_DROP
+                            { lookup_offset + e_limb + 1 } OP_PICK
+                        }
                     }
+                    OP_TUCK
+                    { (1 << ((s_bit - i) % Self::LIMB_SIZE)) - 1 }
+                    OP_GREATERTHAN
+                    OP_TUCK
+                    OP_ADD
+                    if i < WINDOW - 1 {
+                        { crate::pseudo::OP_2MUL() }
+                    }
+                    OP_ROT OP_ROT
+                    OP_IF
+                        { 1 << ((s_bit - i) % Self::LIMB_SIZE) }
+                        OP_SUB
+                    OP_ENDIF
                 }
-                OP_TUCK
-                { (1 << ((s_bit - i) % Self::LIMB_SIZE)) - 1 }
-                OP_GREATERTHAN
-                OP_TUCK
-                OP_ADD
-                if i < WINDOW - 1 {
-                    { crate::pseudo::OP_2MUL() }
+                if index == 1 {
+                    OP_DROP       // last index, drop the accumulator
+                } else {
+                    OP_TOALTSTACK
                 }
-                OP_ROT OP_ROT
-                OP_IF
-                    { 1 << ((s_bit - i) % Self::LIMB_SIZE) }
-                    OP_SUB
-                OP_ENDIF
-            }
-            if index == 1 {
-                OP_DROP       // last index, drop the accumulator
-            } else {
-                OP_TOALTSTACK
             }
         }
     }
@@ -194,7 +202,10 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32>
             }
         }
 
+        let mut bit_decomp_script_y = Self::bit_decomp_script_generator();
+
         script! {
+            // stack: {q} {x} {y}
             { Self::U::toaltstack() }   // move y to altstack
             { Self::U::toaltstack() }   // move x to altstack
             { Self::P::initialize() }   // q: {0*z, 1*z, ..., ((1<<WINDOW)-1)*z}
@@ -215,7 +226,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32>
                 { Self::P::U::copy(2 * (1 << WINDOW) - Self::bit_decomp_modulus(i) + loop_offset(i)) }
 
                 // x*y[i]
-                { Self::bit_decomp_script(i, 1 + loop_offset(i)) }
+                { bit_decomp_script_y(1 + loop_offset(i)) }
                 { (1 << WINDOW) + 1 + loop_offset(i) }
                 OP_SWAP
                 OP_SUB
