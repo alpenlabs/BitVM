@@ -1,9 +1,7 @@
-use crate::treepp::*;
+use crate::{bigint::BigIntImpl, treepp::*};
 use num_bigint::BigUint;
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::str::FromStr;
-
-use super::BigIntImpl;
 
 fn limb_doubling_initial_carry() -> Script {
     script! {

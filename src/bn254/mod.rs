@@ -13,3 +13,5 @@ pub mod ell_coeffs;
 pub mod fp254impl;
 pub mod msm;
 pub mod utils;
+
+pub mod fp254_op_tmul;
