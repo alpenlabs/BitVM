@@ -98,15 +98,11 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32>
     pub const N_BITS: u32 = N_BITS;
     pub const LIMB_SIZE: u32 = LIMB_SIZE;
     pub const N_LIMBS: u32 = (N_BITS + LIMB_SIZE - 1) / LIMB_SIZE;
-    pub const N_WINDOW: u32 = (N_BITS + WINDOW - 1) / WINDOW;
-
-    pub const DECOMPOSITION_SIZE: u32 = Self::decomposition_size(Self::N_BITS, WINDOW); // num coefficients in w-width form
+    pub const N_WINDOW: u32 = (N_BITS + WINDOW - 1) / WINDOW; // num coefficients in w-width form
 
     type U = BigIntImpl<N_BITS, LIMB_SIZE>; // unsigned BigInt
     type S = BigIntImpl<{ N_BITS + 1 }, LIMB_SIZE> where [(); { N_BITS + 1 } as usize]:; // signed BigInt (1-bit for sign)
     type P = PrecomputeTable<{ N_BITS + WINDOW }, LIMB_SIZE, WINDOW> where [(); { N_BITS + WINDOW } as usize]:; // pre-compute table
-
-    const fn decomposition_size(n_bits: u32, window: u32) -> u32 { (n_bits + window - 1) / window }
 
     pub fn modulus() -> BigUint {
         BigUint::from_str(
@@ -116,7 +112,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32>
     }
 
     fn bit_decomp_modulus(index: u32) -> u32 {
-        let shift_by = WINDOW * (Self::DECOMPOSITION_SIZE - index - 1);
+        let shift_by = WINDOW * (Self::N_WINDOW - index - 1);
         let mut bit_mask =
             BigUint::from_u32((1 << WINDOW) - 1).expect("bit_decomp:bit_mask: should not fail");
         bit_mask <<= shift_by;
@@ -167,7 +163,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32>
                         }
                     }
                     OP_TUCK
-                    { (1 << ((s_bit - i) % Self::LIMB_SIZE)) - 1 }
+                    { (1 << ((s_bit - i) % limb_size)) - 1 }
                     OP_GREATERTHAN
                     OP_TUCK
                     OP_ADD
@@ -176,10 +172,11 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32>
                     }
                     OP_ROT OP_ROT
                     OP_IF
-                        { 1 << ((s_bit - i) % Self::LIMB_SIZE) }
+                        { 1 << ((s_bit - i) % limb_size) }
                         OP_SUB
                     OP_ENDIF
                 }
+
                 if index == 1 {
                     OP_DROP       // last index, drop the accumulator
                 } else {
@@ -214,9 +211,9 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32>
             { Self::U::fromaltstack() } // move y back to stack
 
             // main loop
-            for i in 0..Self::DECOMPOSITION_SIZE {
+            for i in 0..Self::N_WINDOW {
                 if i != 0 {
-                    // TODO: ensure result.num_bits() <= N_BITS + WINDOW
+                    // TODO: ensure res.num_bits() <= N_BITS
                     for _ in 0..WINDOW { // z <<= WINDOW
                         { Self::P::U::dbl() }
                     }
@@ -285,91 +282,36 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32>
         }
     }
 
-    /// WINDOW=2: {0, z, 2*z, 3*z}
-    fn initialize_2mul() -> Script {
-        script! {
-            { Self::initialize_1mul() }  // {0, z}
-            { Self::U::copy(0) }         // {0, z, z}
-            { Self::U::dbl() }           // {0, z, 2*z}
-            { Self::U::copy(1) }         // {0, z, 2*z, z}
-            { Self::U::copy(1) }         // {0, z, 2*z, z, 2*z}
-            { Self::U::add(0, 1) }       // {0, z, 2*z, 3*z}
-        }
-    }
-
-    /// WINDOW=3: {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z}
-    fn initialize_3mul() -> Script {
-        script! {
-            { Self::initialize_2mul() }  // {0, z, 2*z, 3*z}
-            { Self::U::copy(1) }         // {0, z, 2*z, 3*z, 2*z}
-            { Self::U::dbl() }           // {0, z, 2*z, 3*z, 4*z}
-            { Self::U::copy(3) }         // {0, z, 2*z, 3*z, 4*z, z}
-            { Self::U::copy(1) }         // {0, z, 2*z, 3*z, 4*z, z, 4*z}
-            { Self::U::add(0, 1) }       // {0, z, 2*z, 3*z, 4*z, 5*z}
-            { Self::U::copy(2) }         // {0, z, 2*z, 3*z, 4*z, 5*z, 3*z}
-            { Self::U::dbl() }           // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z}
-            { Self::U::copy(5) }         // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, z}
-            { Self::U::copy(1) }         // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, z, 6*z}
-            { Self::U::add(0, 1) }       // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z}
-        }
-    }
-
-    /// WINDOW=4: {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, 9*z, 10*z, 11*z, 12*z, 13*z, 14*z, 15*z}
-    fn initialize_4mul() -> Script {
-        script! {
-            { Self::initialize_3mul() }   // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z}
-            { Self::U::copy(3) }          // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 4*z}
-            { Self::U::dbl() }            // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z}
-            { Self::U::copy(7) }          // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, z}
-            { Self::U::copy(1) }          // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, z, 8*z}
-            { Self::U::add(1, 0) }        // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, 9*z}
-            { Self::U::copy(4) }          // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, 9*z, 5*z}
-            { Self::U::dbl() }            // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, 9*z, 10*z}
-            { Self::U::copy(9) }          // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, 9*z, 10*z, z}
-            { Self::U::copy(1) }          // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, 9*z, 10*z, z, 10*z}
-            { Self::U::add(1, 0) }        // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, 9*z, 10*z, 11*z}
-            { Self::U::copy(5) }          // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, 9*z, 10*z, 11*z, 6*z}
-            { Self::U::dbl() }            // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, 9*z, 10*z, 11*z, 12*z}
-            { Self::U::copy(11) }         // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, 9*z, 10*z, 11*z, 12*z, z}
-            { Self::U::copy(1) }          // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, 9*z, 10*z, 11*z, 12*z, z, 12*z}
-            { Self::U::add(1, 0) }        // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, 9*z, 10*z, 11*z, 12*z, 13*z}
-            { Self::U::copy(6) }          // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, 9*z, 10*z, 11*z, 12*z, 13*z, 7*z}
-            { Self::U::dbl() }            // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, 9*z, 10*z, 11*z, 12*z, 13*z, 14*z}
-            { Self::U::copy(13) }         // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, 9*z, 10*z, 11*z, 12*z, 13*z, 14*z, z}
-            { Self::U::copy(1) }          // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, 9*z, 10*z, 11*z, 12*z, 13*z, 14*z, z, 14*z}
-            { Self::U::add(1, 0) }        // {0, z, 2*z, 3*z, 4*z, 5*z, 6*z, 7*z, 8*z, 9*z, 10*z, 11*z, 12*z, 13*z, 14*z, 15*z}
-        }
-    }
-
-    pub fn lazy_initialize() -> Script {
-        assert!(WINDOW >= 2, "window should be at least 2");
-
+    pub fn initialize() -> Script {
+        assert!(
+            0 < WINDOW && WINDOW < 7,
+            "0 < WINDOW < 7 (exceeds stack: 1000)"
+        );
         script! {
             { Self::initialize_1mul() } // {0, z}
-            { Self::U::copy(0) }        // {0, z, z}
-            { Self::U::dbl() }          // {0, z, 2*z}
-            for i in 0..(1<<WINDOW)-3 {
-                // Given {0, z, 2z, ..., (i+2)z} we add (i+3)z to the end
-                { Self::U::copy(0) }    // {0, z, ..., (i+2)z, (i+2)z}
-                { Self::U::copy(i+2) }  // {0, z, ..., (i+2)z, (i+2)z, z}
-                { Self::U::add(0, 1) }  // {0, z, ..., (i+2)z, (i+3)z}
-            }
-        }
-    }
+            if WINDOW > 1 {
+                for i in 2..=WINDOW {
+                    for j in 1 << (i - 1)..1 << i {
+                        if j % 2 == 0 {
+                            { Self::U::copy(j/2 - 1) }
+                            { Self::U::dbl() }
+                        } else {
+                            { Self::U::copy(0) }
+                            { Self::U::copy(j - 1) }
+                            { Self::U::add(0, 1) }
+                        }
 
-    pub fn initialize() -> Script {
-        match WINDOW {
-            1 => Self::initialize_1mul(),
-            2 => Self::initialize_2mul(),
-            3 => Self::initialize_3mul(),
-            4 => Self::initialize_4mul(),
-            _ => Self::lazy_initialize(),
+                    }
+                }
+            }
+
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::ExecuteInfo;
     use num_bigint::RandBigInt;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
@@ -408,13 +350,6 @@ mod tests {
 
         let res = execute_script(script);
         assert!(res.success);
-
-        println!("stack:");
-        for i in 0..res.final_stack.len() {
-            println!("{i}: {:?}", res.final_stack.get(i));
-        }
-
-        println!("{:?}", res.stats);
     }
 
     #[test]
