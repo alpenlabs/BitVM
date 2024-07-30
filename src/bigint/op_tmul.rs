@@ -90,11 +90,10 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
     }
 }
 
-pub struct WinBigIntImpl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32> {}
+// Finite field multiplication impl
+pub struct Fp<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32> {}
 
-impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32>
-    WinBigIntImpl<N_BITS, LIMB_SIZE, WINDOW>
-{
+impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32> Fp<N_BITS, LIMB_SIZE, WINDOW> {
     pub const N_BITS: u32 = N_BITS;
     pub const LIMB_SIZE: u32 = LIMB_SIZE;
     pub const N_LIMBS: u32 = (N_BITS + LIMB_SIZE - 1) / LIMB_SIZE;
@@ -311,7 +310,6 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32>
 
 #[cfg(test)]
 mod tests {
-    use crate::ExecuteInfo;
     use num_bigint::RandBigInt;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
@@ -325,13 +323,13 @@ mod tests {
 
     #[test]
     fn test_254_bit_windowed_op_tmul() {
-        type W = WinBigIntImpl<254, 30, 3>;
+        type F = Fp<254, 30, 3>;
 
-        print_script_size("254-bit-windowed-op-tmul", W::OP_TMUL());
+        print_script_size("254-bit-windowed-op-tmul", F::OP_TMUL());
 
         let mut prng = ChaCha20Rng::seed_from_u64(0);
 
-        let p = W::modulus();
+        let p = F::modulus();
         let x = prng.gen_biguint_below(&p);
         let y = prng.gen_biguint_below(&p);
         let c = &x * &y;
@@ -339,12 +337,12 @@ mod tests {
         let r = &c % &p;
 
         let script = script! {
-            { W::U::push_u32_le(&q.to_u32_digits()) }
-            { W::U::push_u32_le(&x.to_u32_digits()) }
-            { W::U::push_u32_le(&y.to_u32_digits()) }
-            { W::OP_TMUL() }
-            { W::U::push_u32_le(&r.to_u32_digits()) }
-            { W::U::equalverify(1, 0) }
+            { F::U::push_u32_le(&q.to_u32_digits()) }
+            { F::U::push_u32_le(&x.to_u32_digits()) }
+            { F::U::push_u32_le(&y.to_u32_digits()) }
+            { F::OP_TMUL() }
+            { F::U::push_u32_le(&r.to_u32_digits()) }
+            { F::U::equalverify(0, 1) }
             OP_TRUE
         };
 
@@ -353,18 +351,54 @@ mod tests {
     }
 
     #[test]
+    fn test_254_bit_windowed_op_tmul_invalid_q() {
+        type F = Fp<254, 30, 3>;
+
+        print_script_size("254-bit-windowed-op-tmul", F::OP_TMUL());
+
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+
+        let p = F::modulus();
+        let x = prng.gen_biguint_below(&p);
+        let y = prng.gen_biguint_below(&p);
+        let c = &x * &y;
+        let q = &c / &p;
+        let r = &c % &p;
+
+        let q_invalid = loop {
+            let rnd = prng.gen_biguint_below(&p);
+            if rnd != q {
+                break rnd;
+            }
+        };
+
+        let script = script! {
+            { F::U::push_u32_le(&q_invalid.to_u32_digits()) }
+            { F::U::push_u32_le(&x.to_u32_digits()) }
+            { F::U::push_u32_le(&y.to_u32_digits()) }
+            { F::OP_TMUL() }
+            { F::U::push_u32_le(&r.to_u32_digits()) }
+            { F::U::equal(0, 1) }
+            OP_VERIFY
+        };
+
+        let res = execute_script(script);
+        assert!(!res.success);
+    }
+
+    #[test]
     fn test_254_bit_windowed_op_tmul_fuzzy() {
-        type W<const WINDOW: u32> = WinBigIntImpl<254, 30, WINDOW>;
+        type F<const WINDOW: u32> = Fp<254, 30, WINDOW>;
 
         let mut prng = ChaCha20Rng::seed_from_u64(0);
 
         seq!(WINDOW in 1..=4 {
-            print!("254-bit-windowed-op-tmul-{}-bit-window, script_size: {}", WINDOW, W::<WINDOW>::OP_TMUL().len());
+            print!("254-bit-windowed-op-tmul-{}-bit-window, script_size: {}", WINDOW, F::<WINDOW>::OP_TMUL().len());
 
             let mut max_stack_items: usize = 0;
 
             for _ in 0..100 {
-                let p = W::<WINDOW>::modulus();
+                let p = F::<WINDOW>::modulus();
                 let x = prng.gen_biguint_below(&p);
                 let y = prng.gen_biguint_below(&p);
                 let c = &x * &y;
@@ -372,12 +406,12 @@ mod tests {
                 let r = &c % &p;
 
                 let script = script! {
-                    { W::<WINDOW>::U::push_u32_le(&q.to_u32_digits()) }
-                    { W::<WINDOW>::U::push_u32_le(&x.to_u32_digits()) }
-                    { W::<WINDOW>::U::push_u32_le(&y.to_u32_digits()) }
-                    { W::<WINDOW>::OP_TMUL() }
-                    { W::<WINDOW>::U::push_u32_le(&r.to_u32_digits()) }
-                    { W::<WINDOW>::U::equalverify(1, 0) }
+                    { F::<WINDOW>::U::push_u32_le(&q.to_u32_digits()) }
+                    { F::<WINDOW>::U::push_u32_le(&x.to_u32_digits()) }
+                    { F::<WINDOW>::U::push_u32_le(&y.to_u32_digits()) }
+                    { F::<WINDOW>::OP_TMUL() }
+                    { F::<WINDOW>::U::push_u32_le(&r.to_u32_digits()) }
+                    { F::<WINDOW>::U::equalverify(1, 0) }
                     OP_TRUE
                 };
 
@@ -387,6 +421,44 @@ mod tests {
             }
 
             println!(", max_stack_usage: {}", max_stack_items);
+        });
+    }
+
+    #[test]
+    fn test_254_bit_windowed_op_tmul_invalid_q_fuzzy() {
+        type F<const WINDOW: u32> = Fp<254, 30, WINDOW>;
+
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+
+        seq!(WINDOW in 1..=4 {
+            for _ in 0..100 {
+                let p = F::<WINDOW>::modulus();
+                let x = prng.gen_biguint_below(&p);
+                let y = prng.gen_biguint_below(&p);
+                let c = &x * &y;
+                let q = &c / &p;
+                let r = &c % &p;
+
+                let q_invalid = loop {
+                    let rnd = prng.gen_biguint_below(&p);
+                    if rnd != q {
+                        break rnd;
+                    }
+                };
+
+                let script = script! {
+                    { F::<WINDOW>::U::push_u32_le(&q_invalid.to_u32_digits()) }
+                    { F::<WINDOW>::U::push_u32_le(&x.to_u32_digits()) }
+                    { F::<WINDOW>::U::push_u32_le(&y.to_u32_digits()) }
+                    { F::<WINDOW>::OP_TMUL() }
+                    { F::<WINDOW>::U::push_u32_le(&r.to_u32_digits()) }
+                    { F::<WINDOW>::U::equal(0, 1) }
+                    OP_VERIFY
+                };
+
+                let res = execute_script(script);
+                assert!(!res.success);
+            }
         });
     }
 }
