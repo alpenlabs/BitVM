@@ -88,38 +88,46 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
     }
 
     pub fn resize<const T_BITS: u32>() -> Script {
-        assert!(T_BITS >= N_BITS, "T_BITS should >= N_BITS");
-
         let n_limbs_self = (N_BITS + LIMB_SIZE - 1) / LIMB_SIZE;
         let n_limbs_target = (T_BITS + LIMB_SIZE - 1) / LIMB_SIZE;
 
         if n_limbs_target == n_limbs_self {
             return script! {};
-        }
-        let n_limbs_to_add = n_limbs_target - n_limbs_self;
-        script! {
-            if n_limbs_to_add > 0 {
-                {0} {crate::pseudo::OP_NDUP((n_limbs_to_add - 1) as usize)} // Pushing zeros to the stack
+        } else if n_limbs_target > n_limbs_self {
+            let n_limbs_to_add = n_limbs_target - n_limbs_self;
+            script! {
+                if n_limbs_to_add > 0 {
+                    {0} {crate::pseudo::OP_NDUP((n_limbs_to_add - 1) as usize)} // Pushing zeros to the stack
+                }
+                for _ in 0..n_limbs_self {
+                    { n_limbs_target - 1 } OP_ROLL
+                }
             }
-            for _ in 0..n_limbs_self {
-                { n_limbs_target - 1 } OP_ROLL
+        } else {
+            let n_limbs_to_remove = n_limbs_self - n_limbs_target;
+            script! {
+                for _ in 0..n_limbs_to_remove {
+                    { n_limbs_target } OP_ROLL OP_DROP
+                }
             }
         }
     }
 }
 
 // Finite field multiplication impl
-pub struct Fp<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32> {}
+pub struct Fp<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC: u32> {}
 
-impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32> Fp<N_BITS, LIMB_SIZE, WINDOW> {
+impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC: u32>
+    Fp<N_BITS, LIMB_SIZE, WINDOW, LC>
+{
     pub const N_BITS: u32 = N_BITS;
     pub const LIMB_SIZE: u32 = LIMB_SIZE;
     pub const N_LIMBS: u32 = (N_BITS + LIMB_SIZE - 1) / LIMB_SIZE;
     pub const N_WINDOW: u32 = (N_BITS + WINDOW - 1) / WINDOW; // num coefficients in w-width form
+    pub const WINDOW: u32 = WINDOW;
 
     type U = BigIntImpl<N_BITS, LIMB_SIZE>; // unsigned BigInt
-    type S = BigIntImpl<{ N_BITS + 1 }, LIMB_SIZE> where [(); { N_BITS + 1 } as usize]:; // signed BigInt (1-bit for sign)
-    type P = PrecomputeTable<N_BITS, LIMB_SIZE, WINDOW>; // pre-compute table
+    type P = PrecomputeTable<N_BITS, LIMB_SIZE, WINDOW, LC>; // pre-compute table
 
     pub fn modulus() -> BigUint {
         BigUint::from_str(
@@ -138,156 +146,221 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32> Fp<N_BITS, LIMB
             .expect("bit_decomp_modulus: should not fail")
     }
 
-    fn bit_decomp_script_generator() -> impl FnMut(u32) -> Script {
-        let n_limbs = Self::N_LIMBS;
+    fn bit_decomp_script_generator() -> impl FnMut() -> Script
+    where
+        [(); LC as usize]:,
+        [(); { N_BITS + WINDOW + Self::P::BATCH_BITS } as usize]:,
+    {
         let n_window = Self::N_WINDOW;
         let limb_size = Self::LIMB_SIZE;
 
-        let mut index = n_window + 1;
+        let mut iter = n_window + 1;
 
-        move |src_depth: u32| {
-            index -= 1;
+        move || {
+            let n_limbs = Self::P::W::N_LIMBS;
 
-            let lookup_offset = n_limbs * src_depth;
+            let stack_top = n_limbs;
 
-            let s_bit = index * WINDOW - 1; // start bit
-            let e_bit = (index - 1) * WINDOW; // end bit
+            iter -= 1;
+
+            let s_bit = iter * WINDOW - 1; // start bit
+            let e_bit = (iter - 1) * WINDOW; // end bit
 
             let s_limb = s_bit / limb_size; // start bit limb
             let e_limb = e_bit / limb_size; // end bit limb
 
             script! {
-                { 0 }
-                if index == n_window { // initialize accumulator to track reduced limb
+                for j in 0..LC {
+                    { 0 }
+                    if iter == n_window { // initialize accumulator to track reduced limb
 
-                    { lookup_offset + s_limb + 1 } OP_PICK
+                        { stack_top + n_limbs * j + s_limb + 1 } OP_PICK
 
-                } else if (s_bit + 1) % limb_size == 0  { // drop current and initialize next accumulator
+                    } else if (s_bit + 1) % limb_size == 0  { // drop current and initialize next accumulator
+                        OP_FROMALTSTACK OP_DROP
+                        { stack_top + n_limbs * j   + s_limb + 1 } OP_PICK
 
-                    OP_FROMALTSTACK OP_DROP
-                    { lookup_offset + s_limb + 1 } OP_PICK
+                    } else {
+                        OP_FROMALTSTACK // load accumulator from altstack
+                    }
 
-                } else {
-                    OP_FROMALTSTACK // load accumulator from altstack
-                }
+                    for i in 0..WINDOW {
+                        if s_limb > e_limb {
+                            if i % limb_size == (s_bit % limb_size) + 1 {
+                                // window is split between multiple limbs
+                                OP_DROP
+                                { stack_top + n_limbs * j   + e_limb + 1 } OP_PICK
+                            }
+                        }
+                        OP_TUCK
+                        { (1 << ((s_bit - i) % limb_size)) - 1 }
+                        OP_GREATERTHAN
+                        OP_TUCK
+                        OP_ADD
+                        if i < WINDOW - 1 {
+                            { crate::pseudo::OP_2MUL() }
+                        }
+                        OP_ROT OP_ROT
+                        OP_IF
+                            { 1 << ((s_bit - i) % limb_size) }
+                            OP_SUB
+                        OP_ENDIF
+                    }
 
-                for i in 0..WINDOW {
-                    if s_limb > e_limb {
-                        if i % limb_size == (s_bit % limb_size) + 1 {
-                            // window is split between multiple limbs
-                            OP_DROP
-                            { lookup_offset + e_limb + 1 } OP_PICK
+                    if iter == n_window {
+                        OP_TOALTSTACK
+                        OP_TOALTSTACK
+                    } else {
+
+                        for _ in j+1..LC {
+                            OP_FROMALTSTACK
+                        }
+                        { LC - j - 1 } OP_ROLL OP_TOALTSTACK // acc
+                        { LC - j - 1 } OP_ROLL OP_TOALTSTACK // res
+                        for _ in j+1..LC {
+                            OP_TOALTSTACK
                         }
                     }
-                    OP_TUCK
-                    { (1 << ((s_bit - i) % limb_size)) - 1 }
-                    OP_GREATERTHAN
-                    OP_TUCK
-                    OP_ADD
-                    if i < WINDOW - 1 {
-                        { crate::pseudo::OP_2MUL() }
-                    }
-                    OP_ROT OP_ROT
-                    OP_IF
-                        { 1 << ((s_bit - i) % limb_size) }
-                        OP_SUB
-                    OP_ENDIF
-                }
 
-                if index == 1 {
-                    OP_DROP       // last index, drop the accumulator
-                } else {
-                    OP_TOALTSTACK
+                }
+                for _ in 0..LC {
+                    OP_FROMALTSTACK
+                    OP_FROMALTSTACK
+                }
+                for k in (0..LC).rev() {
+                    { 2*k } OP_ROLL OP_TOALTSTACK
                 }
             }
         }
     }
 
-    pub fn OP_TMUL() -> Script
+    // z = x0*y0 - x1*y1 + x2*y2
+    // N = 5
+    // ops = [true, false, true, true, false],
+    //       true for addition, false for subtraction
+    pub fn OP_TMUL(signs: [bool; LC as usize]) -> Script
     where
         [(); { N_BITS + 1 } as usize]:,
         [(); { N_BITS + WINDOW } as usize]:,
+        [(); { N_BITS + WINDOW + Self::P::BATCH_BITS } as usize]:,
     {
-        const fn loop_offset(i: u32) -> u32 {
-            if i == 0 {
-                0
-            } else {
-                1
-            }
-        }
-
         let mut bit_decomp_script_y = Self::bit_decomp_script_generator();
 
         script! {
-            // stack: {q} {x} {y}
-            { Self::U::toaltstack() }   // move y to altstack
-            { Self::U::toaltstack() }   // move x to altstack
-            { Self::P::initialize() }   // q: {0*z, 1*z, ..., ((1<<WINDOW)-1)*z}
-            { Self::U::fromaltstack() } // move x back to stack
-            { Self::P::initialize() }   // x: {0*z, 1*z, ..., ((1<<WINDOW)-1)*z}
-            { Self::U::fromaltstack() } // move y back to stack
-            { Self::U::resize::<{ N_BITS + WINDOW }>() } // resize for stack alignment
+                // stack: {q} {x0} {x1} {x2} {y0} {y1} {y2}
 
-            // main loop
-            for i in 0..Self::N_WINDOW {
-                if i != 0 {
-                    // TODO: ensure res.num_bits() <= N_BITS
-                    for _ in 0..WINDOW { // z <<= WINDOW
-                        { Self::P::W::dbl() }
+                // pre-compute tables
+                for _ in 0..LC {
+                    { Self::U::toaltstack() }
+                }                             // {q} {x0} {x1} {x2}
+                for _ in 0..LC {
+                    { Self::U::toaltstack() }
+                }                             // {q}
+
+                // { Self::P::resize_into() }  // {q}: no need to resize as it's already sized in the input
+                { Self::P::W::push_zero() } // {q} {0}
+                { Self::P::W::sub(0, 1) }   // {-q}
+                { Self::P::initialize() }   // {-q_table}
+
+                for i in 0..LC {
+                    { Self::U::fromaltstack() }
+                    { Self::P::resize_into() }
+                    if !signs[i as usize] {
+                        { Self::P::W::push_zero() } // {-q_table} ... {x} {0}
+                        { Self::P::W::sub(0, 1) }   // {-q_table} ... {-x}
                     }
+                    { Self::P::initialize() }
+                }                                   // {-q_table} {x0_table} {x1_table} {x2_table}
+
+                for _ in 0..LC {
+                    { Self::U::fromaltstack() }
+                    { Self::P::resize_into() }
+                }                           // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2}
+
+                { Self::P::W::push_zero() } // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {0}
+
+                // main loop
+                for i in 0..Self::N_WINDOW {
+                    if i != 0 {
+                        // TODO: ensure res.num_bits() <= N_BITS
+                        for _ in 0..WINDOW { // z <<= WINDOW
+                            { Self::P::W::dbl() }
+                        }
+                    }
+
+                    // z += q*p[i]
+                    { Self::P::W::copy((1 + LC) * (1 << WINDOW) - Self::bit_decomp_modulus(i) + LC) } // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z=0} {-q[i]}
+                    // {99} {i} {0} OP_LESSTHAN OP_VERIFY OP_DROP
+
+                    { Self::P::W::add(0, 1) }  // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z}
+
+                    { bit_decomp_script_y() } // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z} {w0} {w1} {w2}
+
+                    for _ in 0..LC {
+                        OP_TOALTSTACK
+                    }                         // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z} -> {w0} {w1} {w2}
+
+                    for j in 0..LC {
+                        OP_FROMALTSTACK
+                        { (1 << WINDOW) * (LC - j) + LC }
+                        OP_SWAP
+                        OP_SUB
+
+                        // xj*yj[i]
+                        { Self::P::W::stack_copy() } // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z} {xj*yj[i]}
+
+                        // z += x*y[i]
+                        {Self::P::W::add(0, 1) } // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z}
+                    }
+
                 }
 
-                // q*p[i]
-                { Self::P::W::copy(2 * (1 << WINDOW) - Self::bit_decomp_modulus(i) + loop_offset(i)) }
+                // assert 0 <= res < modulus
+                { Self::P::W::copy(0) } // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z} {z} {0}
+                { Self::P::W::push_zero() } // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z} {z} {0}
+                { Self::P::W::lessthanorequal(0, 1) } // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z} 1
+                OP_VERIFY // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z}
+                { Self::P::W::copy(0) } // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z} {z}
+                { Self::P::W::push_u32_le(&Self::modulus().to_u32_digits()) } // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z} {z} {p}
+                { Self::P::W::greaterthan(0, 1)} // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z} 1
+                OP_VERIFY // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z}
 
-                // x*y[i]
-                { bit_decomp_script_y(1 + loop_offset(i)) }
-                { (1 << WINDOW) + 1 + loop_offset(i) }
-                OP_SWAP
-                OP_SUB
-                { Self::P::W::stack_copy() }
+                // resize res back to N_BITS
+                { Self::P::W::resize::<N_BITS>() } // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z}
 
-                // x*y[i] - q*p[i]
-                { Self::P::W::sub(0, 1) }
-
-                // z += x*y[i] - q*p[i]
-                if i != 0 {
-                    { Self::P::W::add(0, 1) }
-                }
-            }
-
-            // assert 0 <= res < modulus
-            { Self::U::copy(0) }
-            { Self::U::push_zero() }
-            { Self::U::lessthanorequal(0, 1) }
-            OP_VERIFY
-            { Self::U::copy(0) }
-            { Self::U::push_u32_le(&Self::modulus().to_u32_digits()) }
-            { Self::U::greaterthan(0, 1)}
-            OP_VERIFY
-
-            // cleanup
-            { Self::U::toaltstack() }   // move res to altstack
-            { Self::U::drop() }         // drop y
-            { Self::P::drop() }         // drop table x*y[i]
-            { Self::P::drop() }         // drop table q*p[i]
-            { Self::U::fromaltstack() } // move res back to stack
+                // cleanup
+                { Self::U::toaltstack() }   // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} -> {r}
+                for _ in 0..LC {
+                    { Self::P::W::drop() }
+                }                           // {-q_table} {x0_table} {x1_table} {x2_table} -> {r}
+                for _ in 0..LC {
+                    { Self::P::drop() }
+                }                           // {-q_table} -> {r}
+                { Self::P::drop() }         // -> {r}
+                { Self::U::fromaltstack() } // {r}
         }
     }
 }
 
-struct PrecomputeTable<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32> {}
+struct PrecomputeTable<
+    const N_BITS: u32,
+    const LIMB_SIZE: u32,
+    const WINDOW: u32,
+    const BATCH_SIZE: u32,
+> {}
 
-impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32>
-    PrecomputeTable<N_BITS, LIMB_SIZE, WINDOW>
+impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const BATCH_SIZE: u32>
+    PrecomputeTable<N_BITS, LIMB_SIZE, WINDOW, BATCH_SIZE>
 {
-    pub type U = BigIntImpl<N_BITS, LIMB_SIZE>; // original N_BITS number
-    pub type W = BigIntImpl<{ N_BITS + WINDOW }, LIMB_SIZE> where [(); { N_BITS + WINDOW } as usize]:; // windowed multiple
+    const BATCH_BITS: u32 = 32 - BATCH_SIZE.leading_zeros() - 1;
+
+    pub type U = BigIntImpl<N_BITS, LIMB_SIZE>;
+    pub type W = BigIntImpl<{ N_BITS + WINDOW + Self::BATCH_BITS }, LIMB_SIZE> where [(); { N_BITS + WINDOW + Self::BATCH_BITS } as usize]:; // windowed multiple
 
     // drop table on top of the stack
     fn drop() -> Script
     where
-        [(); { N_BITS + WINDOW } as usize]:,
+        [(); { N_BITS + WINDOW + Self::BATCH_BITS } as usize]:,
     {
         script! {
             for _ in 0..1<<WINDOW {
@@ -296,15 +369,21 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32>
         }
     }
 
+    fn resize_into() -> Script
+    where
+        [(); { N_BITS + WINDOW + Self::BATCH_BITS } as usize]:,
+    {
+        Self::U::resize::<{ N_BITS + WINDOW + Self::BATCH_BITS }>()
+    }
+
     pub fn initialize() -> Script
     where
-        [(); { N_BITS + WINDOW } as usize]:,
+        [(); { N_BITS + WINDOW + Self::BATCH_BITS } as usize]:,
     {
         assert!(WINDOW < 7, "WINDOW > 6 (exceeds stack limit: 1000)");
         script! {
             for i in 1..=WINDOW {
                 if i == 1 {
-                    { Self::U::resize::<{ N_BITS + WINDOW }>() } // resize to target bits
                     { Self::W::push_zero() } // {z, 0}
                     { Self::W::roll(1) }     // {0, z}
                 } else {
@@ -327,8 +406,10 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32>
 
 #[cfg(test)]
 mod tests {
-    use num_bigint::RandBigInt;
-    use rand::SeedableRng;
+    use ark_ff::One;
+    use num_bigint::{BigInt, RandBigInt, RandomBits, Sign, ToBigInt};
+    use num_traits::{Signed, ToBytes};
+    use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha20Rng;
     use seq_macro::seq;
 
@@ -338,11 +419,189 @@ mod tests {
         println!("{} script is {} bytes in size", name, script.len());
     }
 
+    fn bigint_to_u32_limbs(n: BigInt, n_bits: u32) -> Vec<u32> {
+        const limb_size: u64 = 32;
+        let mut limbs = vec![];
+        let mut limb: u32 = 0;
+        for i in 0..n_bits as u64 {
+            if i > 0 && i % limb_size == 0 {
+                limbs.push(limb);
+                limb = 0;
+            }
+            if n.bit(i) {
+                limb += 1 << (i % limb_size);
+            }
+        }
+        limbs.push(limb);
+        limbs
+    }
+
+    fn bigint_to_uXu8_limbs(n: BigInt, n_bits: u32, limb_size: u32) -> Vec<Vec<u8>> {
+        let mut limbs = vec![];
+        let mut limb: u32 = 0;
+        for i in 0..n_bits {
+            if i > 0 && i % limb_size == 0 {
+                limbs.push(limb.to_le_bytes().to_vec());
+                limb = 0;
+            }
+            if n.bit(i as u64) {
+                limb += 1 << (i % limb_size);
+            }
+        }
+        limbs.push(limb.to_le_bytes().to_vec());
+        limbs
+    }
+
+    fn print_bigint_in_stack(n: BigInt, n_bits: u32) {
+        let mut limbs = bigint_to_uXu8_limbs(n.clone(), n_bits, 30);
+        limbs.reverse();
+        for limb in &mut limbs {
+            while limb.len() > 0 && limb[limb.len() - 1] == 0 {
+                limb.pop();
+            }
+        }
+        for limb in limbs {
+            println!("{:?}", limb);
+        }
+    }
+
+    #[test]
+    fn test_254_bit_windowed_batch() {
+        const LC: usize = 6;
+        const LC_SIGNS: [bool; LC as usize] = [true; LC];
+
+        type F = Fp<254, 30, 3, { LC as u32 }>;
+
+        let p = F::modulus();
+
+        fn window(b: BigUint) -> [usize; F::N_WINDOW as usize] {
+            let mut res = [0; F::N_WINDOW as usize];
+            let mut b = b;
+
+            for i in (0..res.len()).rev() {
+                let next = b.clone() >> F::WINDOW;
+                res[i] = (b.clone() - (next.clone() << F::WINDOW))
+                    .to_usize()
+                    .unwrap();
+                b = next;
+                if b <= BigUint::ZERO {
+                    break;
+                }
+            }
+            res
+        }
+
+        fn precompute_table(b: BigUint) -> [BigInt; 1 << F::WINDOW] {
+            let mut res = [BigInt::ZERO; 1 << F::WINDOW];
+            for i in 0..(1 << F::WINDOW) {
+                res[i] = BigInt::from_biguint(Sign::Plus, b.clone() * BigUint::from(i));
+            }
+            res
+        }
+
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let xs = (0..LC)
+            .map(|_| prng.gen_biguint_below(&p))
+            .collect::<Vec<_>>();
+        let ys = (0..LC)
+            .map(|_| prng.gen_biguint_below(&p))
+            .collect::<Vec<_>>();
+
+        let mut c = BigUint::ZERO;
+        for i in 0..LC {
+            let xy = &xs[i] * &ys[i];
+            if LC_SIGNS[i] {
+                c += xy;
+            } else {
+                c -= xy;
+            };
+        }
+
+        let r = &c % &p;
+        let q = &c / &p;
+
+        let p_window = window(p.clone());
+        let y_windows = ys.iter().map(|y| window(y.clone())).collect::<Vec<_>>();
+        let x_tables = xs
+            .iter()
+            .map(|x| precompute_table(x.clone()))
+            .collect::<Vec<_>>();
+        let q_table = precompute_table(q.clone());
+
+        // accumulator
+        let mut z = BigInt::ZERO;
+        for i in 0..F::N_WINDOW as usize {
+            z *= 1 << F::WINDOW;
+            z -= q_table[p_window[i]].clone();
+            for j in 0..LC {
+                let v = x_tables[j][y_windows[j][i]].clone();
+                z += if LC_SIGNS[j] { v } else { -v };
+            }
+        }
+
+        assert!(z == BigInt::from(r));
+    }
+
+    #[test]
+    fn test_254_bit_windowed_op_tmul_lc() {
+        const LC: usize = 4;
+        const LC_SIGNS: [bool; LC as usize] = [true; LC as usize];
+
+        type F = Fp<254, 30, 3, { LC as u32 }>;
+
+        print_script_size("254-bit-windowed-op-tmul", F::OP_TMUL(LC_SIGNS));
+
+        let p = F::modulus();
+
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+
+        let xs = (0..LC)
+            .map(|_| prng.gen_biguint_below(&p))
+            .collect::<Vec<_>>();
+        let ys = (0..LC)
+            .map(|_| prng.gen_biguint_below(&p))
+            .collect::<Vec<_>>();
+
+        let mut c = BigUint::ZERO;
+        for i in 0..LC {
+            let xy = &xs[i] * &ys[i];
+            if LC_SIGNS[i] {
+                c += xy;
+            } else {
+                c -= xy;
+            };
+        }
+
+        let r = &c % &p;
+        let q = &c / &p;
+
+        let script = script! {
+            { F::P::W::push_u32_le(&q.to_u32_digits()) }
+            for i in 0..LC {
+                { F::U::push_u32_le(&xs[i].to_u32_digits()) }
+            }
+            for i in 0..LC {
+                { F::U::push_u32_le(&ys[i].to_u32_digits()) }
+            }
+            { F::OP_TMUL(LC_SIGNS) }
+            { F::U::push_u32_le(&r.to_u32_digits()) }
+            { F::U::equalverify(0, 1) }
+            OP_TRUE
+        };
+
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:5}: {:?}", res.final_stack.get(i));
+        }
+        println!("{:?}", res.stats);
+        assert!(res.success);
+    }
+
     #[test]
     fn test_254_bit_windowed_op_tmul() {
-        type F = Fp<254, 30, 4>;
+        type F = Fp<254, 30, 3, 1>;
 
-        print_script_size("254-bit-windowed-op-tmul", F::OP_TMUL());
+        print_script_size("254-bit-windowed-op-tmul", F::OP_TMUL([true; 1]));
 
         let mut prng = ChaCha20Rng::seed_from_u64(0);
 
@@ -357,7 +616,7 @@ mod tests {
             { F::U::push_u32_le(&q.to_u32_digits()) }
             { F::U::push_u32_le(&x.to_u32_digits()) }
             { F::U::push_u32_le(&y.to_u32_digits()) }
-            { F::OP_TMUL() }
+            { F::OP_TMUL([true; 1]) }
             { F::U::push_u32_le(&r.to_u32_digits()) }
             { F::U::equalverify(0, 1) }
             OP_TRUE
@@ -369,9 +628,9 @@ mod tests {
 
     #[test]
     fn test_254_bit_windowed_op_tmul_invalid_q() {
-        type F = Fp<254, 30, 3>;
+        type F = Fp<254, 30, 3, 1>;
 
-        print_script_size("254-bit-windowed-op-tmul", F::OP_TMUL());
+        print_script_size("254-bit-windowed-op-tmul-invalid-q", F::OP_TMUL([true; 1]));
 
         let mut prng = ChaCha20Rng::seed_from_u64(0);
 
@@ -393,7 +652,7 @@ mod tests {
             { F::U::push_u32_le(&q_invalid.to_u32_digits()) }
             { F::U::push_u32_le(&x.to_u32_digits()) }
             { F::U::push_u32_le(&y.to_u32_digits()) }
-            { F::OP_TMUL() }
+            { F::OP_TMUL([true; 1]) }
             { F::U::push_u32_le(&r.to_u32_digits()) }
             { F::U::equal(0, 1) }
             OP_VERIFY
@@ -405,12 +664,12 @@ mod tests {
 
     #[test]
     fn test_254_bit_windowed_op_tmul_fuzzy() {
-        type F<const WINDOW: u32> = Fp<254, 30, WINDOW>;
+        type F<const WINDOW: u32> = Fp<254, 30, WINDOW, 1>;
 
         let mut prng = ChaCha20Rng::seed_from_u64(0);
 
         seq!(WINDOW in 1..=4 {
-            print!("254-bit-windowed-op-tmul-{}-bit-window, script_size: {}", WINDOW, F::<WINDOW>::OP_TMUL().len());
+            print!("254-bit-windowed-op-tmul-{}-bit-window, script_size: {}", WINDOW, F::<WINDOW>::OP_TMUL([true; 1]).len());
 
             let mut max_stack_items: usize = 0;
 
@@ -426,7 +685,7 @@ mod tests {
                     { F::<WINDOW>::U::push_u32_le(&q.to_u32_digits()) }
                     { F::<WINDOW>::U::push_u32_le(&x.to_u32_digits()) }
                     { F::<WINDOW>::U::push_u32_le(&y.to_u32_digits()) }
-                    { F::<WINDOW>::OP_TMUL() }
+                    { F::<WINDOW>::OP_TMUL([true; 1]) }
                     { F::<WINDOW>::U::push_u32_le(&r.to_u32_digits()) }
                     { F::<WINDOW>::U::equalverify(0, 1) }
                     OP_TRUE
@@ -443,7 +702,7 @@ mod tests {
 
     #[test]
     fn test_254_bit_windowed_op_tmul_invalid_q_fuzzy() {
-        type F<const WINDOW: u32> = Fp<254, 30, WINDOW>;
+        type F<const WINDOW: u32> = Fp<254, 30, WINDOW, 1>;
 
         let mut prng = ChaCha20Rng::seed_from_u64(0);
 
@@ -467,7 +726,7 @@ mod tests {
                     { F::<WINDOW>::U::push_u32_le(&q_invalid.to_u32_digits()) }
                     { F::<WINDOW>::U::push_u32_le(&x.to_u32_digits()) }
                     { F::<WINDOW>::U::push_u32_le(&y.to_u32_digits()) }
-                    { F::<WINDOW>::OP_TMUL() }
+                    { F::<WINDOW>::OP_TMUL([true; 1]) }
                     { F::<WINDOW>::U::push_u32_le(&r.to_u32_digits()) }
                     { F::<WINDOW>::U::equal(0, 1) }
                     OP_VERIFY
