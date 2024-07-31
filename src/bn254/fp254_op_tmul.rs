@@ -86,6 +86,26 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
             OP_1SUB OP_PICK
         }
     }
+
+    pub fn resize<const T_BITS: u32>() -> Script {
+        assert!(T_BITS >= N_BITS, "T_BITS should >= N_BITS");
+
+        let n_limbs_self = (N_BITS + LIMB_SIZE - 1) / LIMB_SIZE;
+        let n_limbs_target = (T_BITS + LIMB_SIZE - 1) / LIMB_SIZE;
+
+        if n_limbs_target == n_limbs_self {
+            return script! {};
+        }
+        let n_limbs_to_add = n_limbs_target - n_limbs_self;
+        script! {
+            if n_limbs_to_add > 0 {
+                {0} {crate::pseudo::OP_NDUP((n_limbs_to_add - 1) as usize)} // Pushing zeros to the stack
+            }
+            for _ in 0..n_limbs_self {
+                { n_limbs_target - 1 } OP_ROLL
+            }
+        }
+    }
 }
 
 // Finite field multiplication impl
@@ -99,7 +119,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32> Fp<N_BITS, LIMB
 
     type U = BigIntImpl<N_BITS, LIMB_SIZE>; // unsigned BigInt
     type S = BigIntImpl<{ N_BITS + 1 }, LIMB_SIZE> where [(); { N_BITS + 1 } as usize]:; // signed BigInt (1-bit for sign)
-    type P = PrecomputeTable<{ N_BITS + WINDOW }, LIMB_SIZE, WINDOW> where [(); { N_BITS + WINDOW } as usize]:; // pre-compute table
+    type P = PrecomputeTable<N_BITS, LIMB_SIZE, WINDOW>; // pre-compute table
 
     pub fn modulus() -> BigUint {
         BigUint::from_str(
@@ -206,32 +226,33 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32> Fp<N_BITS, LIMB
             { Self::U::fromaltstack() } // move x back to stack
             { Self::P::initialize() }   // x: {0*z, 1*z, ..., ((1<<WINDOW)-1)*z}
             { Self::U::fromaltstack() } // move y back to stack
+            { Self::U::resize::<{ N_BITS + WINDOW }>() } // resize for stack alignment
 
             // main loop
             for i in 0..Self::N_WINDOW {
                 if i != 0 {
                     // TODO: ensure res.num_bits() <= N_BITS
                     for _ in 0..WINDOW { // z <<= WINDOW
-                        { Self::P::U::dbl() }
+                        { Self::P::W::dbl() }
                     }
                 }
 
                 // q*p[i]
-                { Self::P::U::copy(2 * (1 << WINDOW) - Self::bit_decomp_modulus(i) + loop_offset(i)) }
+                { Self::P::W::copy(2 * (1 << WINDOW) - Self::bit_decomp_modulus(i) + loop_offset(i)) }
 
                 // x*y[i]
                 { bit_decomp_script_y(1 + loop_offset(i)) }
                 { (1 << WINDOW) + 1 + loop_offset(i) }
                 OP_SWAP
                 OP_SUB
-                { Self::P::U::stack_copy() }
+                { Self::P::W::stack_copy() }
 
                 // x*y[i] - q*p[i]
-                { Self::P::U::sub(0, 1) }
+                { Self::P::W::sub(0, 1) }
 
                 // z += x*y[i] - q*p[i]
                 if i != 0 {
-                    { Self::P::U::add(0, 1) }
+                    { Self::P::W::add(0, 1) }
                 }
             }
 
@@ -260,48 +281,46 @@ struct PrecomputeTable<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u3
 impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32>
     PrecomputeTable<N_BITS, LIMB_SIZE, WINDOW>
 {
-    pub type U = BigIntImpl<N_BITS, LIMB_SIZE>;
+    pub type U = BigIntImpl<N_BITS, LIMB_SIZE>; // original N_BITS number
+    pub type W = BigIntImpl<{ N_BITS + WINDOW }, LIMB_SIZE> where [(); { N_BITS + WINDOW } as usize]:; // windowed multiple
 
     // drop table on top of the stack
-    fn drop() -> Script {
+    fn drop() -> Script
+    where
+        [(); { N_BITS + WINDOW } as usize]:,
+    {
         script! {
             for _ in 0..1<<WINDOW {
-                { Self::U::drop() }
+                { Self::W::drop() }
             }
         }
     }
 
-    /// WINDOW=1: {0, z}
-    fn initialize_1mul() -> Script {
+    pub fn initialize() -> Script
+    where
+        [(); { N_BITS + WINDOW } as usize]:,
+    {
+        assert!(WINDOW < 7, "WINDOW > 6 (exceeds stack limit: 1000)");
         script! {
-            { Self::U::push_zero() } // {z, 0}
-            { Self::U::roll(1) }     // {0, z}
-        }
-    }
-
-    pub fn initialize() -> Script {
-        assert!(
-            0 < WINDOW && WINDOW < 7,
-            "0 < WINDOW < 7 (exceeds stack: 1000)"
-        );
-        script! {
-            { Self::initialize_1mul() } // {0, z}
-            if WINDOW > 1 {
-                for i in 2..=WINDOW {
+            for i in 1..=WINDOW {
+                if i == 1 {
+                    { Self::U::resize::<{ N_BITS + WINDOW }>() } // resize to target bits
+                    { Self::W::push_zero() } // {z, 0}
+                    { Self::W::roll(1) }     // {0, z}
+                } else {
                     for j in 1 << (i - 1)..1 << i {
                         if j % 2 == 0 {
-                            { Self::U::copy(j/2 - 1) }
-                            { Self::U::dbl() }
+                            { Self::W::copy(j/2 - 1) }
+                            { Self::W::dbl() }
                         } else {
-                            { Self::U::copy(0) }
-                            { Self::U::copy(j - 1) }
-                            { Self::U::add(0, 1) }
+                            { Self::W::copy(0) }
+                            { Self::W::copy(j - 1) }
+                            { Self::W::add(0, 1) }
                         }
 
                     }
                 }
             }
-
         }
     }
 }
@@ -321,7 +340,7 @@ mod tests {
 
     #[test]
     fn test_254_bit_windowed_op_tmul() {
-        type F = Fp<254, 30, 3>;
+        type F = Fp<254, 30, 4>;
 
         print_script_size("254-bit-windowed-op-tmul", F::OP_TMUL());
 
@@ -409,7 +428,7 @@ mod tests {
                     { F::<WINDOW>::U::push_u32_le(&y.to_u32_digits()) }
                     { F::<WINDOW>::OP_TMUL() }
                     { F::<WINDOW>::U::push_u32_le(&r.to_u32_digits()) }
-                    { F::<WINDOW>::U::equalverify(1, 0) }
+                    { F::<WINDOW>::U::equalverify(0, 1) }
                     OP_TRUE
                 };
 
