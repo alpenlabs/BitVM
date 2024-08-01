@@ -1,5 +1,6 @@
 #![feature(generic_const_exprs)]
 #![feature(inherent_associated_types)]
+#![feature(const_if_match, const_fn_floating_point_arithmetic)]
 
 #[allow(dead_code)]
 // Re-export what is needed to write treepp scripts
