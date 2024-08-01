@@ -132,14 +132,14 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
 }
 
 // Linear Combination
-pub struct LinearCombination<const SIZE: usize>([bool; SIZE]);
-impl<const SIZE: usize> LinearCombination<SIZE> {
-    pub const fn new(inner: [bool; SIZE]) -> LinearCombination<SIZE> { LinearCombination(inner) }
-    pub const fn from(n: usize) -> LinearCombination<SIZE> {
-        let mut inner: [bool; SIZE] = [true; SIZE];
+pub struct LinearCombination<const COUNT: usize>([bool; COUNT]);
+impl<const COUNT: usize> LinearCombination<COUNT> {
+    pub const fn new(inner: [bool; COUNT]) -> LinearCombination<COUNT> { LinearCombination(inner) }
+    pub const fn from(n: usize) -> LinearCombination<COUNT> {
+        let mut inner: [bool; COUNT] = [true; COUNT];
         let mut n = n;
         let mut i = 0;
-        while i < SIZE {
+        while i < COUNT {
             inner[i] = (n & 1) != 0;
             n >>= 1;
             i += 1;
@@ -147,15 +147,15 @@ impl<const SIZE: usize> LinearCombination<SIZE> {
         LinearCombination(inner)
     }
     pub const fn get(&self, index: usize) -> bool { self.0[index] }
-    pub const fn SIZE(&self) -> usize { self.0.len() }
-    pub const fn SIZE_U32(&self) -> u32 { self.SIZE() as u32 }
+    pub const fn COUNT(&self) -> usize { self.0.len() }
+    pub const fn U32_COUNT(&self) -> u32 { self.COUNT() as u32 }
 }
 
 // Finite field multiplication impl
-pub struct Fp<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: u32> {}
+pub struct Fp<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_COUNT: u32> {}
 
-impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: u32>
-    Fp<N_BITS, LIMB_SIZE, WINDOW, LC_SIZE>
+impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_COUNT: u32>
+    Fp<N_BITS, LIMB_SIZE, WINDOW, LC_COUNT>
 {
     pub const N_BITS: u32 = N_BITS;
     pub const LIMB_SIZE: u32 = LIMB_SIZE;
@@ -164,7 +164,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: 
     pub const WINDOW: u32 = WINDOW;
 
     type U = BigIntImpl<N_BITS, LIMB_SIZE>; // unsigned BigInt
-    type P = PrecomputeTable<N_BITS, LIMB_SIZE, WINDOW, LC_SIZE>; // pre-compute table
+    type P = PrecomputeTable<N_BITS, LIMB_SIZE, WINDOW, LC_COUNT>; // pre-compute table
 
     pub fn modulus() -> BigUint {
         BigUint::from_str(
@@ -185,7 +185,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: 
 
     fn get_window_script_generator() -> impl FnMut() -> Script
     where
-        [(); LC_SIZE as usize]:,
+        [(); LC_COUNT as usize]:,
         [(); { N_BITS + WINDOW + Self::P::LC_BITS } as usize]:,
     {
         let n_window = Self::N_WINDOW;
@@ -207,7 +207,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: 
             let e_limb = e_bit / limb_size; // end bit limb
 
             script! {
-                for j in 0..LC_SIZE as u32 {
+                for j in 0..LC_COUNT as u32 {
                     { 0 }
                     if iter == n_window { // initialize accumulator to track reduced limb
 
@@ -244,27 +244,27 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: 
                         OP_ENDIF
                     }
 
-                    if j+1 < LC_SIZE as u32 {
+                    if j+1 < LC_COUNT as u32 {
                         if iter == n_window {
                             OP_TOALTSTACK
                             OP_TOALTSTACK
                         } else {
-                            for _ in j+1..LC_SIZE as u32 {
+                            for _ in j+1..LC_COUNT as u32 {
                                 OP_FROMALTSTACK
                             }
-                            { LC_SIZE - j - 1 } OP_ROLL OP_TOALTSTACK // acc
-                            { LC_SIZE - j - 1 } OP_ROLL OP_TOALTSTACK // res
-                            for _ in j+1..LC_SIZE as u32 {
+                            { LC_COUNT - j - 1 } OP_ROLL OP_TOALTSTACK // acc
+                            { LC_COUNT - j - 1 } OP_ROLL OP_TOALTSTACK // res
+                            for _ in j+1..LC_COUNT as u32 {
                                 OP_TOALTSTACK
                             }
                         }
                     }
                 }
-                for _ in 0..LC_SIZE-1 {
+                for _ in 0..LC_COUNT-1 {
                     OP_FROMALTSTACK
                     OP_FROMALTSTACK
                 }
-                for j in (0..LC_SIZE).rev() {
+                for j in (0..LC_COUNT).rev() {
                     if j != 0 {
                         { 2*j } OP_ROLL
                     }
@@ -275,25 +275,25 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: 
     }
 
     // z = x0*y0 - x1*y1 + x2*y2
-    // N = 5
-    // ops = [true, false, true, true, false],
+    // N = 3
+    // ops = [true, false, true],
     //       true for addition, false for subtraction
-    pub fn OP_TMUL(lcs: LinearCombination<{ LC_SIZE as usize }>) -> Script
+    pub fn OP_TMUL(lcs: LinearCombination<{ LC_COUNT as usize }>) -> Script
     where
         [(); { N_BITS + 1 } as usize]:,
         [(); { N_BITS + WINDOW } as usize]:,
         [(); { N_BITS + WINDOW + Self::P::LC_BITS } as usize]:,
-        [(); LC_SIZE as usize]:,
+        [(); LC_COUNT as usize]:,
     {
         let mut get_window_script = Self::get_window_script_generator();
 
         script! {
                 // stack: {q} {x0} {x1} {x2} {y0} {y1} {y2}
                 // pre-compute tables
-                for _ in 0..LC_SIZE {
+                for _ in 0..LC_COUNT {
                     { Self::U::toaltstack() }
                 }                             // {q} {x0} {x1} {x2}
-                for _ in 0..LC_SIZE {
+                for _ in 0..LC_COUNT {
                     { Self::U::toaltstack() }
                 }                             // {q}
 
@@ -301,7 +301,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: 
                 { Self::P::W::sub(0, 1) }   // {-q}
                 { Self::P::initialize() }   // {-q_table}
 
-                for i in 0..LC_SIZE {
+                for i in 0..LC_COUNT {
                     { Self::U::fromaltstack() }
                     { Self::P::resize_into() }
                     if !lcs.0[i as usize] {
@@ -311,7 +311,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: 
                     { Self::P::initialize() }
                 }                                   // {-q_table} {x0_table} {x1_table} {x2_table}
 
-                for _ in 0..LC_SIZE {
+                for _ in 0..LC_COUNT {
                     { Self::U::fromaltstack() }
                     { Self::P::resize_into() }
                 }                           // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2}
@@ -329,23 +329,23 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: 
 
                     // z += q*p[i]
                     if Self::get_modulus_window(i) != 0 {
-                        { Self::P::W::copy(1 + LC_SIZE + (1 + LC_SIZE) * ((1 << WINDOW) - 1) - Self::get_modulus_window(i)) } // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z=0} {-q[i]}
+                        { Self::P::W::copy(1 + LC_COUNT + (1 + LC_COUNT) * Self::P::size() - Self::get_modulus_window(i)) } // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z=0} {-q[i]}
                         { Self::P::W::add(0, 1) }  // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z}
                     }
 
                     { get_window_script() } // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z} {w0} {w1} {w2}
 
-                    for _ in 0..LC_SIZE-1 {
+                    for _ in 0..LC_COUNT-1 {
                         OP_TOALTSTACK
                     }                         // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z} {w0} -> {w1} {w2}
 
-                    for j in 0..LC_SIZE {
+                    for j in 0..LC_COUNT {
                         if j != 0 { OP_FROMALTSTACK }
                         OP_DUP OP_NOT
                         OP_IF
                             OP_DROP
                         OP_ELSE
-                            { 1 + LC_SIZE + (LC_SIZE - j) * ((1 << WINDOW) - 1)  }
+                            { 1 + LC_COUNT + (LC_COUNT - j) * Self::P::size()  }
                             OP_SWAP
                             OP_SUB
                             // xj*yj[i]
@@ -356,15 +356,15 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: 
                     }
                 }
 
-                { Self::P::W::is_positive(LC_SIZE + (1 + LC_SIZE) * ((1 << WINDOW) - 1))  } // -q >= 0 -> q is negative
+                { Self::P::W::is_positive(LC_COUNT + (1 + LC_COUNT) * Self::P::size())  } // -q >= 0 -> q is negative
                 OP_TOALTSTACK               // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {r} -> {1/0}
                 { Self::P::W::toaltstack() }   // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} -> {r} {1/0}
 
                 // cleanup
-                for _ in 0..LC_SIZE {
+                for _ in 0..LC_COUNT {
                     { Self::P::W::drop() }
                 }                           // {-q_table} {x0_table} {x1_table} {x2_table} -> {r} {1/0}
-                for _ in 0..LC_SIZE {
+                for _ in 0..LC_COUNT {
                     { Self::P::drop() }
                 }                           // {-q_table} -> {r} {1/0}
                 { Self::P::drop() }         // -> {r} {1/0}
@@ -389,18 +389,21 @@ struct PrecomputeTable<
     const N_BITS: u32,
     const LIMB_SIZE: u32,
     const WINDOW: u32,
-    const LC_SIZE: u32,
+    const LC_COUNT: u32,
 > {}
 
-impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: u32>
-    PrecomputeTable<N_BITS, LIMB_SIZE, WINDOW, LC_SIZE>
+impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_COUNT: u32>
+    PrecomputeTable<N_BITS, LIMB_SIZE, WINDOW, LC_COUNT>
 {
-    pub const LC_BITS: u32 = u32::BITS - LC_SIZE.leading_zeros() - 1;
+    pub const LC_BITS: u32 = u32::BITS - LC_COUNT.leading_zeros() - 1;
 
     const _WINDOW_LIMIT: u32 = (5 - WINDOW) * (WINDOW - 1); // compile time limit (1 <= WINDOW <= 5)
 
     pub type U = BigIntImpl<N_BITS, LIMB_SIZE>;
     pub type W = BigIntImpl<{ N_BITS + WINDOW + Self::LC_BITS }, LIMB_SIZE> where [(); { N_BITS + WINDOW + Self::LC_BITS } as usize]:; // windowed multiple
+
+    // num of items in the table
+    fn size() -> u32 { (1 << WINDOW) - 1 }
 
     // drop table on top of the stack
     fn drop() -> Script
@@ -508,7 +511,7 @@ mod tests {
         type LC4 = LinearCombination<4>;
         const LC: LC4 = LC4::new([true, false, true, false]);
 
-        type F = Fp<254, 30, 3, { LC.SIZE_U32() }>;
+        type F = Fp<254, 30, 3, { LC.U32_COUNT() }>;
 
         let p = F::modulus();
 
@@ -537,17 +540,17 @@ mod tests {
         }
 
         let mut prng = ChaCha20Rng::seed_from_u64(0);
-        let xs = (0..LC.SIZE())
+        let xs = (0..LC.COUNT())
             .map(|_| prng.gen_biguint_below(&p).to_bigint().unwrap())
             .collect::<Vec<_>>();
-        let ys = (0..LC.SIZE())
+        let ys = (0..LC.COUNT())
             .map(|_| prng.gen_biguint_below(&p).to_bigint().unwrap())
             .collect::<Vec<_>>();
 
         let p = p.to_bigint().unwrap();
 
         let mut c = BigInt::ZERO;
-        for i in 0..LC.SIZE() {
+        for i in 0..LC.COUNT() {
             let xy = &xs[i] * &ys[i];
             c += if LC.get(i) { xy } else { -xy };
         }
@@ -569,7 +572,7 @@ mod tests {
         for i in 0..F::N_WINDOW as usize {
             z *= 1 << F::WINDOW;
             z -= q_table[p_window[i]].clone();
-            for j in 0..LC.SIZE() {
+            for j in 0..LC.COUNT() {
                 let v = x_tables[j][y_windows[j][i]].clone();
                 z += if LC.get(j) { v } else { -v };
             }
@@ -582,7 +585,7 @@ mod tests {
     fn test_254_bit_windowed_op_tmul() {
         const LC: LinearCombination<1> = LinearCombination::new([true]);
 
-        type F = Fp<254, 30, 3, { LC.SIZE_U32() }>;
+        type F = Fp<254, 30, 3, { LC.U32_COUNT() }>;
 
         print_script_size("254-bit-windowed-op-tmul", F::OP_TMUL(LC));
 
@@ -635,7 +638,7 @@ mod tests {
         let mut prng: ChaCha20Rng = ChaCha20Rng::seed_from_u64(0);
 
         seq!(WINDOW in 1..=5 { {
-            type F = Fp<254, 30, WINDOW, { LC.SIZE_U32() }>;
+            type F = Fp<254, 30, WINDOW, { LC.U32_COUNT() }>;
 
             print!("254-bit-windowed-op-tmul-{}-bit-window, script_size: {}", WINDOW, F::OP_TMUL(LC).len());
 
@@ -694,7 +697,7 @@ mod tests {
     fn test_254_bit_windowed_op_tmul_lc() {
         const LC: LinearCombination<4> = LinearCombination::new([true, false, true, false]);
 
-        type F = Fp<254, 30, 3, { LC.SIZE() as u32 }>;
+        type F = Fp<254, 30, 3, { LC.COUNT() as u32 }>;
 
         print_script_size("254-bit-windowed-op-tmul", F::OP_TMUL(LC));
 
@@ -702,17 +705,17 @@ mod tests {
 
         let mut prng: ChaCha20Rng = ChaCha20Rng::seed_from_u64(0);
 
-        let xs = (0..LC.SIZE())
+        let xs = (0..LC.COUNT())
             .map(|_| prng.gen_biguint_below(&p).to_bigint().unwrap())
             .collect::<Vec<_>>();
-        let ys = (0..LC.SIZE())
+        let ys = (0..LC.COUNT())
             .map(|_| prng.gen_biguint_below(&p).to_bigint().unwrap())
             .collect::<Vec<_>>();
 
         let p = p.to_bigint().unwrap();
 
         let mut c = BigInt::ZERO;
-        for i in 0..LC.SIZE() as usize {
+        for i in 0..LC.COUNT() as usize {
             let xy = &xs[i] * &ys[i];
             c += if LC.get(i) { xy } else { -xy };
         }
@@ -724,10 +727,10 @@ mod tests {
         let q = &c / &p;
         let script = script! {
             { F::P::W::push_u32_le(&bigint_to_u32_limbs(q.clone(), F::P::W::N_BITS)) }
-            for i in 0..LC.SIZE() {
+            for i in 0..LC.COUNT() {
                 { F::U::push_u32_le(&xs[i].to_u32_digits().1) }
             }
-            for i in 0..LC.SIZE() {
+            for i in 0..LC.COUNT() {
                 { F::U::push_u32_le(&ys[i].to_u32_digits().1) }
             }
             { F::OP_TMUL(LC) }
@@ -748,10 +751,10 @@ mod tests {
         };
         let script = script! {
             { F::P::W::push_u32_le(&bigint_to_u32_limbs(q, F::P::W::N_BITS)) }
-            for i in 0..LC.SIZE() {
+            for i in 0..LC.COUNT() {
                 { F::U::push_u32_le(&xs[i].to_u32_digits().1) }
             }
-            for i in 0..LC.SIZE() {
+            for i in 0..LC.COUNT() {
                 { F::U::push_u32_le(&ys[i].to_u32_digits().1) }
             }
             { F::OP_TMUL(LC) }
@@ -781,27 +784,27 @@ mod tests {
         let mut prng: ChaCha20Rng = ChaCha20Rng::seed_from_u64(0);
 
         seq!(WINDOW in 1..=4 {
-            seq!(LC_SIZE in 1..=5 { {
+            seq!(LC_COUNT in 1..=5 { {
                 seq!(LC_BITS in 0..32 { {
                     const_if!(
-                        LC_BITS < (1 << LC_SIZE),
+                        LC_BITS < (1 << LC_COUNT),
                         {
-                            const LC: LinearCombination<LC_SIZE> = LinearCombination::from(LC_BITS);
-                            type F = Fp<254, 30, WINDOW, { LC.SIZE_U32() }>;
+                            const LC: LinearCombination<LC_COUNT> = LinearCombination::from(LC_BITS);
+                            type F = Fp<254, 30, WINDOW, { LC.U32_COUNT() }>;
 
                             let p = F::modulus();
 
-                            let xs = (0..LC.SIZE())
+                            let xs = (0..LC.COUNT())
                                 .map(|_| prng.gen_biguint_below(&p).to_bigint().unwrap())
                                 .collect::<Vec<_>>();
-                            let ys = (0..LC.SIZE())
+                            let ys = (0..LC.COUNT())
                                 .map(|_| prng.gen_biguint_below(&p).to_bigint().unwrap())
                                 .collect::<Vec<_>>();
 
                             let p = p.to_bigint().unwrap();
 
                             let mut c = BigInt::ZERO;
-                            for i in 0..LC.SIZE() as usize {
+                            for i in 0..LC.COUNT() as usize {
                                 let xy = &xs[i] * &ys[i];
                                 c += if LC.get(i) { xy } else { -xy };
                             }
@@ -813,10 +816,10 @@ mod tests {
                             let q = &c / &p;
                             let script = script! {
                                 { F::P::W::push_u32_le(&bigint_to_u32_limbs(q.clone(), F::P::W::N_BITS)) }
-                                for i in 0..LC.SIZE() {
+                                for i in 0..LC.COUNT() {
                                     { F::U::push_u32_le(&xs[i].to_u32_digits().1) }
                                 }
-                                for i in 0..LC.SIZE() {
+                                for i in 0..LC.COUNT() {
                                     { F::U::push_u32_le(&ys[i].to_u32_digits().1) }
                                 }
                                 { F::OP_TMUL(LC) }
@@ -836,10 +839,10 @@ mod tests {
                             };
                             let script = script! {
                                 { F::P::W::push_u32_le(&bigint_to_u32_limbs(q, F::P::W::N_BITS)) }
-                                for i in 0..LC.SIZE() {
+                                for i in 0..LC.COUNT() {
                                     { F::U::push_u32_le(&xs[i].to_u32_digits().1) }
                                 }
-                                for i in 0..LC.SIZE() {
+                                for i in 0..LC.COUNT() {
                                     { F::U::push_u32_le(&ys[i].to_u32_digits().1) }
                                 }
                                 { F::OP_TMUL(LC) }
