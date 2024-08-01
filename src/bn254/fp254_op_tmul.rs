@@ -87,11 +87,19 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
         }
     }
 
-    pub fn is_neg(depth: u32) -> Script {
+    pub fn is_negative(depth: u32) -> Script {
         script! {
             { (1 + depth) * Self::N_LIMBS - 1 } OP_PICK
             { Self::HEAD_OFFSET >> 1 }
             OP_GREATERTHANOREQUAL
+        }
+    }
+
+    pub fn is_positive(depth: u32) -> Script {
+        script! {
+            { (1 + depth) * Self::N_LIMBS - 1 } OP_PICK
+            { Self::HEAD_OFFSET >> 1 }
+            OP_LESSTHAN
         }
     }
 
@@ -164,7 +172,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: 
         .expect("modulus: should not fail")
     }
 
-    fn bit_decomp_modulus(index: u32) -> u32 {
+    fn get_modulus_window(index: u32) -> u32 {
         let shift_by = WINDOW * (Self::N_WINDOW - index - 1);
         let mut bit_mask =
             BigUint::from_u32((1 << WINDOW) - 1).expect("bit_decomp:bit_mask: should not fail");
@@ -174,7 +182,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: 
             .expect("bit_decomp_modulus: should not fail")
     }
 
-    fn bit_decomp_script_generator() -> impl FnMut() -> Script
+    fn get_window_script_generator() -> impl FnMut() -> Script
     where
         [(); LC_SIZE as usize]:,
         [(); { N_BITS + WINDOW + Self::P::LC_BITS } as usize]:,
@@ -274,7 +282,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: 
         [(); { N_BITS + WINDOW + Self::P::LC_BITS } as usize]:,
         [(); LC_SIZE as usize]:,
     {
-        let mut bit_decomp_script_y = Self::bit_decomp_script_generator();
+        let mut get_window_script = Self::get_window_script_generator();
 
         script! {
                 // stack: {q} {x0} {x1} {x2} {y0} {y1} {y2}
@@ -318,11 +326,11 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: 
                     }
 
                     // z += q*p[i]
-                    { Self::P::W::copy((1 + LC_SIZE) * (1 << WINDOW) - Self::bit_decomp_modulus(i) + LC_SIZE) } // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z=0} {-q[i]}
+                    { Self::P::W::copy((1 + LC_SIZE) * (1 << WINDOW) - Self::get_modulus_window(i) + LC_SIZE) } // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z=0} {-q[i]}
 
                     { Self::P::W::add(0, 1) }  // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z}
 
-                    { bit_decomp_script_y() } // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z} {w0} {w1} {w2}
+                    { get_window_script() } // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {z} {w0} {w1} {w2}
 
                     for _ in 0..LC_SIZE {
                         OP_TOALTSTACK
@@ -343,9 +351,10 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: 
 
                 }
 
-                { Self::P::W::is_neg((1 + LC_SIZE) * (1 << WINDOW) + LC_SIZE - 1)  } OP_NOT // q is negative
+                { Self::P::W::is_positive((1 + LC_SIZE) * (1 << WINDOW) + LC_SIZE - 1)  } // -q >= 0 -> q is negative
                 OP_TOALTSTACK               // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {r} -> {1/0}
                 { Self::U::toaltstack() }   // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} -> {r} {1/0}
+
                 // cleanup
                 for _ in 0..LC_SIZE {
                     { Self::P::W::drop() }
