@@ -390,7 +390,9 @@ struct PrecomputeTable<
 impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: u32>
     PrecomputeTable<N_BITS, LIMB_SIZE, WINDOW, LC_SIZE>
 {
-    const LC_BITS: u32 = u32::BITS - LC_SIZE.leading_zeros() - 1;
+    pub const LC_BITS: u32 = u32::BITS - LC_SIZE.leading_zeros() - 1;
+
+    const _WINDOW_LIMIT: u32 = (4 - WINDOW) * (WINDOW - 1); // compile time limit (1 <= WINDOW <= 4)
 
     pub type U = BigIntImpl<N_BITS, LIMB_SIZE>;
     pub type W = BigIntImpl<{ N_BITS + WINDOW + Self::LC_BITS }, LIMB_SIZE> where [(); { N_BITS + WINDOW + Self::LC_BITS } as usize]:; // windowed multiple
@@ -418,7 +420,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: 
     where
         [(); { N_BITS + WINDOW + Self::LC_BITS } as usize]:,
     {
-        assert!(WINDOW < 7, "WINDOW > 6 (exceeds stack limit: 1000)");
+        _ = Self::_WINDOW_LIMIT;
         script! {
             for i in 1..=WINDOW {
                 if i == 1 {
