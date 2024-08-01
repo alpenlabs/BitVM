@@ -778,7 +778,6 @@ mod tests {
                             const LC: LinearCombination<LC_SIZE> = LinearCombination::from(LC_BITS);
                             type F = Fp<254, 30, WINDOW, { LC.SIZE_U32() }>;
 
-                            println!("W={}, LC={}, N={}", WINDOW, LC_SIZE, LC_BITS);
                             let p = F::modulus();
 
                             let xs = (0..LC.SIZE())
