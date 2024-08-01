@@ -358,7 +358,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: 
 
                 { Self::P::W::is_positive(LC_SIZE + (1 + LC_SIZE) * ((1 << WINDOW) - 1))  } // -q >= 0 -> q is negative
                 OP_TOALTSTACK               // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} {r} -> {1/0}
-                { Self::U::toaltstack() }   // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} -> {r} {1/0}
+                { Self::P::W::toaltstack() }   // {-q_table} {x0_table} {x1_table} {x2_table} {y0} {y1} {y2} -> {r} {1/0}
 
                 // cleanup
                 for _ in 0..LC_SIZE {
@@ -370,7 +370,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const WINDOW: u32, const LC_SIZE: 
                 { Self::P::drop() }         // -> {r} {1/0}
 
                 // validation: r = if r < 0 { r + p } else { r }; assert(r < p)
-                { Self::U::fromaltstack() } OP_FROMALTSTACK // {r} {1/0}
+                { Self::P::W::fromaltstack() } OP_FROMALTSTACK // {r} {1/0}
                 OP_IF                                                             // {r}
                     { Self::P::W::push_u32_le(&Self::modulus().to_u32_digits()) } // {r} {p}
                     { Self::P::W::add(0, 1) }                                     // {r_final}
