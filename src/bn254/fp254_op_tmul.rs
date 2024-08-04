@@ -1,4 +1,10 @@
-use crate::{bigint::BigIntImpl, treepp::*};
+use crate::{
+    bigint::{
+        add::{limb_add_carry, limb_add_nocarry},
+        BigIntImpl,
+    },
+    treepp::*,
+};
 use num_bigint::BigUint;
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::str::FromStr;
@@ -72,21 +78,6 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
         }
     }
 
-    pub fn stack_copy() -> Script {
-        script! {
-            OP_DUP
-            {crate::pseudo::OP_4MUL()}
-            {crate::pseudo::OP_2MUL()} // Multiplying depth by 8
-            OP_ADD // Adding depth to 8*depth to get 9*depth
-            { Self::N_LIMBS }
-            OP_ADD
-            for _ in 0..Self::N_LIMBS - 1 {
-                OP_DUP OP_PICK OP_SWAP
-            }
-            OP_1SUB OP_PICK
-        }
-    }
-
     pub fn is_negative(depth: u32) -> Script {
         script! {
             { (1 + depth) * Self::N_LIMBS - 1 } OP_PICK
@@ -127,6 +118,175 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
                     { n_limbs_target } OP_ROLL OP_DROP
                 }
             }
+        }
+    }
+
+    pub fn stack_copy() -> Script {
+        script! {
+            OP_DUP
+            {crate::pseudo::OP_4MUL()}
+            {crate::pseudo::OP_2MUL()} // Multiplying depth by 8
+            OP_ADD // Adding depth to 8*depth to get 9*depth
+            { Self::N_LIMBS }
+            OP_ADD
+            for _ in 0..Self::N_LIMBS - 1 {
+                OP_DUP OP_PICK OP_SWAP
+            }
+            OP_1SUB OP_PICK
+        }
+    }
+
+    pub fn ref_zip(mut b: u32) -> Script {
+        let a = Self::N_LIMBS - 1;
+        if b == 0 {
+            Self::dup_zip(0)
+        } else {
+            b = (b + 1) * Self::N_LIMBS - 1;
+            script! {
+                for i in 0..Self::N_LIMBS-1 {
+                    {b} OP_PICK {a+i} OP_ROLL
+                }
+                {b} OP_PICK
+            }
+        }
+    }
+
+    // does not support zipping to self, stack_top={0}
+    pub fn stack_ref_zip() -> Script {
+        script! {
+            OP_DUP
+            {crate::pseudo::OP_4MUL()}
+            {crate::pseudo::OP_2MUL()} // Multiplying depth by 8
+            OP_ADD // Adding depth to 8*depth to get 9*depth
+
+            // OP_DUP OP_NOT OP_NOT OP_VERIFY // fail on {0} stack
+            // OP_DUP OP_NOT
+            // OP_IF
+            //     OP_DROP
+            //     { Self::topzip(0) }
+            // OP_ELSE
+                { Self::N_LIMBS } OP_ADD
+                for i in 0..Self::N_LIMBS {
+                    if i > 0 { OP_ROT }
+                    OP_DUP OP_PICK
+                    if i < Self::N_LIMBS - 1 {
+                        { Self::N_LIMBS + i } OP_ROLL
+                    }
+                }
+                OP_NIP
+            // OP_ENDIF
+        }
+    }
+
+    fn _inner_add() -> Script {
+        script! {
+            { 1 << LIMB_SIZE }
+
+            // A0 + B0
+            limb_add_carry OP_TOALTSTACK
+
+            // from     A1      + B1        + carry_0
+            //   to     A{N-2}  + B{N-2}    + carry_{N-3}
+            for _ in 0..Self::N_LIMBS - 2 {
+                OP_ROT
+                OP_ADD
+                OP_SWAP
+                limb_add_carry OP_TOALTSTACK
+            }
+
+            // A{N-1} + B{N-1} + carry_{N-2}
+            OP_NIP
+            OP_ADD
+            { limb_add_nocarry(Self::HEAD_OFFSET) }
+
+            for _ in 0..Self::N_LIMBS - 1 {
+                OP_FROMALTSTACK
+            }
+        }
+    }
+
+    pub fn ref_add(b: u32) -> Script {
+        script! {
+            { Self::ref_zip(b) }
+            { Self::_inner_add() }
+        }
+    }
+
+    pub fn stack_ref_add() -> Script {
+        script! {
+            { Self::stack_ref_zip() }
+            { Self::_inner_add() }
+        }
+    }
+
+    pub fn ref_add_no_copy(mut b: u32) -> Script {
+        b = b * Self::N_LIMBS;
+        script! {
+            {b} OP_PICK
+            { 1 << LIMB_SIZE }
+            limb_add_carry OP_TOALTSTACK
+            for i in 1..Self::N_LIMBS {
+                { b + 2 } OP_PICK
+                OP_ADD
+                if i < Self::N_LIMBS - 1 {
+                    OP_SWAP
+                    limb_add_carry OP_TOALTSTACK
+                } else {
+                    OP_NIP
+                    { limb_add_nocarry(Self::HEAD_OFFSET) }
+                }
+            }
+            for _ in 0..Self::N_LIMBS - 1 {
+                OP_FROMALTSTACK
+            }
+        }
+    }
+
+    // does not support addition to self, stack_top=0
+    pub fn stack_ref_add_no_copy() -> Script {
+        script! {
+            OP_DUP
+            {crate::pseudo::OP_4MUL()}
+            {crate::pseudo::OP_2MUL()} // Multiplying depth by 8
+            OP_ADD // Adding depth to 8*depth to get 9*depth
+
+            // OP_DUP OP_NOT OP_NOT OP_VERIFY // fail on {0} stack
+            // OP_DUP OP_NOT
+            // OP_IF
+            //     OP_DROP
+            //     { Self::topadd_new(0) }
+            // OP_ELSE
+                OP_1ADD OP_DUP
+                OP_1ADD OP_SWAP OP_PICK
+                for _ in 0..Self::N_LIMBS-1 {
+                    OP_ROT OP_ADD
+                    { 1 << LIMB_SIZE }
+                    OP_SWAP OP_2DUP
+                    OP_LESSTHANOREQUAL
+                    OP_TUCK
+                    OP_IF
+                        OP_ROT OP_SUB
+                    OP_ELSE
+                        OP_ROT OP_DROP
+                    OP_ENDIF
+                    OP_TOALTSTACK
+                    OP_OVER OP_PICK OP_ADD
+                }
+                OP_ROT OP_ADD
+                { Self::HEAD_OFFSET }
+                OP_2DUP
+                OP_GREATERTHANOREQUAL
+                OP_IF
+                    OP_SUB
+                OP_ELSE
+                    OP_DROP
+                OP_ENDIF
+                OP_TOALTSTACK
+                OP_DROP
+                for _ in 0..Self::N_LIMBS {
+                    OP_FROMALTSTACK
+                }
+            // OP_ENDIF
         }
     }
 }
@@ -246,13 +406,19 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const VAR_WIDTH: u32, const MOD_WI
         }
     }
 
-    pub fn OP_TMUL() -> Script
+    pub fn OP_TMUL() -> (Script, (i32, i32))
     where
         [(); { Self::EXT_N_BITS } as usize]:,
     {
         let mut get_var_window = Self::get_var_window_script_generator();
 
-        script! {
+        let mut ops = (0, 0);
+        let mut add_op = |d: i32, a: i32| -> Script {
+            ops = (ops.0 + d, ops.1 + a);
+            script! {}
+        };
+
+        let scr = script! {
                 // stack: {q} {x} {y}
                 // pre-compute tables
                 { Self::U::toaltstack() }    // {q} {x} -> {y}
@@ -273,8 +439,8 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const VAR_WIDTH: u32, const MOD_WI
                 for i in Self::EXT_N_BITS_SKIP..=Self::EXT_N_BITS {
                     // z -= q*p[i]
                     if i % MOD_WIDTH == 0 && Self::get_mod_window(i/MOD_WIDTH - 1) != 0  {
-                        { Self::T::W::copy((1 << VAR_WIDTH) + (1 << MOD_WIDTH) - Self::get_mod_window(i/MOD_WIDTH - 1)) }
-                        { Self::T::W::add(0, 1) }
+                        { Self::T::W::ref_add_no_copy((1 << VAR_WIDTH) + (1 << MOD_WIDTH) - Self::get_mod_window(i/MOD_WIDTH - 1)) }
+                        { add_op(0, 1) }
                     }
                     // z += x*y[i]
                     if i % VAR_WIDTH == 0 {
@@ -286,13 +452,15 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const VAR_WIDTH: u32, const MOD_WI
                             { 1 + (1 << VAR_WIDTH)  }
                             OP_SWAP
                             OP_SUB
-                            { Self::T::W::stack_copy() }
-                            { Self::T::W::add(0, 1) }
+                            // { Self::T::W::stack_ref_add_no_copy() }
+                            { Self::T::W::stack_ref_add() }
+                            { add_op(0, 1) }
                         OP_ENDIF
                     }
                     if i < Self::EXT_N_BITS {
                         // TODO: ensure res.num_bits() <= N_BITS
                         { Self::T::W::dbl() }
+                        { add_op(1, 0) }
                     }
                 }
 
@@ -311,7 +479,9 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32, const VAR_WIDTH: u32, const MOD_WI
 
                 // resize res back to N_BITS
                 { Self::T::W::resize::<N_BITS>() } // {r}
-        }
+        };
+
+        (scr, ops)
     }
 }
 
@@ -332,7 +502,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> LookupTable<N_BITS, LIMB_SIZE> {
     pub fn initialize(window: u32) -> Script {
         assert!(
             1 <= window && window <= 6,
-            "expected 1<=window<=5; got window={}",
+            "expected 1<=window<=6; got window={}",
             window
         );
         script! {
@@ -487,7 +657,7 @@ mod tests {
                     { F::U::push_u32_le(&q.to_u32_digits()) }
                     { F::U::push_u32_le(&x.to_u32_digits()) }
                     { F::U::push_u32_le(&y.to_u32_digits()) }
-                    { F::OP_TMUL() }
+                    { F::OP_TMUL().0 }
                     { F::U::push_u32_le(&r.to_u32_digits()) }
                     { F::U::equalverify(0, 1) }
                     OP_TRUE
@@ -495,10 +665,12 @@ mod tests {
                 // fs::write("~/fq_op_tmul_script.txt", script.clone().compile().to_string()).unwrap();
                 let res = execute_script(script);
                 if VAR_WIDTH == 6 && VAR_WIDTH == MOD_WIDTH { // skip stack limit exceeding muls
-                    stats.push((format!("{}Y-{}P", VAR_WIDTH, MOD_WIDTH), F::OP_TMUL().len(), 1000));
+                    let (scr, ops) = F::OP_TMUL();
+                    stats.push((format!("{}Y-{}P", VAR_WIDTH, MOD_WIDTH),scr.len(), 1000, ops));
                 } else {
                     assert!(res.success);
-                    stats.push((format!("{}Y-{}P", VAR_WIDTH, MOD_WIDTH), F::OP_TMUL().len(), res.stats.max_nb_stack_items));
+                    let (scr, ops) = F::OP_TMUL();
+                    stats.push((format!("{}Y-{}P", VAR_WIDTH, MOD_WIDTH), scr.len(), res.stats.max_nb_stack_items, ops));
                 }
             } });
         });
@@ -513,8 +685,8 @@ mod tests {
         });
         for stat in stats {
             println!(
-                "254-bit-{}: script: {:6}, stack: {:3}",
-                stat.0, stat.1, stat.2
+                "254-bit-{}: script: {:6}, stack: {:4}, [D={:3}, A={:3}]",
+                stat.0, stat.1, stat.2, stat.3 .0, stat.3 .1
             );
         }
     }
