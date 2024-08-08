@@ -5,15 +5,11 @@ use crate::{
     },
     treepp::*,
 };
-use bitcoin::{
-    hashes::{hash160, Hash},
-    hex::DisplayHex,
-    opcodes::all::{OP_FROMALTSTACK, OP_TOALTSTACK},
-};
+use bitcoin::hashes::{hash160, Hash};
 use hex::decode as hex_decode;
 use num_bigint::BigUint;
-use num_traits::{FromPrimitive, ToBytes, ToPrimitive};
-use std::{process::exit, str::FromStr};
+use num_traits::{FromPrimitive, ToPrimitive};
+use std::str::FromStr;
 
 pub fn NMUL(n: u32) -> Script {
     let n_bits = u32::BITS - n.leading_zeros();
@@ -326,6 +322,7 @@ pub struct Fq<
     const MOD_WIDTH: u32,
     const VAR_WIDTH: u32,
     const N_LC: usize,
+    const OTS_WIDTH: u32,
 > {
     pub secret: String,
     pub wots_encode_counter: u32,
@@ -339,7 +336,8 @@ impl<
         const MOD_WIDTH: u32,
         const VAR_WIDTH: u32,
         const N_LC: usize,
-    > Fq<N_BITS, LIMB_SIZE, MOD_WIDTH, VAR_WIDTH, N_LC>
+        const OTS_WIDTH: u32,
+    > Fq<N_BITS, LIMB_SIZE, MOD_WIDTH, VAR_WIDTH, N_LC, OTS_WIDTH>
 {
     pub const N_BITS: u32 = N_BITS;
     pub const LIMB_SIZE: u32 = LIMB_SIZE;
@@ -596,15 +594,20 @@ impl<
         let mut get_var_windows = self.get_var_window_script_generator();
 
         script! {
-            // stack: {q} {x0} {x1} {y0} {y1}
+            // stack: {wr} {q} {wx0} {wx1} {wy0} {wy1}
             for _ in 0..2*N_LC as u32 {
                 { self.wots_decode() }
                 // range check: U < MODULUS
-                { Self::U::copy(0) }                                       // {q} {x0} {x1} {y0} {y1} {y1}
-                { Self::U::push_u32_le(&Self::modulus().to_u32_digits()) } // {q} {x0} {x1} {y0} {y1} {y1} {MODULUS}
-                { Self::U::lessthan(1, 0) } OP_VERIFY                      // {q} {x0} {x1} {y0} {y1}
-                { Self::U::toaltstack() }                                  // {q} {x0} {x1} {y0} -> {y1}
-            }                                                              // {q} -> {x0} {x1} {y0} {y1}
+                { Self::U::copy(0) }                                       // {wr} {q} {x0} {x1} {y0} {y1} {y1}
+                { Self::U::push_u32_le(&Self::modulus().to_u32_digits()) } // {wr} {q} {x0} {x1} {y0} {y1} {y1} {MODULUS}
+                { Self::U::lessthan(1, 0) } OP_VERIFY                      // {wr} {q} {x0} {x1} {y0} {y1}
+                { Self::U::toaltstack() }                                  // {wr} {q} {x0} {x1} {y0} -> {y1}
+            }                                                              // {wr} {q} -> {x0} {x1} {y0} {y1}
+
+            { Self::T::toaltstack() }                                      // {rw} -> {q} {x0} {x1} {y0} {y1}
+            { self.wots_decode() }                                         // {r} -> {q} {x0} {x1} {y0} {y1}
+            { Self::T::fromaltstack() }                                    // {r} {q} -> {x0} {x1} {y0} {y1}
+
             // pre-compute tables
             { Self::T::push_zero() }             // {q} {0} -> {x0} {x1} {y0} {y1}
             { Self::T::sub(0, 1) }               // {-q} -> {x0} {x1} {y0} {y1}
@@ -663,9 +666,6 @@ impl<
             for _ in 0..N_LC { { Self::T::drop_table(VAR_WIDTH) } } // {-q_table} -> {r} {0/1}
             { Self::T::drop_table(MOD_WIDTH) }                      // -> {r} {0/1}
 
-            // decode WOTS r
-            { self.wots_decode() }
-
             // correction/validation: r = if q < 0 { r + p } else { r }; assert(r < p)
             { Self::T::push_u32_le(&Self::modulus().to_u32_digits()) } // {MODULUS} -> {r} {0/1}
             { Self::T::fromaltstack() } OP_FROMALTSTACK // {MODULUS} {r} {0/1}
@@ -681,11 +681,11 @@ impl<
 
     /// Winternitz OTS
     /// WINDOW
-    const WOTS_WINDOW: u32 = 5;
+    const OTS_WIDTH: u32 = OTS_WIDTH;
     /// Digits are base d+1
-    const MAX_DIGIT: u32 = (1 << Self::WOTS_WINDOW) - 1;
+    const MAX_DIGIT: u32 = (1 << Self::OTS_WIDTH) - 1;
     /// Number of digits of the message
-    const N_DIGITS: u32 = (N_BITS + Self::WOTS_WINDOW - 1) / Self::WOTS_WINDOW;
+    const N_DIGITS: u32 = (N_BITS + Self::OTS_WIDTH - 1) / Self::OTS_WIDTH;
     /// Number of digits of the checksum.  N1 = ⌈log_{D+1}(D*N0)⌉ + 1
     const C_DIGITS: usize = log(Self::MAX_DIGIT * Self::N_DIGITS, Self::MAX_DIGIT + 1) as usize;
     /// Total number of chains
@@ -695,8 +695,8 @@ impl<
         assert!(n < &Self::modulus(), "n should be smaller than modulus");
         let mut digits = [0; Self::N_DIGITS as usize];
         for i in 0..Self::N_DIGITS {
-            let shift_by = Self::WOTS_WINDOW * (Self::N_DIGITS - i - 1);
-            let bit_mask = BigUint::from_u32((1 << Self::WOTS_WINDOW) - 1).unwrap() << shift_by;
+            let shift_by = Self::OTS_WIDTH * (Self::N_DIGITS - i - 1);
+            let bit_mask = BigUint::from_u32((1 << Self::OTS_WIDTH) - 1).unwrap() << shift_by;
             digits[i as usize] = ((n & bit_mask) >> shift_by).to_u8().unwrap();
         }
         digits
@@ -771,6 +771,29 @@ impl<
     pub fn wots_decode(&mut self) -> Script {
         self.wots_decode_counter -= 1;
         let var_index = self.wots_decode_counter;
+
+        fn split_digit(window: u32, index: u32) -> Script {
+            script! {
+                // {v}
+                0                           // {v} {A}
+                OP_SWAP
+                for i in 0..index {
+                    OP_TUCK                 // {v} {A} {v}
+                    { 1 << (window - i - 1) }   // {v} {A} {v} {1000}
+                    OP_GREATERTHANOREQUAL   // {v} {A} {1/0}
+                    OP_TUCK                 // {v} {1/0} {A} {1/0}
+                    OP_ADD                  // {v} {1/0} {A+1/0}
+                    if i < index - 1 { { NMUL(2) } }
+                    OP_ROT OP_ROT
+                    OP_IF
+                        { 1 << (window - i - 1) }
+                        OP_SUB
+                    OP_ENDIF
+                }
+                OP_SWAP
+            }
+        }
+
         script! {
             for i in 0..Self::N_CHAINS {
                 { self.wots_public_key( var_index, Self::N_CHAINS - i - 1) } OP_SWAP
@@ -791,7 +814,7 @@ impl<
             // pre-computed checksum
             OP_FROMALTSTACK
             for _ in 1..Self::C_DIGITS {
-                for _ in 0..Self::WOTS_WINDOW {
+                for _ in 0..Self::OTS_WIDTH {
                     OP_DUP OP_ADD
                 }
                 OP_FROMALTSTACK OP_ADD
@@ -799,17 +822,21 @@ impl<
             OP_EQUALVERIFY
 
             // field element reconstruction
-            for i in 0..Self::U::N_LIMBS {
-                if i == 0 {
-                    for _ in 1..((Self::U::HEAD + Self::WOTS_WINDOW - 1) / Self::WOTS_WINDOW) {
-                        { NMUL(1 << Self::WOTS_WINDOW) }  OP_ADD
-                    }
-                } else {
-                    for _ in 1..Self::LIMB_SIZE / Self::WOTS_WINDOW {
-                        { NMUL(1 << Self::WOTS_WINDOW) } OP_ADD
-                    }
+            for i in (1..=Self::N_DIGITS).rev() {
+                if (i * Self::OTS_WIDTH) % LIMB_SIZE == 0 {
+                    OP_TOALTSTACK
+                } else if (i * Self::OTS_WIDTH) % LIMB_SIZE > 0 &&
+                            (i * Self::OTS_WIDTH) % LIMB_SIZE < Self::OTS_WIDTH {
+                    OP_SWAP
+                    { split_digit(Self::OTS_WIDTH, (i * Self::OTS_WIDTH) % LIMB_SIZE) }
+                    OP_ROT
+                    { NMUL(1 << ((i * Self::OTS_WIDTH) % LIMB_SIZE)) }
+                    OP_ADD
+                    OP_TOALTSTACK
+                } else if i != Self::N_DIGITS {
+                    { NMUL(1 << Self::OTS_WIDTH) }
+                    OP_ADD
                 }
-                if i < Self::U::N_LIMBS - 1 { OP_TOALTSTACK }
             }
             for _ in 1..Self::U::N_LIMBS { OP_FROMALTSTACK }
             for i in 1..Self::U::N_LIMBS { { i } OP_ROLL }
@@ -876,6 +903,19 @@ mod tests {
         }
     }
 
+    fn print_bigint_in_stack_with_limb(n: BigInt, n_bits: u32, limb_size: u32) {
+        let mut limbs = bigint_to_uXu8_limbs(n.clone(), n_bits, limb_size);
+        limbs.reverse();
+        for limb in &mut limbs {
+            while limb.len() > 0 && limb[limb.len() - 1] == 0 {
+                limb.pop();
+            }
+        }
+        for limb in limbs {
+            println!("{:?}", limb);
+        }
+    }
+
     fn get_window_decomps(b: &BigInt, window: u32, n_bits: u32) -> Vec<usize> {
         let mut res = vec![];
         let n_window = (n_bits + window - 1) / window;
@@ -900,7 +940,7 @@ mod tests {
         const N_LC: usize = 3;
         const VAR_WIDTH: u32 = 3;
         const MOD_WIDTH: u32 = 3;
-        type F = Fq<254, 30, MOD_WIDTH, VAR_WIDTH, N_LC>;
+        type F = Fq<254, 30, MOD_WIDTH, VAR_WIDTH, N_LC, 0>;
 
         let fq = F::new("".to_string(), [true; N_LC]);
 
@@ -972,9 +1012,9 @@ mod tests {
         const N_LC: usize = 13;
         const VAR_WIDTH: u32 = 3;
         const MOD_WIDTH: u32 = 1;
-        type F = Fq<254, 30, MOD_WIDTH, VAR_WIDTH, N_LC>;
+        type F = Fq<254, 30, MOD_WIDTH, VAR_WIDTH, N_LC, 0>;
 
-        let fq: Fq<254, 30, 1, 3, N_LC> = F::new("".to_string(), rand_bools(0));
+        let fq = F::new("".to_string(), rand_bools(0));
 
         println!("script size: {}", fq.OP_TMUL().0.len());
 
@@ -1049,7 +1089,8 @@ mod tests {
         const N_LC: usize = 6;
         const VAR_WIDTH: u32 = 3;
         const MOD_WIDTH: u32 = 3;
-        type F = Fq<254, 30, MOD_WIDTH, VAR_WIDTH, N_LC>;
+        const OTS_WIDTH: u32 = 4;
+        type F = Fq<254, 30, MOD_WIDTH, VAR_WIDTH, N_LC, OTS_WIDTH>;
 
         let mut fq = F::new(secret, rand_bools(0));
 
