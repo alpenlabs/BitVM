@@ -26,8 +26,34 @@ pub fn NMUL(n: u32) -> Script {
     }
 }
 
-fn limb_doubling_initial_carry() -> Script {
+fn limb_add_with_carry_prevent_overflow(head_offset: u32) -> Script {
     script! {
+        // {a} {b} {c:carry}
+        OP_3DUP                                           // {a} {b} {c} {a} {b} {c}
+        OP_ADD OP_ADD OP_NIP                              // {a} {b} {a+b+c}
+        OP_ROT                                            // {b} {a+b+c} {a}
+        { head_offset >> 1 } OP_LESSTHAN                  // {b} {a+b+c} {sign_a}
+        OP_ROT                                            // {a+b+c} {sign_a} {b}
+        { head_offset >> 1 } OP_LESSTHAN                  // {a+b+c} {sign_a} {sign_b}
+        OP_ADD                                            // {a+b+c} {sign_a+b} -> both neg: 0, both diff: 1, both pos: 2
+        OP_SWAP                                           // {sign_a+b} {a+b+c}
+        OP_DUP { head_offset } OP_GREATERTHANOREQUAL      // {sign_a+b} {a+b+c} {L:0/1} // limb overflow
+        OP_TUCK                                           // {sign_a+b} {L:0/1} {a+b+c} {L:0/1}
+        OP_IF { head_offset } OP_SUB OP_ENDIF             // {sign_a+b} {L:0/1} {a+b+c_nlo}
+        OP_DUP { head_offset >> 1 } OP_GREATERTHANOREQUAL // {sign_a+b} {L:0/1} {a+b+c_nlo} {I:0/1} // integer overflow
+        OP_2SWAP                                          // {a+b+c_nlo} {I:0/1} {sign_a+b} {L:0/1}
+        OP_IF                                             // {a+b+c_nlo} {I:0/1} {sign_a+b}
+            OP_NOTIF OP_VERIFY 0 OP_ENDIF                 // {a+b+c_nlo} 0
+        OP_ELSE
+            OP_1SUB OP_IF OP_NOT OP_VERIFY 0 OP_ENDIF    // {a+b+c_nlo} 0
+        OP_ENDIF
+        OP_DROP                                          // {a+b+c_nlo}
+    }
+}
+
+fn limb_double_without_carry() -> Script {
+    script! {
+        // {limb} {base}
         OP_SWAP // {base} {limb}
         { NMUL(2) } // {base} {2*limb}
         OP_2DUP // {base} {2*limb} {base} {2*limb}
@@ -39,8 +65,9 @@ fn limb_doubling_initial_carry() -> Script {
     }
 }
 
-fn limb_doubling_step() -> Script {
+fn limb_double_with_carry() -> Script {
     script! {
+        // {limb} {base} {carry}
         OP_ROT // {base} {carry} {limb}
         { NMUL(2) } // {base} {carry} {2*limb}
         OP_ADD // {base} {2*limb + carry}
@@ -53,12 +80,11 @@ fn limb_doubling_step() -> Script {
     }
 }
 
-fn limb_doubling_nocarry(head_offset: u32) -> Script {
+fn limb_double_with_carry_allow_overflow(head_offset: u32) -> Script {
     script! {
         OP_SWAP // {carry} {limb}
         { NMUL(2) } // {carry} {2*limb}
         OP_ADD // {carry + 2*limb}
-        // The rest is calculating carry + 2*limb - head_offset if carry+2*limb exceeds the head_offset
         { head_offset } OP_2DUP
         OP_GREATERTHANOREQUAL
         OP_IF
@@ -69,27 +95,164 @@ fn limb_doubling_nocarry(head_offset: u32) -> Script {
     }
 }
 
+fn limb_double_with_carry_prevent_overflow(head_offset: u32) -> Script {
+    script! {
+        // {a} {c:carry}
+        OP_OVER                                          // {a} {c} {a}
+        OP_DUP OP_ADD OP_ADD                             // {a} {2a+c}
+        OP_SWAP                                          // {2a+c} {a}
+        { head_offset >> 1 } OP_LESSTHAN                 // {2a+c} {sign_a} // neg: 0, pos: 1
+        OP_SWAP                                          // {sign_a} {2a+c}
+        OP_DUP { head_offset } OP_GREATERTHANOREQUAL     // {sign_a} {2a+c} {L:0/1} // limb overflow
+
+        OP_TUCK                                          // {sign_a} {L:0/1} {2a+c} {L:0/1}
+        OP_IF { head_offset } OP_SUB OP_ENDIF            // {sign_a} {L:0/1} {2a+c_nlo}
+        OP_DUP {head_offset >> 1 } OP_GREATERTHANOREQUAL // {sign_a} {L:0/1} {2a+c_nlo} {I:0/1}
+        OP_2SWAP                                         // {2a+c_nlo} {I:0/1} {sign_a} {L:0/1}
+
+        OP_IF                                            // {2a+c_nlo} {I:0/1} {sign_a}
+            OP_NOTIF OP_VERIFY 0 OP_ENDIF                // {2a+c_nlo} 0
+        OP_ELSE                                          // {2a+c_nlo} {I:0/1} {sign_a}
+            OP_IF OP_NOT OP_VERIFY 0 OP_ENDIF            // {2a+c_nlo} 0
+        OP_ENDIF
+        OP_DROP                                          // {2a+c_nlo}
+    }
+}
+
+fn limb_lshift_without_carry(bits: u32) -> Script {
+    script! {
+        OP_SWAP                  // {base} {limb}
+        for i in 1..=bits {
+            { NMUL(2) }          // {base} {2*limb}
+            OP_2DUP              // {base} {2*limb} {base} {2*limb}
+            OP_LESSTHANOREQUAL   // {base} {2*limb} {carry:base<=2*limb}
+            OP_TUCK              // {base} {carry} {2*limb} {carry}
+            OP_IF                // {base} {carry} {2*limb}
+                2 OP_PICK OP_SUB // {base} {carry} {2*limb-base}
+            OP_ENDIF
+            if i < bits { OP_ROT OP_SWAP } // {carry...} {base} {2*limb-base}
+            else { OP_TOALTSTACK OP_SWAP } // {carry...} {base} -> {2*limb-base}
+        }
+    }
+}
+
+fn limb_lshift_with_carry(bits: u32) -> Script {
+    script! {
+        // {limb} {p_carry..} {base}
+        { 1 + bits } OP_ROLL     // {p_carry..} {base} {limb}
+        for i in 1..=bits {
+            { NMUL(2) }                     // {p_carry..} {base} {2*limb}
+            { 1 + bits } OP_ROLL OP_ADD     // {p_carry..} {base} {2*limb+c0}
+            OP_2DUP                         // {p_carry..} {base} {2*limb+c0} {base} {2*limb+c0}
+            OP_LESSTHANOREQUAL              // {p_carry..} {base} {2*limb+c0} {carry:base<=2*limb+c0}
+            OP_TUCK                         // {p_carry..} {base} {carry} {2*limb+c0} {carry}
+            OP_IF                           // {p_carry..} {base} {carry} {2*limb+c0}
+                2 OP_PICK OP_SUB            // {p_carry..} {base} {carry} {2*limb+c0-base}
+            OP_ENDIF
+            if i < bits { OP_ROT OP_SWAP } // {p_carry..} {carry..} {base} {2*limb-base}
+            else { OP_TOALTSTACK OP_SWAP } // {carry..} {base} -> {2*limb-base}
+        }
+    }
+}
+
+fn limb_lshift_with_carry_prevent_overflow(bits: u32, head: u32) -> Script {
+    script! {
+        // {a} {c..}
+        { bits } OP_PICK     // {a} {c..} {a}
+        for i in 0..bits {
+            { NMUL(2) }                     // {a} {c..} {2*a}
+            if i < bits - 1 {
+                { bits - i } OP_ROLL
+            }
+            OP_ADD                          // {a} {c..} {2*a+c0}
+        }                                   // {a} {2*a+c..}
+
+        OP_SWAP                                          // {2a+c} {a}
+        { 1 << (head - 1) } OP_LESSTHAN                  // {2a+c} {sign_a} // neg: 0, pos: 1
+        OP_SWAP                                          // {sign_a} {2a+c}
+
+        OP_DUP { 1 << head } OP_GREATERTHANOREQUAL          // {sign_a} {2a+c} {L:0/1} // limb overflow
+        OP_TUCK                                             // {sign_a} {L:0/1} {2a+c} {L:0/1}
+        OP_IF { ((1 << bits) - 1) << head } OP_SUB OP_ENDIF // {sign_a} {L:0/1} {2a+c_nlo}
+        OP_DUP { 1 << head } OP_LESSTHAN OP_VERIFY
+        OP_DUP { 1 << (head - 1) } OP_GREATERTHANOREQUAL // {sign_a} {L:0/1} {2a+c_nlo} {I:0/1}
+        OP_2SWAP                                         // {2a+c_nlo} {I:0/1} {sign_a} {L:0/1}
+
+        OP_IF                                            // {2a+c_nlo} {I:0/1} {sign_a}
+            OP_NOTIF OP_VERIFY 0 OP_ENDIF                // {2a+c_nlo} 0
+        OP_ELSE                                          // {2a+c_nlo} {I:0/1} {sign_a}
+            OP_IF OP_NOT OP_VERIFY 0 OP_ENDIF            // {2a+c_nlo} 0
+        OP_ENDIF
+        OP_DROP                                          // {2a+c_nlo}
+    }
+}
+
 impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
-    // double the item on top of the stack
-    pub fn dbl() -> Script {
+    // double the item on top of the stack ignoring overflow bits
+    pub fn double_allow_overflow() -> Script {
         script! {
             { 1 << LIMB_SIZE }
 
             // Double the limb, take the result to the alt stack, and add initial carry
-            limb_doubling_initial_carry OP_TOALTSTACK
+            limb_double_without_carry OP_TOALTSTACK
+
 
             for _ in 0..Self::N_LIMBS - 2 {
-                // Since we have {limb} {base} {carry} in the stack, we need
-                // to double the limb and add an old carry to it.
-                limb_doubling_step OP_TOALTSTACK
+                limb_double_with_carry OP_TOALTSTACK
             }
 
             // When we got {limb} {base} {carry} on the stack, we drop the base
             OP_NIP // {limb} {carry}
-            { limb_doubling_nocarry(Self::HEAD_OFFSET) } // Calculating {2*limb+carry}, ensuring it does not exceed the head size
+            { limb_double_with_carry_allow_overflow(Self::HEAD_OFFSET) }
 
             // Take all limbs from the alt stack to the main stack
             for _ in 0..Self::N_LIMBS - 1 {
+                OP_FROMALTSTACK
+            }
+        }
+    }
+
+    // double the item on top of the stack preventing overflow
+    pub fn double_prevent_overflow() -> Script {
+        script! {
+            { 1 << LIMB_SIZE }
+
+            // Double the limb, take the result to the alt stack, and add initial carry
+            limb_double_without_carry OP_TOALTSTACK
+
+
+            for _ in 0..Self::N_LIMBS - 2 {
+                limb_double_with_carry OP_TOALTSTACK
+            }
+
+            // When we got {limb} {base} {carry} on the stack, we drop the base
+            OP_NIP // {limb} {carry}
+            { limb_double_with_carry_prevent_overflow(Self::HEAD_OFFSET) }
+
+            // Take all limbs from the alt stack to the main stack
+            for _ in 0..Self::N_LIMBS - 1 {
+                OP_FROMALTSTACK
+            }
+        }
+    }
+
+    // left shift by bits preventing overflow
+    pub fn lshift_prevent_overflow(bits: u32) -> Script {
+        script! {
+            // {limb}
+            { 1 << LIMB_SIZE } // {limb} {base}
+
+            { limb_lshift_without_carry(bits) } // {limb} {carry..} {base}
+
+            for _ in 0..Self::N_LIMBS - 2 {
+                { limb_lshift_with_carry(bits) } // {limb} {carry..} {base}
+            }
+            // // When we got {limb} {base} {carry} on the stack, we drop the base
+            OP_DROP // {limb} {carry..}
+            { limb_lshift_with_carry_prevent_overflow(bits, Self::HEAD) }
+
+            // Take all limbs from the alt stack to the main stack
+            for _ in 1..Self::N_LIMBS {
                 OP_FROMALTSTACK
             }
         }
@@ -186,12 +349,12 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
         }
     }
 
-    pub fn ref_add(b: u32) -> Script {
+    pub fn add_ref(b: u32) -> Script {
         let b_depth = b * Self::N_LIMBS;
         if b > 1 {
             script! {
                 { b_depth }
-                { Self::ref_add_inner() }
+                { Self::_add_ref_inner() }
             }
         } else {
             script! {
@@ -200,13 +363,14 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
                 limb_add_carry OP_TOALTSTACK
                 for i in 1..Self::N_LIMBS {
                     { b_depth + 2 } OP_PICK
-                    OP_ADD
                     if i < Self::N_LIMBS - 1 {
+                        OP_ADD
                         OP_SWAP
                         limb_add_carry OP_TOALTSTACK
                     } else {
-                        OP_NIP
-                        { limb_add_nocarry(Self::HEAD_OFFSET) }
+                        OP_ROT OP_DROP
+                        OP_SWAP { limb_add_with_carry_prevent_overflow(Self::HEAD_OFFSET) }
+                        // OP_SWAP { limb_add_nocarry(Self::HEAD_OFFSET) }
                     }
                 }
                 for _ in 0..Self::N_LIMBS - 1 {
@@ -217,14 +381,14 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
     }
 
     // does not support addition to self, stack_top=0
-    pub fn stack_ref_add() -> Script {
+    pub fn add_ref_stack() -> Script {
         script! {
             { NMUL(Self::N_LIMBS) }
-            { Self::ref_add_inner() }
+            { Self::_add_ref_inner() }
         }
     }
 
-    fn ref_add_inner() -> Script {
+    fn _add_ref_inner() -> Script {
         script! {
             // OP_DUP OP_NOT OP_NOT OP_VERIFY // fail on {0} stack
             // OP_DUP OP_NOT
@@ -248,11 +412,9 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
                     OP_TOALTSTACK
                 }
                 OP_NIP OP_SWAP
-                2 OP_SUB OP_PICK OP_ADD OP_ADD
-                { Self::HEAD_OFFSET }
-                OP_2DUP
-                OP_GREATERTHANOREQUAL
-                OP_IF OP_SUB OP_ELSE OP_DROP OP_ENDIF
+                2 OP_SUB OP_PICK
+
+                OP_SWAP { limb_add_with_carry_prevent_overflow(Self::HEAD_OFFSET) }
 
                 for _ in 0..Self::N_LIMBS-1 {
                     OP_FROMALTSTACK
@@ -292,10 +454,10 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> LookupTable<N_BITS, LIMB_SIZE>
                 for j in 1 << (i - 1)..1 << i {
                     if j % 2 == 0 {
                         { Self::copy(j/2 - 1) }
-                        { Self::dbl() }
+                        { Self::double_allow_overflow() }
                     } else {
                         { Self::copy(0) }
-                        { Self::ref_add(j - 1) }
+                        { Self::add_ref(j - 1) }
                     }
                 }
             }
@@ -512,6 +674,7 @@ impl<
                     { Self::U::toaltstack() }                                  // {q} {x0} {x1} {y0} -> {y1}
                 }                                                              // {q} -> {x0} {x1} {y0} {y1}
                 // pre-compute tables
+                // TODO: range check for quotient
                 { Self::T::push_zero() }             // {q} {0} -> {x0} {x1} {y0} {y1}
                 { Self::T::sub(0, 1) }               // {-q} -> {x0} {x1} {y0} {y1}
                 { Self::T::init_table(MOD_WIDTH) }   // {-q_table} -> {x0} {x1} {y0} {y1}
@@ -534,7 +697,7 @@ impl<
                 for i in Self::MAIN_LOOP_START..=Self::MAIN_LOOP_END {
                     // z -= q*p[i]
                     if i % MOD_WIDTH == 0 && self.get_mod_window(i/MOD_WIDTH - 1) != 0  {
-                        { Self::T::ref_add(1 + Self::N_LC + Self::T::size_table(MOD_WIDTH) +
+                        { Self::T::add_ref(1 + Self::N_LC + Self::T::size_table(MOD_WIDTH) +
                             Self::N_LC * Self::T::size_table(VAR_WIDTH) - self.get_mod_window(i/MOD_WIDTH - 1)) }
                         { add_op(0, 1, 0) }
                     }
@@ -551,15 +714,21 @@ impl<
                                 { 1 + Self::N_LC + (Self::N_LC - j) * Self::T::size_table(VAR_WIDTH)  }
                                 OP_SWAP
                                 OP_SUB
-                                { Self::T::stack_ref_add() }
+                                { Self::T::add_ref_stack() }
                                 { add_op(0, 0, 1) }
                             OP_ENDIF
                         }
                     }
                     if i < Self::MAIN_LOOP_END {
-                        // TODO: Overflow check
-                        { Self::T::dbl() }
-                        { add_op(1, 0, 0) }
+                        if MOD_WIDTH == VAR_WIDTH {
+                            if i % VAR_WIDTH == 0 {
+                                { Self::T::lshift_prevent_overflow(VAR_WIDTH) }
+                                { add_op(VAR_WIDTH as i32, 0, 0) }
+                            }
+                        } else {
+                            { Self::T::double_prevent_overflow() }
+                            { add_op(1, 0, 0) }
+                        }
                     }
                 }
 
@@ -575,7 +744,7 @@ impl<
                 // correction/validation: r = if q < 0 { r + p } else { r }; assert(r < p)
                 { Self::T::push_u32_le(&Self::modulus().to_u32_digits()) } // {MODULUS} -> {r} {0/1}
                 { Self::T::fromaltstack() } OP_FROMALTSTACK // {MODULUS} {r} {0/1}
-                OP_IF { Self::T::ref_add(1) } OP_ENDIF      // {MODULUS} {-r/r}
+                OP_IF { Self::T::add_ref(1) } OP_ENDIF      // {MODULUS} {-r/r}
                 { Self::T::copy(0) }                        // {MODULUS} {-r/r} {-r/r}
                 { Self::T::lessthan(0, 2) } OP_VERIFY       // {-r/r}
 
@@ -609,6 +778,7 @@ impl<
             { Self::T::fromaltstack() }                                    // {r} {q} -> {x0} {x1} {y0} {y1}
 
             // pre-compute tables
+            // TODO: range check for quotient
             { Self::T::push_zero() }             // {q} {0} -> {x0} {x1} {y0} {y1}
             { Self::T::sub(0, 1) }               // {-q} -> {x0} {x1} {y0} {y1}
             { Self::T::init_table(MOD_WIDTH) }   // {-q_table} -> {x0} {x1} {y0} {y1}
@@ -631,7 +801,7 @@ impl<
             for i in Self::MAIN_LOOP_START..=Self::MAIN_LOOP_END {
                 // z -= q*p[i]
                 if i % MOD_WIDTH == 0 && self.get_mod_window(i/MOD_WIDTH - 1) != 0  {
-                    { Self::T::ref_add(1 + Self::N_LC + Self::T::size_table(MOD_WIDTH) +
+                    { Self::T::add_ref(1 + Self::N_LC + Self::T::size_table(MOD_WIDTH) +
                         Self::N_LC * Self::T::size_table(VAR_WIDTH) - self.get_mod_window(i/MOD_WIDTH - 1)) }
                 }
                 // z += x*y[i]
@@ -647,13 +817,18 @@ impl<
                             { 1 + Self::N_LC + (Self::N_LC - j) * Self::T::size_table(VAR_WIDTH)  }
                             OP_SWAP
                             OP_SUB
-                            { Self::T::stack_ref_add() }
+                            { Self::T::add_ref_stack() }
                         OP_ENDIF
                     }
                 }
                 if i < Self::MAIN_LOOP_END {
-                    // TODO: Overflow check
-                    { Self::T::dbl() }
+                    if MOD_WIDTH == VAR_WIDTH {
+                        if i % VAR_WIDTH == 0 {
+                            { Self::T::lshift_prevent_overflow(VAR_WIDTH) }
+                        }
+                    } else {
+                        { Self::T::double_prevent_overflow() }
+                    }
                 }
             }
 
@@ -669,7 +844,7 @@ impl<
             // correction/validation: r = if q < 0 { r + p } else { r }; assert(r < p)
             { Self::T::push_u32_le(&Self::modulus().to_u32_digits()) } // {MODULUS} -> {r} {0/1}
             { Self::T::fromaltstack() } OP_FROMALTSTACK // {MODULUS} {r} {0/1}
-            OP_IF { Self::T::ref_add(1) } OP_ENDIF      // {MODULUS} {-r/r}
+            OP_IF { Self::T::add_ref(1) } OP_ENDIF      // {MODULUS} {-r/r}
             { Self::T::copy(0) }                        // {MODULUS} {-r/r} {-r/r}
             { Self::T::lessthan(0, 2) } OP_VERIFY       // {-r/r}
 
@@ -850,6 +1025,7 @@ mod tests {
     use num_traits::Signed;
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha20Rng;
+    use seq_macro::seq;
 
     use super::*;
 
@@ -1145,7 +1321,7 @@ mod tests {
     fn test_multi_window_op_tmul_bench() {
         const N_LC: usize = 1;
         let mut prng: ChaCha20Rng = ChaCha20Rng::seed_from_u64(0);
-        let modulus = Fq::<254, 30, 1, 1, N_LC>::modulus();
+        let modulus = Fq::<254, 30, 1, 1, N_LC, 0>::modulus();
         let x = prng.gen_biguint_below(&modulus);
         let y = prng.gen_biguint_below(&modulus);
         let c = &x * &y;
@@ -1156,8 +1332,8 @@ mod tests {
 
         seq!(VAR_WIDTH in 1..=6 {
             seq!(MOD_WIDTH in 1..=6 { {
-                type F = Fq<254, 30, VAR_WIDTH, MOD_WIDTH, N_LC>;
-                let fq = F::new([true; N_LC]);
+                type F = Fq<254, 30, VAR_WIDTH, MOD_WIDTH, N_LC, 0>;
+                let fq = F::new("".to_string(), [true; N_LC]);
                 let script = script! {
                     { F::U::push_u32_le(&q.to_u32_digits()) }
                     { F::U::push_u32_le(&x.to_u32_digits()) }
