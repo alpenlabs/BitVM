@@ -301,54 +301,6 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
         }
     }
 
-    pub fn stack_copy() -> Script {
-        script! {
-            { NMUL(Self::N_LIMBS + 1) }
-            for _ in 0..Self::N_LIMBS - 1 {
-                OP_DUP OP_PICK OP_SWAP
-            }
-            OP_1SUB OP_PICK
-        }
-    }
-
-    pub fn ref_zip(mut b: u32) -> Script {
-        let a = Self::N_LIMBS - 1;
-        if b == 0 {
-            Self::dup_zip(0)
-        } else {
-            b = (b + 1) * Self::N_LIMBS - 1;
-            script! {
-                for i in 0..Self::N_LIMBS-1 {
-                    {b} OP_PICK {a+i} OP_ROLL
-                }
-                {b} OP_PICK
-            }
-        }
-    }
-
-    // does not support zipping to self, stack_top={0}
-    pub fn stack_ref_zip() -> Script {
-        script! {
-            { NMUL(Self::N_LIMBS) }
-            // OP_DUP OP_NOT OP_NOT OP_VERIFY // fail on {0} stack
-            // OP_DUP OP_NOT
-            // OP_IF
-            //     OP_DROP
-            //     { Self::topzip(0) }
-            // OP_ELSE
-                { Self::N_LIMBS } OP_ADD
-                for i in 0..Self::N_LIMBS {
-                    if i > 0 { OP_ROT }
-                    OP_DUP OP_PICK
-                    if i < Self::N_LIMBS - 1 {
-                        { Self::N_LIMBS + i } OP_ROLL
-                    }
-                }
-                OP_NIP
-            // OP_ENDIF
-        }
-    }
-
     pub fn add_ref(b: u32) -> Script {
         let b_depth = b * Self::N_LIMBS;
         if b > 1 {
