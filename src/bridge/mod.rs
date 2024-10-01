@@ -1,3 +1,4 @@
+//! Defines traits and types related to bridge-specific transactions.
 pub mod client;
 pub mod connectors;
 pub mod constants;

@@ -1,3 +1,4 @@
+//! Defines constants for block/network information.
 use core::fmt;
 
 pub const NUM_BLOCKS_PER_HOUR: u32 = 6;

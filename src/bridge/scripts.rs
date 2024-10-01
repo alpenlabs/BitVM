@@ -1,3 +1,9 @@
+//! Defines bitcoin scripts that are reused across various transactions.
+//!
+//! There are two sets of functions in this module:
+//!
+//! * Ones that create Bitcoin script, and
+//! * Ones that create addresses (p2wsh, p2tr, etc.) from the created script.
 use crate::treepp::script;
 use bitcoin::{
     hashes::{ripemd160::Hash as Ripemd160, sha256::Hash as Sha256, Hash},
@@ -12,24 +18,32 @@ lazy_static! {
         "0405f818748aecbc8c67a4e61a03cee506888f49480cf343363b04908ed51e25b9615f244c38311983fb0f5b99e3fd52f255c5cc47a03ee2d85e78eaf6fa76bb9d"
     )
     .unwrap();
+    /// Random pubkey: Hash(G) as per BIP 341
     pub static ref UNSPENDABLE_TAPROOT_PUBLIC_KEY: XOnlyPublicKey = XOnlyPublicKey::from_str(
         "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0"
     )
     .unwrap();
 }
 
+/// Creates a script locked with an unspendable pubkey.
+///
+/// The funds sent to this address are not exactly burnt but are just unspendable possibly forever
+/// till the private key is discovered.
 pub fn generate_burn_script() -> ScriptBuf {
     generate_pay_to_pubkey_script(&UNSPENDABLE_PUBLIC_KEY)
 }
 
+/// Creates first a burn script and then, creates a `p2wsh` address from it.
 pub fn generate_burn_script_address(network: Network) -> Address {
     Address::p2wsh(&generate_burn_script(), network)
 }
 
+/// Creates first a burn script and then, creates a `p2tr` address from it.
 pub fn generate_burn_taproot_script() -> ScriptBuf {
     generate_pay_to_pubkey_taproot_script(&UNSPENDABLE_TAPROOT_PUBLIC_KEY)
 }
 
+/// Creates a pay to pubkey script with [`OP_CHECKSIG`].
 pub fn generate_pay_to_pubkey_script(public_key: &PublicKey) -> ScriptBuf {
     script! {
         { *public_key }
@@ -38,6 +52,11 @@ pub fn generate_pay_to_pubkey_script(public_key: &PublicKey) -> ScriptBuf {
     .compile()
 }
 
+/// Creates a pay to pubkey script with [`OP_CHECKSIG`] including an inscription that includes:
+///
+/// * A public key hash
+/// * A timestamp (u32) and
+/// * An evm address
 pub fn generate_pay_to_pubkey_hash_with_inscription_script(
     public_key: &PublicKey,
     timestamp: u32,
@@ -66,7 +85,7 @@ pub fn generate_pay_to_pubkey_hash_with_inscription_script(
 
 pub fn generate_p2pkh_address(network: Network, public_key: &PublicKey) -> Address {
     Address::p2pkh(
-        &CompressedPublicKey::try_from(*public_key).expect("Could not compress public key"),
+        CompressedPublicKey::try_from(*public_key).expect("Could not compress public key"),
         network,
     )
 }
@@ -109,6 +128,7 @@ pub fn generate_pay_to_pubkey_taproot_script_address(
     Address::p2wsh(&generate_pay_to_pubkey_taproot_script(public_key), network)
 }
 
+/// Generates a timelock script with a pubkey using [`OP_CSV`] and [`OP_CHECKSIG`].
 pub fn generate_timelock_script(public_key: &PublicKey, num_blocks_timelock: u32) -> ScriptBuf {
     script! {
       { num_blocks_timelock }

@@ -1,6 +1,9 @@
+//! Defines generic serializers using [`serde_json`].
 use serde::{Deserialize, Serialize};
 
-pub fn serialize(object: &impl Serialize) -> String { serde_json::to_string(object).unwrap() }
+pub fn serialize(object: &impl Serialize) -> String {
+    serde_json::to_string(object).unwrap()
+}
 
 pub fn deserialize<'a, T>(data: &'a str) -> T
 where
@@ -15,6 +18,6 @@ where
 {
     match serde_json::from_str::<T>(data) {
         Ok(x) => Ok(x),
-        Err(err) => Err(format!("Failed to parse json: {}", err.to_string())),
+        Err(err) => Err(format!("Failed to parse json: {}", err)),
     }
 }
