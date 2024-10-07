@@ -5,7 +5,7 @@ use crate::{
     },
     treepp::*,
 };
-use bitcoin::hashes::{hash160, Hash};
+use bitcoin::{hashes::{hash160, Hash}, ScriptBuf};
 use hex::decode as hex_decode;
 use num_bigint::BigUint;
 use num_traits::{FromPrimitive, ToPrimitive};
@@ -593,6 +593,7 @@ impl<
         self.wots_decode_counter = self.wots_encode_counter;
         let mut get_var_windows = self.get_var_window_script_generator();
 
+
         script! {
             // stack: {wr} {q} {wx0} {wx1} {wy0} {wy1}
             for _ in 0..2*N_LC as u32 {
@@ -852,6 +853,8 @@ mod tests {
     use num_traits::Signed;
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha20Rng;
+    use std::fs::File;
+    use std::io::{self, Read};
 
     use super::*;
 
@@ -1058,6 +1061,7 @@ mod tests {
             { F::U::push_u32_le(&r.to_u32_digits().1) }
             { F::U::equal(0, 1) }
         };
+
         let res = execute_script(script);
         assert!(res.success);
 
@@ -1143,6 +1147,23 @@ mod tests {
     }
 
 
+    fn read_script_from_file() -> Script {
+
+        fn read_file_to_bytes(file_path: &str) -> io::Result<Vec<u8>> {
+            let mut file = File::open(file_path)?;
+            let mut all_script_bytes = Vec::new();
+            file.read_to_end(&mut all_script_bytes)?;
+            Ok(all_script_bytes)
+        }
+        let file_path = "blake3_bin/blake3_192b_252k.bin"; // Replace with your file path
+        let all_script_bytes = read_file_to_bytes(file_path).unwrap();
+
+        let scb = ScriptBuf::from_bytes(all_script_bytes);
+        let sc = script!();
+        let sc = sc.push_script(scb);
+        sc
+    }
+
     #[test]
     fn check_hash_fqs() {
         let secret = hex::encode("my_secret_key");
@@ -1162,6 +1183,27 @@ mod tests {
 
         print!("r1 {:x} \n", r1);
         print!("r2 {:x} \n", r1);
+
+        let sc = script!{
+            { F::U::push_u32_le(&r1.to_u32_digits().1) }
+            { fq_to_nibbles() }
+            { F::U::push_u32_le(&r2.to_u32_digits().1) }
+            { fq_to_nibbles() }
+            { F::U::push_u32_le(&r1.to_u32_digits().1) }
+            { fq_to_nibbles() }
+            { F::U::push_u32_le(&r2.to_u32_digits().1) }
+            { fq_to_nibbles() }
+            { F::U::push_u32_le(&r1.to_u32_digits().1) }
+            { fq_to_nibbles() }
+            { F::U::push_u32_le(&r2.to_u32_digits().1) }
+            { fq_to_nibbles() }
+            { read_script_from_file() }
+        };
+        let res = execute_script(sc);
+        for i in 0..res.final_stack.len() {
+            println!("{i:3}: {:?}", res.final_stack.get(i));
+        }
+        println!("stats {:?} ", res.stats.max_nb_stack_items);
     }
 
 

@@ -24,3 +24,5 @@ Cargo.lock
 .vscode
 
 .DS_Store
+
+blake3_bin/
