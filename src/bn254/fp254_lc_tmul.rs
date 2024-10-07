@@ -846,6 +846,8 @@ impl<
 
 #[cfg(test)]
 mod tests {
+    use ark_ff::One;
+    use bitcoin::opcodes::{all::{OP_ADD, OP_DROP, OP_FROMALTSTACK, OP_PICK, OP_ROLL}, OP_TRUE};
     use num_bigint::{BigInt, RandBigInt, ToBigInt};
     use num_traits::Signed;
     use rand::{Rng, SeedableRng};
@@ -1138,6 +1140,193 @@ mod tests {
         assert!(res.success);
         println!("script: {}", fq.OP_TMUL_WOTS().len());
         println!("max stack: {}", res.stats.max_nb_stack_items);
+    }
+
+
+    #[test]
+    fn check_hash_fqs() {
+        let secret = hex::encode("my_secret_key");
+
+        const N_LC: usize = 1;
+        const VAR_WIDTH: u32 = 3;
+        const MOD_WIDTH: u32 = 3;
+        const OTS_WIDTH: u32 = 4;
+        type F = Fq<254, 30, MOD_WIDTH, VAR_WIDTH, N_LC, OTS_WIDTH>;
+
+        let fq = F::new(secret, rand_bools(0));
+
+        let modulus = &fq.get_modulus().to_bigint().unwrap();
+
+        let r1 = modulus - BigInt::one(); //BigInt::from_slice(num_bigint::Sign::Plus, &[u32::MAX, u32::MAX, u32::MAX, u32::MAX, u32::MAX, u32::MAX, u32::MAX, u32::MAX/2]);
+        let r2 = modulus - BigInt::one() - BigInt::one();
+
+        print!("r1 {:x} \n", r1);
+        print!("r2 {:x} \n", r1);
+    }
+
+
+    fn split_digit(window: u32, index: u32) -> Script {
+        script! {
+            // {v}
+            0                           // {v} {A}
+            OP_SWAP
+            for i in 0..index {
+                OP_TUCK                 // {v} {A} {v}
+                { 1 << (window - i - 1) }   // {v} {A} {v} {1000}
+                OP_GREATERTHANOREQUAL   // {v} {A} {1/0}
+                OP_TUCK                 // {v} {1/0} {A} {1/0}
+                OP_ADD                  // {v} {1/0} {A+1/0}
+                if i < index - 1 { { NMUL(2) } }
+                OP_ROT OP_ROT
+                OP_IF
+                    { 1 << (window - i - 1) }
+                    OP_SUB
+                OP_ENDIF
+            }
+            // OP_SWAP
+        }
+    }
+
+    fn fq_to_nibbles() -> Script {
+        script!{
+            { split_digit(30, 4)} 
+            { split_digit(26, 4)} 
+            { split_digit(22, 4)} 
+            { split_digit(18, 4)} 
+            { split_digit(14, 4)} 
+            { split_digit(10, 4)} 
+            { split_digit(6, 4)} 
+
+            {8}
+            OP_ROLL
+            { split_digit(30, 4)} 
+            { split_digit(26, 4)} 
+            { split_digit(22, 4)} 
+            { split_digit(18, 4)} 
+            { split_digit(14, 4)} 
+            { split_digit(10, 4)} 
+            { split_digit(6, 4)} 
+
+            {16}
+            OP_ROLL
+            { split_digit(30, 4)} 
+            { split_digit(26, 4)} 
+            { split_digit(22, 4)} 
+            { split_digit(18, 4)} 
+            { split_digit(14, 4)} 
+            { split_digit(10, 4)} 
+            { split_digit(6, 4)} 
+
+            {24}
+            OP_ROLL
+            { split_digit(30, 4)} 
+            { split_digit(26, 4)} 
+            { split_digit(22, 4)} 
+            { split_digit(18, 4)} 
+            { split_digit(14, 4)} 
+            { split_digit(10, 4)} 
+            { split_digit(6, 4)} 
+
+            {32}
+            OP_ROLL
+            { split_digit(30, 4)} 
+            { split_digit(26, 4)} 
+            { split_digit(22, 4)} 
+            { split_digit(18, 4)} 
+            { split_digit(14, 4)} 
+            { split_digit(10, 4)} 
+            { split_digit(6, 4)} 
+
+            {40}
+            OP_ROLL
+            { split_digit(30, 4)} 
+            { split_digit(26, 4)} 
+            { split_digit(22, 4)} 
+            { split_digit(18, 4)} 
+            { split_digit(14, 4)} 
+            { split_digit(10, 4)} 
+            { split_digit(6, 4)} 
+
+            {48}
+            OP_ROLL
+            { split_digit(30, 4)} 
+            { split_digit(26, 4)} 
+            { split_digit(22, 4)} 
+            { split_digit(18, 4)} 
+            { split_digit(14, 4)} 
+            { split_digit(10, 4)} 
+            { split_digit(6, 4)} 
+
+            {56}
+            OP_ROLL
+            { split_digit(30, 4)} 
+            { split_digit(26, 4)} 
+            { split_digit(22, 4)} 
+            { split_digit(18, 4)} 
+            { split_digit(14, 4)} 
+            { split_digit(10, 4)} 
+            { split_digit(6, 4)} 
+
+            {64}
+            OP_ROLL
+            { split_digit(14, 4)} 
+            { split_digit(10, 4)} 
+            { split_digit(6, 4)} 
+
+            // link 2 bits
+            {4}
+            OP_ROLL
+            {12}
+            OP_ROLL
+            {NMUL(4)}
+            OP_ADD
+            {20-1}
+            OP_ROLL
+            {28-1}
+            OP_ROLL
+            {NMUL(4)}
+            OP_ADD
+            {36-2}
+            OP_ROLL
+            {44-2}
+            OP_ROLL
+            {NMUL(4)}
+            OP_ADD
+            {52-3}
+            OP_ROLL
+            {60-3}
+            OP_ROLL
+            {NMUL(4)}
+            OP_ADD
+        }
+    }
+    
+    #[test]
+    fn check_fq_to_nibbles() {
+        let secret = hex::encode("my_secret_key");
+
+        const N_LC: usize = 1;
+        const VAR_WIDTH: u32 = 3;
+        const MOD_WIDTH: u32 = 3;
+        const OTS_WIDTH: u32 = 4;
+        type F = Fq<254, 30, MOD_WIDTH, VAR_WIDTH, N_LC, OTS_WIDTH>;
+
+        let fq = F::new(secret, rand_bools(0));
+
+        let modulus = &fq.get_modulus().to_bigint().unwrap();
+
+        let r = modulus - BigInt::one(); //BigInt::from_slice(num_bigint::Sign::Plus, &[u32::MAX, u32::MAX, u32::MAX, u32::MAX, u32::MAX, u32::MAX, u32::MAX, u32::MAX/2]);
+        print!("r {:x} \n", r);
+
+        let sc = script!{
+            { F::U::push_u32_le(&r.to_u32_digits().1) }
+            { fq_to_nibbles() }
+        };
+
+        let res = execute_script(sc);
+        for i in 0..res.final_stack.len() {
+            println!("{i:3}: {:?}", res.final_stack.get(i));
+        }
     }
 
     #[test]
