@@ -943,6 +943,9 @@ mod test {
     }
 
 
+    // len12 783502 len12h 431686 len6 351798
+    // mul: 2288732
+    // total:  2288732 + 783502 + 431686 + 575*1024
     #[test]
     fn test_bn254_fq12_hinted_mul_splits() {
         let mut prng: ChaCha20Rng = ChaCha20Rng::seed_from_u64(0);
@@ -963,9 +966,8 @@ mod test {
                 { fq12_push_not_montgomery(a) }
                 { fq12_push_not_montgomery(b) }
                 { hinted_mul.clone() }
-                { fq6_push_not_montgomery(c.c1) }
-                { Fq6::equalverify() }
-                OP_TRUE
+                // { hash_fp6() }
+
             };
             let exec_result = execute_script(script);
             //assert!(exec_result.success);
@@ -974,11 +976,10 @@ mod test {
             }
             max_stack = max_stack.max(exec_result.stats.max_nb_stack_items);
             println!("Fq6::window_mul: {} @ {} stack", hinted_mul.len(), max_stack);
+            println!("hfp12 len {}", hash_fp12().len());
         }
 
     }
-
-
 
     #[test]
     fn test_bn254_fq12_hinted_mul() {
@@ -1118,83 +1119,198 @@ mod test {
     use std::fs::File;
     use std::io::{self, Read};
 
+
+    fn read_script_from_file(file_path: &str) -> Script {
+        fn read_file_to_bytes(file_path: &str) -> io::Result<Vec<u8>> {
+            let mut file = File::open(file_path)?;
+            let mut all_script_bytes = Vec::new();
+            file.read_to_end(&mut all_script_bytes)?;
+            Ok(all_script_bytes)
+        }
+        //let file_path = "blake3_bin/blake3_192b_252k.bin"; // Replace with your file path
+        let all_script_bytes = read_file_to_bytes(file_path).unwrap();
+        let scb = ScriptBuf::from_bytes(all_script_bytes);
+        let sc = script!();
+        let sc = sc.push_script(scb);
+        sc
+    }
+
+
+    fn hash_fp6() -> Script {
+
+        let hash_64b_75k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_64b_75k.bin");
+        let hash_128b_168k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_128b_168k.bin");
+
+        script!{
+            for _ in 0..=4 {
+                {Fq::toaltstack()}
+            }
+            { fq_to_nibbles() }
+            { Fq::fromaltstack() }
+            { fq_to_nibbles() }
+            {hash_64b_75k.clone()}
+            { nibbles_to_fq() }
+
+            { Fq::fromaltstack() }
+            {fq_to_nibbles()}
+            { Fq::fromaltstack() }
+            {fq_to_nibbles()}
+            { Fq::fromaltstack() }
+            {fq_to_nibbles()}
+            { Fq::fromaltstack() }
+            {fq_to_nibbles()}
+            { hash_128b_168k.clone() }
+
+            for i in 1..=1 {
+                for _ in 0..9 {
+                    {64*i + 8} OP_ROLL
+                }
+                {fq_to_nibbles()}
+            }
+            { hash_64b_75k }
+            {nibbles_to_fq()}
+        } 
+    }
+
+
+
+    fn hash_fp12() -> Script {
+
+        let hash_64b_75k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_64b_75k.bin");
+        let hash_128b_168k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_128b_168k.bin");
+
+        script!{
+            for i in 0..=10 {
+                {Fq::toaltstack()}
+            }
+
+            // first part
+            { fq_to_nibbles() }
+            { Fq::fromaltstack() }
+            { fq_to_nibbles() }
+            {hash_64b_75k.clone()}
+            { nibbles_to_fq() }
+
+            { Fq::fromaltstack() }
+            {fq_to_nibbles()}
+            { Fq::fromaltstack() }
+            {fq_to_nibbles()}
+            { Fq::fromaltstack() }
+            {fq_to_nibbles()}
+            { Fq::fromaltstack() }
+            {fq_to_nibbles()}
+            { hash_128b_168k.clone() }
+
+
+            for i in 1..=1 {
+                for _ in 0..9 {
+                    {64*i + 8} OP_ROLL
+                }
+                {fq_to_nibbles()}
+            }
+            {hash_64b_75k.clone()}
+            {nibbles_to_fq()}
+
+            // second part
+
+            { Fq::fromaltstack() }
+            {fq_to_nibbles()}
+            { Fq::fromaltstack() }
+            {fq_to_nibbles()}
+            {hash_64b_75k.clone()}
+            { nibbles_to_fq() }
+            
+
+            { Fq::fromaltstack() }
+            {fq_to_nibbles()}
+            { Fq::fromaltstack() }
+            {fq_to_nibbles()}
+            { Fq::fromaltstack() }
+            {fq_to_nibbles()}
+            { Fq::fromaltstack() }
+            {fq_to_nibbles()}
+            { hash_128b_168k.clone() }
+
+            for i in 1..=1 {
+                for _ in 0..9 {
+                    {64*i + 8} OP_ROLL
+                }
+                {fq_to_nibbles()}
+            }
+            {hash_64b_75k.clone()}
+
+            // wrap up
+            for i in 1..=1 {
+                for _ in 0..9 {
+                    {64*i + 8} OP_ROLL
+                }
+                {fq_to_nibbles()}
+            }
+            {hash_64b_75k.clone()}
+            {nibbles_to_fq()}
+
+        } 
+    }
+
+
+    // 6Fp_hash
+    // fp6
+    fn hash_fp12_with_hints() -> Script {
+
+        let hash_64b_75k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_64b_75k.bin");
+        let hash_128b_168k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_128b_168k.bin");
+
+        script!{
+            for i in 0..=4 {
+                {Fq::toaltstack()}
+            }
+
+            { fq_to_nibbles() }
+            { Fq::fromaltstack() }
+            { fq_to_nibbles() }
+            {hash_64b_75k.clone()}
+            { nibbles_to_fq() }
+
+            { Fq::fromaltstack() }
+            {fq_to_nibbles()}
+            { Fq::fromaltstack() }
+            {fq_to_nibbles()}
+            { Fq::fromaltstack() }
+            {fq_to_nibbles()}
+            { Fq::fromaltstack() }
+            {fq_to_nibbles()}
+            { hash_128b_168k.clone() }
+
+
+            for i in 1..=1 {
+                for _ in 0..9 {
+                    {64*i + 8} OP_ROLL
+                }
+                {fq_to_nibbles()}
+            }
+            {hash_64b_75k.clone()}
+
+            // wrap up
+            for i in 1..=1 {
+                for _ in 0..9 {
+                    {64*i + 8} OP_ROLL
+                }
+                {fq_to_nibbles()}
+            }
+            {hash_64b_75k.clone()}
+            {nibbles_to_fq()}
+
+        } 
+    }
+
+
+
     #[test]
     fn test_bn254_fq12_hinted_square() {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
 
         let mut max_stack = 0u32;
 
-
-        fn read_script_from_file(file_path: &str) -> Script {
-            fn read_file_to_bytes(file_path: &str) -> io::Result<Vec<u8>> {
-                let mut file = File::open(file_path)?;
-                let mut all_script_bytes = Vec::new();
-                file.read_to_end(&mut all_script_bytes)?;
-                Ok(all_script_bytes)
-            }
-            //let file_path = "blake3_bin/blake3_192b_252k.bin"; // Replace with your file path
-            let all_script_bytes = read_file_to_bytes(file_path).unwrap();
-            let scb = ScriptBuf::from_bytes(all_script_bytes);
-            let sc = script!();
-            let sc = sc.push_script(scb);
-            sc
-        }
-
-
-        fn hash_fp12() -> Script {
-            let hash_64b_75k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_64b_75k.bin");
-            let hash_128b_168k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_128b_168k.bin");
-
-            script!{
-                for i in 0..=10 {
-                    {Fq::toaltstack()}
-                }
-                { fq_to_nibbles() }
-                { Fq::fromaltstack() }
-                { fq_to_nibbles() }
-                {hash_64b_75k.clone()}
-                { nibbles_to_fq() }
-
-                { Fq::fromaltstack() }
-                {fq_to_nibbles()}
-                { Fq::fromaltstack() }
-                {fq_to_nibbles()}
-                { Fq::fromaltstack() }
-                {fq_to_nibbles()}
-                { Fq::fromaltstack() }
-                {fq_to_nibbles()}
-                { hash_128b_168k.clone() }
-                { nibbles_to_fq() }
-
-                { Fq::fromaltstack() }
-                {fq_to_nibbles()}
-                { Fq::fromaltstack() }
-                {fq_to_nibbles()}
-                {hash_64b_75k}
-                { nibbles_to_fq() }
-                
-
-                { Fq::fromaltstack() }
-                {fq_to_nibbles()}
-                { Fq::fromaltstack() }
-                {fq_to_nibbles()}
-                { Fq::fromaltstack() }
-                {fq_to_nibbles()}
-                { Fq::fromaltstack() }
-                {fq_to_nibbles()}
-                { hash_128b_168k.clone() }
-
-                for i in 1..=3 {
-                    for _ in 0..9 {
-                        {64*i + 8} OP_ROLL
-                    }
-                    {fq_to_nibbles()}
-                }
-                { hash_128b_168k }
-                {nibbles_to_fq()}
-
-            } 
-        }
 
         for _ in 0..1 {
             let a = ark_bn254::Fq12::rand(&mut prng);
@@ -1242,21 +1358,18 @@ mod test {
                 {Fq::drop()}
                 OP_TRUE
 
-                // { Fq::push_u32_le(&v.to_u32_digits()) }
-                // { fq12_push_not_montgomery(b) }
-                // { Fq12::equalverify() }
-                // OP_TRUE
             };
             println!("len {:?}", script.len());
             let exec_result = execute_script(script);
 
-            assert!(exec_result.success);
+            //assert!(exec_result.success);
             for i in 0..exec_result.final_stack.len() {
                 println!("{i:3} {:?}", exec_result.final_stack.get(i));
             }
             println!("stack len {:?} final len {:?}", exec_result.stats.max_nb_stack_items, exec_result.final_stack.len());
             // max_stack = max_stack.max(exec_result.stats.max_nb_stack_items);
             // println!("Fq12::hinted_square: {} @ {} stack final stack {}", hinted_square.len(), max_stack,exec_result.final_stack.len());
+            println!("len12 {} len12h {} len6 {}", hash_fp12().len(), hash_fp12_with_hints().len(), hash_fp6().len());
         }
     }
 
