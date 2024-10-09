@@ -711,7 +711,7 @@ mod test {
     use ark_std::UniformRand;
 
     use ark_ff::AdditiveGroup;
-    use bitcoin::opcodes::{all::{OP_ADD, OP_FROMALTSTACK, OP_ROLL, OP_TOALTSTACK}, OP_TRUE};
+    use bitcoin::opcodes::all::{OP_ADD, OP_FROMALTSTACK, OP_ROLL, OP_TOALTSTACK};
     use core::ops::{Add, Mul, Rem, Sub};
     use num_bigint::{BigInt, BigUint, RandBigInt, RandomBits};
     use num_traits::{Num, Signed};
@@ -984,15 +984,13 @@ mod test {
             { Fq::push_u32_le_not_montgomery(&a.to_u32_digits()) }
             { fq_to_nibbles() }
             {nibbles_to_fq()}
-            { Fq::equalverify(1, 0) }
-            OP_TRUE
             // { Fq::push_u32_le_not_montgomery(&a.to_u32_digits()) }
             // { fq_to_nibbles() }
         };
         println!("sc len {}", sc.len());
         let res = execute_script(sc);
         for i in 0..res.final_stack.len() {
-            println!("ok:{} {i:3}: {:?}", res.success, res.final_stack.get(i));
+            println!("{i:3}: {:?}", res.final_stack.get(i));
         }
     }
 

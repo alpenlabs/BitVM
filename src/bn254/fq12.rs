@@ -795,12 +795,18 @@ impl Fq12 {
 
 #[cfg(test)]
 mod test {
+    use crate::bn254::fp254impl::Fp254Impl;
+    use crate::bn254::fq::{fq_to_nibbles, nibbles_to_fq, Fq};
     use crate::bn254::fq12::Fq12;
     use crate::bn254::utils::{fq12_push, fq12_push_not_montgomery, fq2_push, fq2_push_not_montgomery};
+    use crate::pseudo::NMUL;
     use crate::{execute_script_without_stack_limit, treepp::*};
     use ark_ff::AdditiveGroup;
     use ark_ff::{CyclotomicMultSubgroup, Field};
     use ark_std::UniformRand;
+    use bitcoin::opcodes::all::{OP_FROMALTSTACK, OP_ROLL, OP_TOALTSTACK};
+    use bitcoin::opcodes::OP_TRUE;
+    use bitcoin::ScriptBuf;
     use bitcoin_scriptexec::ExecError;
     use core::ops::Mul;
     use num_bigint::BigUint;
@@ -1006,11 +1012,86 @@ mod test {
         }
     }
 
+    use std::fs::File;
+    use std::io::{self, Read};
+
     #[test]
     fn test_bn254_fq12_hinted_square() {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
 
-        let mut max_stack = 0;
+        let mut max_stack = 0u32;
+
+
+        fn read_script_from_file(file_path: &str) -> Script {
+            fn read_file_to_bytes(file_path: &str) -> io::Result<Vec<u8>> {
+                let mut file = File::open(file_path)?;
+                let mut all_script_bytes = Vec::new();
+                file.read_to_end(&mut all_script_bytes)?;
+                Ok(all_script_bytes)
+            }
+            //let file_path = "blake3_bin/blake3_192b_252k.bin"; // Replace with your file path
+            let all_script_bytes = read_file_to_bytes(file_path).unwrap();
+            let scb = ScriptBuf::from_bytes(all_script_bytes);
+            let sc = script!();
+            let sc = sc.push_script(scb);
+            sc
+        }
+
+
+        fn hash_fp12() -> Script {
+            let hash_64b_75k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_64b_75k.bin");
+            let hash_128b_168k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_128b_168k.bin");
+
+            script!{
+                for i in 0..=10 {
+                    {Fq::toaltstack()}
+                }
+                { fq_to_nibbles() }
+                { Fq::fromaltstack() }
+                { fq_to_nibbles() }
+                {hash_64b_75k.clone()}
+                { nibbles_to_fq() }
+
+                { Fq::fromaltstack() }
+                {fq_to_nibbles()}
+                { Fq::fromaltstack() }
+                {fq_to_nibbles()}
+                { Fq::fromaltstack() }
+                {fq_to_nibbles()}
+                { Fq::fromaltstack() }
+                {fq_to_nibbles()}
+                { hash_128b_168k.clone() }
+                { nibbles_to_fq() }
+
+                { Fq::fromaltstack() }
+                {fq_to_nibbles()}
+                { Fq::fromaltstack() }
+                {fq_to_nibbles()}
+                {hash_64b_75k}
+                { nibbles_to_fq() }
+                
+
+                { Fq::fromaltstack() }
+                {fq_to_nibbles()}
+                { Fq::fromaltstack() }
+                {fq_to_nibbles()}
+                { Fq::fromaltstack() }
+                {fq_to_nibbles()}
+                { Fq::fromaltstack() }
+                {fq_to_nibbles()}
+                { hash_128b_168k.clone() }
+
+                for i in 1..=3 {
+                    for _ in 0..9 {
+                        {64*i + 8} OP_ROLL
+                    }
+                    {fq_to_nibbles()}
+                }
+                { hash_128b_168k }
+                {nibbles_to_fq()}
+
+            } 
+        }
 
         for _ in 0..1 {
             let a = ark_bn254::Fq12::rand(&mut prng);
@@ -1018,21 +1099,61 @@ mod test {
 
             let (hinted_square, hints) = Fq12::hinted_square(a);
 
+            println!("hints len {:?}", hints.len());
             let script = script! {
+           
                 for hint in hints { 
                     { hint.push() }
                 }
+                {u32::from_le_bytes([234, 190, 118, 0])}
+                {u32::from_le_bytes([135, 162, 241, 5])}
+                {u32::from_le_bytes([186, 52, 155, 0])}
+                {u32::from_le_bytes([162, 11, 254, 31])}
+                {u32::from_le_bytes([130, 167, 61, 5])}
+                {u32::from_le_bytes([178, 14, 103, 23])}
+                {u32::from_le_bytes([195, 223, 134, 7])}
+                {u32::from_le_bytes([68, 150, 213, 11])}
+                {u32::from_le_bytes([83, 1, 19, 0])}
+
+                {u32::from_le_bytes([234, 190, 118, 0])}
+                {u32::from_le_bytes([135, 162, 241, 5])}
+                {u32::from_le_bytes([186, 52, 155, 0])}
+                {u32::from_le_bytes([162, 11, 254, 31])}
+                {u32::from_le_bytes([130, 167, 61, 5])}
+                {u32::from_le_bytes([178, 14, 103, 23])}
+                {u32::from_le_bytes([195, 223, 134, 7])}
+                {u32::from_le_bytes([68, 150, 213, 11])}
+                {u32::from_le_bytes([83, 1, 19, 0])}
+
+                { fq12_push_not_montgomery(a) }
                 { fq12_push_not_montgomery(a) }
                 { hinted_square.clone() }
-                { fq12_push_not_montgomery(b) }
-                { Fq12::equalverify() }
-                OP_TRUE
-            };
-            let exec_result = execute_script(script);
-            assert!(exec_result.success);
+                { hash_fp12() }
 
-            max_stack = max_stack.max(exec_result.stats.max_nb_stack_items);
-            println!("Fq12::hinted_square: {} @ {} stack", hinted_square.len(), max_stack);
+                { Fq::drop() }
+
+                { hash_fp12() }
+
+                {Fq::drop()}
+                {Fq::drop()}
+                {Fq::drop()}
+                OP_TRUE
+
+                // { Fq::push_u32_le(&v.to_u32_digits()) }
+                // { fq12_push_not_montgomery(b) }
+                // { Fq12::equalverify() }
+                // OP_TRUE
+            };
+            println!("len {:?}", script.len());
+            let exec_result = execute_script(script);
+
+            assert!(exec_result.success);
+            for i in 0..exec_result.final_stack.len() {
+                println!("{i:3} {:?}", exec_result.final_stack.get(i));
+            }
+            println!("stack len {:?} final len {:?}", exec_result.stats.max_nb_stack_items, exec_result.final_stack.len());
+            // max_stack = max_stack.max(exec_result.stats.max_nb_stack_items);
+            // println!("Fq12::hinted_square: {} @ {} stack final stack {}", hinted_square.len(), max_stack,exec_result.final_stack.len());
         }
     }
 
