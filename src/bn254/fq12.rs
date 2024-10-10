@@ -943,11 +943,97 @@ mod test {
     }
 
 
-    // len12 783502 len12h 431686 len6 351798
-    // mul: 2288732
-    // total:  2288732 + 783502 + 431686 + 575*1024
     #[test]
-    fn test_bn254_fq12_hinted_mul_splits() {
+    fn test_bn254_fq12_hinted_mul_split0() {
+        let mut prng: ChaCha20Rng = ChaCha20Rng::seed_from_u64(0);
+
+        let mut max_stack = 0;
+
+        for _ in 0..1 {
+            let a = ark_bn254::Fq12::rand(&mut prng);
+            let b = ark_bn254::Fq12::rand(&mut prng);
+            let c = a.mul(&b);
+
+            let (hinted_mul, hints) = Fq12::hinted_mul_first(12, a, 0, b);
+
+            let script = script! {
+                for hint in hints { 
+                    { hint.push() }
+                }
+                // Hash_b
+                {u32::from_le_bytes([17, 50, 164, 0])}
+                {u32::from_le_bytes([235, 77, 217, 15])}
+                {u32::from_le_bytes([1, 4, 86, 10])}
+                {u32::from_le_bytes([23, 225, 110, 26])}
+                {u32::from_le_bytes([71, 105, 236, 11])}
+                {u32::from_le_bytes([75, 29, 151, 8])}
+                {u32::from_le_bytes([130, 190, 188, 3])}
+                {u32::from_le_bytes([246, 67, 44, 19])}
+                {u32::from_le_bytes([105, 194, 20, 27])}
+
+                // Hash_a
+                {u32::from_le_bytes([131, 116, 114, 0])}
+                {u32::from_le_bytes([245, 129, 139, 3])}
+                {u32::from_le_bytes([132, 171, 199, 7])}
+                {u32::from_le_bytes([97, 185, 93, 16])}
+                {u32::from_le_bytes([161, 222, 150, 25])}
+                {u32::from_le_bytes([44, 144, 71, 23])}
+                {u32::from_le_bytes([139, 185, 38, 22])}
+                {u32::from_le_bytes([233, 138, 103, 22])}
+                {u32::from_le_bytes([9, 213, 155, 19])}
+                
+                // Hash_c
+                {u32::from_le_bytes([82, 143, 25,0])}
+                {u32::from_le_bytes([106, 69, 151, 13])}
+                {u32::from_le_bytes([154, 120, 131, 27])}
+                {u32::from_le_bytes([140, 55, 239, 25])}
+                {u32::from_le_bytes([92, 201, 47, 28])}
+                {u32::from_le_bytes([44, 174, 74, 16])}
+                {u32::from_le_bytes([57, 190, 31, 19])}
+                {u32::from_le_bytes([31, 231, 126, 1])}
+                {u32::from_le_bytes([158, 11, 210, 2])}
+
+                { fq12_push_not_montgomery(a) }
+                { fq12_push_not_montgomery(b) } // fp12_one
+                { hinted_mul.clone() }
+                { Fq6::toaltstack() }
+                
+                { hash_fp12()}
+                //bring Hashb to top
+                for i in 0..9 {
+                    OP_DEPTH OP_1SUB OP_ROLL
+                }
+                { Fq::equalverify(0, 1)}
+
+                // hash_a
+                { hash_fp12_192() }
+                for i in 0..9 {
+                    OP_DEPTH OP_1SUB OP_ROLL
+                }
+                { Fq::equalverify(0, 1)}
+
+                {Fq::fromaltstack()} // Fq_claimed from altstack
+                {Fq::equalverify(0, 1)} // SHOULD BE UNEQUAL VERIFY
+                OP_TRUE
+            };
+
+            println!("script len {}", script.len());
+            let exec_result = execute_script(script);
+            assert!(exec_result.success);
+            for i in 0..exec_result.final_stack.len() {
+                println!("{i:3} {:?}", exec_result.final_stack.get(i));
+            }
+            max_stack = max_stack.max(exec_result.stats.max_nb_stack_items);
+            println!("Fq12::mul {} stack", max_stack);
+            
+        }
+
+    }
+
+
+
+    #[test]
+    fn test_bn254_fq12_hinted_mul_split1() {
         let mut prng: ChaCha20Rng = ChaCha20Rng::seed_from_u64(0);
 
         let mut max_stack = 0;
@@ -1051,6 +1137,7 @@ mod test {
         }
 
     }
+
 
     #[test]
     fn test_bn254_fq12_hinted_mul() {
