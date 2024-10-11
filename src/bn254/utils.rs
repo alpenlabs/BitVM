@@ -1163,8 +1163,10 @@ pub fn double_line() -> Script {
 mod test {
     use super::*;
     use crate::bn254::fq2::Fq2;
+    use ark_bn254::G2Affine;
     use ark_ff::AdditiveGroup;
     use ark_std::UniformRand;
+    use bitcoin::opcodes::all::{OP_PICK, OP_ROLL};
     use num_traits::One;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
@@ -1414,6 +1416,103 @@ mod test {
             // [OP_TRUE]
         };
         run(script);
+    }
+
+    #[test]
+    fn test_hinted_affine_double_add_eval() {
+        // slope: alpha = 3 * x^2 / 2 * y
+        // intercept: bias = y - alpha * x
+        // x' = alpha^2 - 2 * x
+        // y' = -bias - alpha * x'
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let t = ark_bn254::G2Affine::rand(&mut prng);
+        let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
+        let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
+        let mut alpha = t.x.square();
+        alpha /= t.y;
+        alpha.mul_assign_by_fp(&three_div_two);
+        // -bias
+        let bias_minus = alpha * t.x - t.y;
+
+        let x = alpha.square() - t.x.double();
+        let y = bias_minus - alpha * x;
+        let (hinted_double_line, hintsd) = hinted_affine_double_line(t.x, alpha, bias_minus);
+        let (hinted_check_tangent, hintst) = hinted_check_line_through_point(t.x, alpha, bias_minus);
+
+        let tt = G2Affine::new(x, y);
+        let q = ark_bn254::G2Affine::rand(&mut prng);
+        let alpha = (tt.y - q.y) / (tt.x - q.x);
+        // -bias
+        let bias_minus = alpha * tt.x - tt.y;
+        assert_eq!(alpha * tt.x - tt.y, bias_minus);
+
+        let x = alpha.square() - tt.x - q.x;
+        let y = bias_minus - alpha * x;
+
+        let (hinted_check_chord, hintsc) = hinted_check_chord_line(tt, q, alpha, bias_minus);
+        let (hinted_add_line, hintsa) = hinted_affine_add_line(tt.x, q.x, alpha, bias_minus);
+
+        let script = script! {
+            for hint in hintst { 
+                { hint.push() }
+            }
+            for hint in hintsd { 
+                { hint.push() }
+            }
+            for hint in hintsc { 
+                { hint.push() }
+            }
+            for hint in hintsa { 
+                { hint.push() }
+            }
+
+            { fq2_push_not_montgomery(q.x) }
+            { fq2_push_not_montgomery(q.x) }
+            { fq2_push_not_montgomery(q.y) }
+
+            { fq2_push_not_montgomery(t.x) }
+            { fq2_push_not_montgomery(t.x) }
+            { fq2_push_not_montgomery(t.y) }
+
+            { hinted_check_tangent }
+            { hinted_double_line }
+
+            for i in 0..18 {
+                {35} OP_PICK
+            }
+
+            { Fq2::toaltstack() }
+
+            for i in 0..36 {
+                {71} OP_ROLL
+            }
+
+            { hinted_check_chord }
+
+            {Fq2::fromaltstack()}
+
+            for i in 0..18 {
+                {35} OP_ROLL
+            }
+            { hinted_add_line }
+
+            { fq2_push_not_montgomery(y) }
+            // [x', y', y]
+            { Fq2::equalverify() }
+            // [x']
+            { fq2_push_not_montgomery(x) }
+            // [x', x]
+            { Fq2::equalverify() }
+            
+            OP_TRUE
+        };
+
+        let len = script.len();
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        println!("script {} stack {}", len, res.stats.max_nb_stack_items);
     }
 
     #[test]
