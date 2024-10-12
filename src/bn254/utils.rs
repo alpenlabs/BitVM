@@ -552,6 +552,53 @@ pub fn hinted_affine_add_line(tx: ark_bn254::Fq2, qx: ark_bn254::Fq2, c3: ark_bn
     (script, hints)
 }
 
+
+pub fn new_hinted_affine_add_line(tx: ark_bn254::Fq2, qx: ark_bn254::Fq2, c3: ark_bn254::Fq2, c4: ark_bn254::Fq2) -> (Script, Vec<Hint>) {
+    let mut hints = Vec::new();
+    let (hsc, hts) = Fq2::hinted_square(c3);
+    let (hinted_script1, hint1) = Fq2::hinted_mul(4, c3, 0, c3.square()-tx-qx);
+
+    let script_lines = vec! [
+        // [T.x, Q.x]
+        Fq2::neg(0),
+        // [T.x, -Q.x]
+        Fq2::roll(2),
+        // [-Q.x, T.x]
+        Fq2::neg(0),
+        // [-T.x - Q.x]
+        Fq2::add(2, 0),
+        // [-T.x - Q.x]
+        Fq2::roll(2),
+        Fq2::copy(0),
+        hsc,
+        // [-T.x - Q.x, alpha, alpha^2]
+        // calculate x' = alpha^2 - T.x - Q.x
+        Fq2::add(4, 0),
+        // [alpha, x']
+        Fq2::copy(0),
+        // [alpha, x', x']
+        hinted_script1,
+        // [x', alpha * x']
+        Fq2::neg(0),
+        // [x', -alpha * x']
+        // fq2_push_not_montgomery(c4),
+        // [x', -alpha * x', -bias]
+        // compute y' = -bias - alpha * x'
+        Fq2::add(4, 0),
+        // [x', y']
+    ];
+
+    let mut script = script!{};
+    for script_line in script_lines {
+        script = script.push_script(script_line.compile());
+    }
+    hints.extend(hts);
+    hints.extend(hint1);
+
+    (script, hints)
+}
+
+
 /// double a point T:
 ///     x' = alpha^2 - 2 * T.x
 ///     y' = -bias - alpha* x'
@@ -617,6 +664,45 @@ pub fn hinted_affine_double_line(tx: ark_bn254::Fq2, c3: ark_bn254::Fq2, c4: ark
     (script, hints)
 }
 
+
+pub fn new_hinted_affine_double_line(tx: ark_bn254::Fq2, c3: ark_bn254::Fq2, c4: ark_bn254::Fq2) -> (Script, Vec<Hint>) {
+    let mut hints = Vec::new();
+
+    let (hsc, hts) = Fq2::hinted_square(c3);
+    let (hinted_script1, hint1) = Fq2::hinted_mul(4, c3, 0, c3.square()-tx-tx);
+
+    let script_lines = vec! [
+        Fq2::double(0),
+        Fq2::neg(0),
+        // [alpha, - 2 * T.x]
+        Fq2::roll(2),
+        Fq2::copy(0),
+        hsc,
+        // fq2_push_not_montgomery(c3.square()),
+        // [- 2 * T.x, alpha, alpha^2]
+        Fq2::add(4, 0),
+        Fq2::copy(0),
+        // [alpha, x', x']
+        hinted_script1,
+        Fq2::neg(0),
+        // [x', -alpha * x']
+
+        Fq2::add(4, 0),
+        // [x', y']
+    ];
+
+    let mut script = script!{};
+
+    for script_line in script_lines {
+        script = script.push_script(script_line.compile());
+    }
+    hints.extend(hts);
+    hints.extend(hint1);
+
+    (script, hints)
+}
+
+
 /// check line through one point, that is:
 ///     y - alpha * x - bias = 0
 ///
@@ -653,6 +739,7 @@ pub fn check_line_through_point(c3: ark_bn254::Fq2, c4: ark_bn254::Fq2) -> Scrip
     }
 }
 
+
 pub fn hinted_check_line_through_point(x: ark_bn254::Fq2, c3: ark_bn254::Fq2, c4: ark_bn254::Fq2) -> (Script, Vec<Hint>) {
     let mut hints: Vec<Hint> = Vec::new();
     
@@ -687,6 +774,41 @@ pub fn hinted_check_line_through_point(x: ark_bn254::Fq2, c3: ark_bn254::Fq2, c4
 
     (script, hints)
 }
+
+
+pub fn new_hinted_check_line_through_point(x: ark_bn254::Fq2, c3: ark_bn254::Fq2, c4: ark_bn254::Fq2) -> (Script, Vec<Hint>) {
+    let mut hints: Vec<Hint> = Vec::new();
+    
+    let (hinted_script1, hint1) = Fq2::hinted_mul(2, x,0, c3);
+
+    let script_lines = vec![
+        // [y, x, alpha]
+        hinted_script1,
+        // [y, alpha * x]
+        Fq2::neg(0),
+        // [y, -alpha * x]
+        Fq2::add(2, 0),
+        // [y - alpha * x]
+
+        // fq2_push_not_montgomery(c4),
+        // [y - alpha * x, -bias]
+        Fq2::add(2, 0),
+        // [y - alpha * x - bias]
+
+        Fq2::push_zero(),
+        // [y - alpha * x - bias, 0]
+        Fq2::equalverify(),
+    ];
+
+    let mut script = script!{};
+    for script_line in script_lines {
+        script = script.push_script(script_line.compile());
+    }
+    hints.extend(hint1);
+
+    (script, hints)
+}
+
 
 /// check whether a tuple coefficient (alpha, -bias) of a tangent line is satisfied with expected point T (affine)
 /// two aspects:
@@ -810,6 +932,27 @@ pub fn hinted_check_chord_line(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine, c
     (script, hints)
 }
 
+pub fn new_hinted_check_chord_line(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine, c3: ark_bn254::Fq2, c4: ark_bn254::Fq2) -> (Script, Vec<Hint>) {
+    let mut hints = Vec::new();
+
+    let (script1, hint1) = new_hinted_check_line_through_point(t.x, c3, c4);
+    let (script2, hint2) = new_hinted_check_line_through_point(q.x, c3, c4);
+
+
+    let script_lines = vec![
+        script1,
+        script2,
+    ];
+    let mut script = script!{};
+    for script_line in script_lines {
+        script = script.push_script(script_line.compile());
+    }
+
+    hints.extend(hint1);
+    hints.extend(hint2);
+
+    (script, hints)
+}
 // stack data: beta^{2 * (p - 1) / 6}, beta^{3 * (p - 1) / 6}, beta^{2 * (p^2 - 1) / 6}, 1/2, B,
 // P1, P2, P3, P4, Q4, c, c', wi, f, Px, Py, Tx, Ty, Tz, Qx, Qy
 // [..., Fq12, Fq12, Fq12, Fq12, Fq, Fq, (Fq, Fq), (Fq, Fq), (Fq, Fq), (Fq, Fq), (Fq, Fq)]
@@ -1428,29 +1571,29 @@ mod test {
         let t = ark_bn254::G2Affine::rand(&mut prng);
         let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
         let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
-        let mut alpha = t.x.square();
-        alpha /= t.y;
-        alpha.mul_assign_by_fp(&three_div_two);
+        let mut alpha_tangent = t.x.square();
+        alpha_tangent /= t.y;
+        alpha_tangent.mul_assign_by_fp(&three_div_two);
         // -bias
-        let bias_minus = alpha * t.x - t.y;
+        let bias_minus_tangent = alpha_tangent * t.x - t.y;
 
-        let x = alpha.square() - t.x.double();
-        let y = bias_minus - alpha * x;
-        let (hinted_double_line, hintsd) = hinted_affine_double_line(t.x, alpha, bias_minus);
-        let (hinted_check_tangent, hintst) = hinted_check_line_through_point(t.x, alpha, bias_minus);
+        let x = alpha_tangent.square() - t.x.double();
+        let y = bias_minus_tangent - alpha_tangent * x;
+        let (hinted_double_line, hintsd) = new_hinted_affine_double_line(t.x, alpha_tangent, bias_minus_tangent);
+        let (hinted_check_tangent, hintst) = new_hinted_check_line_through_point(t.x, alpha_tangent, bias_minus_tangent);
 
         let tt = G2Affine::new(x, y);
         let q = ark_bn254::G2Affine::rand(&mut prng);
-        let alpha = (tt.y - q.y) / (tt.x - q.x);
+        let alpha_chord = (tt.y - q.y) / (tt.x - q.x);
         // -bias
-        let bias_minus = alpha * tt.x - tt.y;
-        assert_eq!(alpha * tt.x - tt.y, bias_minus);
+        let bias_minus_chord = alpha_chord * tt.x - tt.y;
+        assert_eq!(alpha_chord * tt.x - tt.y, bias_minus_chord);
 
-        let x = alpha.square() - tt.x - q.x;
-        let y = bias_minus - alpha * x;
+        let x = alpha_chord.square() - tt.x - q.x;
+        let y = bias_minus_chord - alpha_chord * x;
 
-        let (hinted_check_chord, hintsc) = hinted_check_chord_line(tt, q, alpha, bias_minus);
-        let (hinted_add_line, hintsa) = hinted_affine_add_line(tt.x, q.x, alpha, bias_minus);
+        let (hinted_check_chord, hintsc) = new_hinted_check_chord_line(tt, q, alpha_chord, bias_minus_chord);
+        let (hinted_add_line, hintsa) = new_hinted_affine_add_line(tt.x, q.x, alpha_chord, bias_minus_chord);
 
         let script = script! {
             for hint in hintst { 
@@ -1466,32 +1609,43 @@ mod test {
                 { hint.push() }
             }
 
+            { fq2_push_not_montgomery(bias_minus_chord)}
+            { fq2_push_not_montgomery(alpha_chord)}
             { fq2_push_not_montgomery(q.x) }
-            { fq2_push_not_montgomery(q.x) }
-            { fq2_push_not_montgomery(q.y) }
 
-            { fq2_push_not_montgomery(t.x) }
-            { fq2_push_not_montgomery(t.x) }
-            { fq2_push_not_montgomery(t.y) }
+                { fq2_push_not_montgomery(bias_minus_chord)}
+                { fq2_push_not_montgomery(q.y) }
+                { fq2_push_not_montgomery(q.x) }
+                { fq2_push_not_montgomery(alpha_chord)}
+                { fq2_push_not_montgomery(bias_minus_chord)}
 
-            { hinted_check_tangent }
-            { hinted_double_line }
+                    { fq2_push_not_montgomery(bias_minus_tangent)}
+                    { fq2_push_not_montgomery(alpha_tangent)}
+                    { fq2_push_not_montgomery(t.x) }
 
-            for i in 0..18 {
-                {35} OP_PICK
-            }
+                        { fq2_push_not_montgomery(bias_minus_tangent)}
+                        { fq2_push_not_montgomery(t.y) }
+                        { fq2_push_not_montgomery(t.x) }
+                        { fq2_push_not_montgomery(alpha_tangent)}
+                        { hinted_check_tangent }
 
-            { Fq2::toaltstack() }
+                    { hinted_double_line }
 
-            for i in 0..36 {
-                {71} OP_ROLL
-            }
+                for i in 0..18 {
+                    {35} OP_PICK
+                }
 
-            { hinted_check_chord }
+                { Fq2::toaltstack() } // save t.x to altstack
+                for i in 0..18 {
+                    {35} OP_ROLL
+                }
+                { fq2_push_not_montgomery(alpha_chord)}
 
-            {Fq2::fromaltstack()}
+                { hinted_check_chord } // [q,t]
 
-            for i in 0..18 {
+            {Fq2::fromaltstack()} // t.x
+
+            for i in 0..18 { // q.x
                 {35} OP_ROLL
             }
             { hinted_add_line }
