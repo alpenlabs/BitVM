@@ -838,16 +838,16 @@ pub fn new_hinted_check_line_through_point(x: ark_bn254::Fq2, c3: ark_bn254::Fq2
     let (hinted_script1, hint1) = Fq2::hinted_mul(2, x,0, c3);
 
     let script_lines = vec![
-        // [y, x, alpha]
+        // [alpha, bias, y, x ]
+        Fq2::roll(2),
+        // [alpha, bias, x, y ]
+        Fq2::roll(6),
         hinted_script1,
-        // [y, alpha * x]
+        // [bias, y, alpha * x]
         Fq2::neg(0),
-        // [y, -alpha * x]
+        // [bias, y, -alpha * x]
         Fq2::add(2, 0),
-        // [y - alpha * x]
-
-        // fq2_push_not_montgomery(c4),
-        // [y - alpha * x, -bias]
+        // [bias, y - alpha * x]
         Fq2::add(2, 0),
         // [y - alpha * x - bias]
 
@@ -991,12 +991,16 @@ pub fn hinted_check_chord_line(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine, c
 pub fn new_hinted_check_chord_line(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine, c3: ark_bn254::Fq2, c4: ark_bn254::Fq2) -> (Script, Vec<Hint>) {
     let mut hints = Vec::new();
 
-    let (script1, hint1) = new_hinted_check_line_through_point(t.x, c3, c4);
+    // let (script1, hint1) = new_hinted_check_line_through_point(t.x, c3, c4);
     let (script2, hint2) = new_hinted_check_line_through_point(q.x, c3, c4);
 
 
     let script_lines = vec![
-        script1,
+        // {Fq2::toaltstack()},
+        // {Fq2::toaltstack()},
+        // script1, // t
+        // {Fq2::fromaltstack()}, // q
+        // {Fq2::fromaltstack()}, // q
         script2,
     ];
     let mut script = script!{};
@@ -1004,7 +1008,7 @@ pub fn new_hinted_check_chord_line(t: ark_bn254::G2Affine, q: ark_bn254::G2Affin
         script = script.push_script(script_line.compile());
     }
 
-    hints.extend(hint1);
+    // hints.extend(hint1);
     hints.extend(hint2);
 
     (script, hints)
@@ -1773,6 +1777,201 @@ mod test {
         }
         println!("script {} stack {}", len, res.stats.max_nb_stack_items);
     }
+
+
+    #[test]
+    fn test_hinted_affine_double_add_eval_new() {
+        // slope: alpha = 3 * x^2 / 2 * y
+        // intercept: bias = y - alpha * x
+        // x' = alpha^2 - 2 * x
+        // y' = -bias - alpha * x'
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let t = ark_bn254::G2Affine::rand(&mut prng);
+        let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
+        let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
+        let mut alpha_tangent = t.x.square();
+        alpha_tangent /= t.y;
+        alpha_tangent.mul_assign_by_fp(&three_div_two);
+        // -bias
+        let bias_minus_tangent = alpha_tangent * t.x - t.y;
+
+        let x = alpha_tangent.square() - t.x.double();
+        let y = bias_minus_tangent - alpha_tangent * x;
+        let (hinted_double_line, hints_double_line) = new_hinted_affine_double_line(t.x, alpha_tangent, bias_minus_tangent);
+        let (hinted_check_tangent, hints_check_tangent) = new_hinted_check_line_through_point(t.x, alpha_tangent, bias_minus_tangent);
+
+        let tt = G2Affine::new(x, y);
+        let q = ark_bn254::G2Affine::rand(&mut prng);
+        let alpha_chord = (tt.y - q.y) / (tt.x - q.x);
+        // -bias
+        let bias_minus_chord = alpha_chord * tt.x - tt.y;
+        assert_eq!(alpha_chord * tt.x - tt.y, bias_minus_chord);
+
+        let x = alpha_chord.square() - tt.x - q.x;
+        let y = bias_minus_chord - alpha_chord * x;
+        let p = ark_bn254::g1::G1Affine::rand(&mut prng);
+        let p_dash_x = -p.x/p.y;
+        let p_dash_y = p.y.inverse().unwrap();
+
+        let (hinted_check_chord_t, hints_check_chord_t) = new_hinted_check_line_through_point( tt.x, alpha_chord, bias_minus_chord);
+        let (hinted_check_chord_q, hints_check_chord_q) = new_hinted_check_line_through_point( q.x, alpha_chord, bias_minus_chord);
+        let (hinted_add_line, hints_add_line) = new_hinted_affine_add_line(tt.x, q.x, alpha_chord, bias_minus_chord);
+
+        // affine mode as well
+        let mut c1new = alpha_tangent;
+        c1new.mul_assign_by_fp(&(-p.x / p.y));
+
+        let mut c2new = bias_minus_tangent;
+        c2new.mul_assign_by_fp(&(p.y.inverse().unwrap()));
+
+        let mut c1new_2 = alpha_chord;
+        c1new_2.mul_assign_by_fp(&(-p.x / p.y));
+
+        let mut c2new_2 = bias_minus_chord;
+        c2new_2.mul_assign_by_fp(&(p.y.inverse().unwrap()));
+
+        let (hinted_ell_tangent, hints_ell_tangent) = new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_tangent, bias_minus_tangent);
+        let (hinted_ell_chord, hints_ell_chord) = new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_chord, bias_minus_chord);
+
+
+        let bcsize = 6+2;
+        let script = script! {
+            // hints
+            for hint in hints_check_tangent { 
+                { hint.push() }
+            }
+            for hint in hints_ell_tangent { 
+                { hint.push() }
+            }
+            for hint in hints_double_line { 
+                { hint.push() }
+            }
+            for hint in hints_check_chord_q { 
+                { hint.push() }
+            }
+            for hint in hints_check_chord_t { 
+                { hint.push() }
+            }
+            for hint in hints_ell_chord { 
+                { hint.push() }
+            }
+            for hint in hints_add_line { 
+                { hint.push() }
+            }
+
+            // aux
+            { fq2_push_not_montgomery(alpha_chord)}
+            { fq2_push_not_montgomery(bias_minus_chord)}
+            { fq2_push_not_montgomery(alpha_tangent)}
+            { fq2_push_not_montgomery(bias_minus_tangent)}
+            { fq2_push_not_montgomery(t.x) }
+            { fq2_push_not_montgomery(t.y) }
+
+            // bit commits
+            { fq_push_not_montgomery(p_dash_x) }
+            { fq_push_not_montgomery(p_dash_y) }
+            { fq2_push_not_montgomery(q.x) }
+            { fq2_push_not_montgomery(q.y) }
+            { Fq::push_zero() } // hash
+            { Fq::push_zero() } // hash
+            
+
+            { Fq2::copy(bcsize+6)} // alpha
+            { Fq2::copy(bcsize+6)} // bias
+            { Fq2::copy(bcsize+6)} // t.x
+            { Fq2::copy(bcsize+6)} // t.y
+            { hinted_check_tangent }
+
+            { Fq2::copy(bcsize+6) } // alpha
+            { Fq2::copy(bcsize+6) } // bias
+            { Fq2::copy(4 + 6) } // p_dash
+            { hinted_ell_tangent }
+            // { Fq2::toaltstack() } // le.0
+            // { Fq2::toaltstack() } // le.1
+            { fq2_push_not_montgomery(c2new) }
+            { Fq2::equalverify() }
+            { fq2_push_not_montgomery(c1new) }
+            { Fq2::equalverify() }
+
+
+            { Fq2::copy(bcsize+4)} // bias
+            { Fq2::copy(bcsize+8)} // alpha
+            { Fq2::copy(bcsize+6)} // t.x
+            { hinted_double_line }
+            { Fq2::toaltstack() }
+            { Fq2::toaltstack()}
+            // { fq2_push_not_montgomery(tt.y) }
+            // { Fq2::equalverify() }
+            // { fq2_push_not_montgomery(tt.x) }
+            // { Fq2::equalverify() }
+
+            { Fq2::roll(bcsize+6) } // alpha tangent drop
+            { Fq2::drop() }
+            { Fq2::roll(bcsize+4) } // bias tangent drop
+            { Fq2::drop() }
+
+            // hinted check chord // t.x, t.y
+            { Fq2::copy(bcsize+6)} // alpha
+            { Fq2::copy(bcsize+6)} // bias
+            { Fq2::copy(8) }
+            { Fq2::copy(8) }
+            { hinted_check_chord_q }
+            { Fq2::copy(bcsize+6)} // alpha
+            { Fq2::copy(bcsize+6)} // bias
+            { Fq2::fromaltstack() }
+            { Fq2::fromaltstack() }
+            { Fq2::copy(2)} // t.x
+            { Fq2::toaltstack() }
+            { hinted_check_chord_t }
+
+
+            { Fq2::copy(bcsize+6) } // alpha
+            { Fq2::copy(bcsize+6) } // bias
+            { Fq2::copy(10) } // p_dash
+            { hinted_ell_chord }
+            // { fq2_push_not_montgomery(c2new_2) }
+            // { Fq2::equalverify() }
+            // { fq2_push_not_montgomery(c1new_2) }
+            // { Fq2::equalverify() }
+
+            { Fq2::copy(4+bcsize+4) } // bias
+            { Fq2::copy(8+bcsize+4) } // alpha
+            { Fq2::copy(4+4+4) } // q.x
+            { Fq2::fromaltstack() }
+            { hinted_add_line }
+            // { fq2_push_not_montgomery(y) }
+            // { Fq2::equalverify() }
+            // { fq2_push_not_montgomery(x) }
+            // { Fq2::equalverify() }
+            { Fq2::toaltstack() } 
+            { Fq2::toaltstack() } 
+            { Fq2::toaltstack() } 
+            { Fq2::toaltstack() } 
+
+
+
+            { Fq2::drop() }
+            { Fq2::drop() }
+            { Fq2::drop() }
+            { Fq2::drop() }
+            { Fq2::drop() }
+            { Fq2::drop() }
+            { Fq2::drop() }
+            { Fq::drop() }
+            { Fq::drop() }
+            
+            
+            OP_TRUE
+        };
+
+        let len = script.len();
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        println!("script {} stack {}", len, res.stats.max_nb_stack_items);
+    }
+
 
     #[test]
     fn test_hinted_affine_add_line() {
