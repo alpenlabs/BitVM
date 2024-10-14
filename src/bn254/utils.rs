@@ -266,6 +266,62 @@ pub fn hinted_ell_by_constant_affine(f: ark_bn254::Fq12, x: ark_bn254::Fq, y: ar
 
 }
 
+
+pub fn new_hinted_ell_by_constant_affine(x: ark_bn254::Fq, y: ark_bn254::Fq, slope: ark_bn254::Fq2, bias: ark_bn254::Fq2) -> (Script, Vec<Hint>) {
+    let mut hints = Vec::new();
+
+    let (hinted_script1, hint1) = Fq::hinted_mul(1, x, 0, slope.c0);
+    let (hinted_script2, hint2) = Fq::hinted_mul(1, x, 0, slope.c1);
+    let (hinted_script3, hint3) = Fq::hinted_mul(1, y, 0, bias.c0);
+    let (hinted_script4, hint4) = Fq::hinted_mul(1, y, 0, bias.c1);
+
+
+    let script_lines = vec! [
+        // [slope, bias, x', y']
+        // update c1, c1' = x' * c1
+        Fq::copy(1),
+        // [slope0, slope1, bias0, bias1, x', y', x']
+        Fq::roll(6),
+        // [slope1, bias0, bias1, x', y', x', slope0]
+        hinted_script1,
+        // [slope1, bias0, bias1, x', y', x'* slope0]
+
+        Fq::roll(2),
+        // [slope1, bias0, bias1, y', x'* slope0, x']
+        Fq::roll(5),
+        // [bias0, bias1, y', x'* slope0, x', slope1]
+        hinted_script2,
+        // [bias0, bias1, y', x'* slope0, x'* slope1]
+
+        // update c2, c2' = -y' * c2
+        Fq::copy(2),
+        // [bias0, bias1, y', x'* slope0, x'* slope1, y']
+        Fq::roll(5),
+        // [bias1, y', x'* slope0, x'* slope1, y', bias0]
+        hinted_script3,  
+        // [bias1, y', x'* slope0, x'* slope1, y'*bias0]
+        Fq::roll(3),
+        // [bias1, x'* slope0, x'* slope1, y'*bias0, y']
+        Fq::roll(4),
+        // [x'* slope0, x'* slope1, y'*bias0, y', bias1]
+        hinted_script4,
+        // [x'* slope0, x'* slope1, y'*bias0, y'* bias1]
+
+    ];
+
+    let mut script = script!{};
+    for script_line in script_lines {
+        script = script.push_script(script_line.compile());
+    }
+    hints.extend(hint1);
+    hints.extend(hint2);
+    hints.extend(hint3);
+    hints.extend(hint4);
+    
+    (script, hints)
+
+}
+
 pub fn collect_line_coeffs(
     constants: Vec<G2Prepared>,
 ) -> Vec<Vec<Vec<(ark_bn254::Fq2, ark_bn254::Fq2, ark_bn254::Fq2)>>> {
@@ -1305,7 +1361,7 @@ pub fn double_line() -> Script {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::bn254::fq2::Fq2;
+    use crate::bn254::{curves::G1Affine, fq2::Fq2};
     use ark_bn254::G2Affine;
     use ark_ff::AdditiveGroup;
     use ark_std::UniformRand;
@@ -1591,11 +1647,38 @@ mod test {
 
         let x = alpha_chord.square() - tt.x - q.x;
         let y = bias_minus_chord - alpha_chord * x;
+        let p = ark_bn254::g1::G1Affine::rand(&mut prng);
+        let p_dash_x = -p.x/p.y;
+        let p_dash_y = p.y.inverse().unwrap();
 
         let (hinted_check_chord, hintsc) = new_hinted_check_chord_line(tt, q, alpha_chord, bias_minus_chord);
         let (hinted_add_line, hintsa) = new_hinted_affine_add_line(tt.x, q.x, alpha_chord, bias_minus_chord);
 
+        
+        // affine mode as well
+        let mut c1new = alpha_tangent;
+        c1new.mul_assign_by_fp(&(-p.x / p.y));
+
+        let mut c2new = bias_minus_tangent;
+        c2new.mul_assign_by_fp(&(p.y.inverse().unwrap()));
+
+        let mut c1new_2 = alpha_chord;
+        c1new_2.mul_assign_by_fp(&(-p.x / p.y));
+
+        let mut c2new_2 = bias_minus_chord;
+        c2new_2.mul_assign_by_fp(&(p.y.inverse().unwrap()));
+
+        let (hinted_ell_tangent, hintste) = new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_tangent, bias_minus_tangent);
+        let (hinted_ell_chord, hintstc) = new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_chord, bias_minus_chord);
+
+
         let script = script! {
+            for hint in hintste { 
+                { hint.push() }
+            }
+            for hint in hintstc { 
+                { hint.push() }
+            }
             for hint in hintst { 
                 { hint.push() }
             }
@@ -1618,6 +1701,28 @@ mod test {
                 { fq2_push_not_montgomery(q.x) }
                 { fq2_push_not_montgomery(alpha_chord)}
                 { fq2_push_not_montgomery(bias_minus_chord)}
+                
+                    // alpha, bias, P(x,y) -> le
+                    { fq2_push_not_montgomery(alpha_tangent)}   
+                    { fq2_push_not_montgomery(bias_minus_tangent)}
+                    { fq_push_not_montgomery(p_dash_x) }
+                    { fq_push_not_montgomery(p_dash_y) }
+                    { hinted_ell_tangent }
+                    { fq2_push_not_montgomery(c2new) }
+                    { Fq2::equalverify() }
+                    { fq2_push_not_montgomery(c1new) }
+                    { Fq2::equalverify() }
+
+                    // alpha, bias, P(x,y) -> le
+                    { fq2_push_not_montgomery(alpha_chord)}   
+                    { fq2_push_not_montgomery(bias_minus_chord)}
+                    { fq_push_not_montgomery(p_dash_x) }
+                    { fq_push_not_montgomery(p_dash_y) }
+                    { hinted_ell_chord }
+                    { fq2_push_not_montgomery(c2new_2) }
+                    { Fq2::equalverify() }
+                    { fq2_push_not_montgomery(c1new_2) }
+                    { Fq2::equalverify() }
 
                     { fq2_push_not_montgomery(bias_minus_tangent)}
                     { fq2_push_not_montgomery(alpha_tangent)}
