@@ -1642,6 +1642,58 @@ mod test {
     }
 
     #[test]
+    fn test_hinited_sparse_dense_mul() {
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let t = ark_bn254::G2Affine::rand(&mut prng);
+        let _q = ark_bn254::G2Affine::rand(&mut prng);
+        let p = ark_bn254::G1Affine::rand(&mut prng);
+        let f = ark_bn254::Fq12::rand(&mut prng);
+        
+        let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
+        let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
+        let mut alpha_tangent = t.x.square();
+        alpha_tangent /= t.y;
+        alpha_tangent.mul_assign_by_fp(&three_div_two);
+        // -bias
+        let bias_minus_tangent = alpha_tangent * t.x - t.y;
+
+        let mut f1 = f;
+        let mut c1new = alpha_tangent;
+        c1new.mul_assign_by_fp(&(-p.x / p.y));
+
+        let mut c2new = bias_minus_tangent;
+        c2new.mul_assign_by_fp(&(p.y.inverse().unwrap()));
+
+        f1.mul_by_034(&ark_bn254::Fq2::ONE, &c1new, &c2new);
+        let (hinted_script, hints) = Fq12::hinted_mul_by_34(f, c1new, c2new);
+
+        let script = script! {
+            for hint in hints { 
+                { hint.push() }
+            }
+            { fq12_push_not_montgomery(f) }
+            { fq2_push_not_montgomery(c1new) }
+            { fq2_push_not_montgomery(c2new) }
+            { fq12_push_not_montgomery(f) }
+            { fq2_push_not_montgomery(c1new) }
+            { fq2_push_not_montgomery(c2new) }
+            { hinted_script.clone() }
+            { fq12_push_not_montgomery(f1) }
+            { Fq12::equalverify() }
+            {Fq2::drop()}
+            {Fq2::drop()}
+            {Fq12::drop()}
+            OP_TRUE
+        };
+        let len = script.len();
+        let res = execute_script(script);
+        assert!(res.success);
+        let mut max_stack = 0;
+        max_stack = max_stack.max(res.stats.max_nb_stack_items);
+        println!("Fq6::window_mul: {} @ {} stack", len, max_stack);
+    }
+
+    #[test]
     fn test_hinted_affine_double_add_eval() {
         // slope: alpha = 3 * x^2 / 2 * y
         // intercept: bias = y - alpha * x

@@ -524,6 +524,34 @@ pub trait Fp254Impl {
         }
     }
 
+
+    fn hinted_mul_small(mut a_depth: u32, mut a: ark_bn254::Fq, mut b_depth: u32, mut b: ark_bn254::Fq) -> (Script, Vec<Hint>) {
+        assert_ne!(a_depth, b_depth);
+        if a_depth > b_depth {
+            (a_depth, b_depth) = (b_depth, a_depth);
+            (a, b) = (b, a);
+        }
+
+        let mut hints = Vec::new();
+        let x = BigInt::from_str(&a.to_string()).unwrap();
+        let y = BigInt::from_str(&b.to_string()).unwrap();
+        let modulus = &Fq::modulus_as_bigint();
+        let q = (x * y) / modulus;
+
+        let script = script!{
+            for _ in 0..Self::N_LIMBS { 
+                OP_DEPTH OP_1SUB OP_ROLL // hints
+            }
+            // { fq_push(ark_bn254::Fq::from_str(&q.to_string()).unwrap()) }
+            { Fq::roll(a_depth + 1) }
+            { Fq::roll(b_depth + 1) }
+            { Fq::smul() }
+        };
+        hints.push(Hint::Fq(ark_bn254::Fq::from_str(&q.to_string()).unwrap()));
+
+        (script, hints)
+    }
+
     fn hinted_mul(mut a_depth: u32, mut a: ark_bn254::Fq, mut b_depth: u32, mut b: ark_bn254::Fq) -> (Script, Vec<Hint>) {
         assert_ne!(a_depth, b_depth);
         if a_depth > b_depth {
@@ -600,6 +628,36 @@ pub trait Fp254Impl {
         (script, hints)
     }
 
+
+    fn hinted_mul_keep_element_small(mut a_depth: u32, mut a: ark_bn254::Fq, mut b_depth: u32, mut b: ark_bn254::Fq) -> (Script, Vec<Hint>) {
+        assert_ne!(a_depth, b_depth);
+        if a_depth > b_depth {
+            (a_depth, b_depth) = (b_depth, a_depth);
+            (a, b) = (b, a);
+        }
+
+        let mut hints = Vec::new();
+        let x = BigInt::from_str(&a.to_string()).unwrap();
+        let y = BigInt::from_str(&b.to_string()).unwrap();
+        let modulus = &Fq::modulus_as_bigint();
+        let q = (x * y) / modulus;
+
+        let script = script!{
+            for _ in 0..Self::N_LIMBS { 
+                OP_DEPTH OP_1SUB OP_ROLL // hints
+            }
+            // { fq_push(ark_bn254::Fq::from_str(&q.to_string()).unwrap()) }
+            { Fq::copy(a_depth + 1) }
+            { Fq::copy(b_depth + 2) }
+            { Fq::smul() }
+        };
+        hints.push(Hint::Fq(ark_bn254::Fq::from_str(&q.to_string()).unwrap()));
+
+        (script, hints)
+    }
+
+
+    
     fn mul() -> Script {
         Self::MUL_ONCELOCK
             .get_or_init(|| {

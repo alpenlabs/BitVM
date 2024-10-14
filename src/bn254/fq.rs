@@ -50,6 +50,12 @@ impl Fq {
             { <Fq as Fp254Mul>::tmul() }
         }
     }
+
+    pub fn smul() -> Script {
+        script!{ 
+            { <Fq as Fp254MulS>::tmul() }
+        }
+    }
     
 }
 
@@ -382,6 +388,7 @@ macro_rules! fp_lc_mul {
 }
 
 fp_lc_mul!(Mul, 4, 4, [true]);
+fp_lc_mul!(MulS, 3, 3, [true]);
 fp_lc_mul!(Mul2LC, 3, 3, [true, true]);
 
 

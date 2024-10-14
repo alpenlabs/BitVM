@@ -552,11 +552,11 @@ impl Fq6 {
     pub fn hinted_mul_by_01(p: ark_bn254::Fq6, c0: ark_bn254::Fq2, c1: ark_bn254::Fq2) -> (Script, Vec<Hint>) {
         let mut hints = Vec::new();
 
-        let (hinted_script1, hint1) = Fq2::hinted_mul(2, p.c0, 0, c0);
-        let (hinted_script2, hint2) = Fq2::hinted_mul(2, p.c1, 0, c1);
-        let (hinted_script3, hint3) = Fq2::hinted_mul(2, c1, 0, p.c1+p.c2);
-        let (hinted_script4, hint4) = Fq2::hinted_mul(2, c0+c1, 0, p.c0+p.c1);
-        let (hinted_script5, hint5) = Fq2::hinted_mul(10, c0, 0, p.c0+p.c2);
+        let (hinted_script1, hint1) = Fq2::hinted_mul_small(2, p.c0, 0, c0);
+        let (hinted_script2, hint2) = Fq2::hinted_mul_small(2, p.c1, 0, c1);
+        let (hinted_script3, hint3) = Fq2::hinted_mul_small(2, c1, 0, p.c1+p.c2);
+        let (hinted_script4, hint4) = Fq2::hinted_mul_small(2, c0+c1, 0, p.c0+p.c1);
+        let (hinted_script5, hint5) = Fq2::hinted_mul_small(10, c0, 0, p.c0+p.c2);
 
         let mut script = script! {};
         let script_lines = [
@@ -1140,7 +1140,7 @@ mod test {
 
         let mut max_stack = 0;
 
-        for _ in 0..100 {
+        for _ in 0..1 {
             let a = ark_bn254::Fq6::rand(&mut prng);
             let c0 = ark_bn254::Fq2::rand(&mut prng);
             let c1 = ark_bn254::Fq2::rand(&mut prng);

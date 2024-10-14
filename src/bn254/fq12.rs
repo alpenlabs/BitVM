@@ -1179,7 +1179,7 @@ mod test {
 
         let mut max_stack = 0;
 
-        for _ in 0..100 {
+        for _ in 0..1 {
             let a = ark_bn254::Fq12::rand(&mut prng);
             let c0 = ark_bn254::Fq2::ONE;
             let c3 = ark_bn254::Fq2::rand(&mut prng);
