@@ -1369,7 +1369,7 @@ mod test {
     use ark_bn254::G2Affine;
     use ark_ff::AdditiveGroup;
     use ark_std::UniformRand;
-    use bitcoin::opcodes::all::{OP_PICK, OP_ROLL};
+    use bitcoin::opcodes::all::{OP_DEPTH, OP_PICK, OP_PUSHBYTES_0, OP_ROLL};
     use num_traits::One;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
@@ -1834,7 +1834,7 @@ mod test {
         let (hinted_ell_chord, hints_ell_chord) = new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_chord, bias_minus_chord);
 
 
-        let bcsize = 6+2;
+        let bcsize = 6+3;
         let script = script! {
             // hints
             for hint in hints_check_tangent { 
@@ -1874,6 +1874,7 @@ mod test {
             { fq2_push_not_montgomery(q.y) }
             { Fq::push_zero() } // hash
             { Fq::push_zero() } // hash
+            { Fq::push_zero() } // hash
             
 
             { Fq2::copy(bcsize+6)} // alpha
@@ -1884,7 +1885,7 @@ mod test {
 
             { Fq2::copy(bcsize+6) } // alpha
             { Fq2::copy(bcsize+6) } // bias
-            { Fq2::copy(4 + 6) } // p_dash
+            { Fq2::copy(4 + 7) } // p_dash
             { hinted_ell_tangent }
             // { Fq2::toaltstack() } // le.0
             // { Fq2::toaltstack() } // le.1
@@ -1913,8 +1914,8 @@ mod test {
             // hinted check chord // t.x, t.y
             { Fq2::copy(bcsize+6)} // alpha
             { Fq2::copy(bcsize+6)} // bias
-            { Fq2::copy(8) }
-            { Fq2::copy(8) }
+            { Fq2::copy(8+1) } // q.x
+            { Fq2::copy(8+1) } // q.y
             { hinted_check_chord_q }
             { Fq2::copy(bcsize+6)} // alpha
             { Fq2::copy(bcsize+6)} // bias
@@ -1927,40 +1928,32 @@ mod test {
 
             { Fq2::copy(bcsize+6) } // alpha
             { Fq2::copy(bcsize+6) } // bias
-            { Fq2::copy(10) } // p_dash
+            { Fq2::copy(10+1) } // p_dash
             { hinted_ell_chord }
-            // { fq2_push_not_montgomery(c2new_2) }
-            // { Fq2::equalverify() }
-            // { fq2_push_not_montgomery(c1new_2) }
-            // { Fq2::equalverify() }
 
-            { Fq2::copy(4+bcsize+4) } // bias
-            { Fq2::copy(8+bcsize+4) } // alpha
-            { Fq2::copy(4+4+4) } // q.x
+            { Fq2::roll(4+bcsize+4) } // bias
+            { Fq2::roll(6+bcsize+4) } // alpha
+            { Fq2::copy(4+4+4+1) } //q.x
             { Fq2::fromaltstack() }
             { hinted_add_line }
-            // { fq2_push_not_montgomery(y) }
-            // { Fq2::equalverify() }
-            // { fq2_push_not_montgomery(x) }
-            // { Fq2::equalverify() }
-            { Fq2::toaltstack() } 
-            { Fq2::toaltstack() } 
-            { Fq2::toaltstack() } 
-            { Fq2::toaltstack() } 
 
-
-
-            { Fq2::drop() }
-            { Fq2::drop() }
-            { Fq2::drop() }
-            { Fq2::drop() }
-            { Fq2::drop() }
-            { Fq2::drop() }
-            { Fq2::drop() }
-            { Fq::drop() }
-            { Fq::drop() }
+            { Fq2::toaltstack() }//R
+            { Fq2::toaltstack() }
             
-            
+            { Fq2::toaltstack() } //le_add
+            { Fq2::toaltstack() } 
+
+  
+            { Fq::toaltstack() } //hashes
+            { Fq::toaltstack() }
+            { Fq::toaltstack() }
+            { Fq2::drop() }
+            { Fq2::drop() }
+            { Fq2::drop() }
+
+            //t.x
+            { Fq2::toaltstack() } // T
+            { Fq2::toaltstack() }
             OP_TRUE
         };
 
