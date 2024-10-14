@@ -862,7 +862,7 @@ mod test {
     use crate::bn254::fq::{fq_to_nibbles, nibbles_to_fq, Fq};
     use crate::bn254::fq12::Fq12;
     use crate::bn254::fq6::Fq6;
-    use crate::bn254::utils::{fq12_push, fq12_push_not_montgomery, fq2_push, fq2_push_not_montgomery, fq6_push_not_montgomery};
+    use crate::bn254::utils::{fq12_push, fq12_push_not_montgomery, fq2_push, fq2_push_not_montgomery, fq6_push_not_montgomery, read_script_from_file};
     use crate::pseudo::NMUL;
     use crate::{execute_script_without_stack_limit, treepp::*};
     use ark_ff::AdditiveGroup;
@@ -1274,24 +1274,6 @@ mod test {
         }
     }
 
-    use std::fs::File;
-    use std::io::{self, Read};
-
-
-    fn read_script_from_file(file_path: &str) -> Script {
-        fn read_file_to_bytes(file_path: &str) -> io::Result<Vec<u8>> {
-            let mut file = File::open(file_path)?;
-            let mut all_script_bytes = Vec::new();
-            file.read_to_end(&mut all_script_bytes)?;
-            Ok(all_script_bytes)
-        }
-        //let file_path = "blake3_bin/blake3_192b_252k.bin"; // Replace with your file path
-        let all_script_bytes = read_file_to_bytes(file_path).unwrap();
-        let scb = ScriptBuf::from_bytes(all_script_bytes);
-        let sc = script!();
-        let sc = sc.push_script(scb);
-        sc
-    }
 
 
     fn hash_fp6() -> Script {

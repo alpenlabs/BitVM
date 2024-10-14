@@ -6,6 +6,7 @@ use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use ark_ec::{bn::BnConfig, AffineRepr};
 use ark_ff::{AdditiveGroup, BigInt};
 use ark_ff::Field;
+use bitcoin::ScriptBuf;
 use num_bigint::BigUint;
 
 use crate::{
@@ -1362,10 +1363,29 @@ pub fn double_line() -> Script {
     }
 }
 
+use std::fs::File;
+use std::io::{self, Read};
+pub fn read_script_from_file(file_path: &str) -> Script {
+    fn read_file_to_bytes(file_path: &str) -> io::Result<Vec<u8>> {
+        let mut file = File::open(file_path)?;
+        let mut all_script_bytes = Vec::new();
+        file.read_to_end(&mut all_script_bytes)?;
+        Ok(all_script_bytes)
+    }
+    //let file_path = "blake3_bin/blake3_192b_252k.bin"; // Replace with your file path
+    let all_script_bytes = read_file_to_bytes(file_path).unwrap();
+    let scb = ScriptBuf::from_bytes(all_script_bytes);
+    let sc = script!();
+    let sc = sc.push_script(scb);
+    sc
+}
+
+
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::bn254::{curves::G1Affine, fq2::Fq2};
+    use crate::bn254::{curves::G1Affine, fq::{fq_to_nibbles, nibbles_to_fq}, fq2::Fq2};
     use ark_bn254::G2Affine;
     use ark_ff::AdditiveGroup;
     use ark_std::UniformRand;
@@ -1675,6 +1695,8 @@ mod test {
         let (hinted_ell_tangent, hints_ell_tangent) = new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_tangent, bias_minus_tangent);
         let (hinted_ell_chord, hints_ell_chord) = new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_chord, bias_minus_chord);
 
+        let hash_64b_75k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_64b_75k.bin");
+        let hash_128b_168k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_128b_168k.bin");
 
         let bcsize = 6+3;
         let script = script! {
@@ -1729,12 +1751,8 @@ mod test {
             { Fq2::copy(bcsize+6) } // bias
             { Fq2::copy(4 + 7) } // p_dash
             { hinted_ell_tangent }
-            // { Fq2::toaltstack() } // le.0
-            // { Fq2::toaltstack() } // le.1
-            { fq2_push_not_montgomery(c2new) }
-            { Fq2::equalverify() }
-            { fq2_push_not_montgomery(c1new) }
-            { Fq2::equalverify() }
+            { Fq2::toaltstack() } // le.0
+            { Fq2::toaltstack() } // le.1
 
 
             { Fq2::copy(bcsize+4)} // bias
@@ -1793,20 +1811,106 @@ mod test {
             { Fq2::drop() }
             { Fq2::drop() }
 
-            //t.x
-            { Fq2::toaltstack() } // T
-            { Fq2::toaltstack() }
+            //T
+            {Fq::roll(1)}
+            {Fq::roll(2)}
+            {Fq::roll(3)}
+            { Fq::toaltstack() }
+            { Fq::toaltstack() }
+            { Fq::toaltstack() }
+            {fq_to_nibbles()} // 0
+            { Fq::fromaltstack()}
+            {fq_to_nibbles()}
+            { Fq::fromaltstack()}
+            {fq_to_nibbles()}
+            { Fq::fromaltstack()}
+            {fq_to_nibbles()}
+            {hash_128b_168k.clone()}
+
+            // fetch 1 hash
+            { Fq::fromaltstack()} // aux_hash
+            {fq_to_nibbles()}
+            {hash_64b_75k.clone()}
+            {nibbles_to_fq()}
+            { Fq::fromaltstack()} //input_hash
+            {Fq2::drop()} //{Fq::equalverify(1, 0)}
+
+            for i in 0..13 {
+                {Fq::fromaltstack()}
+            }
+
+            // Hash le
+            {Fq::roll(1)}
+            {Fq::roll(2)}
+            {Fq::roll(3)}
+            { Fq::toaltstack() }
+            { Fq::toaltstack() }
+            { Fq::toaltstack() }
+            {fq_to_nibbles()} // 0
+            { Fq::fromaltstack()}
+            {fq_to_nibbles()}
+            { Fq::fromaltstack()}
+            {fq_to_nibbles()}
+            { Fq::fromaltstack()}
+            {fq_to_nibbles()}
+            {hash_128b_168k.clone()}
+            {nibbles_to_fq()}
+            {Fq::toaltstack()}
+            
+            {Fq::roll(1)}
+            {Fq::roll(2)}
+            {Fq::roll(3)}
+            { Fq::toaltstack() }
+            { Fq::toaltstack() }
+            { Fq::toaltstack() }
+            {fq_to_nibbles()} // 0
+            { Fq::fromaltstack()}
+            {fq_to_nibbles()}
+            { Fq::fromaltstack()}
+            {fq_to_nibbles()}
+            { Fq::fromaltstack()}
+            {fq_to_nibbles()}
+            {hash_128b_168k.clone()}
+            {nibbles_to_fq()}
+            {Fq::toaltstack()}
+
+            {Fq::roll(1)}
+            {Fq::roll(2)}
+            {Fq::roll(3)}
+            { Fq::toaltstack() }
+            { Fq::toaltstack() }
+            { Fq::toaltstack() }
+            {fq_to_nibbles()} // 0
+            { Fq::fromaltstack()}
+            {fq_to_nibbles()}
+            { Fq::fromaltstack()}
+            {fq_to_nibbles()}
+            { Fq::fromaltstack()}
+            {fq_to_nibbles()}
+            {hash_128b_168k.clone()}
+            //{nibbles_to_fq()}
+
+            // bring back hash
+            { Fq::fromaltstack()}
+            { fq_to_nibbles()}
+            {hash_64b_75k.clone()}
+            { Fq::fromaltstack()}
+            { fq_to_nibbles()}
+            {hash_64b_75k.clone()}
+            {nibbles_to_fq()}
+
+            {Fq2::drop()} //{Fq::equalverify(1, 0)}
             OP_TRUE
         };
 
         let len = script.len();
         let res = execute_script(script);
+        assert!(res.success);
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
         println!("script {} stack {}", len, res.stats.max_nb_stack_items);
     }
-
 
     #[test]
     fn test_hinted_affine_add_line() {
