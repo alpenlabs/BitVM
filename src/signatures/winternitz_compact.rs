@@ -23,20 +23,41 @@ use crate::treepp::*;
 use bitcoin::hashes::{hash160, Hash};
 use hex::decode as hex_decode;
 
+///
+const N_BITS: u32 = 256;
 /// Bits per digit
 const LOG_D: u32 = 4;
 /// Digits are base d+1
 pub const D: u32 = (1 << LOG_D) - 1;
 /// Number of digits of the message
-const N0: u32 = 80;
+const N0: u32 = (N_BITS + LOG_D - 1) / LOG_D;
 /// Number of digits of the checksum
-const N1: usize = 4;
+const N1: usize = log(D * N0, D + 1) as usize;
 /// Total number of digits to be signed
 const N: u32 = N0 + N1 as u32;
+///
+const LIMB_SIZE: u32 = 29;
+const N_LIMBS: u32 = 9;
 
-//
-// Helper functions
-//
+const fn log(n: u32, base: u32) -> u32 {
+    _ = n - 1; // compile time assertion: self >= 1
+    _ = base - 2; // compile time assertion: base >= 2
+    let mut res = 0;
+    let mut power = 1;
+    while power < n {
+        res += 1;
+        power *= base;
+    }
+    res
+}
+
+
+/// Number of digits of the message
+
+/// Number of digits of the checksum.  N1 = ⌈log_{D+1}(D*N0)⌉ + 1
+
+/// Total number of chains
+
 
 /// Generate the public key for the i-th digit of the message
 pub fn public_key(secret_key: &str, digit_index: u32) -> Script {
@@ -216,8 +237,154 @@ pub fn checksig_verify(secret_key: &str) -> Script {
     }
 }
 
+
+/// Winternitz Signature verification
+///
+/// Note that the script inputs are malleable.
+///
+/// Optimized by @SergioDemianLerner, @tomkosm
+pub fn checksig_verify_fq(secret_key: &str) -> Script {
+    pub fn NMUL(n: u32) -> Script {
+        let n_bits = u32::BITS - n.leading_zeros();
+        let bits = (0..n_bits).map(|i| 1 & (n >> i)).collect::<Vec<_>>();
+        script! {
+            if n_bits == 0 { OP_DROP 0 }
+            else {
+                for i in 0..bits.len()-1 {
+                    if bits[i] == 1 { OP_DUP }
+                    { crate::pseudo::OP_2MUL() }
+                }
+                for _ in 1..bits.iter().sum() { OP_ADD }
+            }
+        }
+    }
+
+
+    fn split_digit(window: u32, index: u32) -> Script {
+        script! {
+            // {v}
+            0                           // {v} {A}
+            OP_SWAP
+            for i in 0..index {
+                OP_TUCK                 // {v} {A} {v}
+                { 1 << (window - i - 1) }   // {v} {A} {v} {1000}
+                OP_GREATERTHANOREQUAL   // {v} {A} {1/0}
+                OP_TUCK                 // {v} {1/0} {A} {1/0}
+                OP_ADD                  // {v} {1/0} {A+1/0}
+                if i < index - 1 { { NMUL(2) } }
+                OP_ROT OP_ROT
+                OP_IF
+                    { 1 << (window - i - 1) }
+                    OP_SUB
+                OP_ENDIF
+            }
+            OP_SWAP
+        }
+    }
+
+
+
+    script! {
+        //
+        // Verify the hash chain for each digit
+        //
+
+        // Repeat this for every of the n many digits
+        for digit_index in 0..N {
+
+            { public_key(secret_key, N - 1 - digit_index) }
+
+
+            // Check if hash is equal with public key and add digit to altstack.
+            // We dont check if a digit was found to save space, incase we have an invalid hash
+            // there will be one fewer entry in altstack and OP_FROMALTSTACK later will crash.
+            // So its important to start with the altstack empty.
+            // TODO: add testcase for this.
+            OP_SWAP
+
+            OP_2DUP
+            OP_EQUAL
+
+            OP_IF
+
+                {D}
+
+                OP_TOALTSTACK
+
+            OP_ENDIF
+
+            for i in 0..D {
+
+                OP_HASH160
+
+                OP_2DUP
+
+                OP_EQUAL
+
+                OP_IF
+
+                    {D-i-1}
+
+                    OP_TOALTSTACK
+
+                OP_ENDIF
+            }
+
+            OP_2DROP
+        }
+
+
+        // 1. Compute the checksum of the message's digits
+        OP_FROMALTSTACK OP_DUP OP_NEGATE
+        for _ in 1..N0{
+            OP_FROMALTSTACK OP_TUCK OP_SUB
+        }
+        { D * N0 }
+        OP_ADD
+
+
+        // 2. Sum up the signed checksum's digits
+        OP_FROMALTSTACK
+        for _ in 0..N1 - 1 {
+            for _ in 0..LOG_D {
+                OP_DUP OP_ADD
+            }
+            OP_FROMALTSTACK
+            OP_ADD
+        }
+
+        // 3. Ensure both checksums are equal
+        OP_EQUALVERIFY
+
+        
+        // field element reconstruction
+        for i in (1..=N0).rev() {
+            if (i * LOG_D) % LIMB_SIZE == 0 {
+                OP_TOALTSTACK
+            } else if (i * LOG_D) % LIMB_SIZE > 0 &&
+                        (i * LOG_D) % LIMB_SIZE < LOG_D {
+                OP_SWAP
+                { split_digit(LOG_D, (i * LOG_D) % LIMB_SIZE) }
+                OP_ROT
+                { NMUL(1 << ((i * LOG_D) % LIMB_SIZE)) }
+                OP_ADD
+                OP_TOALTSTACK
+            } else if i != N0 {
+                { NMUL(1 << LOG_D) }
+                OP_ADD
+            }
+        }
+        for _ in 1..N_LIMBS { OP_FROMALTSTACK }
+        for i in 1..N_LIMBS { { i } OP_ROLL }
+
+    }
+}
+
+
 #[cfg(test)]
 mod test {
+    use bitcoin::opcodes::OP_TRUE;
+
     use super::*;
 
     // The secret key
@@ -231,7 +398,7 @@ mod test {
             1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
             1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
             1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
+            1, 2, 3, 4,
         ];
         let script = script! {
             { sign(MY_SECKEY, MESSAGE) }
@@ -245,54 +412,15 @@ mod test {
             script.len() as f64 / (N0 * 4) as f64
         );
 
-        run(script! {
+        let sc = script! {
             { sign(MY_SECKEY, MESSAGE) }
-            { checksig_verify(MY_SECKEY) }
-
-            0x21 OP_EQUALVERIFY
-            0x43 OP_EQUALVERIFY
-            0x65 OP_EQUALVERIFY
-            0x87 OP_EQUALVERIFY
-            0xA9 OP_EQUALVERIFY
-            0xCB OP_EQUALVERIFY
-            0xED OP_EQUALVERIFY
-            0x7F OP_EQUALVERIFY
-            0x77 OP_EQUALVERIFY
-            0x77 OP_EQUALVERIFY
-
-            0x21 OP_EQUALVERIFY
-            0x43 OP_EQUALVERIFY
-            0x65 OP_EQUALVERIFY
-            0x87 OP_EQUALVERIFY
-            0xA9 OP_EQUALVERIFY
-            0xCB OP_EQUALVERIFY
-            0xED OP_EQUALVERIFY
-            0x7F OP_EQUALVERIFY
-            0x77 OP_EQUALVERIFY
-            0x77 OP_EQUALVERIFY
-
-            0x21 OP_EQUALVERIFY
-            0x43 OP_EQUALVERIFY
-            0x65 OP_EQUALVERIFY
-            0x87 OP_EQUALVERIFY
-            0xA9 OP_EQUALVERIFY
-            0xCB OP_EQUALVERIFY
-            0xED OP_EQUALVERIFY
-            0x7F OP_EQUALVERIFY
-            0x77 OP_EQUALVERIFY
-            0x77 OP_EQUALVERIFY
-
-            0x21 OP_EQUALVERIFY
-            0x43 OP_EQUALVERIFY
-            0x65 OP_EQUALVERIFY
-            0x87 OP_EQUALVERIFY
-            0xA9 OP_EQUALVERIFY
-            0xCB OP_EQUALVERIFY
-            0xED OP_EQUALVERIFY
-            0x7F OP_EQUALVERIFY
-            0x77 OP_EQUALVERIFY
-            0x77 OP_EQUAL
-        });
+            { checksig_verify_fq(MY_SECKEY) }
+            OP_TRUE
+        };
+        let res = execute_script(sc);
+        for i in 0..res.final_stack.len() {
+            println!("{i:3} {:?}", res.final_stack.get(i));
+        }
 
     }
 
