@@ -1910,6 +1910,125 @@ mod test {
     }
 
     #[test]
+    fn test_hinted_sparse_mul() {
+        // take fixed Qs as input vkY and vk_del
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let q_vk_g = ark_bn254::G2Affine::rand(&mut prng);
+        let q_vk_del = ark_bn254::G2Affine::rand(&mut prng);
+        // take var Ps as input: MSM, Groth
+        let p2 = ark_bn254::g1::G1Affine::rand(&mut prng);
+        let p3 = ark_bn254::g1::G1Affine::rand(&mut prng);
+        // take T4 as auxiliary input
+        let t2 = q_vk_g; // initial assignment
+        let t3 = q_vk_del;
+
+        fn sparse_mul_for_doubling(t2: G2Affine, t3: G2Affine) -> (Script, (G2Affine, G2Affine)) {
+            let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
+            let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
+            let mut alpha_t2 = t2.x.square();
+            alpha_t2 /= t2.y;
+            alpha_t2.mul_assign_by_fp(&three_div_two);
+            let bias_t2 = alpha_t2 * t2.x - t2.y;
+            let x2 = alpha_t2.square() - t2.x.double();
+            let y2 = bias_t2 - alpha_t2 * x2;
+            let (hinted_ell_t2, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::ONE,ark_bn254::Fq::ONE, alpha_t2, bias_t2);
+            
+            let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
+            let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
+            let mut alpha_t3 = t3.x.square();
+            alpha_t3 /= t3.y;
+            alpha_t3.mul_assign_by_fp(&three_div_two);
+            let bias_t3 = alpha_t3 * t3.x - t3.y;
+            let x3 = alpha_t3.square() - t3.x.double();
+            let y3 = bias_t3 - alpha_t3 * x3;
+            let (hinted_ell_t3, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::ONE,ark_bn254::Fq::ONE, alpha_t2, bias_t2);
+            
+            let (sparse_dense_mul, _) = Fq12::hinted_mul_by_34(ark_bn254::Fq12::ONE, ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE);
+            
+            let sc = script!{
+                // P2 
+                // P3
+                {fq2_push_not_montgomery(alpha_t2)} // baked
+                {fq2_push_not_montgomery(bias_t2)}
+                {fq2_push_not_montgomery(alpha_t3)}
+                {fq2_push_not_montgomery(bias_t3)}
+                { Fq2::roll(6) } // P3
+                { hinted_ell_t3 }
+                {Fq2::toaltstack()}
+                {Fq2::toaltstack()}
+                { Fq2::roll(4) }
+                { hinted_ell_t2 }
+                {Fq2::toaltstack()}
+                {Fq2::toaltstack()}
+
+                // sparse fq12
+                {Fq2::push_one()} // 0
+                {Fq2::push_zero()}
+                {Fq2::push_zero()}
+                {Fq2::fromaltstack()} // 3
+                {Fq2::fromaltstack()} // 4
+                {Fq2::push_zero()}
+                // sparse fp12
+                {Fq2::fromaltstack()}
+                {Fq2::fromaltstack()}
+                {sparse_dense_mul}
+            };
+            (sc, (G2Affine::new(x2, y2), G2Affine::new(x3, y3)))
+        }
+
+
+        fn sparse_mul_for_addition(t2: G2Affine, t3: G2Affine, q2: G2Affine, q3: G2Affine) -> (Script, (G2Affine, G2Affine)) {
+            let alpha_t2 = (t2.y - q2.y) / (t2.x - q2.x);
+            let bias_t2 = alpha_t2 * t2.x - t2.y;
+            let x2 = alpha_t2.square() - t2.x - q2.x;
+            let y2 = bias_t2 - alpha_t2 * x2;
+            let (hinted_ell_t2, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::ONE,ark_bn254::Fq::ONE, alpha_t2, bias_t2);
+
+            let alpha_t3 = (t3.y - q3.y) / (t3.x - q3.x);
+            let bias_t3 = alpha_t3 * t3.x - t3.y;
+            let x3 = alpha_t3.square() - t3.x - q3.x;
+            let y3 = bias_t3 - alpha_t3 * x3;
+            let (hinted_ell_t3, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::ONE,ark_bn254::Fq::ONE, alpha_t3, bias_t3);
+            
+            let (sparse_dense_mul, _) = Fq12::hinted_mul_by_34(ark_bn254::Fq12::ONE, ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE);
+            
+            let sc = script!{
+                // P2 
+                // P3
+                {fq2_push_not_montgomery(alpha_t2)}
+                {fq2_push_not_montgomery(bias_t2)}
+                {fq2_push_not_montgomery(alpha_t3)}
+                {fq2_push_not_montgomery(bias_t3)}
+                { Fq2::roll(6) } // P3
+                { hinted_ell_t3 }
+                {Fq2::toaltstack()}
+                {Fq2::toaltstack()}
+                { Fq2::roll(4) }
+                { hinted_ell_t2 }
+                {Fq2::toaltstack()}
+                {Fq2::toaltstack()}
+
+                // sparse fq12
+                {Fq2::push_one()} // 0
+                {Fq2::push_zero()}
+                {Fq2::push_zero()}
+                {Fq2::fromaltstack()} // 3
+                {Fq2::fromaltstack()} // 4
+                {Fq2::push_zero()}
+                // sparse fp12
+                {Fq2::fromaltstack()}
+                {Fq2::fromaltstack()}
+                {sparse_dense_mul}
+            };
+            (sc, (G2Affine::new(x2, y2), G2Affine::new(x3, y3)))
+        }
+
+        let (scd, (nt2, nt3)) = sparse_mul_for_doubling(t2, t3);
+
+        let (sca, (nt2, nt3)) = sparse_mul_for_addition(nt2, nt3, q_vk_g, q_vk_del);
+    }
+
+    #[test]
     fn test_hinted_affine_double_add_eval() {
         // slope: alpha = 3 * x^2 / 2 * y
         // intercept: bias = y - alpha * x
