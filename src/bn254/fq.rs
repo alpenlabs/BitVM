@@ -1,4 +1,3 @@
-use bitcoin::opcodes::all::{OP_ADD, OP_FROMALTSTACK, OP_ROLL, OP_SWAP, OP_TOALTSTACK};
 use num_bigint::BigInt;
 use num_traits::{FromPrimitive, Num, ToPrimitive};
 
@@ -414,7 +413,7 @@ fn split_digit(window: u32, index: u32) -> Script {
     }
 }
 
-pub fn fq_to_nibbles() -> Script {
+pub fn unpack_u32_to_u8() -> Script {
 
     script!{
         {8}
@@ -520,7 +519,7 @@ pub fn fq_to_nibbles() -> Script {
     }
 }
 
-pub fn nibbles_to_fq() -> Script {
+pub fn pack_u8_to_u32() -> Script {
     let n_digits = 64;
     let ots_width = 4;
     let limb_size = 29;
@@ -978,7 +977,7 @@ mod test {
 
 
     #[test]
-    fn check_fq_to_nibbles() {
+    fn check_u32_to_u8() {
 
 
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -989,8 +988,8 @@ mod test {
         let sc = script!{ 
             { Fq::push_u32_le_not_montgomery(&a.to_u32_digits()) }
             { Fq::push_u32_le_not_montgomery(&a.to_u32_digits()) }
-            { fq_to_nibbles() }
-            {nibbles_to_fq()}
+            { unpack_u32_to_u8() }
+            {pack_u8_to_u32()}
             // { Fq::push_u32_le_not_montgomery(&a.to_u32_digits()) }
             // { fq_to_nibbles() }
         };

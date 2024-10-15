@@ -859,18 +859,14 @@ impl Fq12 {
 #[cfg(test)]
 mod test {
     use crate::bn254::fp254impl::Fp254Impl;
-    use crate::bn254::fq::{fq_to_nibbles, nibbles_to_fq, Fq};
+    use crate::bn254::fq::Fq;
     use crate::bn254::fq12::Fq12;
     use crate::bn254::fq6::Fq6;
-    use crate::bn254::utils::{fq12_push, fq12_push_not_montgomery, fq2_push, fq2_push_not_montgomery, fq6_push_not_montgomery, hash_fp12, hash_fp12_192, hash_fp12_with_hints, hash_fp6, read_script_from_file};
-    use crate::pseudo::NMUL;
+    use crate::bn254::utils::{fq12_push, fq12_push_not_montgomery, fq2_push, fq2_push_not_montgomery, hash_fp12, hash_fp12_192, hash_fp12_with_hints, hash_fp6};
     use crate::{execute_script_without_stack_limit, treepp::*};
     use ark_ff::AdditiveGroup;
     use ark_ff::{CyclotomicMultSubgroup, Field};
     use ark_std::UniformRand;
-    use bitcoin::opcodes::all::{OP_1SUB, OP_DEPTH, OP_FROMALTSTACK, OP_ROLL, OP_TOALTSTACK};
-    use bitcoin::opcodes::OP_TRUE;
-    use bitcoin::ScriptBuf;
     use bitcoin_scriptexec::ExecError;
     use core::ops::Mul;
     use num_bigint::BigUint;

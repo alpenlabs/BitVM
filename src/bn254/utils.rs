@@ -1,8 +1,8 @@
 // utils for push fields into stack
 use crate::bn254::ell_coeffs::EllCoeff;
 use crate::bn254::ell_coeffs::G2Prepared;
-use crate::bn254::fq::fq_to_nibbles;
-use crate::bn254::fq::nibbles_to_fq;
+use crate::bn254::fq::unpack_u32_to_u8;
+use crate::bn254::fq::pack_u8_to_u32;
 use crate::bn254::fr::Fr;
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use ark_ec::{bn::BnConfig, AffineRepr};
@@ -1383,149 +1383,144 @@ pub fn read_script_from_file(file_path: &str) -> Script {
 }
 
 
-
+// [a0, a1, a2, a3, a4, a5]
+// [H(a0,a1), H(a2,a3,a4,a5)]
+// [Hb0, Hb1]
+// [Hb1, Hb0]
+// Hash(Hb1, Hb0)
+// Hb
 pub fn hash_fp6() -> Script {
 
-    let hash_64b_75k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_64b_75k.bin");
-    let hash_128b_168k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_128b_168k.bin");
+    let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
+    let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
 
     script!{
         for _ in 0..=4 {
             {Fq::toaltstack()}
         }
-        { fq_to_nibbles() }
+        { unpack_u32_to_u8() }
         { Fq::fromaltstack() }
-        { fq_to_nibbles() }
+        { unpack_u32_to_u8() }
         {hash_64b_75k.clone()}
-        { nibbles_to_fq() }
+        { pack_u8_to_u32() }
 
         { Fq::fromaltstack() }
-        {fq_to_nibbles()}
+        {unpack_u32_to_u8()}
         { Fq::fromaltstack() }
-        {fq_to_nibbles()}
+        {unpack_u32_to_u8()}
         { Fq::fromaltstack() }
-        {fq_to_nibbles()}
+        {unpack_u32_to_u8()}
         { Fq::fromaltstack() }
-        {fq_to_nibbles()}
+        {unpack_u32_to_u8()}
         { hash_128b_168k.clone() }
 
-        for i in 1..=1 {
             for _ in 0..9 {
-                {64*i + 8} OP_ROLL
+                {64 + 8} OP_ROLL
             }
-            {fq_to_nibbles()}
-        }
+            {unpack_u32_to_u8()}
         { hash_64b_75k }
-        {nibbles_to_fq()}
+        {pack_u8_to_u32()}
     } 
 }
 
-
-
 pub fn hash_fp12() -> Script {
 
-    let hash_64b_75k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_64b_75k.bin");
-    let hash_128b_168k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_128b_168k.bin");
+    let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
+    let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
 
     script!{
-        for i in 0..=10 {
+        for _ in 0..=10 {
             {Fq::toaltstack()}
         }
 
         // first part
-        { fq_to_nibbles() }
+        { unpack_u32_to_u8() }
         { Fq::fromaltstack() }
-        { fq_to_nibbles() }
+        { unpack_u32_to_u8() }
         {hash_64b_75k.clone()}
-        { nibbles_to_fq() }
+        { pack_u8_to_u32() }
 
         { Fq::fromaltstack() }
-        {fq_to_nibbles()}
+        {unpack_u32_to_u8()}
         { Fq::fromaltstack() }
-        {fq_to_nibbles()}
+        {unpack_u32_to_u8()}
         { Fq::fromaltstack() }
-        {fq_to_nibbles()}
+        {unpack_u32_to_u8()}
         { Fq::fromaltstack() }
-        {fq_to_nibbles()}
+        {unpack_u32_to_u8()}
         { hash_128b_168k.clone() }
 
 
-        for i in 1..=1 {
-            for _ in 0..9 {
-                {64*i + 8} OP_ROLL
-            }
-            {fq_to_nibbles()}
+        for _ in 0..9 {
+            {64 + 8} OP_ROLL
         }
+        {unpack_u32_to_u8()}
         {hash_64b_75k.clone()}
-        {nibbles_to_fq()}
+        {pack_u8_to_u32()}
 
         // second part
 
         { Fq::fromaltstack() }
-        {fq_to_nibbles()}
+        {unpack_u32_to_u8()}
         { Fq::fromaltstack() }
-        {fq_to_nibbles()}
+        {unpack_u32_to_u8()}
         {hash_64b_75k.clone()}
-        { nibbles_to_fq() }
+        { pack_u8_to_u32() }
         
 
         { Fq::fromaltstack() }
-        {fq_to_nibbles()}
+        {unpack_u32_to_u8()}
         { Fq::fromaltstack() }
-        {fq_to_nibbles()}
+        {unpack_u32_to_u8()}
         { Fq::fromaltstack() }
-        {fq_to_nibbles()}
+        {unpack_u32_to_u8()}
         { Fq::fromaltstack() }
-        {fq_to_nibbles()}
+        {unpack_u32_to_u8()}
         { hash_128b_168k.clone() }
 
-        for i in 1..=1 {
-            for _ in 0..9 {
-                {64*i + 8} OP_ROLL
-            }
-            {fq_to_nibbles()}
+        for _ in 0..9 {
+            {64 + 8} OP_ROLL
         }
+        {unpack_u32_to_u8()}
         {hash_64b_75k.clone()}
 
         // wrap up
-        for i in 1..=1 {
-            for _ in 0..9 {
-                {64*i + 8} OP_ROLL
-            }
-            {fq_to_nibbles()}
+        for _ in 0..9 {
+            {64 + 8} OP_ROLL
         }
+        {unpack_u32_to_u8()}
         {hash_64b_75k.clone()}
-        {nibbles_to_fq()}
+        {pack_u8_to_u32()}
 
     } 
 }
 
 pub fn hash_fp12_192() -> Script {
-    let hash_64b_75k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_64b_75k.bin");
-    let hash_192b_252k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_192b_252k.bin");
+    let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
+    let hash_192b_252k = read_script_from_file("blake3_bin/blake3_192b_252k.bin");
     script! {
-        for i in 0..=10 {
+        for _ in 0..=10 {
             {Fq::toaltstack()}
         }
-        {fq_to_nibbles() }
-        for i in 0..5 {
+        {unpack_u32_to_u8() }
+        for _ in 0..5 {
             { Fq::fromaltstack()}
-            {fq_to_nibbles()}
+            {unpack_u32_to_u8()}
         }
         {hash_192b_252k.clone()}
-        {nibbles_to_fq()}
+        {pack_u8_to_u32()}
 
-        for i in 0..6 {
+        for _ in 0..6 {
             { Fq::fromaltstack()}
-            {fq_to_nibbles()}
+            {unpack_u32_to_u8()}
         }
         {hash_192b_252k}
-        for i in 0..9 {
+        for _ in 0..9 {
             {64+8} OP_ROLL
         }
-        { fq_to_nibbles() }
+        { unpack_u32_to_u8() }
         {hash_64b_75k}
-        {nibbles_to_fq()}
+        {pack_u8_to_u32()}
     }
 }
 
@@ -1533,62 +1528,56 @@ pub fn hash_fp12_192() -> Script {
 // fp6
 pub fn hash_fp12_with_hints() -> Script {
 
-    let hash_64b_75k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_64b_75k.bin");
-    let hash_128b_168k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_128b_168k.bin");
+    let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
+    let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
 
     script!{
-        for i in 0..=4 {
+        for _ in 0..=4 {
             {Fq::toaltstack()}
         }
 
-        { fq_to_nibbles() }
+        { unpack_u32_to_u8() }
         { Fq::fromaltstack() }
-        { fq_to_nibbles() }
+        { unpack_u32_to_u8() }
         {hash_64b_75k.clone()}
-        { nibbles_to_fq() }
+        { pack_u8_to_u32() }
 
         { Fq::fromaltstack() }
-        {fq_to_nibbles()}
+        {unpack_u32_to_u8()}
         { Fq::fromaltstack() }
-        {fq_to_nibbles()}
+        {unpack_u32_to_u8()}
         { Fq::fromaltstack() }
-        {fq_to_nibbles()}
+        {unpack_u32_to_u8()}
         { Fq::fromaltstack() }
-        {fq_to_nibbles()}
+        {unpack_u32_to_u8()}
         { hash_128b_168k.clone() }
 
 
-        for i in 1..=1 {
-            for _ in 0..9 {
-                {64*i + 8} OP_ROLL
-            }
-            {fq_to_nibbles()}
+        for _ in 0..9 {
+            {64 + 8} OP_ROLL
         }
+        {unpack_u32_to_u8()}
         {hash_64b_75k.clone()}
 
         // wrap up
-        for i in 1..=1 {
-            for _ in 0..9 {
-                {64*i + 8} OP_ROLL
-            }
-            {fq_to_nibbles()}
+        for _ in 0..9 {
+            {64 + 8} OP_ROLL
         }
+        {unpack_u32_to_u8()}
         {hash_64b_75k.clone()}
-        {nibbles_to_fq()}
+        {pack_u8_to_u32()}
 
     } 
 }
 
 
-
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::bn254::{curves::G1Affine, fq::{fq_to_nibbles, nibbles_to_fq}, fq2::Fq2};
+    use crate::bn254::{fq::{unpack_u32_to_u8, pack_u8_to_u32}, fq2::Fq2};
     use ark_bn254::G2Affine;
     use ark_ff::AdditiveGroup;
     use ark_std::UniformRand;
-    use bitcoin::opcodes::all::{OP_DEPTH, OP_PICK, OP_PUSHBYTES_0, OP_ROLL};
     use num_traits::One;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
@@ -1866,7 +1855,7 @@ mod test {
         f1.mul_by_034(&ark_bn254::Fq2::ONE, &c1new, &c2new);
         let (hinted_script, hints) = Fq12::hinted_mul_by_34(f, c1new, c2new);
 
-        let hash_128b_168k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_128b_168k.bin");
+        let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
 
 
         let script = script! {
@@ -1893,15 +1882,15 @@ mod test {
             { Fq::toaltstack() }
             { Fq::toaltstack() }
             { Fq::toaltstack() }
-            {fq_to_nibbles()} // 0
+            {unpack_u32_to_u8()} // 0
             { Fq::fromaltstack()}
-            {fq_to_nibbles()}
+            {unpack_u32_to_u8()}
             { Fq::fromaltstack()}
-            {fq_to_nibbles()}
+            {unpack_u32_to_u8()}
             { Fq::fromaltstack()}
-            {fq_to_nibbles()}
+            {unpack_u32_to_u8()}
             {hash_128b_168k.clone()}
-            {nibbles_to_fq()}
+            {pack_u8_to_u32()}
 
             {hash_fp12() }
 
@@ -1974,8 +1963,8 @@ mod test {
         let (hinted_ell_tangent, hints_ell_tangent) = new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_tangent, bias_minus_tangent);
         let (hinted_ell_chord, hints_ell_chord) = new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_chord, bias_minus_chord);
 
-        let hash_64b_75k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_64b_75k.bin");
-        let hash_128b_168k = read_script_from_file("/Users/manishbista/Documents/alpenlabs/BitVM/blake3_bin/blake3_128b_168k.bin");
+        let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
+        let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
 
         let bcsize = 6+3;
         let script = script! {
@@ -2097,20 +2086,20 @@ mod test {
             { Fq::toaltstack() }
             { Fq::toaltstack() }
             { Fq::toaltstack() }
-            {fq_to_nibbles()} // 0
+            {unpack_u32_to_u8()} // 0
             { Fq::fromaltstack()}
-            {fq_to_nibbles()}
+            {unpack_u32_to_u8()}
             { Fq::fromaltstack()}
-            {fq_to_nibbles()}
+            {unpack_u32_to_u8()}
             { Fq::fromaltstack()}
-            {fq_to_nibbles()}
+            {unpack_u32_to_u8()}
             {hash_128b_168k.clone()}
 
             // fetch 1 hash
             { Fq::fromaltstack()} // aux_hash
-            {fq_to_nibbles()}
+            {unpack_u32_to_u8()}
             {hash_64b_75k.clone()}
-            {nibbles_to_fq()}
+            {pack_u8_to_u32()}
             { Fq::fromaltstack()} //input_hash
             {Fq2::drop()} //{Fq::equalverify(1, 0)}
 
@@ -2125,15 +2114,15 @@ mod test {
             { Fq::toaltstack() }
             { Fq::toaltstack() }
             { Fq::toaltstack() }
-            {fq_to_nibbles()} // 0
+            {unpack_u32_to_u8()} // 0
             { Fq::fromaltstack()}
-            {fq_to_nibbles()}
+            {unpack_u32_to_u8()}
             { Fq::fromaltstack()}
-            {fq_to_nibbles()}
+            {unpack_u32_to_u8()}
             { Fq::fromaltstack()}
-            {fq_to_nibbles()}
+            {unpack_u32_to_u8()}
             {hash_128b_168k.clone()}
-            {nibbles_to_fq()}
+            {pack_u8_to_u32()}
             {Fq::toaltstack()}
             
             {Fq::roll(1)}
@@ -2142,15 +2131,15 @@ mod test {
             { Fq::toaltstack() }
             { Fq::toaltstack() }
             { Fq::toaltstack() }
-            {fq_to_nibbles()} // 0
+            {unpack_u32_to_u8()} // 0
             { Fq::fromaltstack()}
-            {fq_to_nibbles()}
+            {unpack_u32_to_u8()}
             { Fq::fromaltstack()}
-            {fq_to_nibbles()}
+            {unpack_u32_to_u8()}
             { Fq::fromaltstack()}
-            {fq_to_nibbles()}
+            {unpack_u32_to_u8()}
             {hash_128b_168k.clone()}
-            {nibbles_to_fq()}
+            {pack_u8_to_u32()}
             {Fq::toaltstack()}
 
             {Fq::roll(1)}
@@ -2159,24 +2148,24 @@ mod test {
             { Fq::toaltstack() }
             { Fq::toaltstack() }
             { Fq::toaltstack() }
-            {fq_to_nibbles()} // 0
+            {unpack_u32_to_u8()} // 0
             { Fq::fromaltstack()}
-            {fq_to_nibbles()}
+            {unpack_u32_to_u8()}
             { Fq::fromaltstack()}
-            {fq_to_nibbles()}
+            {unpack_u32_to_u8()}
             { Fq::fromaltstack()}
-            {fq_to_nibbles()}
+            {unpack_u32_to_u8()}
             {hash_128b_168k.clone()}
             //{nibbles_to_fq()}
 
             // bring back hash
             { Fq::fromaltstack()}
-            { fq_to_nibbles()}
+            { unpack_u32_to_u8()}
             {hash_64b_75k.clone()}
             { Fq::fromaltstack()}
-            { fq_to_nibbles()}
+            { unpack_u32_to_u8()}
             {hash_64b_75k.clone()}
-            {nibbles_to_fq()}
+            {pack_u8_to_u32()}
 
             {Fq2::drop()} //{Fq::equalverify(1, 0)}
             OP_TRUE
