@@ -1,7 +1,6 @@
 
 // utils for push fields into stack
-use crate::bn254::fq::unpack_u32_to_u8;
-use crate::bn254::fq::pack_u8_to_u32;
+use crate::pseudo::NMUL;
 use bitcoin::ScriptBuf;
 use std::fs::File;
 use std::io::{self, Read};
@@ -24,6 +23,320 @@ pub fn read_script_from_file(file_path: &str) -> Script {
     let sc = sc.push_script(scb);
     sc
 }
+
+
+fn split_digit(window: u32, index: u32) -> Script {
+    script! {
+        // {v}
+        0                           // {v} {A}
+        OP_SWAP
+        for i in 0..index {
+            OP_TUCK                 // {v} {A} {v}
+            { 1 << (window - i - 1) }   // {v} {A} {v} {1000}
+            OP_GREATERTHANOREQUAL   // {v} {A} {1/0}
+            OP_TUCK                 // {v} {1/0} {A} {1/0}
+            OP_ADD                  // {v} {1/0} {A+1/0}
+            if i < index - 1 { { NMUL(2) } }
+            OP_ROT OP_ROT
+            OP_IF
+                { 1 << (window - i - 1) }
+                OP_SUB
+            OP_ENDIF
+        }
+        // OP_SWAP
+    }
+}
+
+pub fn unpack_u32_to_u8() -> Script {
+
+    script!{
+        {8}
+        OP_ROLL
+        {split_digit(24, 4)}
+        {split_digit(20, 4)}
+        {split_digit(16, 4)}
+        {split_digit(12, 4)}
+        {split_digit(8, 4)}
+
+        {8-1 + 6}
+        OP_ROLL
+        {split_digit(29, 4)}
+        {split_digit(25, 4)}
+        {split_digit(21, 4)}
+        {split_digit(17, 4)}
+        {split_digit(13, 4)}
+        {split_digit(9, 4)}
+        {split_digit(5, 4)}
+  
+        {NMUL(8)}
+        {8-2 + 6+8} //
+        OP_ROLL
+        {split_digit(29, 3)}
+        OP_TOALTSTACK OP_ADD OP_FROMALTSTACK
+        {split_digit(26, 4)}
+        {split_digit(22, 4)}
+        {split_digit(18, 4)}
+        {split_digit(14, 4)}
+        {split_digit(10, 4)}
+        {split_digit(6, 4)}
+
+        {NMUL(4)}
+        {8-3 + 6+8+7} //
+        OP_ROLL
+        {split_digit(29, 2)}
+        OP_TOALTSTACK OP_ADD OP_FROMALTSTACK
+        {split_digit(27, 4)}
+        {split_digit(23, 4)}
+        {split_digit(19, 4)}
+        {split_digit(15, 4)}
+        {split_digit(11, 4)}
+        {split_digit(7, 4)}
+
+        {NMUL(2)}
+        {8-4 + 6+8+7+7} //
+        OP_ROLL
+        {split_digit(29, 1)}
+        OP_TOALTSTACK OP_ADD OP_FROMALTSTACK
+        {split_digit(28, 4)}
+        {split_digit(24, 4)}
+        {split_digit(20, 4)}
+        {split_digit(16, 4)}
+        {split_digit(12, 4)}
+        {split_digit(8, 4)}
+
+        {8-5 + 6+8+7+7+7} //
+        OP_ROLL
+        {split_digit(29, 4)}
+        {split_digit(25, 4)}
+        {split_digit(21, 4)}
+        {split_digit(17, 4)}
+        {split_digit(13, 4)}
+        {split_digit(9, 4)}
+        {split_digit(5, 4)}
+
+        {NMUL(8)}
+        {8-6 + 6+8+7+7+7+8} //
+        OP_ROLL
+        {split_digit(29, 3)}
+        OP_TOALTSTACK OP_ADD OP_FROMALTSTACK
+        {split_digit(26, 4)}
+        {split_digit(22, 4)}
+        {split_digit(18, 4)}
+        {split_digit(14, 4)}
+        {split_digit(10, 4)}
+        {split_digit(6, 4)}
+
+        {NMUL(4)}
+        {8-7 + 6+8+7+7+7+8+7} //
+        OP_ROLL
+        {split_digit(29, 2)}
+        OP_TOALTSTACK OP_ADD OP_FROMALTSTACK
+        {split_digit(27, 4)}
+        {split_digit(23, 4)}
+        {split_digit(19, 4)}
+        {split_digit(15, 4)}
+        {split_digit(11, 4)}
+        {split_digit(7, 4)}
+
+        {NMUL(2)}
+        {8-8 + 6+8+7+7+7+8+7+7} //
+        OP_ROLL
+        {split_digit(29, 1)}
+        OP_TOALTSTACK OP_ADD OP_FROMALTSTACK
+        {split_digit(28, 4)}
+        {split_digit(24, 4)}
+        {split_digit(20, 4)}
+        {split_digit(16, 4)}
+        {split_digit(12, 4)}
+        {split_digit(8, 4)}
+
+    }
+}
+
+pub fn pack_u8_to_u32() -> Script {
+    let n_limbs = 9;
+    script!{
+        {58} OP_ROLL
+        {59} OP_ROLL
+        {60} OP_ROLL
+        {61} OP_ROLL
+        {62} OP_ROLL
+        {63} OP_ROLL
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        OP_TOALTSTACK
+
+        {50} OP_ROLL
+        {51} OP_ROLL
+        {52} OP_ROLL
+        {53} OP_ROLL
+        {54} OP_ROLL
+        {55} OP_ROLL
+        {56} OP_ROLL
+        {57} OP_ROLL
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(2)}
+        OP_SWAP
+        {split_digit(4, 1)}
+        OP_ROT OP_ROT OP_ADD
+        OP_TOALTSTACK
+
+        OP_TOALTSTACK
+        {43} OP_ROLL
+        {44} OP_ROLL
+        {45} OP_ROLL
+        {46} OP_ROLL
+        {47} OP_ROLL
+        {48} OP_ROLL
+        {49} OP_ROLL
+        OP_FROMALTSTACK
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(4)}
+        OP_SWAP
+        {split_digit(4, 2)}
+        OP_ROT OP_ROT OP_ADD
+        OP_TOALTSTACK
+
+        OP_TOALTSTACK
+        {36} OP_ROLL
+        {37} OP_ROLL
+        {38} OP_ROLL
+        {39} OP_ROLL
+        {40} OP_ROLL
+        {41} OP_ROLL
+        {42} OP_ROLL
+        OP_FROMALTSTACK
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(8)}
+        OP_SWAP
+        {split_digit(4, 3)}
+        OP_ROT OP_ROT OP_ADD
+        OP_TOALTSTACK
+
+        OP_TOALTSTACK
+        {29} OP_ROLL
+        {30} OP_ROLL
+        {31} OP_ROLL
+        {32} OP_ROLL
+        {33} OP_ROLL
+        {34} OP_ROLL
+        {35} OP_ROLL
+        OP_FROMALTSTACK
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        OP_TOALTSTACK
+
+        {21} OP_ROLL
+        {22} OP_ROLL
+        {23} OP_ROLL
+        {24} OP_ROLL
+        {25} OP_ROLL
+        {26} OP_ROLL
+        {27} OP_ROLL
+        {28} OP_ROLL
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(2)}
+        OP_SWAP
+        {split_digit(4, 1)}
+        OP_ROT OP_ROT OP_ADD
+        OP_TOALTSTACK
+
+        OP_TOALTSTACK
+        {14} OP_ROLL
+        {15} OP_ROLL
+        {16} OP_ROLL
+        {17} OP_ROLL
+        {18} OP_ROLL
+        {19} OP_ROLL
+        {20} OP_ROLL
+        OP_FROMALTSTACK
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(4)}
+        OP_SWAP
+        {split_digit(4, 2)}
+        OP_ROT OP_ROT OP_ADD
+        OP_TOALTSTACK
+
+        OP_TOALTSTACK
+        {7} OP_ROLL
+        {8} OP_ROLL
+        {9} OP_ROLL
+        {10} OP_ROLL
+        {11} OP_ROLL
+        {12} OP_ROLL
+        {13} OP_ROLL
+        OP_FROMALTSTACK
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(8)}
+        OP_SWAP
+        {split_digit(4, 3)}
+        OP_ROT OP_ROT OP_ADD
+        OP_TOALTSTACK
+
+        OP_TOALTSTACK
+        {1} OP_ROLL
+        {2} OP_ROLL
+        {3} OP_ROLL
+        {4} OP_ROLL
+        {5} OP_ROLL
+        {6} OP_ROLL
+        OP_FROMALTSTACK
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+        {NMUL(16)} OP_ADD
+
+        for i in 1..n_limbs {
+            OP_FROMALTSTACK
+        }
+        for i in 1..n_limbs {
+            {i} OP_ROLL
+        }
+    }
+
+}
+
 
 
 // [a0, a1, a2, a3, a4, a5]
@@ -217,16 +530,17 @@ pub fn hash_fp12_with_hints() -> Script {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::bn254::{fq::{pack_u8_to_u32, unpack_u32_to_u8}, utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq_push_not_montgomery, new_hinted_affine_add_line, new_hinted_affine_double_line, new_hinted_check_line_through_point, new_hinted_ell_by_constant_affine}};
     use ark_bn254::G2Affine;
-    use ark_ff::AdditiveGroup;
+    use ark_ff::{AdditiveGroup, BigInt};
     use ark_std::UniformRand;
+    use num_bigint::{BigUint, RandomBits};
     use num_traits::One;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
     use crate::bn254::fp254impl::Fp254Impl;
     use crate::bn254::fq::Fq;
     use crate::bn254::fq6::Fq6;
+    use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq_push_not_montgomery, new_hinted_affine_add_line, new_hinted_affine_double_line, new_hinted_check_line_through_point, new_hinted_ell_by_constant_affine};
     use crate::treepp::{script};
     use ark_ff::{Field};
     use core::ops::Mul;

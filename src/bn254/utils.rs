@@ -1,8 +1,6 @@
 // utils for push fields into stack
 use crate::bn254::ell_coeffs::EllCoeff;
 use crate::bn254::ell_coeffs::G2Prepared;
-use crate::bn254::fq::unpack_u32_to_u8;
-use crate::bn254::fq::pack_u8_to_u32;
 use crate::bn254::fr::Fr;
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use ark_ec::{bn::BnConfig, AffineRepr};
@@ -1370,7 +1368,7 @@ pub fn double_line() -> Script {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::bn254::{fq::{unpack_u32_to_u8, pack_u8_to_u32}, fq2::Fq2};
+    use crate::bn254::{ fq2::Fq2};
     use ark_bn254::G2Affine;
     use ark_ff::AdditiveGroup;
     use ark_std::UniformRand;
