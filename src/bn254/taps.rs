@@ -659,38 +659,27 @@ pub fn emulate_extern_hash_fp6(msgs: [ark_bn254::Fq; 6]) -> [u32;9] {
     us
 }
 
-pub fn emulate_extern_hash_fp12(msgs: [ark_bn254::Fq; 12]) -> BigUint {
-    fn limbs_to_biguint(limbs: [u32; 9]) -> BigUint {
-        let mut n = BigUint::zero();
-        for (i, &limb) in limbs.iter().enumerate() {
-            let shift = 29 * i;
-            n += BigUint::from(limb) << shift;
-        }
-        n
-    }
-
+// msg to nibbles
+pub fn emulate_extern_hash_fp12(a: ark_bn254::Fq12) -> [u8; 64] {
+    let msgs = [a.c0.c0.c0,a.c0.c0.c1, a.c0.c1.c0, a.c0.c1.c1, a.c0.c2.c0,a.c0.c2.c1, a.c1.c0.c0,a.c1.c0.c1, a.c1.c1.c0, a.c1.c1.c1, a.c1.c2.c0,a.c1.c2.c1,];
     let scr = script!{
         for i in 0..msgs.len() {
             {fq_push_not_montgomery(msgs[i])}
         }
         {hash_fp12()}
+        {unpack_u32_to_u4()}
     };
     let exec_result = execute_script(scr);
-
-    assert_eq!(exec_result.final_stack.len(), 9);
-    let mut us: [u32;9] = [0u32;9];
+    let mut arr = [0u8; 64];
     for i in 0..exec_result.final_stack.len() {
-        let v = exec_result.final_stack.get(8-i);
-        let mut w = [0u8; 4];
-        for i in 0..v.len() {
-            w[i] = v[i];
+        let v = exec_result.final_stack.get(i);
+        if v.is_empty() {
+            arr[i] = 0;
+        } else {
+            arr[i] = v[0];
         }
-        println!("v {:?}", v);
-        let u = u32::from_le_bytes(w);
-        us[i] = u;
     }
-    let us = limbs_to_biguint(us);
-    us
+    arr
 }
 
 
@@ -850,7 +839,10 @@ fn tap_squaring(sec_key: &str)-> Script {
     let (sq_script, _) = Fq12::hinted_square(ark_bn254::Fq12::ONE);
     let bitcomms_sc = script!{
         {checksig_verify_fq(sec_key)}
+        {Fq::toaltstack()}
         {checksig_verify_fq(sec_key)}
+        {Fq::fromaltstack()}
+        {Fq::roll(1)}
     };
     let hash_sc  = script!{
         { hash_fp12() }
@@ -1668,38 +1660,28 @@ mod test {
 
     #[test]
     fn test_bn254_fq12_hinted_square() {
-        const N_DIGITS: u32 = 64;
-        const OTS_WIDTH: u32 = 4;
-        fn wots_biguint_digits(n: &BigUint) -> [u8; N_DIGITS as usize] {
-            let mut digits = [0; N_DIGITS as usize];
-            for i in 0..N_DIGITS {
-                let shift_by = OTS_WIDTH * (N_DIGITS - i - 1);
-                let bit_mask = BigUint::from_u32((1 << OTS_WIDTH) - 1).unwrap() << shift_by;
-                digits[i as usize] = ((n & bit_mask) >> shift_by).to_u8().unwrap();
-            }
-            digits
-        }
 
-        let mut prng = ChaCha20Rng::seed_from_u64(0);
-
-        let a = ark_bn254::Fq12::rand(&mut prng);
-        let b = a.square();
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let hinted_square = tap_squaring(&sec_key_for_bitcomms);
-        let a_hash = emulate_extern_hash_fp12([a.c0.c0.c0,a.c0.c0.c1, a.c0.c1.c0, a.c0.c1.c1, a.c0.c2.c0,a.c0.c2.c1, a.c1.c0.c0,a.c1.c0.c1, a.c1.c1.c0, a.c1.c1.c1, a.c1.c2.c0,a.c1.c2.c1,]);
-        let a_bytes = wots_biguint_digits(&a_hash);
 
-        println!("a_bytes len {:?}", a_bytes.len());
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let a = ark_bn254::Fq12::rand(&mut prng);
+        let b = a.square();
+        let a_hash = emulate_extern_hash_fp12(a);
+        let b_hash = emulate_extern_hash_fp12(b);
 
         let simulate_stack_input = script!{
             // for hint in hints { 
             //     { hint.push() }
             // }
-            // hash_a
-            // hash_b
+            // aux_b
+            {fq12_push_not_montgomery(b)}
             // aux_a
-            { winternitz_compact::sign(sec_key_for_bitcomms, a_bytes)}
-
+            {fq12_push_not_montgomery(b)}
+            // hash_a
+            { winternitz_compact::sign(sec_key_for_bitcomms, a_hash)}
+            // hash_b
+            { winternitz_compact::sign(sec_key_for_bitcomms, b_hash)}
         };
         let script = script! {
             {simulate_stack_input}
@@ -1710,7 +1692,7 @@ mod test {
 
         // assert!(exec_result.success);
         for i in 0..exec_result.final_stack.len() {
-            println!("{i:3} {:?}", exec_result.final_stack.get(i));
+            println!("{i:3}x {:?}", exec_result.final_stack.get(i));
         }
         // println!("stack len {:?} final len {:?}", exec_result.stats.max_nb_stack_items, exec_result.final_stack.len());
         // max_stack = max_stack.max(exec_result.stats.max_nb_stack_items);
