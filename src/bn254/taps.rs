@@ -6,6 +6,7 @@ use crate::pseudo::NMUL;
 use crate::signatures::winternitz_compact::checksig_verify_fq;
 use ark_bn254::{G2Affine};
 use ark_ff::{AdditiveGroup, Field, UniformRand, Zero};
+use bitcoin::opcodes::OP_TRUE;
 use bitcoin::ScriptBuf;
 use num_bigint::BigUint;
 use rand::SeedableRng;
@@ -841,6 +842,7 @@ fn hints_squaring(a: ark_bn254::Fq12)-> Vec<Hint> {
     hints
 }
 
+
 fn tap_squaring(sec_key: &str)-> Script {
 
     let (sq_script, _) = Fq12::hinted_square(ark_bn254::Fq12::ONE);
@@ -868,23 +870,23 @@ fn tap_squaring(sec_key: &str)-> Script {
 }
 
 
-fn tap_point_ops() -> Script {
+fn tap_point_ops(sec_key: &str) -> Script {
 
-    let (hinted_double_line, hints_double_line) = new_hinted_affine_double_line(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
-    let (hinted_check_tangent, hints_check_tangent) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+    let (hinted_double_line, _) = new_hinted_affine_double_line(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+    let (hinted_check_tangent, _) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
 
-    let (hinted_check_chord_t, hints_check_chord_t) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
-    let (hinted_check_chord_q, hints_check_chord_q) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
-    let (hinted_add_line, hints_add_line) = new_hinted_affine_add_line(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+    let (hinted_check_chord_t, _) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+    let (hinted_check_chord_q, _) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+    let (hinted_add_line, _) = new_hinted_affine_add_line(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
 
-    let (hinted_ell_tangent, hints_ell_tangent) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
-    let (hinted_ell_chord, hints_ell_chord) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+    let (hinted_ell_tangent, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+    let (hinted_ell_chord, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
 
     let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
     let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
 
     let bcsize = 6+3;
-    let script = script! {
+    let ops_script = script! {
         // hints
         // for hint in hints_check_tangent { 
         //     { hint.push() }
@@ -921,7 +923,7 @@ fn tap_point_ops() -> Script {
         // { fq_push_not_montgomery(p_dash_y) }
         // { fq2_push_not_montgomery(q.x) }
         // { fq2_push_not_montgomery(q.y) }
-        // { Fq::push_zero() } // hash
+        // { Fq::push_zero() } // hash- not bc
         // { Fq::push_zero() } // hash
         // { Fq::push_zero() } // hash
         
@@ -995,7 +997,9 @@ fn tap_point_ops() -> Script {
         { Fq2::drop() }
         { Fq2::drop() }
         { Fq2::drop() }
+    };
 
+    let hash_script = script!{
         //T
         {Fq::roll(1)}
         {Fq::roll(2)}
@@ -1085,11 +1089,113 @@ fn tap_point_ops() -> Script {
         {pack_u4_to_u32()}
 
         {Fq2::drop()} //{Fq::equalverify(1, 0)}
-        OP_TRUE
     };
-    script
+
+    let bitcomms_script = script!{
+        {checksig_verify_fq(sec_key)} // hash_a
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // hash_b
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // hash_a
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // hash_b
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // hash_a
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // hash_b
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // hash_a
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // hash_b
+        {Fq::toaltstack()}
+    };
+
+    script!{
+        {bitcomms_script}
+        {ops_script}
+        {hash_script}
+        OP_TRUE
+    }
 }
 
+fn hint_point_ops(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine, p:ark_bn254::G1Affine) -> (Vec<Hint>, [ark_bn254::Fq2; 4]) {
+    // let mut prng = ChaCha20Rng::seed_from_u64(0);
+    // let t = ark_bn254::G2Affine::rand(&mut prng);
+    // let q = ark_bn254::G2Affine::rand(&mut prng);
+    // let p = ark_bn254::g1::G1Affine::rand(&mut prng);
+
+    let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
+    let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
+    let mut alpha_tangent = t.x.square();
+    alpha_tangent /= t.y;
+    alpha_tangent.mul_assign_by_fp(&three_div_two);
+    // -bias
+    let bias_minus_tangent = alpha_tangent * t.x - t.y;
+
+    let x = alpha_tangent.square() - t.x.double();
+    let y = bias_minus_tangent - alpha_tangent * x;
+    let (_, hints_double_line) = new_hinted_affine_double_line(t.x, alpha_tangent, bias_minus_tangent);
+    let (_, hints_check_tangent) = new_hinted_check_line_through_point(t.x, alpha_tangent, bias_minus_tangent);
+
+    let tt = G2Affine::new(x, y);
+
+    let alpha_chord = (tt.y - q.y) / (tt.x - q.x);
+    // -bias
+    let bias_minus_chord = alpha_chord * tt.x - tt.y;
+    assert_eq!(alpha_chord * tt.x - tt.y, bias_minus_chord);
+
+    let x = alpha_chord.square() - tt.x - q.x;
+    let y = bias_minus_chord - alpha_chord * x;
+    let p_dash_x = -p.x/p.y;
+    let p_dash_y = p.y.inverse().unwrap();
+
+    let (_, hints_check_chord_t) = new_hinted_check_line_through_point( tt.x, alpha_chord, bias_minus_chord);
+    let (_, hints_check_chord_q) = new_hinted_check_line_through_point( q.x, alpha_chord, bias_minus_chord);
+    let (_, hints_add_line) = new_hinted_affine_add_line(tt.x, q.x, alpha_chord, bias_minus_chord);
+
+    // affine mode as well
+    let mut c1new = alpha_tangent;
+    c1new.mul_assign_by_fp(&(-p.x / p.y));
+
+    let mut c2new = bias_minus_tangent;
+    c2new.mul_assign_by_fp(&(p.y.inverse().unwrap()));
+
+    let mut c1new_2 = alpha_chord;
+    c1new_2.mul_assign_by_fp(&(-p.x / p.y));
+
+    let mut c2new_2 = bias_minus_chord;
+    c2new_2.mul_assign_by_fp(&(p.y.inverse().unwrap()));
+
+
+    let (_, hints_ell_tangent) = new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_tangent, bias_minus_tangent);
+    let (_, hints_ell_chord) = new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_chord, bias_minus_chord);
+
+    let mut all_qs = vec![];
+    for hint in hints_check_tangent { 
+        all_qs.push(hint)
+    }
+    for hint in hints_ell_tangent { 
+        all_qs.push(hint)
+    }
+    for hint in hints_double_line { 
+        all_qs.push(hint)
+    }
+    for hint in hints_check_chord_q { 
+        all_qs.push(hint)
+    }
+    for hint in hints_check_chord_t { 
+        all_qs.push(hint)
+    }
+    for hint in hints_ell_chord { 
+        all_qs.push(hint)
+    }
+    for hint in hints_add_line { 
+        all_qs.push(hint)
+    }
+
+    let aux = [alpha_tangent, bias_minus_tangent, alpha_chord, bias_minus_chord];
+    (all_qs, aux)
+}
 
 fn tap_sparse_muls() -> Vec<Script> {
     // take fixed Qs as input vkY and vk_del
@@ -1826,89 +1932,26 @@ mod test {
         let (sca, (nt2, nt3)) = sparse_mul_for_addition(nt2, nt3, q_vk_g, q_vk_del);
     }
 
-
     #[test]
     fn test_hinted_affine_double_add_eval() {
-        // slope: alpha = 3 * x^2 / 2 * y
-        // intercept: bias = y - alpha * x
-        // x' = alpha^2 - 2 * x
-        // y' = -bias - alpha * x'
+
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let point_ops_tapscript = tap_point_ops(sec_key_for_bitcomms);
+
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let t = ark_bn254::G2Affine::rand(&mut prng);
-        let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
-        let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
-        let mut alpha_tangent = t.x.square();
-        alpha_tangent /= t.y;
-        alpha_tangent.mul_assign_by_fp(&three_div_two);
-        // -bias
-        let bias_minus_tangent = alpha_tangent * t.x - t.y;
-
-        let x = alpha_tangent.square() - t.x.double();
-        let y = bias_minus_tangent - alpha_tangent * x;
-        let (hinted_double_line, hints_double_line) = new_hinted_affine_double_line(t.x, alpha_tangent, bias_minus_tangent);
-        let (hinted_check_tangent, hints_check_tangent) = new_hinted_check_line_through_point(t.x, alpha_tangent, bias_minus_tangent);
-
-        let tt = G2Affine::new(x, y);
         let q = ark_bn254::G2Affine::rand(&mut prng);
-        let alpha_chord = (tt.y - q.y) / (tt.x - q.x);
-        // -bias
-        let bias_minus_chord = alpha_chord * tt.x - tt.y;
-        assert_eq!(alpha_chord * tt.x - tt.y, bias_minus_chord);
-
-        let x = alpha_chord.square() - tt.x - q.x;
-        let y = bias_minus_chord - alpha_chord * x;
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
-        let p_dash_x = -p.x/p.y;
-        let p_dash_y = p.y.inverse().unwrap();
 
-        let (hinted_check_chord_t, hints_check_chord_t) = new_hinted_check_line_through_point( tt.x, alpha_chord, bias_minus_chord);
-        let (hinted_check_chord_q, hints_check_chord_q) = new_hinted_check_line_through_point( q.x, alpha_chord, bias_minus_chord);
-        let (hinted_add_line, hints_add_line) = new_hinted_affine_add_line(tt.x, q.x, alpha_chord, bias_minus_chord);
+        let (hints, [alpha_tangent, bias_minus_tangent, alpha_chord, bias_minus_chord]) = hint_point_ops(t, q, p);
 
-        // affine mode as well
-        let mut c1new = alpha_tangent;
-        c1new.mul_assign_by_fp(&(-p.x / p.y));
+        // todo: emulate hash
 
-        let mut c2new = bias_minus_tangent;
-        c2new.mul_assign_by_fp(&(p.y.inverse().unwrap()));
-
-        let mut c1new_2 = alpha_chord;
-        c1new_2.mul_assign_by_fp(&(-p.x / p.y));
-
-        let mut c2new_2 = bias_minus_chord;
-        c2new_2.mul_assign_by_fp(&(p.y.inverse().unwrap()));
-
-        let (hinted_ell_tangent, hints_ell_tangent) = new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_tangent, bias_minus_tangent);
-        let (hinted_ell_chord, hints_ell_chord) = new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_chord, bias_minus_chord);
-
-        let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
-        let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
-
-        let bcsize = 6+3;
-        let script = script! {
+        let simulate_stack_input = script!{
             // hints
-            for hint in hints_check_tangent { 
+            for hint in hints { 
                 { hint.push() }
             }
-            for hint in hints_ell_tangent { 
-                { hint.push() }
-            }
-            for hint in hints_double_line { 
-                { hint.push() }
-            }
-            for hint in hints_check_chord_q { 
-                { hint.push() }
-            }
-            for hint in hints_check_chord_t { 
-                { hint.push() }
-            }
-            for hint in hints_ell_chord { 
-                { hint.push() }
-            }
-            for hint in hints_add_line { 
-                { hint.push() }
-            }
-
             // aux
             { fq2_push_not_montgomery(alpha_chord)}
             { fq2_push_not_montgomery(bias_minus_chord)}
@@ -1918,184 +1961,27 @@ mod test {
             { fq2_push_not_montgomery(t.y) }
 
             // bit commits
-            { fq_push_not_montgomery(p_dash_x) }
-            { fq_push_not_montgomery(p_dash_y) }
+            // todo: wots sign hash
+            { fq_push_not_montgomery(-p.x/p.y) }
+            { fq_push_not_montgomery(p.y.inverse().unwrap()) }
             { fq2_push_not_montgomery(q.x) }
             { fq2_push_not_montgomery(q.y) }
             { Fq::push_zero() } // hash
             { Fq::push_zero() } // hash
             { Fq::push_zero() } // hash
-            
-
-            { Fq2::copy(bcsize+6)} // alpha
-            { Fq2::copy(bcsize+6)} // bias
-            { Fq2::copy(bcsize+6)} // t.x
-            { Fq2::copy(bcsize+6)} // t.y
-            { hinted_check_tangent }
-
-            { Fq2::copy(bcsize+6) } // alpha
-            { Fq2::copy(bcsize+6) } // bias
-            { Fq2::copy(4 + 7) } // p_dash
-            { hinted_ell_tangent }
-            { Fq2::toaltstack() } // le.0
-            { Fq2::toaltstack() } // le.1
-
-
-            { Fq2::copy(bcsize+4)} // bias
-            { Fq2::copy(bcsize+8)} // alpha
-            { Fq2::copy(bcsize+6)} // t.x
-            { hinted_double_line }
-            { Fq2::toaltstack() }
-            { Fq2::toaltstack()}
-            // { fq2_push_not_montgomery(tt.y) }
-            // { Fq2::equalverify() }
-            // { fq2_push_not_montgomery(tt.x) }
-            // { Fq2::equalverify() }
-
-            { Fq2::roll(bcsize+6) } // alpha tangent drop
-            { Fq2::drop() }
-            { Fq2::roll(bcsize+4) } // bias tangent drop
-            { Fq2::drop() }
-
-            // hinted check chord // t.x, t.y
-            { Fq2::copy(bcsize+6)} // alpha
-            { Fq2::copy(bcsize+6)} // bias
-            { Fq2::copy(8+1) } // q.x
-            { Fq2::copy(8+1) } // q.y
-            { hinted_check_chord_q }
-            { Fq2::copy(bcsize+6)} // alpha
-            { Fq2::copy(bcsize+6)} // bias
-            { Fq2::fromaltstack() }
-            { Fq2::fromaltstack() }
-            { Fq2::copy(2)} // t.x
-            { Fq2::toaltstack() }
-            { hinted_check_chord_t }
-
-
-            { Fq2::copy(bcsize+6) } // alpha
-            { Fq2::copy(bcsize+6) } // bias
-            { Fq2::copy(10+1) } // p_dash
-            { hinted_ell_chord }
-
-            { Fq2::roll(4+bcsize+4) } // bias
-            { Fq2::roll(6+bcsize+4) } // alpha
-            { Fq2::copy(4+4+4+1) } //q.x
-            { Fq2::fromaltstack() }
-            { hinted_add_line }
-
-            { Fq2::toaltstack() }//R
-            { Fq2::toaltstack() }
-            
-            { Fq2::toaltstack() } //le_add
-            { Fq2::toaltstack() } 
-
-  
-            { Fq::toaltstack() } //hashes
-            { Fq::toaltstack() }
-            { Fq::toaltstack() }
-            { Fq2::drop() }
-            { Fq2::drop() }
-            { Fq2::drop() }
-
-            //T
-            {Fq::roll(1)}
-            {Fq::roll(2)}
-            {Fq::roll(3)}
-            { Fq::toaltstack() }
-            { Fq::toaltstack() }
-            { Fq::toaltstack() }
-            {unpack_u32_to_u4()} // 0
-            { Fq::fromaltstack()}
-            {unpack_u32_to_u4()}
-            { Fq::fromaltstack()}
-            {unpack_u32_to_u4()}
-            { Fq::fromaltstack()}
-            {unpack_u32_to_u4()}
-            {hash_128b_168k.clone()}
-
-            // fetch 1 hash
-            { Fq::fromaltstack()} // aux_hash
-            {unpack_u32_to_u4()}
-            {hash_64b_75k.clone()}
-            {pack_u4_to_u32()}
-            { Fq::fromaltstack()} //input_hash
-            {Fq2::drop()} //{Fq::equalverify(1, 0)}
-
-            for i in 0..13 {
-                {Fq::fromaltstack()}
-            }
-
-            // Hash le
-            {Fq::roll(1)}
-            {Fq::roll(2)}
-            {Fq::roll(3)}
-            { Fq::toaltstack() }
-            { Fq::toaltstack() }
-            { Fq::toaltstack() }
-            {unpack_u32_to_u4()} // 0
-            { Fq::fromaltstack()}
-            {unpack_u32_to_u4()}
-            { Fq::fromaltstack()}
-            {unpack_u32_to_u4()}
-            { Fq::fromaltstack()}
-            {unpack_u32_to_u4()}
-            {hash_128b_168k.clone()}
-            {pack_u4_to_u32()}
-            {Fq::toaltstack()}
-            
-            {Fq::roll(1)}
-            {Fq::roll(2)}
-            {Fq::roll(3)}
-            { Fq::toaltstack() }
-            { Fq::toaltstack() }
-            { Fq::toaltstack() }
-            {unpack_u32_to_u4()} // 0
-            { Fq::fromaltstack()}
-            {unpack_u32_to_u4()}
-            { Fq::fromaltstack()}
-            {unpack_u32_to_u4()}
-            { Fq::fromaltstack()}
-            {unpack_u32_to_u4()}
-            {hash_128b_168k.clone()}
-            {pack_u4_to_u32()}
-            {Fq::toaltstack()}
-
-            {Fq::roll(1)}
-            {Fq::roll(2)}
-            {Fq::roll(3)}
-            { Fq::toaltstack() }
-            { Fq::toaltstack() }
-            { Fq::toaltstack() }
-            {unpack_u32_to_u4()} // 0
-            { Fq::fromaltstack()}
-            {unpack_u32_to_u4()}
-            { Fq::fromaltstack()}
-            {unpack_u32_to_u4()}
-            { Fq::fromaltstack()}
-            {unpack_u32_to_u4()}
-            {hash_128b_168k.clone()}
-            //{nibbles_to_fq()}
-
-            // bring back hash
-            { Fq::fromaltstack()}
-            { unpack_u32_to_u4()}
-            {hash_64b_75k.clone()}
-            { Fq::fromaltstack()}
-            { unpack_u32_to_u4()}
-            {hash_64b_75k.clone()}
-            {pack_u4_to_u32()}
-
-            {Fq2::drop()} //{Fq::equalverify(1, 0)}
-            OP_TRUE
+        };
+        let tap_len = point_ops_tapscript.len();
+        let script = script!{
+            {simulate_stack_input}
+            {point_ops_tapscript}
         };
 
-        let len = script.len();
         let res = execute_script(script);
         assert!(res.success);
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
-        println!("script {} stack {}", len, res.stats.max_nb_stack_items);
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
 
 
