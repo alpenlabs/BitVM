@@ -632,6 +632,55 @@ pub fn hash_fp6() -> Script {
     } 
 }
 
+pub fn emulate_extern_hash_fp6(msgs: [ark_bn254::Fq; 6]) -> [u32;9] {
+    let scr = script!{
+        for i in 0..msgs.len() {
+            {fq_push_not_montgomery(msgs[i])}
+        }
+        {hash_fp6()}
+    };
+    let exec_result = execute_script(scr);
+
+    assert_eq!(exec_result.final_stack.len(), 9);
+    let mut us: [u32;9] = [0u32;9];
+    for i in 0..exec_result.final_stack.len() {
+        let v = exec_result.final_stack.get(i);
+        let mut w = [0u8; 4];
+        for i in 0..v.len() {
+            w[i] = v[i];
+        }
+        println!("v {:?}", v);
+        let u = u32::from_le_bytes(w);
+        us[i] = u;
+    }
+    us
+}
+
+pub fn emulate_extern_hash_fp12(msgs: [ark_bn254::Fq; 12]) -> [u32;9] {
+    let scr = script!{
+        for i in 0..msgs.len() {
+            {fq_push_not_montgomery(msgs[i])}
+        }
+        {hash_fp12()}
+    };
+    let exec_result = execute_script(scr);
+
+    assert_eq!(exec_result.final_stack.len(), 9);
+    let mut us: [u32;9] = [0u32;9];
+    for i in 0..exec_result.final_stack.len() {
+        let v = exec_result.final_stack.get(i);
+        let mut w = [0u8; 4];
+        for i in 0..v.len() {
+            w[i] = v[i];
+        }
+        println!("v {:?}", v);
+        let u = u32::from_le_bytes(w);
+        us[i] = u;
+    }
+    us
+}
+
+
 pub fn hash_fp12() -> Script {
 
     let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
@@ -733,6 +782,7 @@ pub fn hash_fp12_192() -> Script {
     }
 }
 
+
 // 6Fp_hash
 // fp6
 pub fn hash_fp12_with_hints() -> Script {
@@ -780,6 +830,7 @@ pub fn hash_fp12_with_hints() -> Script {
 }
 
 
+
 // Taps
 fn tap_squaring()-> Script {
 
@@ -787,6 +838,15 @@ fn tap_squaring()-> Script {
     let sc = script!{
         {sq_script}
         { hash_fp12() }
+
+        { Fq::drop() }
+
+        { hash_fp12() }
+
+        {Fq::drop()}
+        {Fq::drop()}
+        {Fq::drop()}
+        OP_TRUE
     };
     sc
 }
@@ -810,27 +870,27 @@ fn tap_point_ops() -> Script {
     let bcsize = 6+3;
     let script = script! {
         // hints
-        for hint in hints_check_tangent { 
-            { hint.push() }
-        }
-        for hint in hints_ell_tangent { 
-            { hint.push() }
-        }
-        for hint in hints_double_line { 
-            { hint.push() }
-        }
-        for hint in hints_check_chord_q { 
-            { hint.push() }
-        }
-        for hint in hints_check_chord_t { 
-            { hint.push() }
-        }
-        for hint in hints_ell_chord { 
-            { hint.push() }
-        }
-        for hint in hints_add_line { 
-            { hint.push() }
-        }
+        // for hint in hints_check_tangent { 
+        //     { hint.push() }
+        // }
+        // for hint in hints_ell_tangent { 
+        //     { hint.push() }
+        // }
+        // for hint in hints_double_line { 
+        //     { hint.push() }
+        // }
+        // for hint in hints_check_chord_q { 
+        //     { hint.push() }
+        // }
+        // for hint in hints_check_chord_t { 
+        //     { hint.push() }
+        // }
+        // for hint in hints_ell_chord { 
+        //     { hint.push() }
+        // }
+        // for hint in hints_add_line { 
+        //     { hint.push() }
+        // }
 
         // aux
         // { fq2_push_not_montgomery(alpha_chord)}
@@ -1308,6 +1368,12 @@ mod test {
 
 
     #[test]
+    fn test_fp6_hasher() {
+        let res = emulate_extern_hash_fp6([ark_bn254::Fq::one(); 6]);
+        println!("res {:?}", res);
+    }
+
+    #[test]
     fn test_hinited_sparse_dense_mul() {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let t = ark_bn254::G2Affine::rand(&mut prng);
@@ -1585,68 +1651,34 @@ mod test {
     fn test_bn254_fq12_hinted_square() {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
 
-        let mut max_stack = 0u32;
+        let a = ark_bn254::Fq12::rand(&mut prng);
+        let b = a.square();
 
+        let (_, hints) = Fq12::hinted_square(a);
+        let hinted_square = tap_squaring();
 
-        for _ in 0..1 {
-            let a = ark_bn254::Fq12::rand(&mut prng);
-            let b = a.square();
-
-            let (hinted_square, hints) = Fq12::hinted_square(a);
-
-            println!("hints len {:?}", hints.len());
-            let script = script! {
-           
-                for hint in hints { 
-                    { hint.push() }
-                }
-                {u32::from_le_bytes([234, 190, 118, 0])}
-                {u32::from_le_bytes([135, 162, 241, 5])}
-                {u32::from_le_bytes([186, 52, 155, 0])}
-                {u32::from_le_bytes([162, 11, 254, 31])}
-                {u32::from_le_bytes([130, 167, 61, 5])}
-                {u32::from_le_bytes([178, 14, 103, 23])}
-                {u32::from_le_bytes([195, 223, 134, 7])}
-                {u32::from_le_bytes([68, 150, 213, 11])}
-                {u32::from_le_bytes([83, 1, 19, 0])}
-
-                {u32::from_le_bytes([234, 190, 118, 0])}
-                {u32::from_le_bytes([135, 162, 241, 5])}
-                {u32::from_le_bytes([186, 52, 155, 0])}
-                {u32::from_le_bytes([162, 11, 254, 31])}
-                {u32::from_le_bytes([130, 167, 61, 5])}
-                {u32::from_le_bytes([178, 14, 103, 23])}
-                {u32::from_le_bytes([195, 223, 134, 7])}
-                {u32::from_le_bytes([68, 150, 213, 11])}
-                {u32::from_le_bytes([83, 1, 19, 0])}
-
-                { fq12_push_not_montgomery(a) }
-                { fq12_push_not_montgomery(a) }
-                { hinted_square.clone() }
-                { hash_fp12() }
-
-                { Fq::drop() }
-
-                { hash_fp12() }
-
-                {Fq::drop()}
-                {Fq::drop()}
-                {Fq::drop()}
-                OP_TRUE
-
-            };
-            println!("len {:?}", script.len());
-            let exec_result = execute_script(script);
-
-            //assert!(exec_result.success);
-            for i in 0..exec_result.final_stack.len() {
-                println!("{i:3} {:?}", exec_result.final_stack.get(i));
+        let simulate_stack_input = script!{
+            for hint in hints { 
+                { hint.push() }
             }
-            println!("stack len {:?} final len {:?}", exec_result.stats.max_nb_stack_items, exec_result.final_stack.len());
-            // max_stack = max_stack.max(exec_result.stats.max_nb_stack_items);
-            // println!("Fq12::hinted_square: {} @ {} stack final stack {}", hinted_square.len(), max_stack,exec_result.final_stack.len());
-            println!("len12 {} len12h {} len6 {}", hash_fp12().len(), hash_fp12_with_hints().len(), hash_fp6().len());
-        }
+            // hash_a
+            // hash_b
+            // aux_a
+        };
+        let script = script! {
+            {simulate_stack_input}
+            { hinted_square }
+        };
+
+        let exec_result = execute_script(script);
+
+        assert!(exec_result.success);
+        // for i in 0..exec_result.final_stack.len() {
+        //     println!("{i:3} {:?}", exec_result.final_stack.get(i));
+        // }
+        // println!("stack len {:?} final len {:?}", exec_result.stats.max_nb_stack_items, exec_result.final_stack.len());
+        // max_stack = max_stack.max(exec_result.stats.max_nb_stack_items);
+        // println!("Fq12::hinted_square: {} @ {} stack final stack {}", hinted_square.len(), max_stack,exec_result.final_stack.len());
     }
 
 
