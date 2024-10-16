@@ -20,6 +20,8 @@ use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use num_traits::One;
 use num_traits::ToPrimitive;
 
+use super::utils::Hint;
+
 
 
 fn config_gen() {
@@ -834,31 +836,35 @@ pub fn hash_fp12_with_hints() -> Script {
 
 
 // Taps
+fn hints_squaring(a: ark_bn254::Fq12)-> Vec<Hint> {
+    let (_, hints) = Fq12::hinted_square(a);
+    hints
+}
+
 fn tap_squaring(sec_key: &str)-> Script {
 
     let (sq_script, _) = Fq12::hinted_square(ark_bn254::Fq12::ONE);
     let bitcomms_sc = script!{
-        {checksig_verify_fq(sec_key)}
+        {checksig_verify_fq(sec_key)} // hash_a
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)}
-        {Fq::fromaltstack()}
-        {Fq::roll(1)}
+        {checksig_verify_fq(sec_key)} // hash_b
+        {Fq::toaltstack()}
     };
     let hash_sc  = script!{
-        { hash_fp12() }
-        { Fq::drop() }
-        { hash_fp12() }
-        {Fq::drop()}
-        {Fq::drop()}
-        {Fq::drop()}
+        { hash_fp12() } // Hash(b)
+        { Fq::fromaltstack() } // hash_b
+        { Fq::equalverify(1, 0)} // NOTE: WE SHOULD BE SHOWING INEQUALITY, WILL DO LATER
+        { hash_fp12() } // Hash(a)
+        { Fq::fromaltstack() } // hash_a
+        { Fq::equalverify(1, 0)}
     };
     let sc = script!{
-        {bitcomms_sc.clone()}
+        {bitcomms_sc}
         {sq_script}
         {hash_sc}
         OP_TRUE
     };
-    bitcomms_sc
+    sc
 }
 
 
@@ -1660,43 +1666,44 @@ mod test {
 
     #[test]
     fn test_bn254_fq12_hinted_square() {
-
+        // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let hinted_square = tap_squaring(&sec_key_for_bitcomms);
+        let squaring_tapscript = tap_squaring(&sec_key_for_bitcomms);
 
+        // run time
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let a = ark_bn254::Fq12::rand(&mut prng);
         let b = a.square();
+        let hints_square = hints_squaring(a);
         let a_hash = emulate_extern_hash_fp12(a);
         let b_hash = emulate_extern_hash_fp12(b);
 
+        // data passed to stack in runtime 
         let simulate_stack_input = script!{
-            // for hint in hints { 
-            //     { hint.push() }
-            // }
-            // aux_b
-            {fq12_push_not_montgomery(b)}
+            // quotients for tmul
+            for hint in hints_square { 
+                { hint.push() }
+            }
             // aux_a
-            {fq12_push_not_montgomery(b)}
+            {fq12_push_not_montgomery(a)}
+            // aux_a
+            {fq12_push_not_montgomery(a)}
             // hash_a
-            { winternitz_compact::sign(sec_key_for_bitcomms, a_hash)}
-            // hash_b
             { winternitz_compact::sign(sec_key_for_bitcomms, b_hash)}
+            // hash_b
+            { winternitz_compact::sign(sec_key_for_bitcomms, a_hash)}
         };
+
+        let tap_len = squaring_tapscript.len();
         let script = script! {
-            {simulate_stack_input}
-            { hinted_square }
+            { simulate_stack_input }
+            { squaring_tapscript }
         };
 
         let exec_result = execute_script(script);
 
-        // assert!(exec_result.success);
-        for i in 0..exec_result.final_stack.len() {
-            println!("{i:3}x {:?}", exec_result.final_stack.get(i));
-        }
-        // println!("stack len {:?} final len {:?}", exec_result.stats.max_nb_stack_items, exec_result.final_stack.len());
-        // max_stack = max_stack.max(exec_result.stats.max_nb_stack_items);
-        // println!("Fq12::hinted_square: {} @ {} stack final stack {}", hinted_square.len(), max_stack,exec_result.final_stack.len());
+        assert!(exec_result.success);
+        println!("stack len {:?} script len {:?}", exec_result.stats.max_nb_stack_items, tap_len);
     }
 
 
