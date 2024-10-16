@@ -47,7 +47,7 @@ fn split_digit(window: u32, index: u32) -> Script {
     }
 }
 
-pub fn unpack_u32_to_u8() -> Script {
+pub fn unpack_u32_to_u4() -> Script {
 
     script!{
         {8}
@@ -153,7 +153,7 @@ pub fn unpack_u32_to_u8() -> Script {
     }
 }
 
-pub fn pack_u8_to_u32() -> Script {
+pub fn pack_u4_to_u32() -> Script {
     let n_limbs = 9;
     script!{
         {58} OP_ROLL
@@ -354,28 +354,28 @@ pub fn hash_fp6() -> Script {
         for _ in 0..=4 {
             {Fq::toaltstack()}
         }
-        { unpack_u32_to_u8() }
+        { unpack_u32_to_u4() }
         { Fq::fromaltstack() }
-        { unpack_u32_to_u8() }
+        { unpack_u32_to_u4() }
         {hash_64b_75k.clone()}
-        { pack_u8_to_u32() }
+        { pack_u4_to_u32() }
 
         { Fq::fromaltstack() }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         { Fq::fromaltstack() }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         { Fq::fromaltstack() }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         { Fq::fromaltstack() }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         { hash_128b_168k.clone() }
 
             for _ in 0..9 {
                 {64 + 8} OP_ROLL
             }
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
         { hash_64b_75k }
-        {pack_u8_to_u32()}
+        {pack_u4_to_u32()}
     } 
 }
 
@@ -390,63 +390,63 @@ pub fn hash_fp12() -> Script {
         }
 
         // first part
-        { unpack_u32_to_u8() }
+        { unpack_u32_to_u4() }
         { Fq::fromaltstack() }
-        { unpack_u32_to_u8() }
+        { unpack_u32_to_u4() }
         {hash_64b_75k.clone()}
-        { pack_u8_to_u32() }
+        { pack_u4_to_u32() }
 
         { Fq::fromaltstack() }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         { Fq::fromaltstack() }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         { Fq::fromaltstack() }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         { Fq::fromaltstack() }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         { hash_128b_168k.clone() }
 
 
         for _ in 0..9 {
             {64 + 8} OP_ROLL
         }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         {hash_64b_75k.clone()}
-        {pack_u8_to_u32()}
+        {pack_u4_to_u32()}
 
         // second part
 
         { Fq::fromaltstack() }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         { Fq::fromaltstack() }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         {hash_64b_75k.clone()}
-        { pack_u8_to_u32() }
+        { pack_u4_to_u32() }
         
 
         { Fq::fromaltstack() }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         { Fq::fromaltstack() }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         { Fq::fromaltstack() }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         { Fq::fromaltstack() }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         { hash_128b_168k.clone() }
 
         for _ in 0..9 {
             {64 + 8} OP_ROLL
         }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         {hash_64b_75k.clone()}
 
         // wrap up
         for _ in 0..9 {
             {64 + 8} OP_ROLL
         }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         {hash_64b_75k.clone()}
-        {pack_u8_to_u32()}
+        {pack_u4_to_u32()}
 
     } 
 }
@@ -458,25 +458,25 @@ pub fn hash_fp12_192() -> Script {
         for _ in 0..=10 {
             {Fq::toaltstack()}
         }
-        {unpack_u32_to_u8() }
+        {unpack_u32_to_u4() }
         for _ in 0..5 {
             { Fq::fromaltstack()}
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
         }
         {hash_192b_252k.clone()}
-        {pack_u8_to_u32()}
+        {pack_u4_to_u32()}
 
         for _ in 0..6 {
             { Fq::fromaltstack()}
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
         }
         {hash_192b_252k}
         for _ in 0..9 {
             {64+8} OP_ROLL
         }
-        { unpack_u32_to_u8() }
+        { unpack_u32_to_u4() }
         {hash_64b_75k}
-        {pack_u8_to_u32()}
+        {pack_u4_to_u32()}
     }
 }
 
@@ -492,48 +492,50 @@ pub fn hash_fp12_with_hints() -> Script {
             {Fq::toaltstack()}
         }
 
-        { unpack_u32_to_u8() }
+        { unpack_u32_to_u4() }
         { Fq::fromaltstack() }
-        { unpack_u32_to_u8() }
+        { unpack_u32_to_u4() }
         {hash_64b_75k.clone()}
-        { pack_u8_to_u32() }
+        { pack_u4_to_u32() }
 
         { Fq::fromaltstack() }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         { Fq::fromaltstack() }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         { Fq::fromaltstack() }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         { Fq::fromaltstack() }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         { hash_128b_168k.clone() }
 
 
         for _ in 0..9 {
             {64 + 8} OP_ROLL
         }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         {hash_64b_75k.clone()}
 
         // wrap up
         for _ in 0..9 {
             {64 + 8} OP_ROLL
         }
-        {unpack_u32_to_u8()}
+        {unpack_u32_to_u4()}
         {hash_64b_75k.clone()}
-        {pack_u8_to_u32()}
+        {pack_u4_to_u32()}
 
     } 
 }
+
+
+// Taps
 
 
 #[cfg(test)]
 mod test {
     use super::*;
     use ark_bn254::G2Affine;
-    use ark_ff::{AdditiveGroup, BigInt};
+    use ark_ff::AdditiveGroup;
     use ark_std::UniformRand;
-    use num_bigint::{BigUint, RandomBits};
     use num_traits::One;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
@@ -541,10 +543,10 @@ mod test {
     use crate::bn254::fq::Fq;
     use crate::bn254::fq6::Fq6;
     use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq_push_not_montgomery, new_hinted_affine_add_line, new_hinted_affine_double_line, new_hinted_check_line_through_point, new_hinted_ell_by_constant_affine};
-    use crate::treepp::{script};
-    use ark_ff::{Field};
+    use ark_ff::Field;
     use core::ops::Mul;
     use crate::bn254::{fq12::Fq12, fq2::Fq2};
+
 
     #[test]
     fn test_hinited_sparse_dense_mul() {
@@ -599,15 +601,15 @@ mod test {
             { Fq::toaltstack() }
             { Fq::toaltstack() }
             { Fq::toaltstack() }
-            {unpack_u32_to_u8()} // 0
+            {unpack_u32_to_u4()} // 0
             { Fq::fromaltstack()}
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
             { Fq::fromaltstack()}
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
             { Fq::fromaltstack()}
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
             {hash_128b_168k.clone()}
-            {pack_u8_to_u32()}
+            {pack_u4_to_u32()}
 
             {hash_fp12() }
 
@@ -625,8 +627,6 @@ mod test {
         max_stack = max_stack.max(res.stats.max_nb_stack_items);
         println!("Fq6::window_mul: {} @ {} stack", len, max_stack);
     }
-
-
 
     #[test]
     fn test_bn254_fq12_hinted_mul_split0() {
@@ -891,6 +891,125 @@ mod test {
     }
 
 
+    #[test]
+    fn test_hinted_sparse_mul() {
+        // take fixed Qs as input vkY and vk_del
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let q_vk_g = ark_bn254::G2Affine::rand(&mut prng);
+        let q_vk_del = ark_bn254::G2Affine::rand(&mut prng);
+        // take var Ps as input: MSM, Groth
+        let p2 = ark_bn254::g1::G1Affine::rand(&mut prng);
+        let p3 = ark_bn254::g1::G1Affine::rand(&mut prng);
+        // take T4 as auxiliary input
+        let t2 = q_vk_g; // initial assignment
+        let t3 = q_vk_del;
+
+        fn sparse_mul_for_doubling(t2: G2Affine, t3: G2Affine) -> (Script, (G2Affine, G2Affine)) {
+            let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
+            let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
+            let mut alpha_t2 = t2.x.square();
+            alpha_t2 /= t2.y;
+            alpha_t2.mul_assign_by_fp(&three_div_two);
+            let bias_t2 = alpha_t2 * t2.x - t2.y;
+            let x2 = alpha_t2.square() - t2.x.double();
+            let y2 = bias_t2 - alpha_t2 * x2;
+            let (hinted_ell_t2, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::ONE,ark_bn254::Fq::ONE, alpha_t2, bias_t2);
+            
+            let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
+            let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
+            let mut alpha_t3 = t3.x.square();
+            alpha_t3 /= t3.y;
+            alpha_t3.mul_assign_by_fp(&three_div_two);
+            let bias_t3 = alpha_t3 * t3.x - t3.y;
+            let x3 = alpha_t3.square() - t3.x.double();
+            let y3 = bias_t3 - alpha_t3 * x3;
+            let (hinted_ell_t3, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::ONE,ark_bn254::Fq::ONE, alpha_t2, bias_t2);
+            
+            let (sparse_dense_mul, _) = Fq12::hinted_mul_by_34(ark_bn254::Fq12::ONE, ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE);
+            
+            let sc = script!{
+                // P2 
+                // P3
+                {fq2_push_not_montgomery(alpha_t2)} // baked
+                {fq2_push_not_montgomery(bias_t2)}
+                {fq2_push_not_montgomery(alpha_t3)}
+                {fq2_push_not_montgomery(bias_t3)}
+                { Fq2::roll(6) } // P3
+                { hinted_ell_t3 }
+                {Fq2::toaltstack()}
+                {Fq2::toaltstack()}
+                { Fq2::roll(4) }
+                { hinted_ell_t2 }
+                {Fq2::toaltstack()}
+                {Fq2::toaltstack()}
+
+                // sparse fq12
+                {Fq2::push_one()} // 0
+                {Fq2::push_zero()}
+                {Fq2::push_zero()}
+                {Fq2::fromaltstack()} // 3
+                {Fq2::fromaltstack()} // 4
+                {Fq2::push_zero()}
+                // sparse fp12
+                {Fq2::fromaltstack()}
+                {Fq2::fromaltstack()}
+                {sparse_dense_mul}
+            };
+            (sc, (G2Affine::new(x2, y2), G2Affine::new(x3, y3)))
+        }
+
+
+        fn sparse_mul_for_addition(t2: G2Affine, t3: G2Affine, q2: G2Affine, q3: G2Affine) -> (Script, (G2Affine, G2Affine)) {
+            let alpha_t2 = (t2.y - q2.y) / (t2.x - q2.x);
+            let bias_t2 = alpha_t2 * t2.x - t2.y;
+            let x2 = alpha_t2.square() - t2.x - q2.x;
+            let y2 = bias_t2 - alpha_t2 * x2;
+            let (hinted_ell_t2, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::ONE,ark_bn254::Fq::ONE, alpha_t2, bias_t2);
+
+            let alpha_t3 = (t3.y - q3.y) / (t3.x - q3.x);
+            let bias_t3 = alpha_t3 * t3.x - t3.y;
+            let x3 = alpha_t3.square() - t3.x - q3.x;
+            let y3 = bias_t3 - alpha_t3 * x3;
+            let (hinted_ell_t3, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::ONE,ark_bn254::Fq::ONE, alpha_t3, bias_t3);
+            
+            let (sparse_dense_mul, _) = Fq12::hinted_mul_by_34(ark_bn254::Fq12::ONE, ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE);
+            
+            let sc = script!{
+                // P2 
+                // P3
+                {fq2_push_not_montgomery(alpha_t2)}
+                {fq2_push_not_montgomery(bias_t2)}
+                {fq2_push_not_montgomery(alpha_t3)}
+                {fq2_push_not_montgomery(bias_t3)}
+                { Fq2::roll(6) } // P3
+                { hinted_ell_t3 }
+                {Fq2::toaltstack()}
+                {Fq2::toaltstack()}
+                { Fq2::roll(4) }
+                { hinted_ell_t2 }
+                {Fq2::toaltstack()}
+                {Fq2::toaltstack()}
+
+                // sparse fq12
+                {Fq2::push_one()} // 0
+                {Fq2::push_zero()}
+                {Fq2::push_zero()}
+                {Fq2::fromaltstack()} // 3
+                {Fq2::fromaltstack()} // 4
+                {Fq2::push_zero()}
+                // sparse fp12
+                {Fq2::fromaltstack()}
+                {Fq2::fromaltstack()}
+                {sparse_dense_mul}
+            };
+            (sc, (G2Affine::new(x2, y2), G2Affine::new(x3, y3)))
+        }
+
+        let (scd, (nt2, nt3)) = sparse_mul_for_doubling(t2, t3);
+
+        let (sca, (nt2, nt3)) = sparse_mul_for_addition(nt2, nt3, q_vk_g, q_vk_del);
+    }
+
 
     #[test]
     fn test_hinted_affine_double_add_eval() {
@@ -1069,20 +1188,20 @@ mod test {
             { Fq::toaltstack() }
             { Fq::toaltstack() }
             { Fq::toaltstack() }
-            {unpack_u32_to_u8()} // 0
+            {unpack_u32_to_u4()} // 0
             { Fq::fromaltstack()}
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
             { Fq::fromaltstack()}
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
             { Fq::fromaltstack()}
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
             {hash_128b_168k.clone()}
 
             // fetch 1 hash
             { Fq::fromaltstack()} // aux_hash
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
             {hash_64b_75k.clone()}
-            {pack_u8_to_u32()}
+            {pack_u4_to_u32()}
             { Fq::fromaltstack()} //input_hash
             {Fq2::drop()} //{Fq::equalverify(1, 0)}
 
@@ -1097,15 +1216,15 @@ mod test {
             { Fq::toaltstack() }
             { Fq::toaltstack() }
             { Fq::toaltstack() }
-            {unpack_u32_to_u8()} // 0
+            {unpack_u32_to_u4()} // 0
             { Fq::fromaltstack()}
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
             { Fq::fromaltstack()}
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
             { Fq::fromaltstack()}
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
             {hash_128b_168k.clone()}
-            {pack_u8_to_u32()}
+            {pack_u4_to_u32()}
             {Fq::toaltstack()}
             
             {Fq::roll(1)}
@@ -1114,15 +1233,15 @@ mod test {
             { Fq::toaltstack() }
             { Fq::toaltstack() }
             { Fq::toaltstack() }
-            {unpack_u32_to_u8()} // 0
+            {unpack_u32_to_u4()} // 0
             { Fq::fromaltstack()}
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
             { Fq::fromaltstack()}
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
             { Fq::fromaltstack()}
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
             {hash_128b_168k.clone()}
-            {pack_u8_to_u32()}
+            {pack_u4_to_u32()}
             {Fq::toaltstack()}
 
             {Fq::roll(1)}
@@ -1131,24 +1250,24 @@ mod test {
             { Fq::toaltstack() }
             { Fq::toaltstack() }
             { Fq::toaltstack() }
-            {unpack_u32_to_u8()} // 0
+            {unpack_u32_to_u4()} // 0
             { Fq::fromaltstack()}
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
             { Fq::fromaltstack()}
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
             { Fq::fromaltstack()}
-            {unpack_u32_to_u8()}
+            {unpack_u32_to_u4()}
             {hash_128b_168k.clone()}
             //{nibbles_to_fq()}
 
             // bring back hash
             { Fq::fromaltstack()}
-            { unpack_u32_to_u8()}
+            { unpack_u32_to_u4()}
             {hash_64b_75k.clone()}
             { Fq::fromaltstack()}
-            { unpack_u32_to_u8()}
+            { unpack_u32_to_u4()}
             {hash_64b_75k.clone()}
-            {pack_u8_to_u32()}
+            {pack_u4_to_u32()}
 
             {Fq2::drop()} //{Fq::equalverify(1, 0)}
             OP_TRUE
@@ -1163,5 +1282,252 @@ mod test {
         println!("script {} stack {}", len, res.stats.max_nb_stack_items);
     }
 
+
+
+    #[test]
+    fn config_gen() {
+        use std::collections::HashMap;
+
+        #[derive(Clone)]
+        struct TableRowTemplate {
+            name: &'static str,
+            ID_expr: &'static str,
+            Deps_expr: &'static str,
+        }
+
+        struct TableRow {
+            name: String,
+            ID: String,
+            Deps: String,
+        }
+
+        fn evaluate_expression(expr: &str, start_id: i32) -> i32 {
+            let expr_replaced = expr.replace("Sx", &start_id.to_string());
+            let mut result = 0;
+            let mut last_op = '+';
+            let mut num = String::new();
+            let expr_chars = expr_replaced.chars().chain(" ".chars()); // Add space to trigger parsing of the last number
+
+            for c in expr_chars {
+                if c.is_digit(10) {
+                    num.push(c);
+                } else if c == '+' || c == '-' || c.is_whitespace() {
+                    if !num.is_empty() {
+                        let n: i32 = num.parse().unwrap();
+                        if last_op == '+' {
+                            result += n;
+                        } else if last_op == '-' {
+                            result -= n;
+                        }
+                        num.clear();
+                    }
+                    if c == '+' || c == '-' {
+                        last_op = c;
+                    }
+                }
+            }
+            result
+        }
+
+        fn generate_table(
+            structure: &[TableRowTemplate],
+            start_id: i32,
+            f_value: &str,
+            T4_value: &str,
+            replace_c: bool,
+        ) -> Vec<TableRow> {
+            let mut table = Vec::new();
+            for row in structure {
+                let name = row.name.to_string();
+                // Calculate the actual ID
+                let ID_expr = row.ID_expr;
+                let ID = evaluate_expression(ID_expr, start_id);
+                let ID_str = format!("S{}", ID);
+                // Update dependencies
+                let Deps = row.Deps_expr;
+                let mut Deps_updated = String::new();
+                for dep in Deps.trim_end_matches(';').split(',') {
+                    let dep = dep.trim();
+                    let dep_updated = if dep == "f_value" {
+                        f_value.to_string()
+                    } else if dep == "T4_value" {
+                        T4_value.to_string()
+                    } else if dep.starts_with("Sx") {
+                        let dep_ID = evaluate_expression(dep, start_id);
+                        format!("S{}", dep_ID)
+                    } else {
+                        if replace_c && dep == "c" {
+                            "cinv".to_string()
+                        } else {
+                            dep.to_string()
+                        }
+                    };
+                    Deps_updated.push_str(&dep_updated);
+                    Deps_updated.push(',');
+                }
+                Deps_updated = Deps_updated.trim_end_matches(',').to_string() + ";";
+                // Add the row to the table
+                table.push(TableRow {
+                    name,
+                    ID: ID_str,
+                    Deps: Deps_updated,
+                });
+            }
+            table
+        }
+
+        fn run() {
+            // Array specifying the type of table to generate
+            let ATE_LOOP_COUNT: Vec<i8> = vec![
+                0, 0, 0, 1, 0, 1, 0, -1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, -1, 0, 0, 0, 1, 0, -1, 0, 0,
+                0, 0, -1, 0, 0, 1, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 1, 0, -1, 0, 0, 0, -1,
+                0, -1, 0, 0, 0, 1, 0, 1, 1,
+            ];
+
+            // Initialize the ID counter
+            let mut id_counter = 1;
+
+            // Initial values for f and T4
+            let mut f_value = String::from("f"); // Starting value of f
+            let mut T4_value = String::from("T4"); // Starting value of T4
+
+            // Define the half and full table structures
+            let half_table_structure = vec![
+                TableRowTemplate {
+                    name: "Sqr",
+                    ID_expr: "Sx",
+                    Deps_expr: "f_value;",
+                },
+                TableRowTemplate {
+                    name: "Dbl",
+                    ID_expr: "Sx+1",
+                    Deps_expr: "P4,Q4,T4_value;",
+                },
+                TableRowTemplate {
+                    name: "SD1",
+                    ID_expr: "Sx+2",
+                    Deps_expr: "Sx,Sx+1;",
+                },
+                TableRowTemplate {
+                    name: "SS1",
+                    ID_expr: "Sx+3",
+                    Deps_expr: "P2,P3;",
+                },
+                TableRowTemplate {
+                    name: "DD1",
+                    ID_expr: "Sx+4",
+                    Deps_expr: "Sx+2,Sx+3;",
+                },
+                TableRowTemplate {
+                    name: "DD2",
+                    ID_expr: "Sx+5",
+                    Deps_expr: "Sx+2,Sx+3,Sx+4;",
+                },
+            ];
+
+            let full_table_structure = {
+                let mut v = half_table_structure.clone();
+                v.extend(vec![
+                    TableRowTemplate {
+                        name: "DD3",
+                        ID_expr: "Sx+6",
+                        Deps_expr: "Sx+5,c;",
+                    },
+                    TableRowTemplate {
+                        name: "DD4",
+                        ID_expr: "Sx+7",
+                        Deps_expr: "Sx+5,c,Sx+6;",
+                    },
+                    TableRowTemplate {
+                        name: "SD2",
+                        ID_expr: "Sx+8",
+                        Deps_expr: "Sx+7,Sx+1;",
+                    },
+                    TableRowTemplate {
+                        name: "SS2",
+                        ID_expr: "Sx+9",
+                        Deps_expr: "P2,P3;",
+                    },
+                    TableRowTemplate {
+                        name: "DD5",
+                        ID_expr: "Sx+10",
+                        Deps_expr: "Sx+8,Sx+9;",
+                    },
+                    TableRowTemplate {
+                        name: "DD6",
+                        ID_expr: "Sx+11",
+                        Deps_expr: "Sx+8,Sx+9,Sx+10;",
+                    },
+                ]);
+                v
+            };
+
+            // Generate and print the sequence of tables
+            let mut table_number = 1;
+            for i in ATE_LOOP_COUNT.iter().rev().skip(1) {
+                let table;
+                if *i == 0 {
+                    // Generate a half table
+                    table = generate_table(
+                        &half_table_structure,
+                        id_counter,
+                        &f_value,
+                        &T4_value,
+                        false,
+                    );
+                    // Update f_value and T4_value based on the half table
+                    f_value = format!("S{}", id_counter + 5); // ID of DD2
+                    T4_value = format!("S{}", id_counter + 1); // ID of Dbl
+                    id_counter += 6; // Half table uses 6 IDs
+                } else if *i == 1 {
+                    // Generate a full table
+                    table = generate_table(
+                        &full_table_structure,
+                        id_counter,
+                        &f_value,
+                        &T4_value,
+                        false,
+                    );
+                    // Update f_value and T4_value based on the full table
+                    f_value = format!("S{}", id_counter + 11); // ID of DD6
+                    T4_value = format!("S{}", id_counter + 1); // ID of Dbl
+                    id_counter += 12; // Full table uses 12 IDs
+                } else if *i == -1 {
+                    // Generate a full table with c replaced by cinv
+                    table = generate_table(
+                        &full_table_structure,
+                        id_counter,
+                        &f_value,
+                        &T4_value,
+                        true,
+                    );
+                    // Update f_value and T4_value based on the full table
+                    f_value = format!("S{}", id_counter + 11); // ID of DD6
+                    T4_value = format!("S{}", id_counter + 1); // ID of Dbl
+                    id_counter += 12; // Full table uses 12 IDs
+                } else {
+                    continue;
+                }
+                // Print the table
+                println!(
+                    "\n---\nTable {} ({})",
+                    table_number,
+                    if table.len() == 6 {
+                        "Half Table"
+                    } else {
+                        "Full Table"
+                    }
+                );
+                println!("{:<5} | {:<5} | Deps", "name", "ID");
+                println!("{}", "-".repeat(40));
+                for row in &table {
+                    println!("{:<5} | {:<5} | {}", row.name, row.ID, row.Deps);
+                }
+                table_number += 1;
+            }
+        }
+
+        run();
+    }
 
 }
