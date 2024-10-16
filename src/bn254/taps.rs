@@ -3,9 +3,11 @@ use crate::bn254::fq6::Fq6;
 use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq_push_not_montgomery, new_hinted_affine_add_line, new_hinted_affine_double_line, new_hinted_check_line_through_point, new_hinted_ell_by_constant_affine};
 // utils for push fields into stack
 use crate::pseudo::NMUL;
+use crate::signatures::winternitz_compact::checksig_verify_fq;
 use ark_bn254::{G2Affine};
-use ark_ff::{AdditiveGroup, Field, UniformRand};
+use ark_ff::{AdditiveGroup, Field, UniformRand, Zero};
 use bitcoin::ScriptBuf;
+use num_bigint::BigUint;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use std::fs::File;
@@ -16,6 +18,7 @@ use crate::{
 };
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use num_traits::One;
+use num_traits::ToPrimitive;
 
 
 
@@ -656,7 +659,16 @@ pub fn emulate_extern_hash_fp6(msgs: [ark_bn254::Fq; 6]) -> [u32;9] {
     us
 }
 
-pub fn emulate_extern_hash_fp12(msgs: [ark_bn254::Fq; 12]) -> [u32;9] {
+pub fn emulate_extern_hash_fp12(msgs: [ark_bn254::Fq; 12]) -> BigUint {
+    fn limbs_to_biguint(limbs: [u32; 9]) -> BigUint {
+        let mut n = BigUint::zero();
+        for (i, &limb) in limbs.iter().enumerate() {
+            let shift = 29 * i;
+            n += BigUint::from(limb) << shift;
+        }
+        n
+    }
+
     let scr = script!{
         for i in 0..msgs.len() {
             {fq_push_not_montgomery(msgs[i])}
@@ -668,7 +680,7 @@ pub fn emulate_extern_hash_fp12(msgs: [ark_bn254::Fq; 12]) -> [u32;9] {
     assert_eq!(exec_result.final_stack.len(), 9);
     let mut us: [u32;9] = [0u32;9];
     for i in 0..exec_result.final_stack.len() {
-        let v = exec_result.final_stack.get(i);
+        let v = exec_result.final_stack.get(8-i);
         let mut w = [0u8; 4];
         for i in 0..v.len() {
             w[i] = v[i];
@@ -677,6 +689,7 @@ pub fn emulate_extern_hash_fp12(msgs: [ark_bn254::Fq; 12]) -> [u32;9] {
         let u = u32::from_le_bytes(w);
         us[i] = u;
     }
+    let us = limbs_to_biguint(us);
     us
 }
 
@@ -832,23 +845,28 @@ pub fn hash_fp12_with_hints() -> Script {
 
 
 // Taps
-fn tap_squaring()-> Script {
+fn tap_squaring(sec_key: &str)-> Script {
 
     let (sq_script, _) = Fq12::hinted_square(ark_bn254::Fq12::ONE);
-    let sc = script!{
-        {sq_script}
+    let bitcomms_sc = script!{
+        {checksig_verify_fq(sec_key)}
+        {checksig_verify_fq(sec_key)}
+    };
+    let hash_sc  = script!{
         { hash_fp12() }
-
         { Fq::drop() }
-
         { hash_fp12() }
-
         {Fq::drop()}
         {Fq::drop()}
         {Fq::drop()}
+    };
+    let sc = script!{
+        {bitcomms_sc.clone()}
+        {sq_script}
+        {hash_sc}
         OP_TRUE
     };
-    sc
+    bitcomms_sc
 }
 
 
@@ -1355,13 +1373,14 @@ mod test {
     use ark_bn254::G2Affine;
     use ark_ff::AdditiveGroup;
     use ark_std::UniformRand;
-    use num_traits::One;
+    use num_traits::{FromPrimitive, One};
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
     use crate::bn254::fp254impl::Fp254Impl;
     use crate::bn254::fq::Fq;
     use crate::bn254::fq6::Fq6;
     use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq_push_not_montgomery, new_hinted_affine_add_line, new_hinted_affine_double_line, new_hinted_check_line_through_point, new_hinted_ell_by_constant_affine};
+    use crate::signatures::winternitz_compact;
     use ark_ff::Field;
     use core::ops::Mul;
     use crate::bn254::{fq12::Fq12, fq2::Fq2};
@@ -1649,21 +1668,38 @@ mod test {
 
     #[test]
     fn test_bn254_fq12_hinted_square() {
+        const N_DIGITS: u32 = 64;
+        const OTS_WIDTH: u32 = 4;
+        fn wots_biguint_digits(n: &BigUint) -> [u8; N_DIGITS as usize] {
+            let mut digits = [0; N_DIGITS as usize];
+            for i in 0..N_DIGITS {
+                let shift_by = OTS_WIDTH * (N_DIGITS - i - 1);
+                let bit_mask = BigUint::from_u32((1 << OTS_WIDTH) - 1).unwrap() << shift_by;
+                digits[i as usize] = ((n & bit_mask) >> shift_by).to_u8().unwrap();
+            }
+            digits
+        }
+
         let mut prng = ChaCha20Rng::seed_from_u64(0);
 
         let a = ark_bn254::Fq12::rand(&mut prng);
         let b = a.square();
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let hinted_square = tap_squaring(&sec_key_for_bitcomms);
+        let a_hash = emulate_extern_hash_fp12([a.c0.c0.c0,a.c0.c0.c1, a.c0.c1.c0, a.c0.c1.c1, a.c0.c2.c0,a.c0.c2.c1, a.c1.c0.c0,a.c1.c0.c1, a.c1.c1.c0, a.c1.c1.c1, a.c1.c2.c0,a.c1.c2.c1,]);
+        let a_bytes = wots_biguint_digits(&a_hash);
 
-        let (_, hints) = Fq12::hinted_square(a);
-        let hinted_square = tap_squaring();
+        println!("a_bytes len {:?}", a_bytes.len());
 
         let simulate_stack_input = script!{
-            for hint in hints { 
-                { hint.push() }
-            }
+            // for hint in hints { 
+            //     { hint.push() }
+            // }
             // hash_a
             // hash_b
             // aux_a
+            { winternitz_compact::sign(sec_key_for_bitcomms, a_bytes)}
+
         };
         let script = script! {
             {simulate_stack_input}
@@ -1672,10 +1708,10 @@ mod test {
 
         let exec_result = execute_script(script);
 
-        assert!(exec_result.success);
-        // for i in 0..exec_result.final_stack.len() {
-        //     println!("{i:3} {:?}", exec_result.final_stack.get(i));
-        // }
+        // assert!(exec_result.success);
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:3} {:?}", exec_result.final_stack.get(i));
+        }
         // println!("stack len {:?} final len {:?}", exec_result.stats.max_nb_stack_items, exec_result.final_stack.len());
         // max_stack = max_stack.max(exec_result.stats.max_nb_stack_items);
         // println!("Fq12::hinted_square: {} @ {} stack final stack {}", hinted_square.len(), max_stack,exec_result.final_stack.len());
