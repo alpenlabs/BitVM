@@ -50,12 +50,23 @@ impl Fq {
         }
     }
 
-    pub fn smul() -> Script {
+    pub fn tmul_lc2() -> Script {
         script!{ 
-            { <Fq as Fp254MulS>::tmul() }
+            { <Fq as Fp254Mul2LC>::tmul() }
         }
     }
-    
+
+    pub const fn bigint_tmul_lc_1() -> (u32, u32) {
+        const X: u32 = <Fq as Fp254Mul>::T::N_BITS;
+        const Y: u32 = <Fq as Fp254Mul>::LIMB_SIZE;
+        (X, Y)
+    }
+
+    pub const fn bigint_tmul_lc_2() -> (u32, u32) {
+        const X: u32 = <Fq as Fp254Mul2LC>::T::N_BITS;
+        const Y: u32 = <Fq as Fp254Mul2LC>::LIMB_SIZE;
+        (X, Y)
+    }
 }
 
 pub fn bigint_to_u32_limbs(n: BigInt, n_bits: u32) -> Vec<u32> {
@@ -387,7 +398,6 @@ macro_rules! fp_lc_mul {
 }
 
 fp_lc_mul!(Mul, 4, 4, [true]);
-fp_lc_mul!(MulS, 3, 3, [true]);
 fp_lc_mul!(Mul2LC, 3, 3, [true, true]);
 
 #[cfg(test)]

@@ -1,6 +1,8 @@
+use crate::bigint::BigIntImpl;
 // utils for push fields into stack
 use crate::bn254::ell_coeffs::EllCoeff;
 use crate::bn254::ell_coeffs::G2Prepared;
+use crate::bn254::fq::bigint_to_u32_limbs;
 use crate::bn254::fr::Fr;
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use ark_ec::{bn::BnConfig, AffineRepr};
@@ -97,21 +99,31 @@ pub fn g1_affine_push_not_montgomery(point: ark_bn254::G1Affine) -> Script {
         { Fq::push_u32_le_not_montgomery(&BigUint::from(point.y).to_u32_digits()) }
     }
 }
-
 pub enum Hint {
     Fq(ark_bn254::Fq),
+    BigIntegerTmulLC1(num_bigint::BigInt),
+    BigIntegerTmulLC2(num_bigint::BigInt),
 }
 
 impl Hint {
     pub fn push(&self) -> Script {
+        const K1: (u32, u32) = Fq::bigint_tmul_lc_1();
+        const K2: (u32, u32) = Fq::bigint_tmul_lc_2();
+        pub type T1 = BigIntImpl<{K1.0}, {K1.1}>;
+        pub type T2 = BigIntImpl<{K2.0}, {K2.1}>;
         match self {
             Hint::Fq(fq) => script! {
                 { fq_push_not_montgomery(*fq) }
             },
+            Hint::BigIntegerTmulLC1(a) => script! {
+                { T1::push_u32_le(&bigint_to_u32_limbs(a.clone(), T1::N_BITS)) }
+            },
+            Hint::BigIntegerTmulLC2(a) => script! {
+                { T2::push_u32_le(&bigint_to_u32_limbs(a.clone(), T2::N_BITS)) }
+            },
         }
     }
 }
-
 // input:
 //  f            12 elements
 //  coeffs.c0    2 elements

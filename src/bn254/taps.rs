@@ -1626,45 +1626,45 @@ fn tap_dense_dense_mul0(sec_key: &str) -> Script {
     let (hinted_mul, _) = Fq12::hinted_mul_first(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
 
     let bitcom_scr = script!{
-        {checksig_verify_fq(sec_key)} // c
-        {Fq::toaltstack()}
         {checksig_verify_fq(sec_key)} // g
         {Fq::toaltstack()}
         {checksig_verify_fq(sec_key)} // f
         {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // c
+        {Fq::toaltstack()}
     };
 
     let hash_scr = script!{
-        { hash_fp12()}
-        //bring Hashb to top
-        for _ in 0..9 {
-            OP_DEPTH OP_1SUB OP_ROLL
-        }
-        { Fq::equalverify(0, 1)}
+        {hash_fp6()} // c
+        { Fq::toaltstack()}
 
-        // hash_a
-        { hash_fp12_192() }
-        for _ in 0..9 {
-            OP_DEPTH OP_1SUB OP_ROLL
-        }
-        { Fq::equalverify(0, 1)}
+        {Fq12::roll(12)}
+        { hash_fp12()} // 
+        { Fq::toaltstack()}
 
-        {Fq::fromaltstack()} // Fq_claimed from altstack
-        {Fq::equalverify(0, 1)} // SHOULD BE UNEQUAL VERIFY
-        OP_TRUE
+        {hash_fp12_192()} // Hash_g
+        { Fq::fromaltstack()} // Hash_f
+        { Fq::fromaltstack()} // Hash_c
+
+        { Fq::fromaltstack()} // Hash_c
+        { Fq::fromaltstack()} // Hash_f
+        { Fq::fromaltstack()} // Hash_g
+
+        {Fq::equalverify(0, 5)}
+        {Fq::equalverify(0, 3)}
+        {Fq::equalverify(0, 1)}
+
     };
 
 
     let ops_scr = script! {
-        {Fq12::copy(1)}
-        // {Fq12::copy(1)}
         { hinted_mul }
-        // { Fq6::toaltstack() } // c0
     };
     let scr = script!{
         {bitcom_scr}
         {ops_scr}
-        // {hash_scr}
+        {hash_scr}
+        OP_TRUE
     };
     scr
 }
@@ -1737,7 +1737,7 @@ mod test {
     use crate::bn254::fp254impl::Fp254Impl;
     use crate::bn254::fq::Fq;
     use crate::bn254::fq6::Fq6;
-    use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery};
+    use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq6_push_not_montgomery};
     use crate::signatures::winternitz_compact;
     use ark_ff::Field;
     use core::ops::Mul;
@@ -1833,7 +1833,6 @@ mod test {
         let hash_g = emulate_extern_hash_fps(vec![g.c0.c0.c0,g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0,g.c0.c2.c1, g.c1.c0.c0,g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0,g.c1.c2.c1], false);
         let hash_c = emulate_extern_hash_fps(vec![h.c0.c0.c0,h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0,h.c0.c2.c1], true);
 
-        println!("hints len {:?}", tmul_hints.len());
         // data passed to stack in runtime 
         let simulate_stack_input = script!{
             // quotients for tmul
@@ -1857,207 +1856,11 @@ mod test {
         let script = script! {
             { simulate_stack_input }
             { dense_dense_mul_script }
-            OP_TRUE
         };
 
         let exec_result = execute_script(script);
-        //assert!(exec_result.success);
-        for i in 0..exec_result.final_stack.len() {
-            println!("{i:3} {:?}", exec_result.final_stack.get(i));
-        }
+        assert!(exec_result.success);
         println!("stack len {:?} script len {:?}", exec_result.stats.max_nb_stack_items, tap_len);
-
-    }
-
-
-    #[test]
-    fn test_bn254_fq12_hinted_mul_split0() {
-        let mut prng: ChaCha20Rng = ChaCha20Rng::seed_from_u64(0);
-
-        let mut max_stack = 0;
-
-            let a = ark_bn254::Fq12::rand(&mut prng);
-            let b = ark_bn254::Fq12::rand(&mut prng);
-            let c = a.mul(&b);
-
-            let (hinted_mul, hints) = Fq12::hinted_mul_first(12, a, 0, b);
-
-            let script = script! {
-                for hint in hints { 
-                    { hint.push() }
-                }
-                // Hash_b
-                {u32::from_le_bytes([17, 50, 164, 0])}
-                {u32::from_le_bytes([235, 77, 217, 15])}
-                {u32::from_le_bytes([1, 4, 86, 10])}
-                {u32::from_le_bytes([23, 225, 110, 26])}
-                {u32::from_le_bytes([71, 105, 236, 11])}
-                {u32::from_le_bytes([75, 29, 151, 8])}
-                {u32::from_le_bytes([130, 190, 188, 3])}
-                {u32::from_le_bytes([246, 67, 44, 19])}
-                {u32::from_le_bytes([105, 194, 20, 27])}
-
-                // Hash_a
-                {u32::from_le_bytes([131, 116, 114, 0])}
-                {u32::from_le_bytes([245, 129, 139, 3])}
-                {u32::from_le_bytes([132, 171, 199, 7])}
-                {u32::from_le_bytes([97, 185, 93, 16])}
-                {u32::from_le_bytes([161, 222, 150, 25])}
-                {u32::from_le_bytes([44, 144, 71, 23])}
-                {u32::from_le_bytes([139, 185, 38, 22])}
-                {u32::from_le_bytes([233, 138, 103, 22])}
-                {u32::from_le_bytes([9, 213, 155, 19])}
-                
-                // Hash_c
-                {u32::from_le_bytes([82, 143, 25,0])}
-                {u32::from_le_bytes([106, 69, 151, 13])}
-                {u32::from_le_bytes([154, 120, 131, 27])}
-                {u32::from_le_bytes([140, 55, 239, 25])}
-                {u32::from_le_bytes([92, 201, 47, 28])}
-                {u32::from_le_bytes([44, 174, 74, 16])}
-                {u32::from_le_bytes([57, 190, 31, 19])}
-                {u32::from_le_bytes([31, 231, 126, 1])}
-                {u32::from_le_bytes([158, 11, 210, 2])}
-
-                { fq12_push_not_montgomery(a) }
-                { fq12_push_not_montgomery(b) } // fp12_one
-                { hinted_mul.clone() }
-                { Fq6::toaltstack() }
-                
-                { hash_fp12()}
-                //bring Hashb to top
-                for i in 0..9 {
-                    OP_DEPTH OP_1SUB OP_ROLL
-                }
-                { Fq::equalverify(0, 1)}
-
-                // hash_a
-                { hash_fp12_192() }
-                for i in 0..9 {
-                    OP_DEPTH OP_1SUB OP_ROLL
-                }
-                { Fq::equalverify(0, 1)}
-
-                {Fq::fromaltstack()} // Fq_claimed from altstack
-                {Fq::equalverify(0, 1)} // SHOULD BE UNEQUAL VERIFY
-                OP_TRUE
-            };
-
-            println!("script len {}", script.len());
-            let exec_result = execute_script(script);
-            assert!(exec_result.success);
-            for i in 0..exec_result.final_stack.len() {
-                println!("{i:3} {:?}", exec_result.final_stack.get(i));
-            }
-            max_stack = max_stack.max(exec_result.stats.max_nb_stack_items);
-            println!("Fq12::mul {} stack", max_stack);
-            
-
-    }
-
-    #[test]
-    fn test_bn254_fq12_hinted_mul_split1() {
-        let mut prng: ChaCha20Rng = ChaCha20Rng::seed_from_u64(0);
-
-        let mut max_stack = 0;
-
-        for _ in 0..1 {
-            let a = ark_bn254::Fq12::rand(&mut prng);
-            let b = ark_bn254::Fq12::rand(&mut prng);
-            let c = a.mul(&b);
-
-            let (hinted_mul, hints) = Fq12::hinted_mul_second(12, a, 0, b);
-
-            let script = script! {
-                for hint in hints { 
-                    { hint.push() }
-                }
-                // Hash_b
-                {u32::from_le_bytes([17, 50, 164, 0])}
-                {u32::from_le_bytes([235, 77, 217, 15])}
-                {u32::from_le_bytes([1, 4, 86, 10])}
-                {u32::from_le_bytes([23, 225, 110, 26])}
-                {u32::from_le_bytes([71, 105, 236, 11])}
-                {u32::from_le_bytes([75, 29, 151, 8])}
-                {u32::from_le_bytes([130, 190, 188, 3])}
-                {u32::from_le_bytes([246, 67, 44, 19])}
-                {u32::from_le_bytes([105, 194, 20, 27])}
-
-                // Hash_c0
-                {u32::from_le_bytes([17, 50, 164, 0])}
-                {u32::from_le_bytes([235, 77, 217, 15])}
-                {u32::from_le_bytes([1, 4, 86, 10])}
-                {u32::from_le_bytes([23, 225, 110, 26])}
-                {u32::from_le_bytes([71, 105, 236, 11])}
-                {u32::from_le_bytes([75, 29, 151, 8])}
-                {u32::from_le_bytes([130, 190, 188, 3])}
-                {u32::from_le_bytes([246, 67, 44, 19])}
-                {u32::from_le_bytes([105, 194, 20, 27])}
-
-                // Hash_a
-                {u32::from_le_bytes([131, 116, 114, 0])}
-                {u32::from_le_bytes([245, 129, 139, 3])}
-                {u32::from_le_bytes([132, 171, 199, 7])}
-                {u32::from_le_bytes([97, 185, 93, 16])}
-                {u32::from_le_bytes([161, 222, 150, 25])}
-                {u32::from_le_bytes([44, 144, 71, 23])}
-                {u32::from_le_bytes([139, 185, 38, 22])}
-                {u32::from_le_bytes([233, 138, 103, 22])}
-                {u32::from_le_bytes([9, 213, 155, 19])}
-                
-                // Hash_c
-                {u32::from_le_bytes([66, 234, 4, 0])}
-                {u32::from_le_bytes([156, 104, 70, 7])}
-                {u32::from_le_bytes([5, 60, 102, 10])}
-                {u32::from_le_bytes([171, 108, 80, 11])}
-                {u32::from_le_bytes([30, 94, 254, 19])}
-                {u32::from_le_bytes([34, 232, 58, 11])}
-                {u32::from_le_bytes([191, 101, 160, 16])}
-                {u32::from_le_bytes([53, 186, 189, 25])}
-                {u32::from_le_bytes([83, 33, 154, 8])}
-
-                { fq12_push_not_montgomery(a) }
-                { fq12_push_not_montgomery(b) } // fp12_one
-                { hinted_mul.clone() }
-                { Fq6::toaltstack() }
-                
-                { hash_fp12()}
-                // bring Hashb to top
-                for i in 0..9 {
-                    OP_DEPTH OP_1SUB OP_ROLL
-                }
-                { Fq::equalverify(0, 1)}
-
-                // bring Hash_c0 to top
-                for i in 0..9 {
-                    OP_DEPTH OP_1SUB OP_ROLL
-                }
-                { Fq6::fromaltstack() }
-                { hash_fp12_with_hints() }
-                { Fq::toaltstack() } // Fq_claimed to altstack
-
-                // hash_a
-                { hash_fp12_192() }
-                for i in 0..9 {
-                    OP_DEPTH OP_1SUB OP_ROLL
-                }
-                { Fq::equalverify(0, 1)}
-
-                {Fq::fromaltstack()} // Fq_claimed from altstack
-                {Fq::equalverify(0, 1)} // SHOULD BE UNEQUAL VERIFY
-                OP_TRUE
-            };
-
-            println!("script len {}", script.len());
-            let exec_result = execute_script(script);
-            assert!(exec_result.success);
-            for i in 0..exec_result.final_stack.len() {
-                println!("{i:3} {:?}", exec_result.final_stack.get(i));
-            }
-            max_stack = max_stack.max(exec_result.stats.max_nb_stack_items);
-            println!("Fq12::mul {} stack", max_stack);
-            
-        }
 
     }
 
