@@ -11,6 +11,7 @@ use bitcoin::ScriptBuf;
 use num_bigint::BigUint;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
+use std::cmp::min;
 use std::fs::File;
 use std::io::{self, Read};
 use crate::{
@@ -724,7 +725,11 @@ fn emulate_nibbles_to_limbs(msg: [u8;64]) -> [u32;9] {
     let mut arr = [0u32; 9];
     for i in 0..exec_result.final_stack.len() {
         let v = exec_result.final_stack.get(i);
-        arr[i] = u32::from_le_bytes(v.try_into().unwrap());
+        let mut w: [u8;4] = [0u8;4];
+        for j in 0..min(v.len(), 4) {
+            w[j] = v[j];
+        }
+        arr[i] = u32::from_le_bytes(w);
     }
     arr
 }
@@ -928,29 +933,8 @@ fn tap_point_ops(sec_key: &str) -> Script {
 
     let bcsize = 6+3;
     let ops_script = script! {
-        // hints
-        // for hint in hints_check_tangent { 
-        //     { hint.push() }
-        // }
-        // for hint in hints_ell_tangent { 
-        //     { hint.push() }
-        // }
-        // for hint in hints_double_line { 
-        //     { hint.push() }
-        // }
-        // for hint in hints_check_chord_q { 
-        //     { hint.push() }
-        // }
-        // for hint in hints_check_chord_t { 
-        //     { hint.push() }
-        // }
-        // for hint in hints_ell_chord { 
-        //     { hint.push() }
-        // }
-        // for hint in hints_add_line { 
-        //     { hint.push() }
-        // }
-
+        // Altstack is empty
+        // View of stack:
         // aux
         // { fq2_push_not_montgomery(alpha_chord)}
         // { fq2_push_not_montgomery(bias_minus_chord)}
@@ -958,16 +942,23 @@ fn tap_point_ops(sec_key: &str) -> Script {
         // { fq2_push_not_montgomery(bias_minus_tangent)}
         // { fq2_push_not_montgomery(t.x) }
         // { fq2_push_not_montgomery(t.y) }
+        // { fq_push_not_montgomery(aux_hash) } // AUX_HASH- not bc
 
         // bit commits
         // { fq_push_not_montgomery(p_dash_x) }
         // { fq_push_not_montgomery(p_dash_y) }
         // { fq2_push_not_montgomery(q.x) }
         // { fq2_push_not_montgomery(q.y) }
-        // { Fq::push_zero() } // hash- not bc
-        // { Fq::push_zero() } // hash
-        // { Fq::push_zero() } // hash
-        
+        // { hash_in } // hash
+        // MOVE_AUX_HASH_HERE
+        // { hash_out_claim } // hash
+       
+        // move aux hash to MOVE_AUX_HASH_HERE
+        {Fq::toaltstack()}
+        {Fq::toaltstack()}
+        {Fq::roll(6)}
+        {Fq::fromaltstack()}
+        {Fq::fromaltstack()}
 
         { Fq2::copy(bcsize+6)} // alpha
         { Fq2::copy(bcsize+6)} // bias
@@ -989,10 +980,6 @@ fn tap_point_ops(sec_key: &str) -> Script {
         { hinted_double_line }
         { Fq2::toaltstack() }
         { Fq2::toaltstack()}
-        // { fq2_push_not_montgomery(tt.y) }
-        // { Fq2::equalverify() }
-        // { fq2_push_not_montgomery(tt.x) }
-        // { Fq2::equalverify() }
 
         { Fq2::roll(bcsize+6) } // alpha tangent drop
         { Fq2::drop() }
@@ -1010,7 +997,7 @@ fn tap_point_ops(sec_key: &str) -> Script {
         { Fq2::fromaltstack() }
         { Fq2::fromaltstack() }
         { Fq2::copy(2)} // t.x
-        { Fq2::toaltstack() }
+        { Fq2::toaltstack() } // t.x to altstack
         { hinted_check_chord_t }
 
 
@@ -1022,8 +1009,8 @@ fn tap_point_ops(sec_key: &str) -> Script {
         { Fq2::roll(4+bcsize+4) } // bias
         { Fq2::roll(6+bcsize+4) } // alpha
         { Fq2::copy(4+4+4+1) } //q.x
-        { Fq2::fromaltstack() }
-        { hinted_add_line }
+        { Fq2::fromaltstack() } // t.x from altstack
+        { hinted_add_line } // alpha, bias chord consumed
 
         { Fq2::toaltstack() }//R
         { Fq2::toaltstack() }
@@ -1035,16 +1022,23 @@ fn tap_point_ops(sec_key: &str) -> Script {
         { Fq::toaltstack() } //hashes
         { Fq::toaltstack() }
         { Fq::toaltstack() }
-        { Fq2::drop() }
-        { Fq2::drop() }
-        { Fq2::drop() }
+        { Fq2::drop() } // drop Qy
+        { Fq2::drop() } // drop Qx
+        { Fq::drop() } // drop Py
+        { Fq::drop() } // drop Px
+
+        // Altstack: [dbl_le, R, add_le, hash_out, hash_in, hash_inaux]
+        // Stack: [t]
     };
 
+
     let hash_script = script!{
+
         //T
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
+        { Fq::toaltstack() } 
+        { Fq::toaltstack() } 
+        { Fq::toaltstack() } 
+
         {unpack_limbs_to_nibbles()} // 0
         { Fq::fromaltstack()}
         {unpack_limbs_to_nibbles()}
@@ -1054,19 +1048,23 @@ fn tap_point_ops(sec_key: &str) -> Script {
         {unpack_limbs_to_nibbles()}
         {hash_128b_168k.clone()}
 
-        // fetch 1 hash
-        { Fq::fromaltstack()} // aux_hash: todo, keep at below T
+        { Fq::fromaltstack()} // inaux
         {unpack_limbs_to_nibbles()}
         {hash_64b_75k.clone()}
         {pack_nibbles_to_limbs()}
-        { Fq::fromaltstack()} //input_hash
-        {Fq2::drop()} //{Fq::equalverify(1, 0)}
+        {Fq::fromaltstack()} //input_hash
+        {Fq::equalverify(1, 0)}
 
+
+        // Altstack: [dbl_le, R, add_le, hash_out]
+        // Stack: [t]
         for i in 0..13 {
             {Fq::fromaltstack()}
         }
 
-        // Hash le
+        // Altstack: []
+        // Stack: [hash_out, add_le, R, dbl_le]
+
         { Fq::toaltstack() }
         { Fq::toaltstack() }
         { Fq::toaltstack() }
@@ -1080,7 +1078,7 @@ fn tap_point_ops(sec_key: &str) -> Script {
         {hash_128b_168k.clone()}
         {pack_nibbles_to_limbs()}
         {Fq::toaltstack()}
-        
+ 
         { Fq::toaltstack() }
         { Fq::toaltstack() }
         { Fq::toaltstack() }
@@ -1106,45 +1104,65 @@ fn tap_point_ops(sec_key: &str) -> Script {
         { Fq::fromaltstack()}
         {unpack_limbs_to_nibbles()}
         {hash_128b_168k.clone()}
-        //{nibbles_to_fq()}
+        {pack_nibbles_to_limbs()}
+        {Fq::toaltstack()}
 
-        // bring back hash
-        { Fq::fromaltstack()}
-        { unpack_limbs_to_nibbles()}
-        {hash_64b_75k.clone()}
-        { Fq::fromaltstack()}
-        { unpack_limbs_to_nibbles()}
+        // Altstack: [HD, HR, HA]
+        // Stack: [hash_out]
+        {Fq::fromaltstack()}
+        {Fq::fromaltstack()}
+        {Fq::fromaltstack()}
+        // Altstack: []
+        // Stack: [hash_out, HA, HR, HD]
+        {Fq::roll(2)}
+        // Stack: [hash_out, HR, HD, HA]
+        {Fq::toaltstack()}
+        {unpack_limbs_to_nibbles()}
+        {Fq::fromaltstack()}
+        {unpack_limbs_to_nibbles()}
         {hash_64b_75k.clone()}
         {pack_nibbles_to_limbs()}
 
-        {Fq2::drop()} //{Fq::equalverify(1, 0)}
+        // Altstack: []
+        // Stack: [hash_out, HR, Hle]
+        {Fq::toaltstack()}
+        {unpack_limbs_to_nibbles()}
+        {Fq::fromaltstack()}
+        {unpack_limbs_to_nibbles()}
+        {hash_64b_75k.clone()}
+        {pack_nibbles_to_limbs()}
+        {Fq::equalverify(1, 0)}
     };
 
     let bitcomms_script = script!{
-        {checksig_verify_fq(sec_key)} // hash_a
+        {checksig_verify_fq(sec_key)} // hash_input
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // hash_b
+        {checksig_verify_fq(sec_key)} // hash_root_claim
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // hash_a
+        {checksig_verify_fq(sec_key)} // qdash_y1
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // hash_b
+        {checksig_verify_fq(sec_key)} // qdash_y0
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // hash_a
+        {checksig_verify_fq(sec_key)} // qdash_x1
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // hash_b
+        {checksig_verify_fq(sec_key)} // qdash_x0
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // hash_a
+        {checksig_verify_fq(sec_key)} // pdash_y
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // hash_b
-        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // pdash_x
+
+        // bring back from altstack
+        for _ in 0..7 {
+            {Fq::fromaltstack()}
+        }
     };
 
-    script!{
-        {bitcomms_script}
+    let sc = script!{
+        {bitcomms_script.clone()}
         {ops_script}
         {hash_script}
-        OP_TRUE
-    }
+    };
+    sc
 }
 
 fn hint_point_ops(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine, p:ark_bn254::G1Affine) -> (Vec<Hint>, [ark_bn254::Fq2; 4],[ark_bn254::Fq2; 6]) {
@@ -1221,6 +1239,7 @@ fn hint_point_ops(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine, p:ark_bn254::G
     for hint in hints_add_line { 
         all_qs.push(hint)
     }
+
 
     let aux = [alpha_tangent, bias_minus_tangent, alpha_chord, bias_minus_chord];
     let out = [x, y, c1new, c2new, c1new_2, c2new_2];
@@ -1844,12 +1863,12 @@ mod test {
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let point_ops_tapscript = tap_point_ops(sec_key_for_bitcomms);
 
-        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
         let t = ark_bn254::G2Affine::rand(&mut prng);
         let q = ark_bn254::G2Affine::rand(&mut prng);
-        let p = ark_bn254::g1::G1Affine::rand(&mut prng);
+        let p: ark_ec::short_weierstrass::Affine<ark_bn254::g1::Config> = ark_bn254::g1::G1Affine::rand(&mut prng);
 
-        let (hints, aux, out) = hint_point_ops(t, q, p);
+        let (tmul_hints, aux, out) = hint_point_ops(t, q, p);
         let [alpha_tangent, bias_minus_tangent, alpha_chord, bias_minus_chord] = aux;
         let [new_tx, new_ty, dbl_le0, dbl_le1, add_le0, add_le1] = out;
 
@@ -1871,8 +1890,8 @@ mod test {
         let hash_input = emulate_extern_hash_nibbles(vec![hash_t, [2u8;64]]);  
 
         let simulate_stack_input = script!{
-            // hints
-            for hint in hints { 
+            // tmul_hints
+            for hint in tmul_hints { 
                 { hint.push() }
             }
             // aux
@@ -1883,7 +1902,11 @@ mod test {
             { fq2_push_not_montgomery(t.x) }
             { fq2_push_not_montgomery(t.y) }
 
-            // bit commits
+            for i in 0..aux_hash_le.len() {
+                {aux_hash_le[i]}
+            }
+
+            // bit commits raw
             {winternitz_compact::sign(sec_key_for_bitcomms, pdash_x)}
             {winternitz_compact::sign(sec_key_for_bitcomms, pdash_y)}
             {winternitz_compact::sign(sec_key_for_bitcomms, qdash_x0)}
@@ -1891,9 +1914,7 @@ mod test {
             {winternitz_compact::sign(sec_key_for_bitcomms, qdash_y0)}
             {winternitz_compact::sign(sec_key_for_bitcomms, qdash_y1)}
 
-            for i in 0..aux_hash_le.len() {
-                {aux_hash_le[i]}
-            }
+            // bit commits hashes
             {winternitz_compact::sign(sec_key_for_bitcomms, hash_input)}
             {winternitz_compact::sign(sec_key_for_bitcomms, hash_root_claim)}
         };
@@ -1901,6 +1922,7 @@ mod test {
         let script = script!{
             {simulate_stack_input}
             {point_ops_tapscript}
+            OP_TRUE
         };
 
         let res = execute_script(script);
