@@ -4,7 +4,7 @@ use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq_
 // utils for push fields into stack
 use crate::pseudo::NMUL;
 use crate::signatures::winternitz_compact::checksig_verify_fq;
-use ark_bn254::{G2Affine};
+use ark_bn254::{G1Affine, G2Affine};
 use ark_ff::{AdditiveGroup, Field, UniformRand, Zero};
 use bitcoin::opcodes::OP_TRUE;
 use bitcoin::ScriptBuf;
@@ -635,7 +635,7 @@ fn hash_fp4() -> Script {
 }
 
 // msg to nibbles
-fn emulate_extern_hash_fps(msgs: Vec<ark_bn254::Fq>) -> [u8; 64] {
+fn emulate_extern_hash_fps(msgs: Vec<ark_bn254::Fq>, mode: bool) -> [u8; 64] {
     assert!(msgs.len() == 4 || msgs.len() == 2 || msgs.len() == 12);
     let scr = script!{
         for i in 0..msgs.len() {
@@ -644,7 +644,11 @@ fn emulate_extern_hash_fps(msgs: Vec<ark_bn254::Fq>) -> [u8; 64] {
         if msgs.len() == 4 {
             {hash_fp4()}
         } else if msgs.len() == 12 {
-            {hash_fp12()}
+            if mode {
+                {hash_fp12()}
+            } else {
+                {hash_fp12_192()}
+            }
         } else if msgs.len() == 2 {
             {hash_fp2()}
         }
@@ -884,7 +888,7 @@ pub fn hash_fp12_with_hints() -> Script {
 
 
 
-// Taps
+// SQUARING
 fn hints_squaring(a: ark_bn254::Fq12)-> Vec<Hint> {
     let (_, hints) = Fq12::hinted_square(a);
     hints
@@ -916,6 +920,7 @@ fn tap_squaring(sec_key: &str)-> Script {
     sc
 }
 
+// POINT OPS
 fn tap_point_ops(sec_key: &str) -> Script {
 
     let (hinted_double_line, _) = new_hinted_affine_double_line(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
@@ -1161,6 +1166,7 @@ fn tap_point_ops(sec_key: &str) -> Script {
         {bitcomms_script.clone()}
         {ops_script}
         {hash_script}
+        OP_TRUE
     };
     sc
 }
@@ -1246,138 +1252,261 @@ fn hint_point_ops(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine, p:ark_bn254::G
     (all_qs, aux, out)
 }
 
+// DOUBLE EVAL
+fn hint_double_eval_mul_for_fixed_Qs(t2: G2Affine, t3: G2Affine, p2: G1Affine, p3: G1Affine) -> (Vec<Hint>, (G2Affine, G2Affine), ark_bn254::Fq12) {
+    // First
+    let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
+    let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
+    let mut alpha_t2 = t2.x.square();
+    alpha_t2 /= t2.y;
+    alpha_t2.mul_assign_by_fp(&three_div_two);
+    let bias_t2 = alpha_t2 * t2.x - t2.y;
+    let x2 = alpha_t2.square() - t2.x.double();
+    let y2 = bias_t2 - alpha_t2 * x2;
+    let mut c2x = alpha_t2;
+    c2x.mul_assign_by_fp(&p2.x);
+    let mut c2y = bias_t2;
+    c2y.mul_assign_by_fp(&p2.y);
+    let mut f = ark_bn254::Fq12::zero();
+    f.c0.c0 = ark_bn254::Fq2::one(); // 0
+    f.c1.c0 = c2x; // 3
+    f.c1.c1 = c2y; // 4
+    
+    // Second
+    let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
+    let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
+    let mut alpha_t3 = t3.x.square();
+    alpha_t3 /= t3.y;
+    alpha_t3.mul_assign_by_fp(&three_div_two);
+    let bias_t3 = alpha_t3 * t3.x - t3.y;
+    let x3 = alpha_t3.square() - t3.x.double();
+    let y3 = bias_t3 - alpha_t3 * x3;
+    let mut c3x = alpha_t3;
+    c3x.mul_assign_by_fp(&p3.x);
+    let mut c3y = bias_t3;
+    c3y.mul_assign_by_fp(&p3.y);
 
-fn tap_sparse_muls() -> Vec<Script> {
-    // take fixed Qs as input vkY and vk_del
-    let mut prng = ChaCha20Rng::seed_from_u64(0);
-    let q_vk_g = ark_bn254::G2Affine::rand(&mut prng);
-    let q_vk_del = ark_bn254::G2Affine::rand(&mut prng);
-    // take T4 as auxiliary input
-    let t2 = q_vk_g; // initial assignment
-    let t3 = q_vk_del;
+    let mut f1 = f;
+    f1.mul_by_034(&ark_bn254::Fq2::ONE, &c3x, &c3y);
 
-    fn sparse_mul_for_doubling(t2: G2Affine, t3: G2Affine) -> (Script, (G2Affine, G2Affine)) {
-        let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
-        let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
-        let mut alpha_t2 = t2.x.square();
-        alpha_t2 /= t2.y;
-        alpha_t2.mul_assign_by_fp(&three_div_two);
-        let bias_t2 = alpha_t2 * t2.x - t2.y;
-        let x2 = alpha_t2.square() - t2.x.double();
-        let y2 = bias_t2 - alpha_t2 * x2;
-        let (hinted_ell_t2, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::ONE,ark_bn254::Fq::ONE, alpha_t2, bias_t2);
-        
-        let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
-        let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
-        let mut alpha_t3 = t3.x.square();
-        alpha_t3 /= t3.y;
-        alpha_t3.mul_assign_by_fp(&three_div_two);
-        let bias_t3 = alpha_t3 * t3.x - t3.y;
-        let x3 = alpha_t3.square() - t3.x.double();
-        let y3 = bias_t3 - alpha_t3 * x3;
-        let (hinted_ell_t3, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::ONE,ark_bn254::Fq::ONE, alpha_t2, bias_t2);
-        
-        let (sparse_dense_mul, _) = Fq12::hinted_mul_by_34(ark_bn254::Fq12::ONE, ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE);
-        
-        let sc = script!{
-            // P2 
-            // P3
-            {fq2_push_not_montgomery(alpha_t2)} // baked
-            {fq2_push_not_montgomery(bias_t2)}
-            {fq2_push_not_montgomery(alpha_t3)}
-            {fq2_push_not_montgomery(bias_t3)}
-            { Fq2::roll(6) } // P3
-            { hinted_ell_t3 }
-            {Fq2::toaltstack()}
-            {Fq2::toaltstack()}
-            { Fq2::roll(4) }
-            { hinted_ell_t2 }
-            {Fq2::toaltstack()}
-            {Fq2::toaltstack()}
+    let mut hints = vec![];
+    let (_, hint_ell_t2) = new_hinted_ell_by_constant_affine(p2.x, p2.y, alpha_t2, bias_t2);
+    let (_, hint_ell_t3) = new_hinted_ell_by_constant_affine(p3.x, p3.y, alpha_t3, bias_t3);
+    let (_, hint_sparse_dense_mul) = Fq12::hinted_mul_by_34(f, c3x, c3y);
 
-            // sparse fq12
-            {Fq2::push_one()} // 0
-            {Fq2::push_zero()}
-            {Fq2::push_zero()}
-            {Fq2::fromaltstack()} // 3
-            {Fq2::fromaltstack()} // 4
-            {Fq2::push_zero()}
-            // sparse fp12
-            {Fq2::fromaltstack()}
-            {Fq2::fromaltstack()}
-            {sparse_dense_mul}
-        };
-        (sc, (G2Affine::new(x2, y2), G2Affine::new(x3, y3)))
+    for hint in hint_ell_t3 {
+        hints.push(hint);
     }
-
-    fn sparse_mul_for_addition(t2: G2Affine, t3: G2Affine, q2: G2Affine, q3: G2Affine) -> (Script, (G2Affine, G2Affine)) {
-        let alpha_t2 = (t2.y - q2.y) / (t2.x - q2.x);
-        let bias_t2 = alpha_t2 * t2.x - t2.y;
-        let x2 = alpha_t2.square() - t2.x - q2.x;
-        let y2 = bias_t2 - alpha_t2 * x2;
-        let (hinted_ell_t2, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::ONE,ark_bn254::Fq::ONE, alpha_t2, bias_t2);
-
-        let alpha_t3 = (t3.y - q3.y) / (t3.x - q3.x);
-        let bias_t3 = alpha_t3 * t3.x - t3.y;
-        let x3 = alpha_t3.square() - t3.x - q3.x;
-        let y3 = bias_t3 - alpha_t3 * x3;
-        let (hinted_ell_t3, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::ONE,ark_bn254::Fq::ONE, alpha_t3, bias_t3);
-        
-        let (sparse_dense_mul, _) = Fq12::hinted_mul_by_34(ark_bn254::Fq12::ONE, ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE);
-        
-        let sc = script!{
-            // P2 
-            // P3
-            {fq2_push_not_montgomery(alpha_t2)}
-            {fq2_push_not_montgomery(bias_t2)}
-            {fq2_push_not_montgomery(alpha_t3)}
-            {fq2_push_not_montgomery(bias_t3)}
-            { Fq2::roll(6) } // P3
-            { hinted_ell_t3 }
-            {Fq2::toaltstack()}
-            {Fq2::toaltstack()}
-            { Fq2::roll(4) }
-            { hinted_ell_t2 }
-            {Fq2::toaltstack()}
-            {Fq2::toaltstack()}
-
-            // sparse fq12
-            {Fq2::push_one()} // 0
-            {Fq2::push_zero()}
-            {Fq2::push_zero()}
-            {Fq2::fromaltstack()} // 3
-            {Fq2::fromaltstack()} // 4
-            {Fq2::push_zero()}
-            // sparse fp12
-            {Fq2::fromaltstack()}
-            {Fq2::fromaltstack()}
-            {sparse_dense_mul}
-        };
-        (sc, (G2Affine::new(x2, y2), G2Affine::new(x3, y3)))
+    for hint in hint_ell_t2 {
+        hints.push(hint);
     }
+    for hint in hint_sparse_dense_mul {
+        hints.push(hint);
+    }
+    (hints, (G2Affine::new(x2, y2), G2Affine::new(x3, y3)), f1)
+}
 
-    let ate_loop_count: Vec<i8> = vec![
-        0, 0, 0, 1, 0, 1, 0, -1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, -1, 0, 0, 0, 1, 0, -1, 0, 0,
-        0, 0, -1, 0, 0, 1, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 1, 0, -1, 0, 0, 0, -1,
-        0, -1, 0, 0, 0, 1, 0, 1, 1,
-    ];
+fn tap_double_eval_mul_for_fixed_Qs(sec_key: &str, t2: G2Affine, t3: G2Affine) -> Script {
+    // First
+    let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
+    let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
+    let mut alpha_t2 = t2.x.square();
+    alpha_t2 /= t2.y;
+    alpha_t2.mul_assign_by_fp(&three_div_two);
+    let bias_t2 = alpha_t2 * t2.x - t2.y;
 
-    let mut nt2 = t2.clone();
-    let mut nt3 = t3.clone();
-    let mut scripts = vec![];
-    let mut scr: Script = script!();
-    for bit in ate_loop_count.iter().rev().skip(1) {
-        (scr, (nt2, nt3)) = sparse_mul_for_doubling(nt2, nt3);
-        scripts.push(scr);
-        if *bit == 1 {
-            (scr, (nt2, nt3)) = sparse_mul_for_addition(nt2, nt3, q_vk_g, q_vk_del);
-            scripts.push(scr);
-        } else if *bit == -1 {
-            (scr, (nt2, nt3)) = sparse_mul_for_addition(nt2, nt3, -q_vk_g, -q_vk_del);
-            scripts.push(scr);
+    // Second
+    let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
+    let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
+    let mut alpha_t3 = t3.x.square();
+    alpha_t3 /= t3.y;
+    alpha_t3.mul_assign_by_fp(&three_div_two);
+    let bias_t3 = alpha_t3 * t3.x - t3.y;
+
+    let (hinted_ell_t2,_) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::one(), ark_bn254::Fq::one(), alpha_t2, bias_t2);
+    let (hinted_ell_t3,_) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::one(), ark_bn254::Fq::one(), alpha_t2, bias_t2);
+    let (hinted_sparse_dense_mul,_) = Fq12::hinted_mul_by_34(ark_bn254::Fq12::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+    
+    let ops_scr = script!{
+        // tmul hints
+        // Bitcommits:
+        // claimed_fp12_output
+        // P2 
+        // P3
+        {fq2_push_not_montgomery(alpha_t2)} // baked
+        {fq2_push_not_montgomery(bias_t2)}
+        {fq2_push_not_montgomery(alpha_t3)}
+        {fq2_push_not_montgomery(bias_t3)}
+        
+        { Fq2::roll(8) } // P3
+        { hinted_ell_t3 }
+        {Fq2::toaltstack()} // c4
+        {Fq2::toaltstack()} // c3
+
+        { Fq2::roll(4) } // P2
+        { hinted_ell_t2 }
+        {Fq2::toaltstack()} // c4
+        {Fq2::toaltstack()} // c3
+
+        //insert fp12
+        {fq2_push_not_montgomery(ark_bn254::Fq2::one())} // f0
+        {fq2_push_not_montgomery(ark_bn254::Fq2::zero())} // f1
+        {fq2_push_not_montgomery(ark_bn254::Fq2::zero())} // f2
+        {Fq2::fromaltstack()} // f3
+        {Fq2::fromaltstack()} // f4
+        {fq2_push_not_montgomery(ark_bn254::Fq2::zero())} // f5
+
+        {Fq2::fromaltstack()} // c3
+        {Fq2::fromaltstack()} // c4
+
+        {hinted_sparse_dense_mul}
+    };
+
+    let bitcomms_script = script!{
+        {checksig_verify_fq(sec_key)} // P3y
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // P3x
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // P2y
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // P2x
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // bhash
+        for _ in 0..4 {
+            {Fq::fromaltstack()}
         }
+        // Stack: [bhash, P2x, P2y, P3x, P3y]
+    };
+    let hash_scr = script!{
+        { hash_fp12_192() }
+        {Fq::equalverify(1, 0)}
+    };
+    let sc = script!{
+        {bitcomms_script} 
+        {ops_scr}
+        {hash_scr}
+        OP_TRUE
+    };
+    sc
+}
+
+// ADD EVAL
+fn hint_add_eval_mul_for_fixed_Qs(t2: G2Affine, t3: G2Affine, p2: G1Affine, p3: G1Affine, q2: G2Affine, q3: G2Affine) -> (Vec<Hint>, (G2Affine, G2Affine), ark_bn254::Fq12) {
+    // First
+    let alpha_t2 = (t2.y - q2.y) / (t2.x - q2.x);
+    let bias_t2 = alpha_t2 * t2.x - t2.y;
+    let x2 = alpha_t2.square() - t2.x - q2.x;
+    let y2 = bias_t2 - alpha_t2 * x2;
+    let mut c2x = alpha_t2;
+    c2x.mul_assign_by_fp(&p2.x);
+    let mut c2y = bias_t2;
+    c2y.mul_assign_by_fp(&p2.y);
+    let mut f = ark_bn254::Fq12::zero();
+    f.c0.c0 = ark_bn254::Fq2::one(); // 0
+    f.c1.c0 = c2x; // 3
+    f.c1.c1 = c2y; // 4
+    
+    // Second
+    let alpha_t3 = (t3.y - q3.y) / (t3.x - q3.x);
+    let bias_t3 = alpha_t3 * t3.x - t3.y;
+    let x3 = alpha_t3.square() - t3.x - q3.x;
+    let y3 = bias_t3 - alpha_t3 * x3;
+    let mut c3x = alpha_t3;
+    c3x.mul_assign_by_fp(&p3.x);
+    let mut c3y = bias_t3;
+    c3y.mul_assign_by_fp(&p3.y);
+
+    let mut f1 = f;
+    f1.mul_by_034(&ark_bn254::Fq2::ONE, &c3x, &c3y);
+
+    let mut hints = vec![];
+    let (_, hint_ell_t2) = new_hinted_ell_by_constant_affine(p2.x, p2.y, alpha_t2, bias_t2);
+    let (_, hint_ell_t3) = new_hinted_ell_by_constant_affine(p3.x, p3.y, alpha_t3, bias_t3);
+    let (_, hint_sparse_dense_mul) = Fq12::hinted_mul_by_34(f, c3x, c3y);
+
+    for hint in hint_ell_t3 {
+        hints.push(hint);
     }
-    scripts
+    for hint in hint_ell_t2 {
+        hints.push(hint);
+    }
+    for hint in hint_sparse_dense_mul {
+        hints.push(hint);
+    }
+    (hints, (G2Affine::new(x2, y2), G2Affine::new(x3, y3)), f1)
+}
+
+fn tap_add_eval_mul_for_fixed_Qs(sec_key: &str, t2: G2Affine, t3: G2Affine, q2: G2Affine, q3: G2Affine) -> Script {
+    // First
+    let alpha_t2 = (t2.y - q2.y) / (t2.x - q2.x);
+    let bias_t2 = alpha_t2 * t2.x - t2.y;
+    // Second
+    let alpha_t3 = (t3.y - q3.y) / (t3.x - q3.x);
+    let bias_t3 = alpha_t3 * t3.x - t3.y;
+
+    let (hinted_ell_t2,_) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::one(), ark_bn254::Fq::one(), alpha_t2, bias_t2);
+    let (hinted_ell_t3,_) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::one(), ark_bn254::Fq::one(), alpha_t3, bias_t3);
+    let (hinted_sparse_dense_mul,_) = Fq12::hinted_mul_by_34(ark_bn254::Fq12::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+    
+    let ops_scr = script!{
+        // tmul hints
+        // P2 
+        // P3
+        {fq2_push_not_montgomery(alpha_t2)} // baked
+        {fq2_push_not_montgomery(bias_t2)}
+        {fq2_push_not_montgomery(alpha_t3)}
+        {fq2_push_not_montgomery(bias_t3)}
+        
+        { Fq2::roll(8) } // P3
+        { hinted_ell_t3 }
+        {Fq2::toaltstack()} // c4
+        {Fq2::toaltstack()} // c3
+
+        { Fq2::roll(4) } // P2
+        { hinted_ell_t2 }
+        {Fq2::toaltstack()} // c4
+        {Fq2::toaltstack()} // c3
+
+        // insert fp12
+        {fq2_push_not_montgomery(ark_bn254::Fq2::one())} // f0
+        {fq2_push_not_montgomery(ark_bn254::Fq2::zero())} // f1
+        {fq2_push_not_montgomery(ark_bn254::Fq2::zero())} // f2
+        {Fq2::fromaltstack()} // f3
+        {Fq2::fromaltstack()} // f4
+        {fq2_push_not_montgomery(ark_bn254::Fq2::zero())} // f5
+
+        {Fq2::fromaltstack()} // c3
+        {Fq2::fromaltstack()} // c4
+
+        {hinted_sparse_dense_mul}
+    };
+
+    let bitcomms_script = script!{
+        {checksig_verify_fq(sec_key)} // P3y
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // P3x
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // P2y
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // P2x
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // bhash
+        for _ in 0..4 {
+            {Fq::fromaltstack()}
+        }
+        // Stack: [bhash, P2x, P2y, P3x, P3y]
+    };
+    let hash_scr = script!{
+        { hash_fp12_192() }
+        {Fq::equalverify(1, 0)}
+    };
+    let sc = script!{
+        {bitcomms_script}
+        {ops_scr}
+        {hash_scr}
+        OP_TRUE
+    };
+    sc
 }
 
 
@@ -1815,7 +1944,7 @@ mod test {
 
 
     #[test]
-    fn test_bn254_fq12_hinted_square() {
+    fn test_tap_fq12_hinted_square() {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let squaring_tapscript = tap_squaring(&sec_key_for_bitcomms);
@@ -1825,8 +1954,8 @@ mod test {
         let a = ark_bn254::Fq12::rand(&mut prng);
         let b = a.square();
         let hints_square = hints_squaring(a);
-        let a_hash = emulate_extern_hash_fps(vec![a.c0.c0.c0,a.c0.c0.c1, a.c0.c1.c0, a.c0.c1.c1, a.c0.c2.c0,a.c0.c2.c1, a.c1.c0.c0,a.c1.c0.c1, a.c1.c1.c0, a.c1.c1.c1, a.c1.c2.c0,a.c1.c2.c1,]);
-        let b_hash = emulate_extern_hash_fps(vec![b.c0.c0.c0,b.c0.c0.c1, b.c0.c1.c0, b.c0.c1.c1, b.c0.c2.c0,b.c0.c2.c1, b.c1.c0.c0,b.c1.c0.c1, b.c1.c1.c0, b.c1.c1.c1, b.c1.c2.c0,b.c1.c2.c1]);
+        let a_hash = emulate_extern_hash_fps(vec![a.c0.c0.c0,a.c0.c0.c1, a.c0.c1.c0, a.c0.c1.c1, a.c0.c2.c0,a.c0.c2.c1, a.c1.c0.c0,a.c1.c0.c1, a.c1.c1.c0, a.c1.c1.c1, a.c1.c2.c0,a.c1.c2.c1], true);
+        let b_hash = emulate_extern_hash_fps(vec![b.c0.c0.c0,b.c0.c0.c1, b.c0.c1.c0, b.c0.c1.c1, b.c0.c2.c0,b.c0.c2.c1, b.c1.c0.c0,b.c1.c0.c1, b.c1.c1.c0, b.c1.c1.c1, b.c1.c2.c0,b.c1.c2.c1], true);
 
         // data passed to stack in runtime 
         let simulate_stack_input = script!{
@@ -1856,9 +1985,8 @@ mod test {
         println!("stack len {:?} script len {:?}", exec_result.stats.max_nb_stack_items, tap_len);
     }
 
-
     #[test]
-    fn test_hinted_affine_double_add_eval() {
+    fn test_tap_affine_double_add_eval() {
 
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let point_ops_tapscript = tap_point_ops(sec_key_for_bitcomms);
@@ -1866,7 +1994,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let t = ark_bn254::G2Affine::rand(&mut prng);
         let q = ark_bn254::G2Affine::rand(&mut prng);
-        let p: ark_ec::short_weierstrass::Affine<ark_bn254::g1::Config> = ark_bn254::g1::G1Affine::rand(&mut prng);
+        let p = ark_bn254::g1::G1Affine::rand(&mut prng);
 
         let (tmul_hints, aux, out) = hint_point_ops(t, q, p);
         let [alpha_tangent, bias_minus_tangent, alpha_chord, bias_minus_chord] = aux;
@@ -1879,13 +2007,13 @@ mod test {
         let qdash_y0 = emulate_fq_to_nibbles(q.y.c0);
         let qdash_y1 = emulate_fq_to_nibbles(q.y.c1);
 
-        let hash_new_t = emulate_extern_hash_fps(vec![new_tx.c0, new_tx.c1, new_ty.c0, new_ty.c1]);
-        let hash_dbl_le = emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1]);
-        let hash_add_le = emulate_extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1]);
+        let hash_new_t = emulate_extern_hash_fps(vec![new_tx.c0, new_tx.c1, new_ty.c0, new_ty.c1], true);
+        let hash_dbl_le = emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
+        let hash_add_le = emulate_extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
         let hash_le = emulate_extern_hash_nibbles(vec![hash_dbl_le, hash_add_le]);
         let hash_root_claim = emulate_extern_hash_nibbles(vec![hash_new_t, hash_le]);
 
-        let hash_t = emulate_extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1]); 
+        let hash_t = emulate_extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true); 
         let aux_hash_le = emulate_nibbles_to_limbs([2u8;64]); // mock     
         let hash_input = emulate_extern_hash_nibbles(vec![hash_t, [2u8;64]]);  
 
@@ -1922,7 +2050,6 @@ mod test {
         let script = script!{
             {simulate_stack_input}
             {point_ops_tapscript}
-            OP_TRUE
         };
 
         let res = execute_script(script);
@@ -1935,122 +2062,105 @@ mod test {
 
 
     #[test]
-    fn test_hinted_sparse_mul() {
-        // take fixed Qs as input vkY and vk_del
+    fn test_tap_dbl_sparse_muls() {
+
+        // Compile time: Ts are known in advance for fixed G2 pairing
         let mut prng = ChaCha20Rng::seed_from_u64(0);
-        let q_vk_g = ark_bn254::G2Affine::rand(&mut prng);
-        let q_vk_del = ark_bn254::G2Affine::rand(&mut prng);
-        // take var Ps as input: MSM, Groth
-        let p2 = ark_bn254::g1::G1Affine::rand(&mut prng);
-        let p3 = ark_bn254::g1::G1Affine::rand(&mut prng);
-        // take T4 as auxiliary input
-        let t2 = q_vk_g; // initial assignment
-        let t3 = q_vk_del;
+        let t2 = ark_bn254::G2Affine::rand(&mut prng);
+        let t3 = ark_bn254::G2Affine::rand(&mut prng);
+    
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let sparse_dbl_tapscript = tap_double_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms, t2, t3);
+        
+        // Run time
+        let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
+        let p3dash = ark_bn254::g1::G1Affine::rand(&mut prng);
+        let hints = hint_double_eval_mul_for_fixed_Qs( t2, t3, p2dash, p3dash);
+        let (tmul_hints, (_new_t2, _new_t3), b) = hints;
+    
+        let b_hash = emulate_extern_hash_fps(vec![b.c0.c0.c0,b.c0.c0.c1, b.c0.c1.c0, b.c0.c1.c1, b.c0.c2.c0,b.c0.c2.c1, b.c1.c0.c0,b.c1.c0.c1, b.c1.c1.c0, b.c1.c1.c1, b.c1.c2.c0,b.c1.c2.c1], false);
+        let p2dash_x = emulate_fq_to_nibbles(p2dash.x);
+        let p2dash_y = emulate_fq_to_nibbles(p2dash.y);
+        let p3dash_x = emulate_fq_to_nibbles(p3dash.x);
+        let p3dash_y = emulate_fq_to_nibbles(p3dash.y);
 
-        fn sparse_mul_for_doubling(t2: G2Affine, t3: G2Affine) -> (Script, (G2Affine, G2Affine)) {
-            let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
-            let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
-            let mut alpha_t2 = t2.x.square();
-            alpha_t2 /= t2.y;
-            alpha_t2.mul_assign_by_fp(&three_div_two);
-            let bias_t2 = alpha_t2 * t2.x - t2.y;
-            let x2 = alpha_t2.square() - t2.x.double();
-            let y2 = bias_t2 - alpha_t2 * x2;
-            let (hinted_ell_t2, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::ONE,ark_bn254::Fq::ONE, alpha_t2, bias_t2);
-            
-            let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
-            let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
-            let mut alpha_t3 = t3.x.square();
-            alpha_t3 /= t3.y;
-            alpha_t3.mul_assign_by_fp(&three_div_two);
-            let bias_t3 = alpha_t3 * t3.x - t3.y;
-            let x3 = alpha_t3.square() - t3.x.double();
-            let y3 = bias_t3 - alpha_t3 * x3;
-            let (hinted_ell_t3, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::ONE,ark_bn254::Fq::ONE, alpha_t2, bias_t2);
-            
-            let (sparse_dense_mul, _) = Fq12::hinted_mul_by_34(ark_bn254::Fq12::ONE, ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE);
-            
-            let sc = script!{
-                // P2 
-                // P3
-                {fq2_push_not_montgomery(alpha_t2)} // baked
-                {fq2_push_not_montgomery(bias_t2)}
-                {fq2_push_not_montgomery(alpha_t3)}
-                {fq2_push_not_montgomery(bias_t3)}
-                { Fq2::roll(6) } // P3
-                { hinted_ell_t3 }
-                {Fq2::toaltstack()}
-                {Fq2::toaltstack()}
-                { Fq2::roll(4) }
-                { hinted_ell_t2 }
-                {Fq2::toaltstack()}
-                {Fq2::toaltstack()}
+        println!("hints len {:?}", tmul_hints.len());
+        let simulate_stack_input = script!{
+            for hint in tmul_hints { 
+                { hint.push() }
+            }
+            // bit commits
+            { winternitz_compact::sign(sec_key_for_bitcomms, b_hash)}
+            { winternitz_compact::sign(sec_key_for_bitcomms, p2dash_x)}
+            { winternitz_compact::sign(sec_key_for_bitcomms, p2dash_y)}
+            { winternitz_compact::sign(sec_key_for_bitcomms, p3dash_x)}
+            { winternitz_compact::sign(sec_key_for_bitcomms, p3dash_y)}
+        };
+        let tap_len = sparse_dbl_tapscript.len();
 
-                // sparse fq12
-                {Fq2::push_one()} // 0
-                {Fq2::push_zero()}
-                {Fq2::push_zero()}
-                {Fq2::fromaltstack()} // 3
-                {Fq2::fromaltstack()} // 4
-                {Fq2::push_zero()}
-                // sparse fp12
-                {Fq2::fromaltstack()}
-                {Fq2::fromaltstack()}
-                {sparse_dense_mul}
-            };
-            (sc, (G2Affine::new(x2, y2), G2Affine::new(x3, y3)))
-        }
+        let script = script! {
+            { simulate_stack_input }
+            { sparse_dbl_tapscript }
+        };
+
+        let exec_result = execute_script(script);
+
+        assert!(exec_result.success);
+        println!("stack len {:?} script len {:?}", exec_result.stats.max_nb_stack_items, tap_len);
+
+    }    
 
 
-        fn sparse_mul_for_addition(t2: G2Affine, t3: G2Affine, q2: G2Affine, q3: G2Affine) -> (Script, (G2Affine, G2Affine)) {
-            let alpha_t2 = (t2.y - q2.y) / (t2.x - q2.x);
-            let bias_t2 = alpha_t2 * t2.x - t2.y;
-            let x2 = alpha_t2.square() - t2.x - q2.x;
-            let y2 = bias_t2 - alpha_t2 * x2;
-            let (hinted_ell_t2, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::ONE,ark_bn254::Fq::ONE, alpha_t2, bias_t2);
+    #[test]
+    fn test_tap_add_sparse_muls() {
 
-            let alpha_t3 = (t3.y - q3.y) / (t3.x - q3.x);
-            let bias_t3 = alpha_t3 * t3.x - t3.y;
-            let x3 = alpha_t3.square() - t3.x - q3.x;
-            let y3 = bias_t3 - alpha_t3 * x3;
-            let (hinted_ell_t3, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::ONE,ark_bn254::Fq::ONE, alpha_t3, bias_t3);
-            
-            let (sparse_dense_mul, _) = Fq12::hinted_mul_by_34(ark_bn254::Fq12::ONE, ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE);
-            
-            let sc = script!{
-                // P2 
-                // P3
-                {fq2_push_not_montgomery(alpha_t2)}
-                {fq2_push_not_montgomery(bias_t2)}
-                {fq2_push_not_montgomery(alpha_t3)}
-                {fq2_push_not_montgomery(bias_t3)}
-                { Fq2::roll(6) } // P3
-                { hinted_ell_t3 }
-                {Fq2::toaltstack()}
-                {Fq2::toaltstack()}
-                { Fq2::roll(4) }
-                { hinted_ell_t2 }
-                {Fq2::toaltstack()}
-                {Fq2::toaltstack()}
+        // Compile time: Ts are known in advance for fixed G2 pairing
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let t2 = ark_bn254::G2Affine::rand(&mut prng);
+        let t3 = ark_bn254::G2Affine::rand(&mut prng);
+        let q2 = ark_bn254::G2Affine::rand(&mut prng);
+        let q3 = ark_bn254::G2Affine::rand(&mut prng);
+    
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let sparse_add_tapscript = tap_add_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms, t2, t3, q2, q3);
+        
+        // Run time
+        let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
+        let p3dash = ark_bn254::g1::G1Affine::rand(&mut prng);
+        let hints = hint_add_eval_mul_for_fixed_Qs( t2, t3, p2dash, p3dash, q2, q3);
+        let (tmul_hints, (_new_t2, _new_t3), b) = hints;
+    
+        let b_hash = emulate_extern_hash_fps(vec![b.c0.c0.c0,b.c0.c0.c1, b.c0.c1.c0, b.c0.c1.c1, b.c0.c2.c0,b.c0.c2.c1, b.c1.c0.c0,b.c1.c0.c1, b.c1.c1.c0, b.c1.c1.c1, b.c1.c2.c0,b.c1.c2.c1], false);
+        let p2dash_x = emulate_fq_to_nibbles(p2dash.x);
+        let p2dash_y = emulate_fq_to_nibbles(p2dash.y);
+        let p3dash_x = emulate_fq_to_nibbles(p3dash.x);
+        let p3dash_y = emulate_fq_to_nibbles(p3dash.y);
 
-                // sparse fq12
-                {Fq2::push_one()} // 0
-                {Fq2::push_zero()}
-                {Fq2::push_zero()}
-                {Fq2::fromaltstack()} // 3
-                {Fq2::fromaltstack()} // 4
-                {Fq2::push_zero()}
-                // sparse fp12
-                {Fq2::fromaltstack()}
-                {Fq2::fromaltstack()}
-                {sparse_dense_mul}
-            };
-            (sc, (G2Affine::new(x2, y2), G2Affine::new(x3, y3)))
-        }
+        println!("hints len {:?}", tmul_hints.len());
+        let simulate_stack_input = script!{
+            for hint in tmul_hints { 
+                { hint.push() }
+            }
+            // bit commits
+            { winternitz_compact::sign(sec_key_for_bitcomms, b_hash)}
+            { winternitz_compact::sign(sec_key_for_bitcomms, p2dash_x)}
+            { winternitz_compact::sign(sec_key_for_bitcomms, p2dash_y)}
+            { winternitz_compact::sign(sec_key_for_bitcomms, p3dash_x)}
+            { winternitz_compact::sign(sec_key_for_bitcomms, p3dash_y)}
+        };
+        let tap_len = sparse_add_tapscript.len();
 
-        let (scd, (nt2, nt3)) = sparse_mul_for_doubling(t2, t3);
+        let script = script! {
+            { simulate_stack_input }
+            { sparse_add_tapscript }
+        };
 
-        let (sca, (nt2, nt3)) = sparse_mul_for_addition(nt2, nt3, q_vk_g, q_vk_del);
-    }
+        let exec_result = execute_script(script);
 
-}
+        assert!(exec_result.success);
+        println!("stack len {:?} script len {:?}", exec_result.stats.max_nb_stack_items, tap_len);
+
+    }    
+
+
+ }
