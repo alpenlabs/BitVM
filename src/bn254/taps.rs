@@ -6,6 +6,7 @@ use crate::pseudo::NMUL;
 use crate::signatures::winternitz_compact::checksig_verify_fq;
 use ark_bn254::{G1Affine, G2Affine};
 use ark_ff::{AdditiveGroup, Field,  Zero};
+use bitcoin::opcodes::OP_TRUE;
 use bitcoin::ScriptBuf;
 use std::cmp::min;
 use std::fs::File;
@@ -1530,8 +1531,8 @@ fn tap_sparse_dense_mul(sec_key: &str) -> Script {
 
         // Stack [f, dbl_le0, dbl_le1]
         {Fq12::copy(4)}
-        {Fq12::copy(14)}
-        {Fq12::copy(14)}
+        {Fq2::copy(14)}
+        {Fq2::copy(14)}
 
         // Stack [f, dbl_le0, dbl_le1, f, dbl_le0, dbl_le]
         { hinted_script }
@@ -1539,31 +1540,35 @@ fn tap_sparse_dense_mul(sec_key: &str) -> Script {
         // Fq_equal verify
     };
     let hash_script = script!{
-
         {hash_fp12()}
         // Stack [f, dbl_le0, dbl_le1, Hf1]
 
         {Fq2::roll(3)}
         {Fq2::roll(3)}
-        {hash_fp4()}
+        {hash_fp4()} // hash_le
         {Fq::fromaltstack()} // addle
+        // {Fq::fromaltstack()}
         {hash_fp2()}
         {Fq::fromaltstack()} // T_le
+        {Fq::roll(1)}
         {hash_fp2()}
+
         {Fq::fromaltstack()} // hash_in_sparse
         {Fq::equalverify(1, 0)}
 
         {Fq::toaltstack()} // Hf1 to altstack
-        {hash_fp12()} // Hash_in
-        {Fq::fromaltstack()} // Hash_out
-        {Fq::fromaltstack()} // Hash_in
-        {Fq::fromaltstack()} // Hash_out
-
+        {hash_fp12()} // Hash_calcin
+        {Fq::fromaltstack()} // Hash_calcout
+        {Fq::fromaltstack()} // Hash_claimin
+        {Fq::fromaltstack()} // Hash_claimout
+        {Fq::equalverify(3, 1)}
+        {Fq::equalverify(1,0)}
     };
     let scr = script!{
         {bitcomms_script}
         {ops_script}
         {hash_script}
+        OP_TRUE
     };
     scr
 }
@@ -1696,15 +1701,16 @@ mod test {
         // assumes sparse-dense after doubling block, hashing arrangement changes otherwise
         let hash_new_t = [3u8; 64];
         let hash_dbl_le = emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
-        let hash_add_le = [3u8; 64]; // mock
+        let hash_add_le = [4u8; 64]; // mock
         let hash_le = emulate_extern_hash_nibbles(vec![hash_dbl_le, hash_add_le]);
         let hash_sparse_input = emulate_extern_hash_nibbles(vec![hash_new_t, hash_le]);
 
-        let hash_dense_input = emulate_extern_hash_fps(vec![f.c0.c0.c0,f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0,f.c0.c2.c1, f.c1.c0.c0,f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0,f.c1.c2.c1], false);
-        let hash_dense_output = emulate_extern_hash_fps(vec![f1.c0.c0.c0,f1.c0.c0.c1, f1.c0.c1.c0, f1.c0.c1.c1, f1.c0.c2.c0,f1.c0.c2.c1, f1.c1.c0.c0,f1.c1.c0.c1, f1.c1.c1.c0, f1.c1.c1.c1, f1.c1.c2.c0,f1.c1.c2.c1], false);
+        let hash_dense_input = emulate_extern_hash_fps(vec![f.c0.c0.c0,f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0,f.c0.c2.c1, f.c1.c0.c0,f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0,f.c1.c2.c1], true);
+        let hash_dense_output = emulate_extern_hash_fps(vec![f1.c0.c0.c0,f1.c0.c0.c1, f1.c0.c1.c0, f1.c0.c1.c1, f1.c0.c2.c0,f1.c0.c2.c1, f1.c1.c0.c0,f1.c1.c0.c1, f1.c1.c1.c0, f1.c1.c1.c1, f1.c1.c2.c0,f1.c1.c2.c1], true);
         let hash_add_le_limbs = emulate_nibbles_to_limbs(hash_add_le);
-        let hash_dbl_le_limbs = emulate_nibbles_to_limbs(hash_dbl_le);
+        let hash_t_limbs = emulate_nibbles_to_limbs(hash_new_t);
 
+        println!("hints len {:?}", tmul_hints.len());
         // data passed to stack in runtime 
         let simulate_stack_input = script!{
             // quotients for tmul
@@ -1716,18 +1722,17 @@ mod test {
             {fq2_push_not_montgomery(dbl_le0)}
             {fq2_push_not_montgomery(dbl_le1)}
  
-            // aux_hashes
             for i in 0..hash_add_le_limbs.len() {
                 {hash_add_le_limbs[i]}
             }
-            for i in 0..hash_dbl_le_limbs.len() {
-                {hash_dbl_le_limbs[i]}
+            for i in 0..hash_t_limbs.len() {
+                {hash_t_limbs[i]}
             }
-
+            // aux_hashes
             // bit commit hashes
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_dense_output)}
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_dense_input)}
             { winternitz_compact::sign(sec_key_for_bitcomms, hash_sparse_input)}
+            { winternitz_compact::sign(sec_key_for_bitcomms, hash_dense_input)}
+            { winternitz_compact::sign(sec_key_for_bitcomms, hash_dense_output)}
         };
 
 
@@ -1739,8 +1744,10 @@ mod test {
         };
 
         let exec_result = execute_script(script);
-
         assert!(exec_result.success);
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:3} {:?}", exec_result.final_stack.get(i));
+        }
         println!("stack len {:?} script len {:?}", exec_result.stats.max_nb_stack_items, tap_len);
 
     }
