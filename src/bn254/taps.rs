@@ -886,6 +886,7 @@ pub fn hash_fp12_with_hints() -> Script {
     let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
 
     script!{
+        {Fq::toaltstack()} //Hc0
         for _ in 0..=4 {
             {Fq::toaltstack()}
         }
@@ -914,9 +915,7 @@ pub fn hash_fp12_with_hints() -> Script {
         {hash_64b_75k.clone()}
 
         // wrap up
-        for _ in 0..9 {
-            {64 + 8} OP_ROLL
-        }
+        {Fq::fromaltstack()}
         {unpack_limbs_to_nibbles()}
         {hash_64b_75k.clone()}
         {pack_nibbles_to_limbs()}
@@ -1678,53 +1677,63 @@ fn hints_dense_dense_mul0(a: ark_bn254::Fq12, b: ark_bn254::Fq12) -> Vec<Hint> {
 
 // DENSE DENSE MUL ONE
 
-fn tap_dense_dense_mul1() -> Script {
+
+fn tap_dense_dense_mul1(sec_key: &str) -> Script {
     let (hinted_mul, _) = Fq12::hinted_mul_second(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
 
-    let script = script! {
-        // hints
-        // Hash_b
-
-        // Hash_c0
-
-        // Hash_a
-        
-        // Hash_c
-
-        // aux a
-        // aux b
-        { hinted_mul }
-        { Fq6::toaltstack() }
-        
-        { hash_fp12()}
-        // bring Hashb to top
-        for i in 0..9 {
-            OP_DEPTH OP_1SUB OP_ROLL
-        }
-        { Fq::equalverify(0, 1)}
-
-        // bring Hash_c0 to top
-        for i in 0..9 {
-            OP_DEPTH OP_1SUB OP_ROLL
-        }
-        { Fq6::fromaltstack() }
-        { hash_fp12_with_hints() }
-        { Fq::toaltstack() } // Fq_claimed to altstack
-
-        // hash_a
-        { hash_fp12_192() }
-        for i in 0..9 {
-            OP_DEPTH OP_1SUB OP_ROLL
-        }
-        { Fq::equalverify(0, 1)}
-
-        {Fq::fromaltstack()} // Fq_claimed from altstack
-        {Fq::equalverify(0, 1)} // SHOULD BE UNEQUAL VERIFY
-        OP_TRUE
+    let bitcom_scr = script!{
+        {checksig_verify_fq(sec_key)} // g
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // f
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // c
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // c0
+        {Fq::toaltstack()}
     };
-    script  
+
+    let hash_scr = script!{
+        {Fq::fromaltstack()} // Hc0
+        {hash_fp12_with_hints()} // Hc
+        { Fq::toaltstack()}
+
+        {Fq12::roll(12)}
+        { hash_fp12()} // 
+        { Fq::toaltstack()}
+
+        {hash_fp12_192()} // Hash_g
+        { Fq::fromaltstack()} // Hash_f
+        { Fq::fromaltstack()} // Hash_c
+
+        { Fq::fromaltstack()} // Hash_c
+        { Fq::fromaltstack()} // Hash_f
+        { Fq::fromaltstack()} // Hash_g
+
+        {Fq::equalverify(0, 5)}
+        {Fq::equalverify(0, 3)}
+        {Fq::equalverify(0, 1)}
+        
+
+    };
+
+
+    let ops_scr = script! {
+        { hinted_mul }
+    };
+    let scr = script!{
+        {bitcom_scr}
+        {ops_scr}
+        {hash_scr}
+        // OP_TRUE
+    };
+    scr
 }
 
+
+fn hints_dense_dense_mul1(a: ark_bn254::Fq12, b: ark_bn254::Fq12) -> Vec<Hint> {
+    let (_, mul_hints) = Fq12::hinted_mul_second(12, a, 0, b);
+    mul_hints
+}
 
 
 
@@ -1856,6 +1865,60 @@ mod test {
         let script = script! {
             { simulate_stack_input }
             { dense_dense_mul_script }
+        };
+
+        let exec_result = execute_script(script);
+        assert!(exec_result.success);
+        println!("stack len {:?} script len {:?}", exec_result.stats.max_nb_stack_items, tap_len);
+
+    }
+
+
+    #[test]
+    fn test_hinited_dense_dense_mul1() {
+        // compile time
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let dense_dense_mul_script = tap_dense_dense_mul1(&sec_key_for_bitcomms);
+
+        // runtime
+        let mut prng = ChaCha20Rng::seed_from_u64(17);
+        let f = ark_bn254::Fq12::rand(&mut prng);
+        let g = ark_bn254::Fq12::rand(&mut prng);
+        let h = f * g; 
+
+        let tmul_hints = hints_dense_dense_mul1(f, g);
+
+        let hash_f = emulate_extern_hash_fps(vec![f.c0.c0.c0,f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0,f.c0.c2.c1, f.c1.c0.c0,f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0,f.c1.c2.c1], true);
+        let hash_g = emulate_extern_hash_fps(vec![g.c0.c0.c0,g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0,g.c0.c2.c1, g.c1.c0.c0,g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0,g.c1.c2.c1], false);
+
+        let hash_c0 = emulate_extern_hash_fps(vec![h.c0.c0.c0,h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0,h.c0.c2.c1], true);
+        let hash_c = emulate_extern_hash_fps(vec![h.c0.c0.c0,h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0,h.c0.c2.c1, h.c1.c0.c0,h.c1.c0.c1, h.c1.c1.c0, h.c1.c1.c1, h.c1.c2.c0,h.c1.c2.c1], true);
+
+        // data passed to stack in runtime 
+        let simulate_stack_input = script!{
+            // quotients for tmul
+            for hint in tmul_hints { 
+                { hint.push() }
+            }
+            // aux_a
+            {fq12_push_not_montgomery(f)}
+            {fq12_push_not_montgomery(g)}
+ 
+            // aux_hashes
+            // bit commit hashes
+            { winternitz_compact::sign(sec_key_for_bitcomms, hash_c0)}
+            { winternitz_compact::sign(sec_key_for_bitcomms, hash_c)}
+            { winternitz_compact::sign(sec_key_for_bitcomms, hash_f)}
+            { winternitz_compact::sign(sec_key_for_bitcomms, hash_g)}
+        };
+
+
+        let tap_len = dense_dense_mul_script.len();
+
+        let script = script! {
+            { simulate_stack_input }
+            { dense_dense_mul_script }
+            OP_TRUE
         };
 
         let exec_result = execute_script(script);
