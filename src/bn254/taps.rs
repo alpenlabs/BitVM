@@ -1,16 +1,12 @@
 
 use crate::bn254::fq6::Fq6;
-use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq_push_not_montgomery, new_hinted_affine_add_line, new_hinted_affine_double_line, new_hinted_check_line_through_point, new_hinted_ell_by_constant_affine};
+use crate::bn254::utils::{ fq2_push_not_montgomery, fq_push_not_montgomery, new_hinted_affine_add_line, new_hinted_affine_double_line, new_hinted_check_line_through_point, new_hinted_ell_by_constant_affine};
 // utils for push fields into stack
 use crate::pseudo::NMUL;
 use crate::signatures::winternitz_compact::checksig_verify_fq;
 use ark_bn254::{G1Affine, G2Affine};
-use ark_ff::{AdditiveGroup, Field, UniformRand, Zero};
-use bitcoin::opcodes::OP_TRUE;
+use ark_ff::{AdditiveGroup, Field,  Zero};
 use bitcoin::ScriptBuf;
-use num_bigint::BigUint;
-use rand::SeedableRng;
-use rand_chacha::ChaCha20Rng;
 use std::cmp::min;
 use std::fs::File;
 use std::io::{self, Read};
@@ -1510,57 +1506,72 @@ fn tap_add_eval_mul_for_fixed_Qs(sec_key: &str, t2: G2Affine, t3: G2Affine, q2: 
 }
 
 
-fn tap_sparse_dense_mul() -> Script {
+// SPARSE DENSE
+
+fn tap_sparse_dense_mul(sec_key: &str) -> Script {
     let (hinted_script, _) = Fq12::hinted_mul_by_34(ark_bn254::Fq12::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
 
-    let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
 
-
-    let script = script! {
-        // for hint in hints { 
-        //     { hint.push() }
-        // }
-
-        // { fq12_push_not_montgomery(f) }
-        // { fq2_push_not_montgomery(c1new) }
-        // { fq2_push_not_montgomery(c2new) }
-        // { fq12_push_not_montgomery(f) }
-        // { fq2_push_not_montgomery(c1new) }
-        // { fq2_push_not_montgomery(c2new) }
-
-        { hinted_script.clone() }
-
-        for _ in 0..12 { // save claim
-            {Fq::toaltstack()}
-        }
-
-        // hash c1new and c2new
-        {Fq::roll(1)}
-        {Fq::roll(2)}
-        {Fq::roll(3)}
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        {unpack_limbs_to_nibbles()} // 0
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_128b_168k.clone()}
-        {pack_nibbles_to_limbs()}
-
-        {hash_fp12() }
-
-        for _ in 0..12 { // save claim
-            {Fq::fromaltstack()}
-        }
-        { hash_fp12_192() }
-
-        OP_TRUE
+    let bitcomms_script = script!{
+        {checksig_verify_fq(sec_key)} // hash_in1
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // hash_in2
+        {Fq::toaltstack()}
+        {checksig_verify_fq(sec_key)} // hash_out
+        {Fq::toaltstack()}
+        // Stack: [...,hash_out, hash_in1, hash_in2]
     };
-    script
+
+    let ops_script = script! {
+        // Stack: [...,hash_out, hash_in1, hash_in2]
+        // Move aux hashes to alt stack
+        {Fq::toaltstack()}
+        {Fq::toaltstack()}
+
+        // Stack [f, dbl_le0, dbl_le1]
+        {Fq12::copy(4)}
+        {Fq12::copy(14)}
+        {Fq12::copy(14)}
+
+        // Stack [f, dbl_le0, dbl_le1, f, dbl_le0, dbl_le]
+        { hinted_script }
+        // Stack [f, dbl_le0, dbl_le1, f1]
+        // Fq_equal verify
+    };
+    let hash_script = script!{
+
+        {hash_fp12()}
+        // Stack [f, dbl_le0, dbl_le1, Hf1]
+
+        {Fq2::roll(3)}
+        {Fq2::roll(3)}
+        {hash_fp4()}
+        {Fq::fromaltstack()} // addle
+        {hash_fp2()}
+        {Fq::fromaltstack()} // T_le
+        {hash_fp2()}
+        {Fq::fromaltstack()} // hash_in_sparse
+        {Fq::equalverify(1, 0)}
+
+        {Fq::toaltstack()} // Hf1 to altstack
+        {hash_fp12()} // Hash_in
+        {Fq::fromaltstack()} // Hash_out
+        {Fq::fromaltstack()} // Hash_in
+        {Fq::fromaltstack()} // Hash_out
+
+    };
+    let scr = script!{
+        {bitcomms_script}
+        {ops_script}
+        {hash_script}
+    };
+    scr
+}
+
+
+fn hints_sparse_dense_mul(p: ark_bn254::Fq12, c3: ark_bn254::Fq2, c4: ark_bn254::Fq2) -> Vec<Hint> {
+    let (_, hints) = Fq12::hinted_mul_by_34(p, c3, c4);
+    hints
 }
 
 
@@ -1653,100 +1664,85 @@ fn tap_dense_dense_mul1() -> Script {
 #[cfg(test)]
 mod test {
     use super::*;
-    use ark_bn254::G2Affine;
-    use ark_ff::AdditiveGroup;
     use ark_std::UniformRand;
-    use num_traits::One;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
     use crate::bn254::fp254impl::Fp254Impl;
     use crate::bn254::fq::Fq;
     use crate::bn254::fq6::Fq6;
-    use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq_push_not_montgomery, new_hinted_ell_by_constant_affine};
+    use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery};
     use crate::signatures::winternitz_compact;
     use ark_ff::Field;
     use core::ops::Mul;
-    use crate::bn254::{fq12::Fq12, fq2::Fq2};
+    use crate::bn254::{fq12::Fq12};
 
 
     #[test]
     fn test_hinited_sparse_dense_mul() {
+        // compile time
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let sparse_dense_mul_script = tap_sparse_dense_mul(&sec_key_for_bitcomms);
+
+        // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
-        let t = ark_bn254::G2Affine::rand(&mut prng);
-        let _q = ark_bn254::G2Affine::rand(&mut prng);
-        let p = ark_bn254::G1Affine::rand(&mut prng);
         let f = ark_bn254::Fq12::rand(&mut prng);
-        
-        let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
-        let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
-        let mut alpha_tangent = t.x.square();
-        alpha_tangent /= t.y;
-        alpha_tangent.mul_assign_by_fp(&three_div_two);
-        // -bias
-        let bias_minus_tangent = alpha_tangent * t.x - t.y;
-
         let mut f1 = f;
-        let mut c1new = alpha_tangent;
-        c1new.mul_assign_by_fp(&(-p.x / p.y));
+        let dbl_le0 = ark_bn254::Fq2::rand(&mut prng);
+        let dbl_le1 = ark_bn254::Fq2::rand(&mut prng);
+        f1.mul_by_034(&ark_bn254::Fq2::ONE, &dbl_le0, &dbl_le1);
 
-        let mut c2new = bias_minus_tangent;
-        c2new.mul_assign_by_fp(&(p.y.inverse().unwrap()));
+        let tmul_hints = hints_sparse_dense_mul(f, dbl_le0, dbl_le1);
 
-        f1.mul_by_034(&ark_bn254::Fq2::ONE, &c1new, &c2new);
-        let (hinted_script, hints) = Fq12::hinted_mul_by_34(f, c1new, c2new);
+        // assumes sparse-dense after doubling block, hashing arrangement changes otherwise
+        let hash_new_t = [3u8; 64];
+        let hash_dbl_le = emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
+        let hash_add_le = [3u8; 64]; // mock
+        let hash_le = emulate_extern_hash_nibbles(vec![hash_dbl_le, hash_add_le]);
+        let hash_sparse_input = emulate_extern_hash_nibbles(vec![hash_new_t, hash_le]);
 
-        let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
+        let hash_dense_input = emulate_extern_hash_fps(vec![f.c0.c0.c0,f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0,f.c0.c2.c1, f.c1.c0.c0,f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0,f.c1.c2.c1], false);
+        let hash_dense_output = emulate_extern_hash_fps(vec![f1.c0.c0.c0,f1.c0.c0.c1, f1.c0.c1.c0, f1.c0.c1.c1, f1.c0.c2.c0,f1.c0.c2.c1, f1.c1.c0.c0,f1.c1.c0.c1, f1.c1.c1.c0, f1.c1.c1.c1, f1.c1.c2.c0,f1.c1.c2.c1], false);
+        let hash_add_le_limbs = emulate_nibbles_to_limbs(hash_add_le);
+        let hash_dbl_le_limbs = emulate_nibbles_to_limbs(hash_dbl_le);
 
-
-        let script = script! {
-            for hint in hints { 
+        // data passed to stack in runtime 
+        let simulate_stack_input = script!{
+            // quotients for tmul
+            for hint in tmul_hints { 
                 { hint.push() }
             }
-
-            { fq12_push_not_montgomery(f) }
-            { fq2_push_not_montgomery(c1new) }
-            { fq2_push_not_montgomery(c2new) }
-            { fq12_push_not_montgomery(f) }
-            { fq2_push_not_montgomery(c1new) }
-            { fq2_push_not_montgomery(c2new) }
-            { hinted_script.clone() }
-
-            for _ in 0..12 { // save claim
-                {Fq::toaltstack()}
+            // aux_a
+            {fq12_push_not_montgomery(f)}
+            {fq2_push_not_montgomery(dbl_le0)}
+            {fq2_push_not_montgomery(dbl_le1)}
+ 
+            // aux_hashes
+            for i in 0..hash_add_le_limbs.len() {
+                {hash_add_le_limbs[i]}
+            }
+            for i in 0..hash_dbl_le_limbs.len() {
+                {hash_dbl_le_limbs[i]}
             }
 
-            // hash c1new and c2new
-            {Fq::roll(1)}
-            {Fq::roll(2)}
-            {Fq::roll(3)}
-            { Fq::toaltstack() }
-            { Fq::toaltstack() }
-            { Fq::toaltstack() }
-            {unpack_limbs_to_nibbles()} // 0
-            { Fq::fromaltstack()}
-            {unpack_limbs_to_nibbles()}
-            { Fq::fromaltstack()}
-            {unpack_limbs_to_nibbles()}
-            { Fq::fromaltstack()}
-            {unpack_limbs_to_nibbles()}
-            {hash_128b_168k.clone()}
-            {pack_nibbles_to_limbs()}
-
-            {hash_fp12() }
-
-            for _ in 0..12 { // save claim
-                {Fq::fromaltstack()}
-            }
-            { hash_fp12_192() }
-
-            OP_TRUE
+            // bit commit hashes
+            { winternitz_compact::sign(sec_key_for_bitcomms, hash_dense_output)}
+            { winternitz_compact::sign(sec_key_for_bitcomms, hash_dense_input)}
+            { winternitz_compact::sign(sec_key_for_bitcomms, hash_sparse_input)}
         };
-        let len = script.len();
-        let res = execute_script(script);
-        assert!(res.success);
-        let mut max_stack = 0;
-        max_stack = max_stack.max(res.stats.max_nb_stack_items);
-        println!("Fq6::window_mul: {} @ {} stack", len, max_stack);
+
+
+        let tap_len = sparse_dense_mul_script.len();
+
+        let script = script! {
+            { simulate_stack_input }
+            { sparse_dense_mul_script }
+        };
+
+        let exec_result = execute_script(script);
+
+        assert!(exec_result.success);
+        println!("stack len {:?} script len {:?}", exec_result.stats.max_nb_stack_items, tap_len);
+
     }
 
     #[test]
@@ -2136,7 +2132,6 @@ mod test {
         let p3dash_x = emulate_fq_to_nibbles(p3dash.x);
         let p3dash_y = emulate_fq_to_nibbles(p3dash.y);
 
-        println!("hints len {:?}", tmul_hints.len());
         let simulate_stack_input = script!{
             for hint in tmul_hints { 
                 { hint.push() }
