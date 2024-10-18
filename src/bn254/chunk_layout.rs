@@ -1,7 +1,9 @@
 use ark_bn254::{G1Affine, G2Affine};
 
 use crate::bn254::chunk_primitves;
-
+use crate::{
+    treepp::*,
+};
 
 #[derive(Debug)]
 struct TableRow {
@@ -85,7 +87,7 @@ fn config_gen()->Vec<Vec<TableRow>> {
                 Deps_updated.push_str(&dep_updated);
                 Deps_updated.push(',');
             }
-            Deps_updated = Deps_updated.trim_end_matches(',').to_string() + ";";
+            Deps_updated = Deps_updated.trim_end_matches(',').to_string();
             // Add the row to the table
             table.push(TableRow {
                 name,
@@ -108,7 +110,7 @@ fn config_gen()->Vec<Vec<TableRow>> {
         let mut id_counter = 1;
 
         // Initial values for f and T4
-        let mut f_value = String::from("f"); // Starting value of f
+        let mut f_value = String::from("cinv"); // Starting value of f
         let mut T4_value = String::from("T4"); // Starting value of T4
 
         // Define the half and full table structures
@@ -121,7 +123,7 @@ fn config_gen()->Vec<Vec<TableRow>> {
             TableRowTemplate {
                 name: "Dbl",
                 ID_expr: "Sx+1",
-                Deps_expr: "P4,Q4,T4_value;",
+                Deps_expr: "T4_value,Q4,P4;",
             },
             TableRowTemplate {
                 name: "SD1",
@@ -131,7 +133,7 @@ fn config_gen()->Vec<Vec<TableRow>> {
             TableRowTemplate {
                 name: "SS1",
                 ID_expr: "Sx+3",
-                Deps_expr: "P2,P3;",
+                Deps_expr: "P3,P2;",
             },
             TableRowTemplate {
                 name: "DD1",
@@ -166,7 +168,7 @@ fn config_gen()->Vec<Vec<TableRow>> {
                 TableRowTemplate {
                     name: "SS2",
                     ID_expr: "Sx+9",
-                    Deps_expr: "P2,P3;",
+                    Deps_expr: "P3,P2;",
                 },
                 TableRowTemplate {
                     name: "DD5",
@@ -254,14 +256,15 @@ fn config_gen()->Vec<Vec<TableRow>> {
 }
 
 // given a groth16 verification key, generate all of the tapscripts in compile mode
-fn compile(vk: (G1Affine, G2Affine, G2Affine, G2Affine)) {
+fn compile() {
+    // vk: (G1Affine, G2Affine, G2Affine, G2Affine)
     // groth16 is 1 G2 and 2 G1, P4, Q4, 
     // e(A,B)⋅e(vkα ,vkβ)=e(C,vkδ)⋅e(vkγ_ABC,vkγ)
     // e(P4,Q4).e(P1,Q1) = e(P2,Q2).e(P3,Q3)
     // P3 = vk_0 + msm(vk_i, k_i)
 
     // Verification key is P1, Q1, Q2, Q3
-    let (P1, Q1, Q2, Q3) = vk;
+    // let (P1, Q1, Q2, Q3) = vk;
 
     const ATE_LOOP_COUNT: &'static [i8] = &[
          0, 0, 0, 1, 0, 1, 0, -1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, -1, 0, 0, 0, 1, 0, -1, 0, 0, 0,
@@ -276,61 +279,76 @@ fn compile(vk: (G1Affine, G2Affine, G2Affine, G2Affine)) {
     let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
 
-    fn get_index(blk_name: &str, max_id: u32)-> u32 {
+    fn get_index(blk_name: &str, max_id: u32)-> Vec<u32> {
         if blk_name.starts_with("S") {
-            return blk_name[1..].parse::<u32>().ok().unwrap();
+            return vec![blk_name[1..].parse::<u32>().ok().unwrap()];
         } else if blk_name == "P2" {
-            return max_id+1;
+            return vec![max_id+1, max_id+2];
         } else if blk_name == "P3" {
-            return max_id+2;
+            return vec![max_id+3, max_id+4]; 
         } else if blk_name == "P4" {
-            return max_id+3;
+            return vec![max_id+5, max_id+6]; // y,x
         } else if blk_name == "Q4" {
-            return max_id+4;
+            return vec![max_id+7, max_id+8, max_id+9, max_id+10]; // y1,y0,x1,x0
         } else if blk_name == "c" {
-            return max_id+5;
+            return vec![max_id+11];
         } else if blk_name == "cinv" {
-            return max_id+6;
+            return vec![max_id+12];
+        } else if blk_name == "T4" {
+            return vec![max_id+13];
         } else {
             println!("unknown blk_name {:?}", blk_name);
             panic!();
         }
     }
-    // p2, p3, p4, q4, c, cinv
+    fn get_deps(deps: &str, max_id: u32) -> Vec<u32> {
+        let splits: Vec<Vec<u32>>= deps.split(",").into_iter().map(|s| get_index(s, max_id)).collect();
+        splits.into_iter().flatten().collect()
+    }
+
+    fn get_script(blk_name: &str, sec_key_for_bitcomms: &str, self_index: u32, deps_indices: Vec<u32>) -> Script {
+        if blk_name == "Sqr" {
+            chunk_primitves::tap_squaring(sec_key_for_bitcomms, self_index, deps_indices);
+        } else if blk_name == "Dbl" {
+            chunk_primitves::tap_point_ops(sec_key_for_bitcomms, self_index, deps_indices);
+        } else if blk_name == "SD1" {
+            chunk_primitves::tap_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices);
+        } else if blk_name == "SS1" {
+            //chunk_primitves::tap_double_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices);
+        } else if blk_name == "DD1" {
+            chunk_primitves::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices);
+        } else if blk_name == "DD2" {
+            chunk_primitves::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices);
+        } else if blk_name == "DD3" {
+            chunk_primitves::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices);
+        } else if blk_name == "DD4" {
+            chunk_primitves::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices);
+        } else if blk_name == "SD2" {
+            chunk_primitves::tap_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices);
+        } else if blk_name == "SS2" {
+            //chunk_primitves::tap_add_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices);
+        } else if blk_name == "DD5" {
+            chunk_primitves::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices);
+        } else if blk_name == "DD6" {
+            chunk_primitves::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices);
+        } else {
+            println!("unhandled {:?}", blk_name);
+            panic!();
+        }
+        script!{}
+    }
 
     for bit in ATE_LOOP_COUNT.iter().rev().skip(1) {
         let blocks_of_a_loop = &blocks[itr];
         for block in blocks_of_a_loop {
-            if block.name == "Sqr" {
-                // chunk_primitves::tap_squaring(&sec_key_for_bitcomms);
-            } else if block.name == "Dbl" {
-
-            } else if block.name == "SD1" {
-
-            } else if block.name == "SS1" {
-
-            } else if block.name == "DD1" {
-                
-            } else if block.name == "DD2" {
-                
-            } else if block.name == "DD3" {
-                
-            } else if block.name == "DD4" {
-                
-            } else if block.name == "SD2" {
-                
-            } else if block.name == "SS2" {
-
-            } else if block.name == "DD5" {
-                
-            } else if block.name == "DD6" {
-                
-            } else {
-                println!("unhandled {:?}", block.name);
-                panic!();
-            }
+            let self_index = get_index(&block.name, max_id);
+            assert_eq!(self_index.len(), 1);
+            let deps_indices = get_deps(&block.Deps, max_id);
+            let tap = get_script(&block.name, sec_key_for_bitcomms, self_index[0], deps_indices);
+            let selfid = get_index(&block.ID, max_id);
+            let depsid = get_deps(&block.Deps, max_id);
+            println!("{itr} {} ID {:?} deps {:?}", block.name, selfid, depsid);
         }
-        println!("{itr} {:?}", blocks[itr]);
         // squaring
         // point_ops
         // sparse_dense
@@ -345,17 +363,17 @@ fn compile(vk: (G1Affine, G2Affine, G2Affine, G2Affine)) {
 // Sqr;S1;f;
 // Dbl;S2;P4,Q4,T4;
 // SD1;S3;S1,S2;
-// SS1;S4;P2,P3;
+// SS1;S4;P3,P2;
 // DD1;S5;S3,S4;
 // DD2;S6;S3,S4,S5;
 // DD3;S7;S6,c;
 // DD4;S8;S6,c,S7;
 // SD2;S9;S8,S2;
-// SS2;S10;P2,P3;
+// SS2;S10;P3,P2;
 // DD5;S11;S9,S10;
 // DD6;S12;S9,S10,S11;
 
 #[test]
 fn compile_test() {
-   config_gen();
+   compile();
 }

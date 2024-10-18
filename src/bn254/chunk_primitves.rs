@@ -684,13 +684,13 @@ fn hints_squaring(a: ark_bn254::Fq12)-> Vec<Hint> {
     hints
 }
 
-pub(crate) fn tap_squaring(sec_key: &str)-> Script {
-
+pub(crate) fn tap_squaring(sec_key: &str, sec_out: u32, sec_in: Vec<u32>)-> Script {
+    assert_eq!(sec_in.len(), 1);
     let (sq_script, _) = Fq12::hinted_square(ark_bn254::Fq12::ONE);
     let bitcomms_sc = script!{
-        {checksig_verify_fq(sec_key)} // hash_a
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[0]))} // hash_a
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // hash_b
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_out))} // hash_b
         {Fq::toaltstack()}
     };
     let hash_sc  = script!{
@@ -711,8 +711,9 @@ pub(crate) fn tap_squaring(sec_key: &str)-> Script {
 }
 
 // POINT OPS
-fn tap_point_ops(sec_key: &str) -> Script {
+pub(crate) fn tap_point_ops(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
 
+    assert_eq!(sec_in.len(), 6);
     let (hinted_double_line, _) = new_hinted_affine_double_line(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
     let (hinted_check_tangent, _) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
 
@@ -930,21 +931,21 @@ fn tap_point_ops(sec_key: &str) -> Script {
     };
 
     let bitcomms_script = script!{
-        {checksig_verify_fq(sec_key)} // hash_input
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[0]))} // hash_root_claim
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // hash_root_claim
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_out))} // hash_root_claim
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // qdash_y1
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[1]))} // qdash_y1
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // qdash_y0
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[2]))} // qdash_y0
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // qdash_x1
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[3]))} // qdash_x1
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // qdash_x0
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[4]))} // qdash_x0
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // pdash_y
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[5]))} // pdash_y
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // pdash_x
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[6]))} // pdash_x
 
         // bring back from altstack
         for _ in 0..7 {
@@ -1096,7 +1097,7 @@ fn hint_double_eval_mul_for_fixed_Qs(t2: G2Affine, t3: G2Affine, p2: G1Affine, p
     (hints, (G2Affine::new(x2, y2), G2Affine::new(x3, y3)), f1)
 }
 
-fn tap_double_eval_mul_for_fixed_Qs(sec_key: &str, t2: G2Affine, t3: G2Affine) -> Script {
+pub(crate) fn tap_double_eval_mul_for_fixed_Qs(sec_key: &str, t2: G2Affine, t3: G2Affine) -> Script {
     // First
     let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
     let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
@@ -1226,7 +1227,7 @@ fn hint_add_eval_mul_for_fixed_Qs(t2: G2Affine, t3: G2Affine, p2: G1Affine, p3: 
     (hints, (G2Affine::new(x2, y2), G2Affine::new(x3, y3)), f1)
 }
 
-fn tap_add_eval_mul_for_fixed_Qs(sec_key: &str, t2: G2Affine, t3: G2Affine, q2: G2Affine, q3: G2Affine) -> Script {
+pub(crate) fn tap_add_eval_mul_for_fixed_Qs(sec_key: &str, t2: G2Affine, t3: G2Affine, q2: G2Affine, q3: G2Affine) -> Script {
     // First
     let alpha_t2 = (t2.y - q2.y) / (t2.x - q2.x);
     let bias_t2 = alpha_t2 * t2.x - t2.y;
@@ -1302,16 +1303,17 @@ fn tap_add_eval_mul_for_fixed_Qs(sec_key: &str, t2: G2Affine, t3: G2Affine, q2: 
 
 // SPARSE DENSE
 
-fn tap_sparse_dense_mul(sec_key: &str) -> Script {
+pub(crate) fn tap_sparse_dense_mul(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+    assert_eq!(sec_in.len(), 2);
     let (hinted_script, _) = Fq12::hinted_mul_by_34(ark_bn254::Fq12::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
 
 
     let bitcomms_script = script!{
-        {checksig_verify_fq(sec_key)} // hash_in1
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_out))} // hash_out
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // hash_in2
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[0]))} // hash_dense_in
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // hash_out
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[1]))} // hash_sparse_in
         {Fq::toaltstack()}
         // Stack: [...,hash_out, hash_in1, hash_in2]
     };
@@ -1374,15 +1376,16 @@ fn hints_sparse_dense_mul(p: ark_bn254::Fq12, c3: ark_bn254::Fq2, c4: ark_bn254:
 
 // DENSE DENSE MUL ZERO
 
-fn tap_dense_dense_mul0(sec_key: &str) -> Script {
+pub(crate) fn tap_dense_dense_mul0(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+    assert_eq!(sec_in.len(), 2);
     let (hinted_mul, _) = Fq12::hinted_mul_first(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
 
     let bitcom_scr = script!{
-        {checksig_verify_fq(sec_key)} // g
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_out))} // g
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // f
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[0]))} // f // SD or DD output
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // c
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[1]))} // c // SS or c' output
         {Fq::toaltstack()}
     };
 
@@ -1431,17 +1434,18 @@ fn hints_dense_dense_mul0(a: ark_bn254::Fq12, b: ark_bn254::Fq12) -> Vec<Hint> {
 // DENSE DENSE MUL ONE
 
 
-fn tap_dense_dense_mul1(sec_key: &str) -> Script {
+pub(crate) fn tap_dense_dense_mul1(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+    assert_eq!(sec_in.len(), 3);
     let (hinted_mul, _) = Fq12::hinted_mul_second(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
 
     let bitcom_scr = script!{
-        {checksig_verify_fq(sec_key)} // g
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_out))} // g
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // f
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[0]))} // f // SD or DD output
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // c
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[1]))} // c // SS or c' output
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // c0
+        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[2]))} // c // SS or c' output
         {Fq::toaltstack()}
     };
 
@@ -1510,7 +1514,7 @@ mod test {
     fn test_hinited_sparse_dense_mul() {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let sparse_dense_mul_script = tap_sparse_dense_mul(&sec_key_for_bitcomms);
+        let sparse_dense_mul_script = tap_sparse_dense_mul(&sec_key_for_bitcomms, 0, vec![1,2]);
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -1581,7 +1585,7 @@ mod test {
     fn test_hinited_dense_dense_mul0() {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let dense_dense_mul_script = tap_dense_dense_mul0(&sec_key_for_bitcomms);
+        let dense_dense_mul_script = tap_dense_dense_mul0(&sec_key_for_bitcomms, 0, vec![1,2]);
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -1607,9 +1611,9 @@ mod test {
  
             // aux_hashes
             // bit commit hashes
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_c)}
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_f)}
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_g)}
+            { winternitz_compact::sign(sec_key_for_bitcomms, hash_c)} // in2: SS or c' link
+            { winternitz_compact::sign(sec_key_for_bitcomms, hash_f)} // in1: SD or DD1 link
+            { winternitz_compact::sign(sec_key_for_bitcomms, hash_g)} // out
         };
 
 
@@ -1631,7 +1635,7 @@ mod test {
     fn test_hinited_dense_dense_mul1() {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let dense_dense_mul_script = tap_dense_dense_mul1(&sec_key_for_bitcomms);
+        let dense_dense_mul_script = tap_dense_dense_mul1(&sec_key_for_bitcomms,0, vec![1,2,3]);
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(17);
@@ -1659,10 +1663,10 @@ mod test {
  
             // aux_hashes
             // bit commit hashes
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_c0)}
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_c)}
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_f)}
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_g)}
+            { winternitz_compact::sign(sec_key_for_bitcomms, hash_c0)} // in3: links to DD0
+            { winternitz_compact::sign(sec_key_for_bitcomms, hash_c)} // in2: links to SS or c'
+            { winternitz_compact::sign(sec_key_for_bitcomms, hash_f)} // in1: links to SD or DD1 
+            { winternitz_compact::sign(sec_key_for_bitcomms, hash_g)} // out 
         };
 
 
@@ -1685,7 +1689,7 @@ mod test {
     fn test_tap_fq12_hinted_square() {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let squaring_tapscript = tap_squaring(&sec_key_for_bitcomms);
+        let squaring_tapscript = tap_squaring(&sec_key_for_bitcomms, 0, vec![1]);
 
         // run time
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -1727,7 +1731,7 @@ mod test {
     fn test_tap_affine_double_add_eval() {
 
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let point_ops_tapscript = tap_point_ops(sec_key_for_bitcomms);
+        let point_ops_tapscript = tap_point_ops(sec_key_for_bitcomms, 0, vec![1,2,3,4,5,6]);
 
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let t = ark_bn254::G2Affine::rand(&mut prng);
