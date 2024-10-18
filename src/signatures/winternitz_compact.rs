@@ -64,7 +64,7 @@ pub fn public_key(secret_key: &str, digit_index: u32) -> Script {
     // Convert secret_key from hex string to bytes
     let mut secret_i = match hex_decode(secret_key) {
         Ok(bytes) => bytes,
-        Err(_) => panic!("Invalid hex string"),
+        Err(_) => panic!("Invalid hex string {:?}", secret_key),
     };
 
     secret_i.push(digit_index as u8);

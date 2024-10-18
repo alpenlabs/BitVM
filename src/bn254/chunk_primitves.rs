@@ -688,9 +688,9 @@ pub(crate) fn tap_squaring(sec_key: &str, sec_out: u32, sec_in: Vec<u32>)-> Scri
     assert_eq!(sec_in.len(), 1);
     let (sq_script, _) = Fq12::hinted_square(ark_bn254::Fq12::ONE);
     let bitcomms_sc = script!{
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[0]))} // hash_a
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // hash_a
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_out))} // hash_b
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // hash_b
         {Fq::toaltstack()}
     };
     let hash_sc  = script!{
@@ -712,8 +712,8 @@ pub(crate) fn tap_squaring(sec_key: &str, sec_out: u32, sec_in: Vec<u32>)-> Scri
 
 // POINT OPS
 pub(crate) fn tap_point_ops(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
-
-    assert_eq!(sec_in.len(), 6);
+    
+    assert_eq!(sec_in.len(), 7);
     let (hinted_double_line, _) = new_hinted_affine_double_line(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
     let (hinted_check_tangent, _) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
 
@@ -931,21 +931,21 @@ pub(crate) fn tap_point_ops(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Sc
     };
 
     let bitcomms_script = script!{
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[0]))} // hash_root_claim
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // hash_root_claim
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_out))} // hash_root_claim
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // hash_root_claim
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[1]))} // qdash_y1
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // qdash_y1
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[2]))} // qdash_y0
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // qdash_y0
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[3]))} // qdash_x1
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[3]))} // qdash_x1
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[4]))} // qdash_x0
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[4]))} // qdash_x0
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[5]))} // pdash_y
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[5]))} // pdash_y
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[6]))} // pdash_x
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[6]))} // pdash_x
 
         // bring back from altstack
         for _ in 0..7 {
@@ -1309,11 +1309,11 @@ pub(crate) fn tap_sparse_dense_mul(sec_key: &str, sec_out: u32, sec_in: Vec<u32>
 
 
     let bitcomms_script = script!{
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_out))} // hash_out
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // hash_out
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[0]))} // hash_dense_in
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // hash_dense_in
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[1]))} // hash_sparse_in
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // hash_sparse_in
         {Fq::toaltstack()}
         // Stack: [...,hash_out, hash_in1, hash_in2]
     };
@@ -1381,11 +1381,11 @@ pub(crate) fn tap_dense_dense_mul0(sec_key: &str, sec_out: u32, sec_in: Vec<u32>
     let (hinted_mul, _) = Fq12::hinted_mul_first(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
 
     let bitcom_scr = script!{
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_out))} // g
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // g
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[0]))} // f // SD or DD output
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // f // SD or DD output
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[1]))} // c // SS or c' output
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // c // SS or c' output
         {Fq::toaltstack()}
     };
 
@@ -1439,13 +1439,13 @@ pub(crate) fn tap_dense_dense_mul1(sec_key: &str, sec_out: u32, sec_in: Vec<u32>
     let (hinted_mul, _) = Fq12::hinted_mul_second(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
 
     let bitcom_scr = script!{
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_out))} // g
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // g
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[0]))} // f // SD or DD output
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // f // SD or DD output
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[1]))} // c // SS or c' output
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // c // SS or c' output
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{}", sec_key, sec_in[2]))} // c // SS or c' output
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // c // SS or c' output
         {Fq::toaltstack()}
     };
 

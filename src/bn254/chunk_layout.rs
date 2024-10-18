@@ -341,7 +341,7 @@ fn compile() {
     for bit in ATE_LOOP_COUNT.iter().rev().skip(1) {
         let blocks_of_a_loop = &blocks[itr];
         for block in blocks_of_a_loop {
-            let self_index = get_index(&block.name, max_id);
+            let self_index = get_index(&block.ID, max_id);
             assert_eq!(self_index.len(), 1);
             let deps_indices = get_deps(&block.Deps, max_id);
             let tap = get_script(&block.name, sec_key_for_bitcomms, self_index[0], deps_indices);
