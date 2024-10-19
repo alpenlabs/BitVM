@@ -1,4 +1,3 @@
-use ark_bn254::{G1Affine, G2Affine};
 
 use crate::bn254::chunk_primitves;
 use crate::{
@@ -123,7 +122,7 @@ fn config_gen()->Vec<Vec<TableRow>> {
             TableRowTemplate {
                 name: "Dbl",
                 ID_expr: "Sx+1",
-                Deps_expr: "T4_value,Q4,P4;",
+                Deps_expr: "T4_value,P4y,P4x;",
             },
             TableRowTemplate {
                 name: "SD1",
@@ -133,7 +132,7 @@ fn config_gen()->Vec<Vec<TableRow>> {
             TableRowTemplate {
                 name: "SS1",
                 ID_expr: "Sx+3",
-                Deps_expr: "P3,P2;",
+                Deps_expr: "P3y,P3x,P2y,P2x;",
             },
             TableRowTemplate {
                 name: "DD1",
@@ -148,8 +147,37 @@ fn config_gen()->Vec<Vec<TableRow>> {
         ];
 
         let full_table_structure = {
-            let mut v = half_table_structure.clone();
-            v.extend(vec![
+            let v = vec![
+                TableRowTemplate {
+                    name: "Sqr",
+                    ID_expr: "Sx",
+                    Deps_expr: "f_value;",
+                },
+                TableRowTemplate {
+                    name: "DblAdd",
+                    ID_expr: "Sx+1",
+                    Deps_expr: "T4_value,Q4y1,Q4y0,Q4x1,Q4x0,P4y,P4x;",
+                },
+                TableRowTemplate {
+                    name: "SD1",
+                    ID_expr: "Sx+2",
+                    Deps_expr: "Sx,Sx+1;",
+                },
+                TableRowTemplate {
+                    name: "SS1",
+                    ID_expr: "Sx+3",
+                    Deps_expr: "P3y,P3x,P2y,P2x;",
+                },
+                TableRowTemplate {
+                    name: "DD1",
+                    ID_expr: "Sx+4",
+                    Deps_expr: "Sx+2,Sx+3;",
+                },
+                TableRowTemplate {
+                    name: "DD2",
+                    ID_expr: "Sx+5",
+                    Deps_expr: "Sx+2,Sx+3,Sx+4;",
+                },
                 TableRowTemplate {
                     name: "DD3",
                     ID_expr: "Sx+6",
@@ -168,7 +196,7 @@ fn config_gen()->Vec<Vec<TableRow>> {
                 TableRowTemplate {
                     name: "SS2",
                     ID_expr: "Sx+9",
-                    Deps_expr: "P3,P2;",
+                    Deps_expr: "P3y,P3x,P2y,P2x;",
                 },
                 TableRowTemplate {
                     name: "DD5",
@@ -180,7 +208,7 @@ fn config_gen()->Vec<Vec<TableRow>> {
                     ID_expr: "Sx+11",
                     Deps_expr: "Sx+8,Sx+9,Sx+10;",
                 },
-            ]);
+            ];
             v
         };
 
@@ -232,20 +260,20 @@ fn config_gen()->Vec<Vec<TableRow>> {
                 continue;
             }
             // Print the table
-            // println!(
-            //     "\n---\nTable {} ({})",
-            //     table_number,
-            //     if table.len() == 6 {
-            //         "Half Table"
-            //     } else {
-            //         "Full Table"
-            //     }
-            // );
-            // println!("{:<5} | {:<5} | Deps", "name", "ID");
-            // println!("{}", "-".repeat(40));
-            // for row in &table {
-            //     println!("{:<5} | {:<5} | {}", row.name, row.ID, row.Deps);
-            // }
+            println!(
+                "\n---\nTable {} ({})",
+                table_number,
+                if table.len() == 6 {
+                    "Half Table"
+                } else {
+                    "Full Table"
+                }
+            );
+            println!("{:<5} | {:<5} | Deps", "name", "ID");
+            println!("{}", "-".repeat(40));
+            for row in &table {
+                println!("{:<5} | {:<5} | {}", row.name, row.ID, row.Deps);
+            }
             table_number += 1;
             tables.push(table);
         }
@@ -375,5 +403,5 @@ fn compile() {
 
 #[test]
 fn compile_test() {
-   compile();
+   config_gen();
 }

@@ -2,11 +2,9 @@
 use crate::bn254::utils::{ fq2_push_not_montgomery, fq_push_not_montgomery, new_hinted_affine_add_line, new_hinted_affine_double_line, new_hinted_check_line_through_point, new_hinted_ell_by_constant_affine, new_hinted_from_eval_point};
 // utils for push fields into stack
 use crate::pseudo::NMUL;
-use crate::signatures::winternitz::D;
 use crate::signatures::winternitz_compact::checksig_verify_fq;
 use ark_bn254::{G1Affine, G2Affine};
 use ark_ff::{AdditiveGroup, Field,  Zero};
-use bitcoin::opcodes::all::{OP_DROP, OP_DUP, OP_ELSE, OP_ENDIF, OP_IF, OP_NUMEQUAL};
 use bitcoin::ScriptBuf;
 use std::cmp::min;
 use std::fs::File;
@@ -1604,7 +1602,7 @@ fn hint_double_eval_mul_for_fixed_Qs(t2: G2Affine, t3: G2Affine, p2: G1Affine, p
     (hints, (G2Affine::new(x2, y2), G2Affine::new(x3, y3)), f1)
 }
 
-pub(crate) fn tap_double_eval_mul_for_fixed_Qs(sec_key: &str, t2: G2Affine, t3: G2Affine) -> Script {
+pub(crate) fn tap_double_eval_mul_for_fixed_Qs(sec_key: &str,sec_out: u32, sec_in: Vec<u32>, t2: G2Affine, t3: G2Affine) -> Script {
     // First
     let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
     let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
@@ -1661,15 +1659,15 @@ pub(crate) fn tap_double_eval_mul_for_fixed_Qs(sec_key: &str, t2: G2Affine, t3: 
     };
 
     let bitcomms_script = script!{
-        {checksig_verify_fq(sec_key)} // P3y
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // P3y
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // P3x
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // P3x
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // P2y
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // P2y
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // P2x
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[3]))} // P2x
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // bhash
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // bhash
         for _ in 0..4 {
             {Fq::fromaltstack()}
         }
@@ -1734,7 +1732,7 @@ fn hint_add_eval_mul_for_fixed_Qs(t2: G2Affine, t3: G2Affine, p2: G1Affine, p3: 
     (hints, (G2Affine::new(x2, y2), G2Affine::new(x3, y3)), f1)
 }
 
-pub(crate) fn tap_add_eval_mul_for_fixed_Qs(sec_key: &str, t2: G2Affine, t3: G2Affine, q2: G2Affine, q3: G2Affine) -> Script {
+pub(crate) fn tap_add_eval_mul_for_fixed_Qs(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, t2: G2Affine, t3: G2Affine, q2: G2Affine, q3: G2Affine) -> Script {
     // First
     let alpha_t2 = (t2.y - q2.y) / (t2.x - q2.x);
     let bias_t2 = alpha_t2 * t2.x - t2.y;
@@ -1780,15 +1778,15 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs(sec_key: &str, t2: G2Affine, t3: G2A
     };
 
     let bitcomms_script = script!{
-        {checksig_verify_fq(sec_key)} // P3y
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // P3y
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // P3x
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // P3x
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // P2y
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // P2y
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // P2x
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[3]))} // P2x
         {Fq::toaltstack()}
-        {checksig_verify_fq(sec_key)} // bhash
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // bhash
         for _ in 0..4 {
             {Fq::fromaltstack()}
         }
@@ -2540,7 +2538,7 @@ mod test {
         let t3 = ark_bn254::G2Affine::rand(&mut prng);
     
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let sparse_dbl_tapscript = tap_double_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms, t2, t3);
+        let sparse_dbl_tapscript = tap_double_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms,0, vec![1,2,3,4], t2, t3);
         
         // Run time
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
@@ -2560,11 +2558,11 @@ mod test {
                 { hint.push() }
             }
             // bit commits
-            { winternitz_compact::sign(sec_key_for_bitcomms, b_hash)}
-            { winternitz_compact::sign(sec_key_for_bitcomms, p2dash_x)}
-            { winternitz_compact::sign(sec_key_for_bitcomms, p2dash_y)}
-            { winternitz_compact::sign(sec_key_for_bitcomms, p3dash_x)}
-            { winternitz_compact::sign(sec_key_for_bitcomms, p3dash_y)}
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 0), b_hash)}
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 4), p2dash_x)}
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 3), p2dash_y)}
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 2), p3dash_x)}
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 1), p3dash_y)}
         };
         let tap_len = sparse_dbl_tapscript.len();
 
@@ -2592,7 +2590,7 @@ mod test {
         let q3 = ark_bn254::G2Affine::rand(&mut prng);
     
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let sparse_add_tapscript = tap_add_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms, t2, t3, q2, q3);
+        let sparse_add_tapscript = tap_add_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms,0, vec![1,2,3,4], t2, t3, q2, q3);
         
         // Run time
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
@@ -2611,11 +2609,11 @@ mod test {
                 { hint.push() }
             }
             // bit commits
-            { winternitz_compact::sign(sec_key_for_bitcomms, b_hash)}
-            { winternitz_compact::sign(sec_key_for_bitcomms, p2dash_x)}
-            { winternitz_compact::sign(sec_key_for_bitcomms, p2dash_y)}
-            { winternitz_compact::sign(sec_key_for_bitcomms, p3dash_x)}
-            { winternitz_compact::sign(sec_key_for_bitcomms, p3dash_y)}
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 0), b_hash)}
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 4), p2dash_x)}
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 3), p2dash_y)}
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 2), p3dash_x)}
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 1), p3dash_y)}
         };
         let tap_len = sparse_add_tapscript.len();
 
@@ -2625,7 +2623,9 @@ mod test {
         };
 
         let exec_result = execute_script(script);
-
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:} {:?}", exec_result.final_stack.get(i));
+        }
         assert!(exec_result.success);
         println!("stack len {:?} script len {:?}", exec_result.stats.max_nb_stack_items, tap_len);
 
