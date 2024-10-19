@@ -2,6 +2,7 @@
 use crate::bn254::utils::{ fq2_push_not_montgomery, fq_push_not_montgomery, new_hinted_affine_add_line, new_hinted_affine_double_line, new_hinted_check_line_through_point, new_hinted_ell_by_constant_affine, new_hinted_from_eval_point};
 // utils for push fields into stack
 use crate::pseudo::NMUL;
+use crate::signatures::winternitz::D;
 use crate::signatures::winternitz_compact::checksig_verify_fq;
 use ark_bn254::{G1Affine, G2Affine};
 use ark_ff::{AdditiveGroup, Field,  Zero};
@@ -884,7 +885,7 @@ pub(crate) fn tap_point_dbl(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Sc
         {bitcomms_script.clone()}
         {ops_script}
         {hash_script}
-        // OP_TRUE
+        OP_TRUE
     };
     sc
 }
@@ -936,6 +937,241 @@ fn hint_point_dbl(t: ark_bn254::G2Affine, p:ark_bn254::G1Affine) -> (Vec<Hint>, 
 
     let aux = [alpha_tangent, bias_minus_tangent];
     let out = [x, y, c1new, c2new];
+    (all_qs, aux, out)
+}
+
+// POINT ADD
+pub(crate) fn tap_point_add(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+    
+    assert_eq!(sec_in.len(), 7);
+
+    let (hinted_check_chord_t, _) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+    let (hinted_check_chord_q, _) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+    let (hinted_add_line, _) = new_hinted_affine_add_line(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+
+    let (hinted_ell_chord, _) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+
+    let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
+    let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
+
+    let ops_script = script! {
+        // [a,b,tx,ty, aux_in]
+        // [px, py, qx, qy, in, out]
+
+        {Fq::toaltstack()} // hash out
+        {Fq::toaltstack()} // hash in
+        {Fq::roll(6)}
+        {Fq::toaltstack()} // hash aux in
+
+        //[a, b, tx, ty, p, qx, qy]
+        // hinted check chord // t.x, t.y
+        { Fq2::copy(12)} // alpha
+        { Fq2::copy(12)} // bias
+        { Fq2::copy(6) } // q.x
+        { Fq2::copy(6) } // q.y
+        { hinted_check_chord_q }
+        { Fq2::copy(12)} // alpha
+        { Fq2::copy(12)} // bias
+        { Fq2::copy(12)} // tx
+        { Fq2::copy(12)} // ty
+        { hinted_check_chord_t }
+
+
+         //[a, b, tx, ty, p, qx, qy]
+        { Fq2::copy(12) } // alpha
+        { Fq2::copy(12) } // bias
+        { Fq2::roll(8) } // p_dash
+        { hinted_ell_chord }
+        { Fq2::toaltstack() } // le.0
+        { Fq2::toaltstack() } // le.1
+
+        //[a, b, tx, ty, qx, qy]
+        { Fq2::roll(8) } // bias
+        //[a, tx, ty, qx, qy, b]
+        { Fq2::roll(10) } // alpha
+        //[tx, ty, qx, qy, b, a]
+        { Fq2::roll(6) } //q.x
+        //[tx, ty, qy, b, a, qx]
+        { Fq2::copy(10) } // t.x from altstack
+        //[tx, ty, qy, b, a, qx, tx]
+        { hinted_add_line } // alpha, bias chord consumed
+         //[tx, ty, qy, R]
+
+        { Fq2::fromaltstack() } // le
+        { Fq2::fromaltstack() } // le
+        // [tx, ty, qy, Rx, Ry, le0, le1]
+        {Fq2::roll(8)}
+        {Fq2::drop()}
+        // Altstack: [hash_out, hash_in, hash_inaux]
+        // Stack: [tx, ty, Rx, Ry, le0, le1]
+    };
+
+    let hash_script = script!{
+        //Altstack: [hash_out, hash_in, hash_inaux]
+        //Stack: [tx, ty, Rx, Ry, le0, le1]
+        //T
+        {Fq2::roll(10)}
+        {Fq2::roll(10)}
+
+        { Fq::toaltstack() } 
+        { Fq::toaltstack() } 
+        { Fq::toaltstack() } 
+
+        {unpack_limbs_to_nibbles()} // 0
+        { Fq::fromaltstack()}
+        {unpack_limbs_to_nibbles()}
+        { Fq::fromaltstack()}
+        {unpack_limbs_to_nibbles()}
+        { Fq::fromaltstack()}
+        {unpack_limbs_to_nibbles()}
+        {hash_128b_168k.clone()}
+        //{pack_nibbles_to_limbs()}
+        //[T, R, le]
+
+        { Fq::fromaltstack()} // inaux
+        {unpack_limbs_to_nibbles()}
+        {hash_64b_75k.clone()}
+        {pack_nibbles_to_limbs()}
+        {Fq::fromaltstack()} //input_hash
+        {Fq::equalverify(1, 0)}
+
+        // // [HashOut]
+        // // [Rx, Ry, le0, le1]
+
+        {Fq2::roll(6)}
+        {Fq2::roll(6)}
+        // [HashOut]
+        // [le, R]
+        { Fq::toaltstack() }
+        { Fq::toaltstack() }
+        { Fq::toaltstack() }
+        {unpack_limbs_to_nibbles()} // 0
+        { Fq::fromaltstack()}
+        {unpack_limbs_to_nibbles()}
+        { Fq::fromaltstack()}
+        {unpack_limbs_to_nibbles()}
+        { Fq::fromaltstack()}
+        {unpack_limbs_to_nibbles()}
+        {hash_128b_168k.clone()}
+        {pack_nibbles_to_limbs()}
+        {Fq::toaltstack()}
+
+        // // // [HashOut, HashR]
+        // // // [le]
+ 
+        { Fq::toaltstack() }
+        { Fq::toaltstack() }
+        { Fq::toaltstack() }
+        {unpack_limbs_to_nibbles()} // 0
+        { Fq::fromaltstack()}
+        {unpack_limbs_to_nibbles()}
+        { Fq::fromaltstack()}
+        {unpack_limbs_to_nibbles()}
+        { Fq::fromaltstack()}
+        {unpack_limbs_to_nibbles()}
+        {hash_128b_168k.clone()}
+        {pack_nibbles_to_limbs()}
+        // // [HashOut, HashR]
+        // // [Hashle]
+        for _ in 0..64 {
+            {0}
+        }
+        for _ in 0..9 {
+            {64 + 8} OP_ROLL
+        }
+        {unpack_limbs_to_nibbles()}
+        {hash_64b_75k.clone()}
+        {pack_nibbles_to_limbs()}
+
+        {Fq::fromaltstack()}
+        // // [HashOut]
+        // // [Hashle, HashR]
+        {unpack_limbs_to_nibbles()}
+        for _ in 0..9 {
+            {64 + 8} OP_ROLL
+        }
+        {unpack_limbs_to_nibbles()}
+        {hash_64b_75k.clone()}
+        {pack_nibbles_to_limbs()}
+        {Fq::fromaltstack()}
+        {Fq::equalverify(1, 0)}
+    };
+
+    let bitcomms_script = script!{
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // hash_root_claim
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // hash_in
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // qdash_y1
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // qdash_y0
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[3]))} // qdash_x1
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[4]))} // qdash_x0
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[5]))} // pdash_y
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[6]))} // pdash_x
+
+        // bring back from altstack
+        for _ in 0..7 {
+            {Fq::fromaltstack()}
+        }
+        // [px, py, qx0, qx1, qy0, qy1, in, out]
+    };
+
+
+    let sc = script!{
+        {bitcomms_script.clone()}
+        {ops_script}
+        {hash_script}
+        OP_TRUE
+    };
+    sc
+}
+
+fn hint_point_add(tt: ark_bn254::G2Affine, q: ark_bn254::G2Affine, p:ark_bn254::G1Affine) -> (Vec<Hint>, [ark_bn254::Fq2; 2],[ark_bn254::Fq2; 4]) {
+
+    let alpha_chord = (tt.y - q.y) / (tt.x - q.x);
+    // -bias
+    let bias_minus_chord = alpha_chord * tt.x - tt.y;
+    assert_eq!(alpha_chord * tt.x - tt.y, bias_minus_chord);
+
+    let x = alpha_chord.square() - tt.x - q.x;
+    let y = bias_minus_chord - alpha_chord * x;
+    let p_dash_x = -p.x/p.y;
+    let p_dash_y = p.y.inverse().unwrap();
+
+    let (_, hints_check_chord_t) = new_hinted_check_line_through_point( tt.x, alpha_chord, bias_minus_chord);
+    let (_, hints_check_chord_q) = new_hinted_check_line_through_point( q.x, alpha_chord, bias_minus_chord);
+    let (_, hints_add_line) = new_hinted_affine_add_line(tt.x, q.x, alpha_chord, bias_minus_chord);
+
+    let mut c1new_2 = alpha_chord;
+    c1new_2.mul_assign_by_fp(&(-p.x / p.y));
+
+    let mut c2new_2 = bias_minus_chord;
+    c2new_2.mul_assign_by_fp(&(p.y.inverse().unwrap()));
+
+
+    let (_, hints_ell_chord) = new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_chord, bias_minus_chord);
+
+    let mut all_qs = vec![];
+    for hint in hints_check_chord_q { 
+        all_qs.push(hint)
+    }
+    for hint in hints_check_chord_t { 
+        all_qs.push(hint)
+    }
+    for hint in hints_ell_chord { 
+        all_qs.push(hint)
+    }
+    for hint in hints_add_line { 
+        all_qs.push(hint)
+    }
+
+    let aux = [alpha_chord, bias_minus_chord];
+    let out = [x, y, c1new_2, c2new_2];
     (all_qs, aux, out)
 }
 
@@ -1020,7 +1256,7 @@ pub(crate) fn tap_point_ops(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, ate_b
         { hinted_check_chord_q }
         { Fq2::copy(bcsize+6)} // alpha
         { Fq2::copy(bcsize+6)} // bias
-        { Fq2::fromaltstack() }
+        { Fq2::fromaltstack() } // TT
         { Fq2::fromaltstack() }
         { Fq2::copy(2)} // t.x
         { Fq2::toaltstack() } // t.x to altstack
@@ -1848,6 +2084,7 @@ fn hints_precompute_P(p: G1Affine) -> Vec<Hint> {
 mod test {
     use super::*;
     use ark_std::UniformRand;
+    use bitcoin::opcodes::OP_TRUE;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
     use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq6_push_not_montgomery};
@@ -2202,7 +2439,80 @@ mod test {
         let script = script!{
             {simulate_stack_input}
             {point_ops_tapscript}
-            OP_TRUE
+        };
+
+        let res = execute_script(script);
+        assert!(res.success);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+    }
+
+
+    #[test]
+    fn test_tap_affine_add_eval() {
+
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let point_ops_tapscript = tap_point_add(sec_key_for_bitcomms, 0, vec![1,2,3,4,5,6, 7]);
+
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let t = ark_bn254::G2Affine::rand(&mut prng);
+        let q = ark_bn254::G2Affine::rand(&mut prng);
+        let p = ark_bn254::g1::G1Affine::rand(&mut prng);
+
+        let (tmul_hints, aux, out) = hint_point_add(t, q, p);
+        let [ alpha_chord, bias_minus_chord] = aux;
+        let [new_tx, new_ty, add_le0, add_le1] = out;
+
+        let pdash_x = emulate_fq_to_nibbles(-p.x/p.y);
+        let pdash_y = emulate_fq_to_nibbles(p.y.inverse().unwrap());
+        let qdash_x0 = emulate_fq_to_nibbles(q.x.c0);
+        let qdash_x1 = emulate_fq_to_nibbles(q.x.c1);
+        let qdash_y0 = emulate_fq_to_nibbles(q.y.c0);
+        let qdash_y1 = emulate_fq_to_nibbles(q.y.c1);
+
+        let hash_new_t = emulate_extern_hash_fps(vec![new_tx.c0, new_tx.c1, new_ty.c0, new_ty.c1], true);
+        let hash_dbl_le = [0u8; 64];
+        let hash_add_le = emulate_extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
+        let hash_le = emulate_extern_hash_nibbles(vec![hash_dbl_le, hash_add_le]);
+        let hash_root_claim = emulate_extern_hash_nibbles(vec![hash_new_t, hash_le]);
+
+        let hash_t = emulate_extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true); 
+        let aux_hash_le = emulate_nibbles_to_limbs([2u8;64]); // mock     
+        let hash_input = emulate_extern_hash_nibbles(vec![hash_t, [2u8;64]]);  
+
+        let simulate_stack_input = script!{
+            // tmul_hints
+            for hint in tmul_hints { 
+                { hint.push() }
+            }
+            // aux
+            { fq2_push_not_montgomery(alpha_chord)}
+            { fq2_push_not_montgomery(bias_minus_chord)}
+            { fq2_push_not_montgomery(t.x) }
+            { fq2_push_not_montgomery(t.y) }
+
+            for i in 0..aux_hash_le.len() {
+                {aux_hash_le[i]}
+            }
+
+            // bit commits raw
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 7), pdash_x)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 6), pdash_y)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 5), qdash_x0)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 4), qdash_x1)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 3), qdash_y0)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 2), qdash_y1)}
+
+            // bit commits hashes
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 1), hash_input)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 0), hash_root_claim)}
+        };
+        let tap_len = point_ops_tapscript.len();
+        let script = script!{
+            {simulate_stack_input}
+            {point_ops_tapscript}
         };
 
         let res = execute_script(script);
