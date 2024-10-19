@@ -11,6 +11,7 @@ use bitcoin::ScriptBuf;
 use std::cmp::min;
 use std::fs::File;
 use std::io::{self, Read};
+use std::ops::Neg;
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
@@ -941,9 +942,13 @@ fn hint_point_dbl(t: ark_bn254::G2Affine, p:ark_bn254::G1Affine) -> (Vec<Hint>, 
 }
 
 // POINT ADD
-pub(crate) fn tap_point_add(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
-    
+pub(crate) fn tap_point_add(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, ate: i8) -> Script {
+    assert!(ate == 1 || ate == -1);
     assert_eq!(sec_in.len(), 7);
+    let mut ate_unsigned_bit = 1;
+    if ate == -1 {
+        ate_unsigned_bit = 0;
+    }
 
     let (hinted_check_chord_t, _) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
     let (hinted_check_chord_q, _) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
@@ -1097,15 +1102,25 @@ pub(crate) fn tap_point_add(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Sc
         {Fq::equalverify(1, 0)}
     };
 
+    let ate_mul_y_toaltstack = script!{
+        {ate_unsigned_bit}
+        1 OP_NUMEQUAL
+        OP_IF
+            {Fq::toaltstack()}
+        OP_ELSE // -1
+            {Fq::neg(0)}
+            {Fq::toaltstack()}
+        OP_ENDIF
+    };
     let bitcomms_script = script!{
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // hash_root_claim
         {Fq::toaltstack()}
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // hash_in
         {Fq::toaltstack()}
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // qdash_y1
-        {Fq::toaltstack()}
+        {ate_mul_y_toaltstack.clone()}
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // qdash_y0
-        {Fq::toaltstack()}
+        {ate_mul_y_toaltstack}
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[3]))} // qdash_x1
         {Fq::toaltstack()}
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[4]))} // qdash_x0
@@ -1131,21 +1146,26 @@ pub(crate) fn tap_point_add(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Sc
     sc
 }
 
-fn hint_point_add(tt: ark_bn254::G2Affine, q: ark_bn254::G2Affine, p:ark_bn254::G1Affine) -> (Vec<Hint>, [ark_bn254::Fq2; 2],[ark_bn254::Fq2; 4]) {
+fn hint_point_add(tt: ark_bn254::G2Affine, q: ark_bn254::G2Affine, p:ark_bn254::G1Affine, ate: i8) -> (Vec<Hint>, [ark_bn254::Fq2; 2],[ark_bn254::Fq2; 4]) {
 
-    let alpha_chord = (tt.y - q.y) / (tt.x - q.x);
+    let mut qq = q.clone();
+    if ate == -1 {
+        qq = q.neg();
+    }
+
+    let alpha_chord = (tt.y - qq.y) / (tt.x - qq.x);
     // -bias
     let bias_minus_chord = alpha_chord * tt.x - tt.y;
     assert_eq!(alpha_chord * tt.x - tt.y, bias_minus_chord);
 
-    let x = alpha_chord.square() - tt.x - q.x;
+    let x = alpha_chord.square() - tt.x - qq.x;
     let y = bias_minus_chord - alpha_chord * x;
     let p_dash_x = -p.x/p.y;
     let p_dash_y = p.y.inverse().unwrap();
 
     let (_, hints_check_chord_t) = new_hinted_check_line_through_point( tt.x, alpha_chord, bias_minus_chord);
-    let (_, hints_check_chord_q) = new_hinted_check_line_through_point( q.x, alpha_chord, bias_minus_chord);
-    let (_, hints_add_line) = new_hinted_affine_add_line(tt.x, q.x, alpha_chord, bias_minus_chord);
+    let (_, hints_check_chord_q) = new_hinted_check_line_through_point( qq.x, alpha_chord, bias_minus_chord);
+    let (_, hints_add_line) = new_hinted_affine_add_line(tt.x, qq.x, alpha_chord, bias_minus_chord);
 
     let mut c1new_2 = alpha_chord;
     c1new_2.mul_assign_by_fp(&(-p.x / p.y));
@@ -1177,9 +1197,13 @@ fn hint_point_add(tt: ark_bn254::G2Affine, q: ark_bn254::G2Affine, p:ark_bn254::
 
 
 // POINT DBL AND ADD
-pub(crate) fn tap_point_ops(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, ate_bit: u8) -> Script {
-    
+pub(crate) fn tap_point_ops(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, ate: i8) -> Script {
+    assert!(ate == 1 || ate == -1);
     assert_eq!(sec_in.len(), 7);
+    let mut ate_unsigned_bit = 1;
+    if ate == -1 {
+        ate_unsigned_bit = 0;
+    }
     let (hinted_double_line, _) = new_hinted_affine_double_line(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
     let (hinted_check_tangent, _) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
 
@@ -1396,15 +1420,25 @@ pub(crate) fn tap_point_ops(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, ate_b
         {Fq::equalverify(1, 0)}
     };
 
+    let ate_mul_y_toaltstack = script!{
+        {ate_unsigned_bit}
+        1 OP_NUMEQUAL
+        OP_IF
+            {Fq::toaltstack()}
+        OP_ELSE // -1
+            {Fq::neg(0)}
+            {Fq::toaltstack()}
+        OP_ENDIF
+    };
     let bitcomms_script = script!{
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // hash_root_claim
         {Fq::toaltstack()}
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // hash_in
         {Fq::toaltstack()}
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // qdash_y1
-        {Fq::toaltstack()}
+        {ate_mul_y_toaltstack.clone()}
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // qdash_y0
-        {Fq::toaltstack()}
+        {ate_mul_y_toaltstack}
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[3]))} // qdash_x1
         {Fq::toaltstack()}
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[4]))} // qdash_x0
@@ -1419,46 +1453,6 @@ pub(crate) fn tap_point_ops(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, ate_b
         }
     };
 
-    let mod_y_to_altstack = script!{
-        {ate_bit}
-        OP_DUP
-        0 OP_NUMEQUAL
-        OP_IF
-            // drop ate_bit
-            OP_DROP
-            {Fq::drop()}
-            {fq_push_not_montgomery(ark_bn254::Fq::zero())}
-            {Fq::toaltstack()}
-        OP_ELSE
-            OP_DUP
-            1 OP_NUMEQUAL
-            OP_IF
-                // drop ate bit
-                // to altstack
-            OP_ELSE
-                OP_DUP
-                -1 OP_NUMEQUAL
-                OP_IF
-                    // drop ate bit
-                    // negate
-                    // toaltstack
-                OP_ENDIF
-            OP_ENDIF
-        OP_ENDIF
-    };
-    
-    let mod_x_to_altstack = script!{
-        {ate_bit}
-        0 OP_NUMEQUAL
-        OP_IF
-            // drop Fq
-            // q = 0
-            // to altstack
-        OP_ELSE
-            // negate
-            // toaltstack
-        OP_ENDIF
-    };
 
 
     let sc = script!{
@@ -1470,11 +1464,16 @@ pub(crate) fn tap_point_ops(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, ate_b
     sc
 }
 
-fn hint_point_ops(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine, p:ark_bn254::G1Affine) -> (Vec<Hint>, [ark_bn254::Fq2; 4],[ark_bn254::Fq2; 6]) {
+fn hint_point_ops(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine, p:ark_bn254::G1Affine, ate: i8) -> (Vec<Hint>, [ark_bn254::Fq2; 4],[ark_bn254::Fq2; 6]) {
     // let mut prng = ChaCha20Rng::seed_from_u64(0);
     // let t = ark_bn254::G2Affine::rand(&mut prng);
     // let q = ark_bn254::G2Affine::rand(&mut prng);
     // let p = ark_bn254::g1::G1Affine::rand(&mut prng);
+
+    let mut qq = q.clone();
+    if ate == -1 {
+        qq = q.neg();
+    }
 
     let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
     let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
@@ -1491,19 +1490,19 @@ fn hint_point_ops(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine, p:ark_bn254::G
 
     let tt = G2Affine::new(x, y);
 
-    let alpha_chord = (tt.y - q.y) / (tt.x - q.x);
+    let alpha_chord = (tt.y - qq.y) / (tt.x - qq.x);
     // -bias
     let bias_minus_chord = alpha_chord * tt.x - tt.y;
     assert_eq!(alpha_chord * tt.x - tt.y, bias_minus_chord);
 
-    let x = alpha_chord.square() - tt.x - q.x;
+    let x = alpha_chord.square() - tt.x - qq.x;
     let y = bias_minus_chord - alpha_chord * x;
     let p_dash_x = -p.x/p.y;
     let p_dash_y = p.y.inverse().unwrap();
 
     let (_, hints_check_chord_t) = new_hinted_check_line_through_point( tt.x, alpha_chord, bias_minus_chord);
-    let (_, hints_check_chord_q) = new_hinted_check_line_through_point( q.x, alpha_chord, bias_minus_chord);
-    let (_, hints_add_line) = new_hinted_affine_add_line(tt.x, q.x, alpha_chord, bias_minus_chord);
+    let (_, hints_check_chord_q) = new_hinted_check_line_through_point( qq.x, alpha_chord, bias_minus_chord);
+    let (_, hints_add_line) = new_hinted_affine_add_line(tt.x, qq.x, alpha_chord, bias_minus_chord);
 
     // affine mode as well
     let mut c1new = alpha_tangent;
@@ -2313,14 +2312,14 @@ mod test {
     fn test_tap_affine_double_add_eval() {
 
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let point_ops_tapscript = tap_point_ops(sec_key_for_bitcomms, 0, vec![1,2,3,4,5,6], 1);
+        let point_ops_tapscript = tap_point_ops(sec_key_for_bitcomms, 0, vec![1,2,3,4,5,6,7], -1);
 
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let t = ark_bn254::G2Affine::rand(&mut prng);
         let q = ark_bn254::G2Affine::rand(&mut prng);
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
 
-        let (tmul_hints, aux, out) = hint_point_ops(t, q, p);
+        let (tmul_hints, aux, out) = hint_point_ops(t, q, p, -1);
         let [alpha_tangent, bias_minus_tangent, alpha_chord, bias_minus_chord] = aux;
         let [new_tx, new_ty, dbl_le0, dbl_le1, add_le0, add_le1] = out;
 
@@ -2359,16 +2358,16 @@ mod test {
             }
 
             // bit commits raw
-            {winternitz_compact::sign(sec_key_for_bitcomms, pdash_x)}
-            {winternitz_compact::sign(sec_key_for_bitcomms, pdash_y)}
-            {winternitz_compact::sign(sec_key_for_bitcomms, qdash_x0)}
-            {winternitz_compact::sign(sec_key_for_bitcomms, qdash_x1)}
-            {winternitz_compact::sign(sec_key_for_bitcomms, qdash_y0)}
-            {winternitz_compact::sign(sec_key_for_bitcomms, qdash_y1)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 7), pdash_x)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 6), pdash_y)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 5), qdash_x0)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 4), qdash_x1)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 3), qdash_y0)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 2), qdash_y1)}
 
             // bit commits hashes
-            {winternitz_compact::sign(sec_key_for_bitcomms, hash_input)}
-            {winternitz_compact::sign(sec_key_for_bitcomms, hash_root_claim)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 1), hash_input)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 0), hash_root_claim)}
         };
         let tap_len = point_ops_tapscript.len();
         let script = script!{
@@ -2454,14 +2453,14 @@ mod test {
     fn test_tap_affine_add_eval() {
 
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let point_ops_tapscript = tap_point_add(sec_key_for_bitcomms, 0, vec![1,2,3,4,5,6, 7]);
+        let point_ops_tapscript = tap_point_add(sec_key_for_bitcomms, 0, vec![1,2,3,4,5,6, 7], -1);
 
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let t = ark_bn254::G2Affine::rand(&mut prng);
         let q = ark_bn254::G2Affine::rand(&mut prng);
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
 
-        let (tmul_hints, aux, out) = hint_point_add(t, q, p);
+        let (tmul_hints, aux, out) = hint_point_add(t, q, p, -1);
         let [ alpha_chord, bias_minus_chord] = aux;
         let [new_tx, new_ty, add_le0, add_le1] = out;
 
