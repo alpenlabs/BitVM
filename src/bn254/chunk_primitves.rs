@@ -1810,10 +1810,13 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs(sec_key: &str, t2: G2Affine, t3: G2A
 
 // SPARSE DENSE
 
-pub(crate) fn tap_sparse_dense_mul(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn tap_sparse_dense_mul(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, dbl_blk: bool) -> Script {
     assert_eq!(sec_in.len(), 2);
     let (hinted_script, _) = Fq12::hinted_mul_by_34(ark_bn254::Fq12::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
-
+    let mut add = 0;
+    if dbl_blk == false {
+        add = 1;
+    }
 
     let bitcomms_script = script!{
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // hash_out
@@ -1850,6 +1853,11 @@ pub(crate) fn tap_sparse_dense_mul(sec_key: &str, sec_out: u32, sec_in: Vec<u32>
         {hash_fp4()} // hash_le
         {Fq::fromaltstack()} // addle
         // {Fq::fromaltstack()}
+        {add} 1 OP_NUMEQUAL
+        OP_IF
+            {Fq::roll(1)}
+        OP_ENDIF
+ 
         {hash_fp2()}
         {Fq::fromaltstack()} // T_le
         {Fq::roll(1)}
@@ -2095,7 +2103,7 @@ mod test {
     fn test_hinited_sparse_dense_mul() {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let sparse_dense_mul_script = tap_sparse_dense_mul(&sec_key_for_bitcomms, 0, vec![1,2]);
+        let sparse_dense_mul_script = tap_sparse_dense_mul(&sec_key_for_bitcomms, 0, vec![1,2], true);
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -2139,9 +2147,9 @@ mod test {
             }
             // aux_hashes
             // bit commit hashes
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_sparse_input)}
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_dense_input)}
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_dense_output)}
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 2), hash_sparse_input)}
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 1), hash_dense_input)}
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 0), hash_dense_output)}
         };
 
 

@@ -312,7 +312,7 @@ fn compile() {
         } else if blk_name == "Dbl" {
             chunk_primitves::tap_point_ops(sec_key_for_bitcomms, self_index, deps_indices, 0);
         } else if blk_name == "SD1" {
-            chunk_primitves::tap_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices);
+            chunk_primitves::tap_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices, true);
         } else if blk_name == "SS1" {
             //chunk_primitves::tap_double_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices);
         } else if blk_name == "DD1" {
@@ -324,7 +324,7 @@ fn compile() {
         } else if blk_name == "DD4" {
             chunk_primitves::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices);
         } else if blk_name == "SD2" {
-            chunk_primitves::tap_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices);
+            chunk_primitves::tap_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices, false);
         } else if blk_name == "SS2" {
             //chunk_primitves::tap_add_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices);
         } else if blk_name == "DD5" {
