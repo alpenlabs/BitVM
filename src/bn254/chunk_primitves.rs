@@ -1,11 +1,13 @@
 
+use crate::bn254::fq6::Fq6;
 use crate::bn254::utils::{ fq2_push_not_montgomery, fq_push_not_montgomery, new_hinted_affine_add_line, new_hinted_affine_double_line, new_hinted_check_line_through_point, new_hinted_ell_by_constant_affine, new_hinted_from_eval_point};
-// utils for push fields into stack
 use crate::pseudo::NMUL;
 use crate::signatures::winternitz_compact::checksig_verify_fq;
 use ark_bn254::{G1Affine, G2Affine};
-use ark_ff::{AdditiveGroup, Field,  Zero};
+use ark_ff::{AdditiveGroup, Field, UniformRand, Zero};
 use bitcoin::ScriptBuf;
+use rand::SeedableRng;
+use rand_chacha::ChaCha20Rng;
 use std::cmp::min;
 use std::fs::File;
 use std::io::{self, Read};
@@ -689,9 +691,9 @@ pub(crate) fn tap_squaring(sec_key: &str, sec_out: u32, sec_in: Vec<u32>)-> Scri
     assert_eq!(sec_in.len(), 1);
     let (sq_script, _) = Fq12::hinted_square(ark_bn254::Fq12::ONE);
     let bitcomms_sc = script!{
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // hash_a
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // hash_in
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // hash_b
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // hash_out
         {Fq::toaltstack()}
     };
     let hash_sc  = script!{
@@ -1889,10 +1891,13 @@ fn hints_sparse_dense_mul(p: ark_bn254::Fq12, c3: ark_bn254::Fq2, c4: ark_bn254:
 
 // DENSE DENSE MUL ZERO
 
-pub(crate) fn tap_dense_dense_mul0(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn tap_dense_dense_mul0(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, check_is_identity: bool) -> Script {
     assert_eq!(sec_in.len(), 2);
     let (hinted_mul, _) = Fq12::hinted_mul_first(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
-
+    let mut check_id = 1;
+    if !check_is_identity {
+        check_id = 0;
+    }
     let bitcom_scr = script!{
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // g
         {Fq::toaltstack()}
@@ -1927,6 +1932,15 @@ pub(crate) fn tap_dense_dense_mul0(sec_key: &str, sec_out: u32, sec_in: Vec<u32>
 
     let ops_scr = script! {
         { hinted_mul }
+        {check_id} 1 OP_NUMEQUAL
+        OP_IF
+            {Fq6::copy(0)}
+            {fq_push_not_montgomery(ark_bn254::Fq::one())}
+            for _ in 0..5 {
+                {fq_push_not_montgomery(ark_bn254::Fq::zero())}
+            }
+            {Fq6::equalverify()}
+        OP_ENDIF
     };
     let scr = script!{
         {bitcom_scr}
@@ -1947,8 +1961,12 @@ fn hints_dense_dense_mul0(a: ark_bn254::Fq12, b: ark_bn254::Fq12) -> Vec<Hint> {
 // DENSE DENSE MUL ONE
 
 
-pub(crate) fn tap_dense_dense_mul1(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn tap_dense_dense_mul1(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, check_is_identity: bool) -> Script {
     assert_eq!(sec_in.len(), 3);
+    let mut check_id = 1;
+    if !check_is_identity {
+        check_id = 0;
+    }
     let (hinted_mul, _) = Fq12::hinted_mul_second(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
 
     let bitcom_scr = script!{
@@ -1989,6 +2007,14 @@ pub(crate) fn tap_dense_dense_mul1(sec_key: &str, sec_out: u32, sec_in: Vec<u32>
 
     let ops_scr = script! {
         { hinted_mul }
+        {check_id} 1 OP_NUMEQUAL
+        OP_IF
+            {Fq6::copy(0)}
+            for _ in 0..6 {
+                {fq_push_not_montgomery(ark_bn254::Fq::zero())}
+            }
+            {Fq6::equalverify()}
+        OP_ENDIF
     };
     let scr = script!{
         {bitcom_scr}
@@ -2011,7 +2037,7 @@ fn hints_dense_dense_mul1(a: ark_bn254::Fq12, b: ark_bn254::Fq12) -> Vec<Hint> {
 fn tap_hash_c(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
     assert_eq!(sec_in.len(), 12);
     let bitcom_scr = script!{
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // f11
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // f11 MSB
         {Fq::toaltstack()}
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} 
         {Fq::toaltstack()}
@@ -2056,8 +2082,9 @@ fn tap_hash_c(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
 
 // precompute P
 fn tap_precompute_P(sec_key: &str, sec_out: Vec<u32>, sec_in: Vec<u32>) -> Script {
-
-    let (ops_scr, _) =  {new_hinted_from_eval_point(G1Affine::new(ark_bn254::Fq::one(), ark_bn254::Fq::one()))};
+    let mut prng = ChaCha20Rng::seed_from_u64(0); // todo: remove prng use later, pt can be any valid mock data
+    let pt = ark_bn254::G1Affine::rand(&mut prng);
+    let (ops_scr, _) =  {new_hinted_from_eval_point(pt)};
     let bitcomms_script = script!{
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // py
         {Fq::toaltstack()}
@@ -2075,8 +2102,9 @@ fn tap_precompute_P(sec_key: &str, sec_out: Vec<u32>, sec_in: Vec<u32>) -> Scrip
     };
 
     script!{
-        {ops_scr}
         {bitcomms_script}
+        {ops_scr}
+        OP_TRUE
     }
 }
 
@@ -2085,17 +2113,165 @@ fn hints_precompute_P(p: G1Affine) -> Vec<Hint> {
     hints
 }
 
+// hash T4
+fn tap_initT4(sec_key: &str, sec_out: u32, sec_in: Vec<u32>)-> Script {
+    let bitcom_scr = script!{
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // y1
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // y0
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // x1
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[3]))} // x0
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // f_hash
+        for _ in 0..4 {
+            {Fq::fromaltstack()}
+        }
+        // Stack:[f_hash_claim, x0,x1,y0,y1]
+    };
+    let hash_scr = script!{
+        { hash_fp4() }
+        for _ in 0..64 {
+            {0}
+        }
+        {pack_nibbles_to_limbs()}
+        {hash_fp2()}
+        {Fq::equalverify(1, 0)}
+    };
+    let sc = script!{
+        {bitcom_scr}
+        {hash_scr}
+        OP_TRUE
+    };
+
+    sc
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use ark_std::UniformRand;
-    use bitcoin::opcodes::OP_TRUE;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
     use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq6_push_not_montgomery};
     use crate::signatures::winternitz_compact;
     use ark_ff::Field;
 
+    #[test]
+    fn test_tap_hash_c() {
+        // compile time
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let sec_in = vec![1,2,3,4,5,6,7,8,9,10,11,12];
+        let hash_c_scr = tap_hash_c(&sec_key_for_bitcomms, 0, sec_in.clone());
+
+        // runtime
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let f = ark_bn254::Fq12::rand(&mut prng);
+        let f = vec![f.c0.c0.c0,f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0,f.c0.c2.c1, f.c1.c0.c0,f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0,f.c1.c2.c1];
+        let fhash = emulate_extern_hash_fps(f.clone(), false);
+        let simulate_stack_input = script!{
+            // bit commits raw
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 0), fhash)}
+            for i in 0..12 {
+                {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in[11-i]), emulate_fq_to_nibbles(f[i]))}
+            }
+        };
+
+        let tap_len = hash_c_scr.len();
+        let script = script!{
+            {simulate_stack_input}
+            {hash_c_scr}
+        };
+
+        let res = execute_script(script);
+        assert!(res.success);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+        
+    }
+
+
+    #[test]
+    fn test_tap_hash_T4() {
+        // compile time
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let sec_in = vec![1,2,3,4];
+        let hash_c_scr = tap_initT4(&sec_key_for_bitcomms, 0, sec_in.clone());
+
+        // runtime
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let t4 = ark_bn254::G2Affine::rand(&mut prng);
+        let t4hash = emulate_extern_hash_fps(vec![t4.x.c0, t4.x.c1, t4.y.c0, t4.y.c1], false);
+        let t4hash = emulate_extern_hash_nibbles(vec![t4hash, [0u8;64]]);  
+        let simulate_stack_input = script!{
+            // bit commits raw
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 0), t4hash)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in[3]), emulate_fq_to_nibbles(t4.x.c0))}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in[2]), emulate_fq_to_nibbles(t4.x.c1))}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in[1]), emulate_fq_to_nibbles(t4.y.c0))}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in[0]), emulate_fq_to_nibbles(t4.y.c1))}
+        };
+
+        let tap_len = hash_c_scr.len();
+        let script = script!{
+            {simulate_stack_input}
+            {hash_c_scr}
+        };
+
+        let res = execute_script(script);
+       // assert!(res.success);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+        
+    }
+
+
+    #[test]
+    fn test_precompute_P() {
+        // compile time
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let precompute_p = tap_precompute_P(&sec_key_for_bitcomms, vec![0,1], vec![2,3]);
+
+        // runtime
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let p = ark_bn254::g1::G1Affine::rand(&mut prng);
+
+        let pdash_x = emulate_fq_to_nibbles(-p.x/p.y);
+        let pdash_y = emulate_fq_to_nibbles(p.y.inverse().unwrap());
+        let p_x = emulate_fq_to_nibbles(p.x);
+        let p_y = emulate_fq_to_nibbles(p.y);
+        let tmul_hints = hints_precompute_P(p);
+
+        let simulate_stack_input = script!{
+            for hint in tmul_hints { 
+                { hint.push() }
+            }
+            // bit commits raw
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 1), pdash_x)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 0), pdash_y)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 3), p_x)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 2), p_y)}
+        };
+
+        let tap_len = precompute_p.len();
+        let script = script!{
+            {simulate_stack_input}
+            {precompute_p}
+        };
+
+        let res = execute_script(script);
+        assert!(res.success);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+        
+    }
 
     #[test]
     fn test_hinited_sparse_dense_mul() {
@@ -2172,12 +2348,12 @@ mod test {
     fn test_hinited_dense_dense_mul0() {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let dense_dense_mul_script = tap_dense_dense_mul0(&sec_key_for_bitcomms, 0, vec![1,2]);
+        let dense_dense_mul_script = tap_dense_dense_mul0(&sec_key_for_bitcomms, 0, vec![1,2], true);
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
-        let g = ark_bn254::Fq12::rand(&mut prng);
+        let g = f.inverse().unwrap(); //ark_bn254::Fq12::rand(&mut prng); // check_is_identity true
         let h = f * g; 
 
         let tmul_hints = hints_dense_dense_mul0(f, g);
@@ -2198,9 +2374,9 @@ mod test {
  
             // aux_hashes
             // bit commit hashes
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_c)} // in2: SS or c' link
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_f)} // in1: SD or DD1 link
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_g)} // out
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 2), hash_c)} // in2: SS or c' link
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 1), hash_f)} // in1: SD or DD1 link
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 0), hash_g)} // out
         };
 
 
@@ -2222,7 +2398,7 @@ mod test {
     fn test_hinited_dense_dense_mul1() {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let dense_dense_mul_script = tap_dense_dense_mul1(&sec_key_for_bitcomms,0, vec![1,2,3]);
+        let dense_dense_mul_script = tap_dense_dense_mul1(&sec_key_for_bitcomms,0, vec![1,2,3], false);
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(17);
@@ -2250,10 +2426,11 @@ mod test {
  
             // aux_hashes
             // bit commit hashes
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_c0)} // in3: links to DD0
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_c)} // in2: links to SS or c'
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_f)} // in1: links to SD or DD1 
-            { winternitz_compact::sign(sec_key_for_bitcomms, hash_g)} // out 
+
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 3), hash_c0)} // in3: links to DD0
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 2), hash_c)} // in2: SS or c' link
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 1), hash_f)} // in1: SD or DD1 link
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 0), hash_g)} // out
         };
 
 
@@ -2297,9 +2474,9 @@ mod test {
             // aux_a
             {fq12_push_not_montgomery(a)}
             // hash_a
-            { winternitz_compact::sign(sec_key_for_bitcomms, b_hash)}
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 0), b_hash)}
             // hash_b
-            { winternitz_compact::sign(sec_key_for_bitcomms, a_hash)}
+            { winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 1), a_hash)}
         };
 
         let tap_len = squaring_tapscript.len();

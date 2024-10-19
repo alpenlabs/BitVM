@@ -344,21 +344,21 @@ fn compile() {
         } else if blk_name == "SS1" {
             //chunk_primitves::tap_double_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices);
         } else if blk_name == "DD1" {
-            chunk_primitves::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices);
+            chunk_primitves::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, false);
         } else if blk_name == "DD2" {
-            chunk_primitves::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices);
+            chunk_primitves::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices, false);
         } else if blk_name == "DD3" {
-            chunk_primitves::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices);
+            chunk_primitves::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, false);
         } else if blk_name == "DD4" {
-            chunk_primitves::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices);
+            chunk_primitves::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices, false);
         } else if blk_name == "SD2" {
             chunk_primitves::tap_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices, false);
         } else if blk_name == "SS2" {
             //chunk_primitves::tap_add_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices);
         } else if blk_name == "DD5" {
-            chunk_primitves::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices);
+            chunk_primitves::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, false);
         } else if blk_name == "DD6" {
-            chunk_primitves::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices);
+            chunk_primitves::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices, false);
         } else {
             println!("unhandled {:?}", blk_name);
             panic!();
