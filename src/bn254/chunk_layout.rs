@@ -310,7 +310,7 @@ fn compile() {
         if blk_name == "Sqr" {
             chunk_primitves::tap_squaring(sec_key_for_bitcomms, self_index, deps_indices);
         } else if blk_name == "Dbl" {
-            chunk_primitves::tap_point_ops(sec_key_for_bitcomms, self_index, deps_indices);
+            chunk_primitves::tap_point_ops(sec_key_for_bitcomms, self_index, deps_indices, 0);
         } else if blk_name == "SD1" {
             chunk_primitves::tap_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices);
         } else if blk_name == "SS1" {
