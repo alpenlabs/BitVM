@@ -1,9 +1,9 @@
 
 use std::collections::HashMap;
-use crate::bn254::chunk_primitves;
+use crate::bn254::chunk_taps;
 use crate::treepp::*;
 
-use super::chunk_primitves::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4, tap_precompute_P};
+use super::chunk_taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4, tap_precompute_P};
 
 #[derive(Debug)]
 struct TableRow {
@@ -328,31 +328,31 @@ fn miller(id_to_sec: HashMap<&str, u32>) {
 
     fn get_script(blk_name: &str, sec_key_for_bitcomms: &str, self_index: u32, deps_indices: Vec<u32>, ate_bit: i8) -> Script {
         if blk_name == "Sqr" {
-            chunk_primitves::tap_squaring(sec_key_for_bitcomms, self_index, deps_indices);
+            chunk_taps::tap_squaring(sec_key_for_bitcomms, self_index, deps_indices);
         } else if blk_name == "DblAdd" {
-            chunk_primitves::tap_point_ops(sec_key_for_bitcomms, self_index, deps_indices, ate_bit);
+            chunk_taps::tap_point_ops(sec_key_for_bitcomms, self_index, deps_indices, ate_bit);
         } else if blk_name == "Dbl" {
-            chunk_primitves::tap_point_dbl(sec_key_for_bitcomms, self_index, deps_indices);
+            chunk_taps::tap_point_dbl(sec_key_for_bitcomms, self_index, deps_indices);
         } else if blk_name == "SD1" {
-            chunk_primitves::tap_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices, true);
+            chunk_taps::tap_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices, true);
         } else if blk_name == "SS1" {
-            // chunk_primitves::tap_double_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices);
+            // chunk_taps::tap_double_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices);
         } else if blk_name == "DD1" {
-            chunk_primitves::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, false);
+            chunk_taps::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, false);
         } else if blk_name == "DD2" {
-            chunk_primitves::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices, false);
+            chunk_taps::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices, false);
         } else if blk_name == "DD3" {
-            chunk_primitves::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, false);
+            chunk_taps::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, false);
         } else if blk_name == "DD4" {
-            chunk_primitves::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices, false);
+            chunk_taps::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices, false);
         } else if blk_name == "SD2" {
-            chunk_primitves::tap_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices, false);
+            chunk_taps::tap_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices, false);
         } else if blk_name == "SS2" {
-            //chunk_primitves::tap_add_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices);
+            //chunk_taps::tap_add_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices);
         } else if blk_name == "DD5" {
-            chunk_primitves::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, false);
+            chunk_taps::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, false);
         } else if blk_name == "DD6" {
-            chunk_primitves::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices, false);
+            chunk_taps::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices, false);
         } else {
             println!("unhandled {:?}", blk_name);
             panic!();
