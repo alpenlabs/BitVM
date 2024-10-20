@@ -2148,15 +2148,102 @@ pub(crate) fn tap_initT4(sec_key: &str, sec_out: u32, sec_in: Vec<u32>)-> Script
     sc
 }
 
+
+// POST MILLER
+
+// FROB Fq12
+fn tap_frob_fp12(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, power: usize) -> Script {
+    let (hinted_frobenius_map, _) = Fq12::hinted_frobenius_map(power, ark_bn254::Fq12::one());
+
+    let bitcom_scr = script!{
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // hashout
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // hashin
+        {Fq::toaltstack()}
+        // AltStack:[sec_out,sec_in]
+    };
+    let ops_scr = script!{
+        // [f]
+        {Fq12::copy(0)}
+        // [f, f]
+        {hinted_frobenius_map}
+        // [f, g]
+    };
+    let hash_scr = script!{
+        {Fq12::roll(12)}
+        // [g,f]
+        { hash_fp12_192() }
+        {Fq::fromaltstack()}
+        {Fq::equalverify(1, 0)}
+        { hash_fp12_192() }
+        {Fq::fromaltstack()}
+        {Fq::equalverify(1, 0)}
+    };
+    let sc = script!{
+        {bitcom_scr}
+        {ops_scr}
+       {hash_scr}
+        OP_TRUE
+    };
+    sc
+}
+
+fn hints_frob_fp12(a: ark_bn254::Fq12, power: usize) -> Vec<Hint> {
+    let (_, hints_frobenius_map) = Fq12::hinted_frobenius_map(power, a);
+    hints_frobenius_map
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use ark_std::UniformRand;
+    use bitcoin::opcodes::OP_TRUE;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
     use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq6_push_not_montgomery};
     use crate::signatures::winternitz_compact;
     use ark_ff::Field;
+
+
+    #[test]
+    fn test_frob_fq12() {
+        // compile time
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let sec_in = vec![1];
+        let power = 4;
+        let frob_scr = tap_frob_fp12(&sec_key_for_bitcomms, 0, sec_in.clone(), power);
+        
+        // runtime
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let f = ark_bn254::Fq12::rand(&mut prng);
+        let g = f.frobenius_map(power);
+
+        let fhash = emulate_extern_hash_fps(vec![f.c0.c0.c0,f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0,f.c0.c2.c1, f.c1.c0.c0,f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0,f.c1.c2.c1], false);
+        let ghash = emulate_extern_hash_fps(vec![g.c0.c0.c0,g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0,g.c0.c2.c1, g.c1.c0.c0,g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0,g.c1.c2.c1], false);
+
+        let hints = hints_frob_fp12(f, power);
+        
+        let simulate_stack_input = script!{
+            for hint in hints { 
+                { hint.push() }
+            }
+            { fq12_push_not_montgomery(f) }
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in[0]), fhash)}
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key_for_bitcomms, 0), ghash)}
+        };
+        let tap_len = frob_scr.len();
+        let script = script!{
+            {simulate_stack_input}
+            {frob_scr}
+        };
+
+        let res = execute_script(script);
+        assert!(res.success);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+    }
 
     #[test]
     fn test_tap_hash_c() {
