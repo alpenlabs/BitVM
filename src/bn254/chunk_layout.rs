@@ -1,8 +1,9 @@
 
+use std::collections::HashMap;
 use crate::bn254::chunk_primitves;
-use crate::{
-    treepp::*,
-};
+use crate::treepp::*;
+
+use super::chunk_primitves::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4, tap_precompute_P};
 
 #[derive(Debug)]
 struct TableRow {
@@ -12,6 +13,7 @@ struct TableRow {
 }
 
 fn config_gen()->Vec<Vec<TableRow>> {
+
 
     #[derive(Clone)]
     struct TableRowTemplate {
@@ -260,20 +262,20 @@ fn config_gen()->Vec<Vec<TableRow>> {
                 continue;
             }
             // Print the table
-            println!(
-                "\n---\nTable {} ({})",
-                table_number,
-                if table.len() == 6 {
-                    "Half Table"
-                } else {
-                    "Full Table"
-                }
-            );
-            println!("{:<5} | {:<5} | Deps", "name", "ID");
-            println!("{}", "-".repeat(40));
-            for row in &table {
-                println!("{:<5} | {:<5} | {}", row.name, row.ID, row.Deps);
-            }
+            // println!(
+            //     "\n---\nTable {} ({})",
+            //     table_number,
+            //     if table.len() == 6 {
+            //         "Half Table"
+            //     } else {
+            //         "Full Table"
+            //     }
+            // );
+            // println!("{:<5} | {:<5} | Deps", "name", "ID");
+            // println!("{}", "-".repeat(40));
+            // for row in &table {
+            //     println!("{:<5} | {:<5} | {}", row.name, row.ID, row.Deps);
+            // }
             table_number += 1;
             tables.push(table);
         }
@@ -283,8 +285,9 @@ fn config_gen()->Vec<Vec<TableRow>> {
     run()
 }
 
+
 // given a groth16 verification key, generate all of the tapscripts in compile mode
-fn compile() {
+fn miller(id_to_sec: HashMap<&str, u32>) {
     // vk: (G1Affine, G2Affine, G2Affine, G2Affine)
     // groth16 is 1 G2 and 2 G1, P4, Q4, 
     // e(A,B)⋅e(vkα ,vkβ)=e(C,vkδ)⋅e(vkγ_ABC,vkγ)
@@ -302,47 +305,38 @@ fn compile() {
     let blocks = config_gen();
 
     let mut itr = 0;
-    let max_id = blocks.last().unwrap().last().unwrap().ID.as_str()[1..].parse::<u32>().ok().unwrap();
     // println!("max id {:?}", max_id);
     let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
 
-    fn get_index(blk_name: &str, max_id: u32)-> Vec<u32> {
-        if blk_name.starts_with("S") {
-            return vec![blk_name[1..].parse::<u32>().ok().unwrap()];
-        } else if blk_name == "P2" {
-            return vec![max_id+1, max_id+2];
-        } else if blk_name == "P3" {
-            return vec![max_id+3, max_id+4]; 
-        } else if blk_name == "P4" {
-            return vec![max_id+5, max_id+6]; // y,x
-        } else if blk_name == "Q4" {
-            return vec![max_id+7, max_id+8, max_id+9, max_id+10]; // y1,y0,x1,x0
-        } else if blk_name == "c" {
-            return vec![max_id+11];
-        } else if blk_name == "cinv" {
-            return vec![max_id+12];
-        } else if blk_name == "T4" {
-            return vec![max_id+13];
+    fn get_index(blk_name: &str, id_to_sec: HashMap<&str, u32>)-> u32 {
+        let prekey = id_to_sec.get(blk_name);
+        if prekey.is_some() {
+            return prekey.unwrap().clone();
+        } else if blk_name.starts_with("S") {
+            return id_to_sec.len() as u32 + blk_name[1..].parse::<u32>().ok().unwrap();
         } else {
             println!("unknown blk_name {:?}", blk_name);
             panic!();
         }
+
     }
-    fn get_deps(deps: &str, max_id: u32) -> Vec<u32> {
-        let splits: Vec<Vec<u32>>= deps.split(",").into_iter().map(|s| get_index(s, max_id)).collect();
-        splits.into_iter().flatten().collect()
+    fn get_deps(deps: &str, id_to_sec: HashMap<&str, u32>) -> Vec<u32> {
+        let splits: Vec<u32>= deps.split(",").into_iter().map(|s| get_index(s, id_to_sec.clone())).collect();
+        splits
     }
 
-    fn get_script(blk_name: &str, sec_key_for_bitcomms: &str, self_index: u32, deps_indices: Vec<u32>) -> Script {
+    fn get_script(blk_name: &str, sec_key_for_bitcomms: &str, self_index: u32, deps_indices: Vec<u32>, ate_bit: i8) -> Script {
         if blk_name == "Sqr" {
             chunk_primitves::tap_squaring(sec_key_for_bitcomms, self_index, deps_indices);
+        } else if blk_name == "DblAdd" {
+            chunk_primitves::tap_point_ops(sec_key_for_bitcomms, self_index, deps_indices, ate_bit);
         } else if blk_name == "Dbl" {
-            chunk_primitves::tap_point_ops(sec_key_for_bitcomms, self_index, deps_indices, 0);
+            chunk_primitves::tap_point_dbl(sec_key_for_bitcomms, self_index, deps_indices);
         } else if blk_name == "SD1" {
             chunk_primitves::tap_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices, true);
         } else if blk_name == "SS1" {
-            //chunk_primitves::tap_double_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices);
+            // chunk_primitves::tap_double_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices);
         } else if blk_name == "DD1" {
             chunk_primitves::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, false);
         } else if blk_name == "DD2" {
@@ -366,16 +360,17 @@ fn compile() {
         script!{}
     }
 
+    println!("id_to_sec {:?}", id_to_sec);
+
     for bit in ATE_LOOP_COUNT.iter().rev().skip(1) {
         let blocks_of_a_loop = &blocks[itr];
         for block in blocks_of_a_loop {
-            let self_index = get_index(&block.ID, max_id);
-            assert_eq!(self_index.len(), 1);
-            let deps_indices = get_deps(&block.Deps, max_id);
-            let tap = get_script(&block.name, sec_key_for_bitcomms, self_index[0], deps_indices);
-            let selfid = get_index(&block.ID, max_id);
-            let depsid = get_deps(&block.Deps, max_id);
-            println!("{itr} {} ID {:?} deps {:?}", block.name, selfid, depsid);
+            let self_index = get_index(&block.ID, id_to_sec.clone());
+            let deps_indices = get_deps(&block.Deps, id_to_sec.clone());
+            println!("{itr} ate {:?} ID {:?} deps {:?}", *bit, block.ID, block.Deps);
+            println!("{itr} {} ID {:?} deps {:?}", block.name, self_index, deps_indices);
+            let tap = get_script(&block.name, sec_key_for_bitcomms, self_index, deps_indices, *bit);
+          
         }
         // squaring
         // point_ops
@@ -401,7 +396,63 @@ fn compile() {
 // DD5;S11;S9,S10;
 // DD6;S12;S9,S10,S11;
 
+fn pre_miller() -> HashMap<&'static str, u32> {
+    // Groth_{P2,P3,P4,c11,..c0,Hcinv}, Q4*, 
+    // T4: tap_init_Q4
+    // P3y,P3x,P2y,P2x,P4y,P4x: tap_precompute_P
+    // Q4y1,Q4y0,Q4x1,Q4x0,
+    // c: tap_hash_C
+    // cinv: tap_dmul_c_cinv
+    let tables: Vec<TableRow> = vec![
+        TableRow {name: String::from("T4Init"), ID: String::from("T4"), Deps: String::from("Q4y1,Q4y0,Q4x1,Q4x0")},
+        TableRow {name: String::from("PreP"), ID: String::from("P4y,P4x"), Deps: String::from("GP4y,GP4x")},
+        TableRow {name: String::from("PreP"), ID: String::from("P3y,P3x"), Deps: String::from("GP3y,GP3x")},
+        TableRow {name: String::from("PreP"), ID: String::from("P2y,P2x"), Deps: String::from("GP2y,GP2x")},
+        TableRow {name: String::from("HashC"), ID: String::from("c"), Deps: String::from("Gc11,Gc10,Gc9,Gc8,Gc7,Gc6,Gc5,Gc4,Gc3,Gc2,Gc1,Gc0")},
+        TableRow {name: String::from("DD1"), ID: String::from("cinv0"), Deps: String::from("c,GHcinv")},
+        TableRow {name: String::from("DD2"), ID: String::from("cinv"), Deps: String::from("c,GHcinv,cinv0")},
+    ];
+    let sec_key = "b138982ce17ac813d505b5b40b665d404e9528e7";
+
+    let mut id_to_sec: HashMap<&str, u32> = HashMap::new();
+    let groth_elems = vec!["GP4y","GP4x","GP3y","GP3x","GP2y","GP2x","Gc11","Gc10","Gc9","Gc8","Gc7","Gc6","Gc5","Gc4","Gc3","Gc2","Gc1","Gc0","GHcinv","Q4y1","Q4y0","Q4x1","Q4x0"];
+    for i in 0..groth_elems.len() {
+        id_to_sec.insert(groth_elems[i], i as u32);
+    }
+    let groth_derives = vec!["T4","P4y","P4x","P3y","P3x","P2y","P2x","c","cinv0","cinv"];
+    for i in 0..groth_derives.len() {
+        id_to_sec.insert(groth_derives[i], (i as u32)+(groth_elems.len() as u32));
+    }
+    for row in tables {
+        let sec_in = row.Deps.split(",").into_iter().map(|s| id_to_sec.get(s).unwrap().clone()).collect();
+        let sec_out: Vec<u32> = row.ID.split(",").into_iter().map(|s| id_to_sec.get(s).unwrap().clone()).collect();
+        if row.name == "T4Init" {
+            tap_initT4(sec_key, sec_out[0],sec_in);
+        } else if row.name == "PreP" {
+            tap_precompute_P(sec_key, sec_out, sec_in);
+        } else if row.name == "HashC" {
+            tap_hash_c(sec_key, sec_out[0], sec_in);
+        } else if row.name == "DD1" {
+            tap_dense_dense_mul0(sec_key, sec_out[0], sec_in, true);
+        } else if row.name == "DD2" {
+            tap_dense_dense_mul1(sec_key, sec_out[0], sec_in, true);
+        }
+    }
+    return id_to_sec;
+}
+
+fn post_miller() {
+    // cinv^q -> froFp
+    // c^q2
+    // cinv^q3
+    // pi -> addEval
+    // precompute p1, q1
+
+}
+
+
 #[test]
 fn compile_test() {
-   config_gen();
+   let id_to_sec = pre_miller();
+   miller(id_to_sec);
 }

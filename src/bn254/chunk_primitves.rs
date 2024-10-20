@@ -2034,7 +2034,7 @@ fn hints_dense_dense_mul1(a: ark_bn254::Fq12, b: ark_bn254::Fq12) -> Vec<Hint> {
 // PREMILLER
 
 // HASH_C
-fn tap_hash_c(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn tap_hash_c(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
     assert_eq!(sec_in.len(), 12);
     let bitcom_scr = script!{
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // f11 MSB
@@ -2081,7 +2081,7 @@ fn tap_hash_c(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
 }
 
 // precompute P
-fn tap_precompute_P(sec_key: &str, sec_out: Vec<u32>, sec_in: Vec<u32>) -> Script {
+pub(crate) fn tap_precompute_P(sec_key: &str, sec_out: Vec<u32>, sec_in: Vec<u32>) -> Script {
     let mut prng = ChaCha20Rng::seed_from_u64(0); // todo: remove prng use later, pt can be any valid mock data
     let pt = ark_bn254::G1Affine::rand(&mut prng);
     let (ops_scr, _) =  {new_hinted_from_eval_point(pt)};
@@ -2114,7 +2114,7 @@ fn hints_precompute_P(p: G1Affine) -> Vec<Hint> {
 }
 
 // hash T4
-fn tap_initT4(sec_key: &str, sec_out: u32, sec_in: Vec<u32>)-> Script {
+pub(crate) fn tap_initT4(sec_key: &str, sec_out: u32, sec_in: Vec<u32>)-> Script {
     let bitcom_scr = script!{
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // y1
         {Fq::toaltstack()}
