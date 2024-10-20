@@ -1,30 +1,13 @@
-
-use crate::bn254::fq6::Fq6;
-use crate::bn254::utils::{ fq2_push_not_montgomery, fq_push_not_montgomery, new_hinted_affine_add_line, new_hinted_affine_double_line, new_hinted_check_line_through_point, new_hinted_ell_by_constant_affine, new_hinted_from_eval_point};
+use crate::bn254::utils::fq_push_not_montgomery;
 use crate::pseudo::NMUL;
-use crate::signatures::winternitz_compact::checksig_verify_fq;
-use ark_bn254::{Bn254, G1Affine, G2Affine};
-use ark_ec::bn::{G1Prepared, G2Prepared};
-use ark_ec::pairing::Pairing;
-use ark_ff::{AdditiveGroup, Field, UniformRand, Zero};
-use bitcoin::opcodes::all::{OP_ENDIF, OP_NUMEQUAL};
 use bitcoin::ScriptBuf;
-use num_bigint::BigUint;
-use rand::SeedableRng;
-use rand_chacha::ChaCha20Rng;
 use std::cmp::min;
 use std::fs::File;
 use std::io::{self, Read};
-use std::ops::Neg;
-use std::str::FromStr;
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
 };
-use crate::bn254::{fq12::Fq12, fq2::Fq2};
-use num_traits::One;
-
-use super::utils::Hint;
 
 
 fn split_digit(window: u32, index: u32) -> Script {
