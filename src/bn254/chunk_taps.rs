@@ -442,6 +442,33 @@ pub(crate) struct HintInAdd {
     //hash_in: HashBytes, // in = Hash([Hash(T), Hash_le_aux])
 }
 
+impl HintInAdd {
+    pub(crate) fn from_double(g: HintOutDouble, gpx: ark_bn254::Fq, gpy: ark_bn254::Fq, q: ark_bn254::G2Affine) -> Self {
+        let (dbl_le0, dbl_le1) = g.dbl_le;
+        let hash_dbl_le = emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
+        let hash_add_le = g.hash_add_le_aux;
+        let hash_le = emulate_extern_hash_nibbles(vec![hash_dbl_le, hash_add_le]);
+        HintInAdd {t: g.t, p: G1Affine::new(gpx, gpy), hash_le_aux: hash_le, q}
+    }
+
+    pub(crate) fn from_add(g: HintOutAdd, gpx: ark_bn254::Fq, gpy: ark_bn254::Fq, q: ark_bn254::G2Affine) -> Self {
+        let (add_le0, add_le1) = g.add_le;
+        let hash_add_le = emulate_extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le0.c0, add_le0.c1], true);
+        let hash_dbl_le = g.hash_dbl_le_aux;
+        let hash_le = emulate_extern_hash_nibbles(vec![hash_dbl_le, hash_add_le]);
+        HintInAdd {t: g.t, p: G1Affine::new(gpx, gpy), hash_le_aux: hash_le, q}
+    }
+
+    pub(crate) fn from_doubleadd(g: HintOutDblAdd, gpx: ark_bn254::Fq, gpy: ark_bn254::Fq, q: ark_bn254::G2Affine) -> Self {
+        let (dbl_le0, dbl_le1) = g.dbl_le;
+        let (add_le0, add_le1) = g.add_le;
+        let hash_dbl_le = emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
+        let hash_add_le = emulate_extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
+        let hash_le = emulate_extern_hash_nibbles(vec![hash_dbl_le, hash_add_le]);
+        HintInAdd {t: g.t, p: G1Affine::new(gpx, gpy), hash_le_aux: hash_le, q}
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct HintOutAdd {
     t: ark_bn254::G2Affine,
@@ -1745,6 +1772,11 @@ impl HintInSparseDenseMul {
         let hash_dbl_le = emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
         return HintInSparseDenseMul { a: dmul.c, le0: g.add_le.0, le1: g.add_le.1, hash_other_le: hash_dbl_le, hash_aux_T: hash_t };
     }
+    pub(crate) fn from_add(g: HintOutAdd, sq: HintOutDenseMul1) -> Self {
+        let t = g.t;
+        let hash_t = emulate_extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
+        HintInSparseDenseMul { a: sq.c, le0: g.add_le.0, le1: g.add_le.1, hash_other_le: g.hash_dbl_le_aux, hash_aux_T: hash_t }
+    }
 }
 
 pub(crate) fn hints_sparse_dense_mul(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInSparseDenseMul, dbl_blk: bool) -> (HintOutSparseDenseMul, Script) {
@@ -1881,6 +1913,12 @@ impl HintInDenseMul0 {
     pub(crate) fn from_dense_cinv(c: HintOutDenseMul1, d: HintOutGrothCInv) -> Self {
         Self {a: c.c, b: d.cinv}
     }
+    pub(crate) fn from_dense_fixed_acc(c: HintOutDenseMul1, d: HintOutFixedAcc) -> Self {
+        Self {a: c.c, b: d.f}
+    }
+    pub(crate) fn from_dense_frob(c: HintOutDenseMul1, d: HintOutFrobFp12) -> Self {
+        Self {a: c.c, b: d.f}
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -2010,6 +2048,12 @@ impl HintInDenseMul1 {
     }
     pub(crate) fn from_dense_cinv(c: HintOutDenseMul1, d: HintOutGrothCInv) -> Self {
         Self {a: c.c, b: d.cinv}
+    }
+    pub(crate) fn from_dense_fixed_acc(c: HintOutDenseMul1, d: HintOutFixedAcc) -> Self {
+        Self {a: c.c, b: d.f}
+    }
+    pub(crate) fn from_dense_frob(c: HintOutDenseMul1, d: HintOutFrobFp12) -> Self {
+        Self {a: c.c, b: d.f}
     }
 }
 
@@ -2408,7 +2452,10 @@ pub(crate) struct HintInFrobFp12 {
 }
 
 impl HintInFrobFp12 {
-    fn from_groth_q4(g: HintOutDenseMul1) -> Self {
+    pub(crate) fn from_groth_cinv(g: HintOutGrothCInv) -> Self {
+        Self { f: g.cinv }
+    }
+    pub(crate) fn from_groth_c(g: HintOutGrothC) -> Self {
         Self { f: g.c }
     }
 
@@ -2418,7 +2465,7 @@ pub(crate) struct HintOutFrobFp12 {
     f: ark_bn254::Fq12,
     fhash: HashBytes,
 }
-fn hints_frob_fp12(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInFrobFp12, power: usize) -> (HintOutFrobFp12, Script) {
+pub(crate) fn hints_frob_fp12(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInFrobFp12, power: usize) -> (HintOutFrobFp12, Script) {
     assert_eq!(sec_in.len(), 1);
     let f = hint_in.f;
     let (_, hints_frobenius_map) = Fq12::hinted_frobenius_map(power, f);

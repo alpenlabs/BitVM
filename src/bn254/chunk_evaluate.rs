@@ -8,7 +8,7 @@ use rand_chacha::ChaCha20Rng;
 
 use crate::bn254::chunk_config::miller_config_gen;
 use crate::bn254::chunk_primitves::emulate_extern_hash_fps;
-use crate::bn254::chunk_taps::{hint_hash_c, hint_init_T4, hints_dense_dense_mul0, hints_dense_dense_mul1, hints_precompute_Px, hints_precompute_Py, tap_add_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_point_add, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, HashBytes, HintInDblAdd, HintInDenseMul0, HintInDenseMul1, HintInDouble, HintInHashC, HintInInitT4, HintInPrecomputePx, HintInPrecomputePy, HintInSparseAdd, HintInSparseDbl, HintInSparseDenseMul, HintInSquaring, HintOutFixedAcc, HintOutGrothC, HintOutGrothCInv, HintOutGrothS, HintOutPubIdentity};
+use crate::bn254::chunk_taps::{hint_hash_c, hint_init_T4, hints_dense_dense_mul0, hints_dense_dense_mul1, hints_frob_fp12, hints_precompute_Px, hints_precompute_Py, tap_add_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_point_add, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, HashBytes, HintInAdd, HintInDblAdd, HintInDenseMul0, HintInDenseMul1, HintInDouble, HintInFrobFp12, HintInHashC, HintInInitT4, HintInPrecomputePx, HintInPrecomputePy, HintInSparseAdd, HintInSparseDbl, HintInSparseDenseMul, HintInSquaring, HintOutFixedAcc, HintOutFrobFp12, HintOutGrothC, HintOutGrothCInv, HintOutGrothS, HintOutPubIdentity};
 use crate::bn254::{ chunk_taps};
 
 use super::chunk_compile::assign_link_ids;
@@ -182,7 +182,7 @@ fn evaluate_miller_circuit(id_to_sec: HashMap<String, u32>,hintmap: &mut HashMap
                 let (hint_out,_) = hints_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, HintInDenseMul0::from_sparse_dense_dbl(c, d));
                 hintmap.insert(block.ID.clone(), HintOut::DenseMul0(hint_out));
             } else if blk_name == "DD2" {
-                assert!(hints.len() == 2);
+                assert!(hints.len() == 3);
                 let c = match hints[0].clone() {
                     HintOut::SparseDenseMul(r) => r,
                     _ => panic!("failed to match"),
@@ -211,7 +211,7 @@ fn evaluate_miller_circuit(id_to_sec: HashMap<String, u32>,hintmap: &mut HashMap
 
                 hintmap.insert(block.ID.clone(), HintOut::DenseMul0(hint_out));
             } else if blk_name == "DD4" {
-                assert!(hints.len() == 2);
+                assert!(hints.len() == 3);
                 let c = match hints[0].clone() {
                     HintOut::DenseMul1(r) => r,
                     _ => panic!("failed to match"),
@@ -271,7 +271,7 @@ fn evaluate_miller_circuit(id_to_sec: HashMap<String, u32>,hintmap: &mut HashMap
             let (hint_out,_) = hints_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, HintInDenseMul0::from_sparse_dense_add(c, d));
             hintmap.insert(block.ID.clone(), HintOut::DenseMul0(hint_out));
             } else if blk_name == "DD6" {
-                assert!(hints.len() == 2);
+                assert!(hints.len() == 3);
                 let c = match hints[0].clone() {
                     HintOut::SparseDenseMul(r) => r,
                     _ => panic!("failed to match"),
@@ -294,7 +294,7 @@ fn evaluate_miller_circuit(id_to_sec: HashMap<String, u32>,hintmap: &mut HashMap
 }
 
 
-fn compile_post_miller_circuit(id_map: HashMap<String, u32>, t2: ark_bn254::G2Affine,  t3: ark_bn254::G2Affine,  q2: ark_bn254::G2Affine,  q3: ark_bn254::G2Affine, facc: String, tacc: String ) -> HashMap<String, u32> {
+fn evaluate_post_miller_circuit(id_map: HashMap<String, u32>, hintmap: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine,  t3: ark_bn254::G2Affine,  q2: ark_bn254::G2Affine,  q3: ark_bn254::G2Affine, facc: String, tacc: String ) -> HashMap<String, u32> {
     let tables = post_miller_config_gen(facc,tacc);
     let sec_key = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
@@ -303,32 +303,189 @@ fn compile_post_miller_circuit(id_map: HashMap<String, u32>, t2: ark_bn254::G2Af
     for row in tables {
         let sec_in = row.Deps.split(",").into_iter().map(|s| id_map.get(s).unwrap().clone()).collect();
         println!("row ID {:?}", row.ID);
-        let sec_out: Vec<u32> = row.ID.split(",").into_iter().map(|s| id_map.get(s).unwrap().clone()).collect();
+        let sec_out = id_map.get(&row.ID).unwrap().clone();
+        let hints_out: Vec<HintOut> = row.Deps.split(",").into_iter().map(|s| hintmap.get(s).unwrap().clone()).collect();
         if row.name == "Frob1" {
-            tap_frob_fp12(sec_key, sec_out[0],sec_in, 1);
+            assert_eq!(hints_out.len(), 1);
+            let cinv = match hints_out[0].clone() {
+                HintOut::GrothCInv(f) => f,
+                _ => panic!()
+            };
+            let hint_in = HintInFrobFp12::from_groth_cinv(cinv);
+            let (h, _) = hints_frob_fp12(sec_key, sec_out,sec_in, hint_in, 1);
+            hintmap.insert(row.ID, HintOut::FrobFp12(h));
         } else if row.name == "Frob2" {
-            tap_frob_fp12(sec_key, sec_out[0],sec_in, 2);
+            assert_eq!(hints_out.len(), 1);
+            let cinv = match hints_out[0].clone() {
+                HintOut::GrothC(f) => f,
+                _ => panic!()
+            };
+            let hint_in = HintInFrobFp12::from_groth_c(cinv);
+            let (h, _) = hints_frob_fp12(sec_key, sec_out,sec_in, hint_in, 2);
+            hintmap.insert(row.ID, HintOut::FrobFp12(h));
         } else if row.name == "Frob3" {
-            tap_frob_fp12(sec_key, sec_out[0],sec_in, 3);
+            assert_eq!(hints_out.len(), 1);
+            let cinv = match hints_out[0].clone() {
+                HintOut::GrothCInv(f) => f,
+                _ => panic!()
+            };
+            let hint_in = HintInFrobFp12::from_groth_cinv(cinv);
+            let (h, _) = hints_frob_fp12(sec_key, sec_out,sec_in, hint_in, 3);
+            hintmap.insert(row.ID, HintOut::FrobFp12(h));
         } else if row.name == "DD1" {
-            tap_dense_dense_mul0(sec_key, sec_out[0], sec_in, false);
+            assert!(hints_out.len() == 2);
+            let c = match hints_out[0].clone() {
+                HintOut::DenseMul1(r) => r,
+                _ => panic!("failed to match"),
+            };
+            let d = match hints_out[1].clone() {
+                HintOut::FrobFp12(r) => r,
+                _ => panic!("failed to match"),
+            };
+            let (hint_out,_) = hints_dense_dense_mul0(sec_key, sec_out, sec_in, HintInDenseMul0::from_dense_frob(c, d));
+            hintmap.insert(row.ID.clone(), HintOut::DenseMul0(hint_out));
         } else if row.name == "DD2" {
-            tap_dense_dense_mul1(sec_key, sec_out[0], sec_in, false);
+            assert!(hints_out.len() == 3);
+            let c = match hints_out[0].clone() {
+                HintOut::DenseMul1(r) => r,
+                _ => panic!("failed to match"),
+            };
+            let d = match hints_out[1].clone() {
+                HintOut::FrobFp12(r) => r,
+                _ => panic!("failed to match"),
+            };
+            let (hint_out,_) = hints_dense_dense_mul1(sec_key, sec_out, sec_in, HintInDenseMul1::from_dense_frob(c, d));
+            hintmap.insert(row.ID.clone(), HintOut::DenseMul1(hint_out));
         } else if row.name == "DD3" {
-            tap_dense_dense_mul0(sec_key, sec_out[0], sec_in, true);
+            assert!(hints_out.len() == 2);
+            let c = match hints_out[0].clone() {
+                HintOut::SparseDenseMul(r) => r,
+                _ => panic!("failed to match"),
+            };
+            let d = match hints_out[1].clone() {
+                HintOut::SparseAdd(r) => r,
+                _ => panic!("failed to match"),
+            };
+        let (hint_out,_) = hints_dense_dense_mul0(sec_key, sec_out, sec_in, HintInDenseMul0::from_sparse_dense_add(c, d));
+        hintmap.insert(row.ID.clone(), HintOut::DenseMul0(hint_out));
         } else if row.name == "DD4" {
-            tap_dense_dense_mul1(sec_key, sec_out[0], sec_in, true);
-        } else if row.name == "Add1" {
-            tap_point_add(sec_key, sec_out[0], sec_in, 1);
+            assert!(hints_out.len() == 3);
+            let c = match hints_out[0].clone() {
+                HintOut::SparseDenseMul(r) => r,
+                _ => panic!("failed to match"),
+            };
+            let d = match hints_out[1].clone() {
+                HintOut::SparseAdd(r) => r,
+                _ => panic!("failed to match"),
+            };
+            let (hint_out,_) = hints_dense_dense_mul1(sec_key, sec_out, sec_in, HintInDenseMul1::from_sparse_dense_add(c, d));
+            hintmap.insert(row.ID.clone(), HintOut::DenseMul1(hint_out));
+        } else if row.name == "DD5" {
+            assert!(hints_out.len() == 2);
+            let c = match hints_out[0].clone() {
+                HintOut::DenseMul1(r) => r,
+                _ => panic!("failed to match"),
+            };
+            let (hint_out, _) = match hints_out[1].clone() {
+                HintOut::FixedAcc(r) => {
+                    hints_dense_dense_mul0(sec_key, sec_out, sec_in, HintInDenseMul0::from_dense_fixed_acc(c, r))
+                },
+                _ => panic!("failed to match"),
+            };
+
+            hintmap.insert(row.ID.clone(), HintOut::DenseMul0(hint_out));
+        } else if row.name == "DD6" {
+            assert!(hints_out.len() == 3);
+            let c = match hints_out[0].clone() {
+                HintOut::DenseMul1(r) => r,
+                _ => panic!("failed to match"),
+            };
+            let (hint_out, _) = match hints_out[1].clone() {
+                HintOut::FixedAcc(r) => {
+                    hints_dense_dense_mul1(sec_key, sec_out, sec_in, HintInDenseMul1::from_dense_fixed_acc(c, r))
+                },
+                _ => panic!("failed to match"),
+            };
+            hintmap.insert(row.ID.clone(), HintOut::DenseMul1(hint_out));
+        } else if row.name == "Add1"  {
+            assert_eq!(hints_out.len(), 7);
+            let mut ps: Vec<ark_bn254::Fq> = vec![];
+            for i in 1..hints_out.len() {
+                match hints_out[i].clone() {
+                    HintOut::FieldElem(f) => {
+                        ps.push(f);
+                    },
+                    _ => panic!()
+                }
+            }
+            let p = G1Affine::new(ps[5], ps[4]);
+            let q = G2Affine::new(ark_bn254::Fq2::new(ps[3], ps[2]), ark_bn254::Fq2::new(ps[1], ps[0]));
+            let (hintout, _) = match hints_out[0].clone() {
+                HintOut::DblAdd(r) => {
+                    let hint_in = HintInAdd::from_doubleadd(r, p.x, p.y, q);
+                    chunk_taps::hint_point_add(sec_key, sec_out, sec_in, hint_in, 1)
+                },
+                HintOut::Double(r) => {
+                    let hint_in = HintInAdd::from_double(r, p.x,p.y, q);
+                    chunk_taps::hint_point_add(sec_key, sec_out, sec_in, hint_in, 1)
+                },
+                _ => panic!("failed to match"),
+            };
+            hintmap.insert(row.ID.clone(), HintOut::Add(hintout));
         } else if row.name == "Add2" {
-            tap_point_add(sec_key, sec_out[0], sec_in, -1);
+            assert_eq!(hints_out.len(), 7);
+            let mut ps: Vec<ark_bn254::Fq> = vec![];
+            for i in 1..hints_out.len() {
+                match hints_out[i].clone() {
+                    HintOut::FieldElem(f) => {
+                        ps.push(f);
+                    },
+                    _ => panic!()
+                }
+            }
+            let p = G1Affine::new(ps[5], ps[4]);
+            let q = G2Affine::new(ark_bn254::Fq2::new(ps[3], ps[2]), ark_bn254::Fq2::new(ps[1], ps[0]));
+            let (hintout, _) = match hints_out[0].clone() {
+                HintOut::Add(r) => {
+                    let hint_in = HintInAdd::from_add(r, p.x,p.y, q);
+                    chunk_taps::hint_point_add(sec_key, sec_out, sec_in, hint_in, -1)
+                },
+                _ => panic!("failed to match"),
+            };
+            hintmap.insert(row.ID.clone(), HintOut::Add(hintout));
         } else if row.name == "SD" {
-            tap_sparse_dense_mul(sec_key, sec_out[0], sec_in, false);
+            assert_eq!(hints_out.len(), 2);
+            let dense = match hints_out[0].clone() {
+                    HintOut::DenseMul1(f) => f,
+                    _ => panic!()
+                };
+            let (sd_hint, _) = match hints_out[1].clone() {
+                    HintOut::Add(f) => {
+                        let hint_in = HintInSparseDenseMul::from_add(f, dense);
+                        chunk_taps::hints_sparse_dense_mul(sec_key, sec_out, sec_in, hint_in, false)
+                    },
+                    _ => panic!()
+                };
+            hintmap.insert(row.ID.clone(), HintOut::SparseDenseMul(sd_hint));
         } else if row.name == "SS" {
-            let (scr, a, b) = tap_add_eval_mul_for_fixed_Qs(sec_key, sec_out[0], sec_in, nt2, nt3, q2, q3);
-            nt2=a;
-            nt3=b;
-        }
+            assert_eq!(hints_out.len(), 4);
+            let mut ps: Vec<ark_bn254::Fq> = vec![];
+            for i in 0..hints_out.len() {
+                match hints_out[i].clone() {
+                    HintOut::FieldElem(f) => {
+                        ps.push(f);
+                    },
+                    _ => panic!()
+                }
+            }
+            let p3 = G1Affine::new(ps[1], ps[0]);
+            let p2 = G1Affine::new(ps[3], ps[2]);
+            let hint_in: HintInSparseAdd = HintInSparseAdd::from_groth_and_aux(p2, p3,q2, q3, nt2, nt3);
+            let (hint_out, _) = chunk_taps::hint_add_eval_mul_for_fixed_Qs(sec_key, sec_out, sec_in, hint_in);
+            nt2 = hint_out.t2;
+            nt3 = hint_out.t3;
+            hintmap.insert(row.ID.clone(), HintOut::SparseAdd(hint_out));
+        } 
     }
     return id_map;
 }

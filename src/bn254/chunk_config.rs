@@ -98,11 +98,11 @@ pub(crate) fn post_miller_config_gen(f_acc: String, t4_acc: String) -> Vec<Table
         TableRow {name: String::from("Add2"), ID: String::from("U16"), Deps: String::from("U11,Q4y1,Q4y0,Q4x1,Q4x0,P4y,P4x")},
         TableRow {name: String::from("SD"), ID: String::from("U17"), Deps: String::from("U15,U16")},
         TableRow {name: String::from("SS"), ID: String::from("U18"), Deps: String::from("P3y,P3x,P2y,P2x")},
-        TableRow {name: String::from("DD1"), ID: String::from("U19"), Deps: String::from("U17,U18")},
-        TableRow {name: String::from("DD2"), ID: String::from("U20"), Deps: String::from("U17,U18,U19")},
+        TableRow {name: String::from("DD3"), ID: String::from("U19"), Deps: String::from("U17,U18")},
+        TableRow {name: String::from("DD4"), ID: String::from("U20"), Deps: String::from("U17,U18,U19")},
 
-        TableRow {name: String::from("DD3"), ID: String::from("U21"), Deps: String::from("U20,f_fixed")},
-        TableRow {name: String::from("DD4"), ID: String::from("identity"), Deps: String::from("U20,f_fixed,U21")},
+        TableRow {name: String::from("DD5"), ID: String::from("U21"), Deps: String::from("U20,f_fixed")},
+        TableRow {name: String::from("DD6"), ID: String::from("identity"), Deps: String::from("U20,f_fixed,U21")},
     //// SS1;S4;P3,P2;
     ];
     tables
