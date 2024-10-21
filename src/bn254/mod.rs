@@ -16,3 +16,4 @@ pub mod utils;
 pub mod chunk_primitves;
 pub mod chunk_layout;
 pub mod chunk_taps;
+pub mod chunk_config;
