@@ -1338,7 +1338,7 @@ fn hint_double_eval_mul_for_fixed_Qs(sec_key: &str,sec_out: u32, sec_in: Vec<u32
     (hint_out, simulate_stack_input)
 }
 
-pub(crate) fn tap_double_eval_mul_for_fixed_Qs(sec_key: &str,sec_out: u32, sec_in: Vec<u32>, t2: G2Affine, t3: G2Affine) -> Script {
+pub(crate) fn tap_double_eval_mul_for_fixed_Qs(sec_key: &str,sec_out: u32, sec_in: Vec<u32>, t2: G2Affine, t3: G2Affine) -> (Script,G2Affine,G2Affine) {
     assert_eq!(sec_in.len(), 4);
     // First
     let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
@@ -1347,6 +1347,8 @@ pub(crate) fn tap_double_eval_mul_for_fixed_Qs(sec_key: &str,sec_out: u32, sec_i
     alpha_t2 /= t2.y;
     alpha_t2.mul_assign_by_fp(&three_div_two);
     let bias_t2 = alpha_t2 * t2.x - t2.y;
+    let x2 = alpha_t2.square() - t2.x.double();
+    let y2 = bias_t2 - alpha_t2 * x2;
 
     // Second
     let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
@@ -1355,6 +1357,8 @@ pub(crate) fn tap_double_eval_mul_for_fixed_Qs(sec_key: &str,sec_out: u32, sec_i
     alpha_t3 /= t3.y;
     alpha_t3.mul_assign_by_fp(&three_div_two);
     let bias_t3 = alpha_t3 * t3.x - t3.y;
+    let x3 = alpha_t3.square() - t3.x.double();
+    let y3 = bias_t3 - alpha_t3 * x3;
 
     let (hinted_ell_t2,_) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::one(), ark_bn254::Fq::one(), alpha_t2, bias_t2);
     let (hinted_ell_t3,_) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::one(), ark_bn254::Fq::one(), alpha_t2, bias_t2);
@@ -1420,7 +1424,7 @@ pub(crate) fn tap_double_eval_mul_for_fixed_Qs(sec_key: &str,sec_out: u32, sec_i
         {hash_scr}
         OP_TRUE
     };
-    sc
+    (sc, G2Affine::new(x2, y2), G2Affine::new(x3, y3))
 }
 
 // ADD EVAL
@@ -1515,13 +1519,17 @@ fn hint_add_eval_mul_for_fixed_Qs(sec_key: &str,sec_out: u32, sec_in: Vec<u32>, 
     (hint_out, simulate_stack_input)
 }
 
-pub(crate) fn tap_add_eval_mul_for_fixed_Qs(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, t2: G2Affine, t3: G2Affine, q2: G2Affine, q3: G2Affine) -> Script {
+pub(crate) fn tap_add_eval_mul_for_fixed_Qs(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, t2: G2Affine, t3: G2Affine, q2: G2Affine, q3: G2Affine) -> (Script, G2Affine, G2Affine) {
     // First
     let alpha_t2 = (t2.y - q2.y) / (t2.x - q2.x);
     let bias_t2 = alpha_t2 * t2.x - t2.y;
+    let x2 = alpha_t2.square() - t2.x - q2.x;
+    let y2 = bias_t2 - alpha_t2 * x2;
     // Second
     let alpha_t3 = (t3.y - q3.y) / (t3.x - q3.x);
     let bias_t3 = alpha_t3 * t3.x - t3.y;
+    let x3 = alpha_t3.square() - t3.x - q3.x;
+    let y3 = bias_t3 - alpha_t3 * x3;
 
     let (hinted_ell_t2,_) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::one(), ark_bn254::Fq::one(), alpha_t2, bias_t2);
     let (hinted_ell_t3,_) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::one(), ark_bn254::Fq::one(), alpha_t3, bias_t3);
@@ -1585,7 +1593,7 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs(sec_key: &str, sec_out: u32, sec_in:
         {hash_scr}
         OP_TRUE
     };
-    sc
+    (sc, G2Affine::new(x2, y2), G2Affine::new(x3, y3))
 }
 
 
@@ -2226,7 +2234,7 @@ pub(crate) fn hint_init_T4(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint_i
 // POST MILLER
 
 // FROB Fq12
-fn tap_frob_fp12(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, power: usize) -> Script {
+pub(crate) fn tap_frob_fp12(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, power: usize) -> Script {
     let (hinted_frobenius_map, _) = Fq12::hinted_frobenius_map(power, ark_bn254::Fq12::one());
 
     let bitcom_scr = script!{
@@ -2654,7 +2662,7 @@ mod test {
         let t3 = ark_bn254::G2Affine::rand(&mut prng);
     
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let sparse_dbl_tapscript = tap_double_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms,0, vec![1,2,3,4], t2, t3);
+        let (sparse_dbl_tapscript,_,_) = tap_double_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms,0, vec![1,2,3,4], t2, t3);
         
         // Run time
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
@@ -2688,7 +2696,7 @@ mod test {
         let q3 = ark_bn254::G2Affine::rand(&mut prng);
     
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let sparse_add_tapscript = tap_add_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms,0, vec![1,2,3,4], t2, t3, q2, q3);
+        let (sparse_add_tapscript, _, _) = tap_add_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms,0, vec![1,2,3,4], t2, t3, q2, q3);
         
         // Run time
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
