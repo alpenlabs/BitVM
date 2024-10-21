@@ -2311,7 +2311,6 @@ fn hint_miller_f_fixedPQ() {
 mod test {
     use super::*;
     use ark_std::UniformRand;
-    use bitcoin::opcodes::OP_TRUE;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
     use crate::bn254::chunk_primitves::{emulate_extern_hash_fps, emulate_extern_hash_nibbles, emulate_fq_to_nibbles, emulate_nibbles_to_limbs};

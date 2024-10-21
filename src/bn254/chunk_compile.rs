@@ -1,8 +1,10 @@
 
 use std::collections::HashMap;
-use crate::bn254::{chunk_config::miller_config_gen, chunk_taps};
+use crate::bn254::chunk_config::miller_config_gen;
+use crate::bn254::{ chunk_taps};
 use crate::treepp::*;
 
+use super::chunk_config::{groth16_derivatives, groth16_params, post_miller_params, public_params};
 use super::{chunk_config::TableRow, chunk_taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4, tap_precompute_P}};
 
 
@@ -103,18 +105,18 @@ fn miller(id_to_sec: HashMap<&str, u32>) {
 }
 
 
-fn pre_miller(tables: Vec<TableRow>) -> HashMap<&'static str, u32> {
+fn pre_miller(tables: Vec<TableRow>) -> HashMap<String, u32> {
 
     let sec_key = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
-    let mut id_to_sec: HashMap<&str, u32> = HashMap::new();
-    let groth_elems = vec!["GP4y","GP4x","GP3y","GP3x","GP2y","GP2x","Gc11","Gc10","Gc9","Gc8","Gc7","Gc6","Gc5","Gc4","Gc3","Gc2","Gc1","Gc0","GHcinv","Q4y1","Q4y0","Q4x1","Q4x0"];
+    let mut id_to_sec: HashMap<String, u32> = HashMap::new();
+    let groth_elems = groth16_params();
     for i in 0..groth_elems.len() {
-        id_to_sec.insert(groth_elems[i], i as u32);
+        id_to_sec.insert(groth_elems[i].clone(), i as u32);
     }
-    let groth_derives = vec!["T4","P4y","P4x","P3y","P3x","P2y","P2x","c","cinv0","cinv"];
+    let groth_derives = groth16_derivatives();
     for i in 0..groth_derives.len() {
-        id_to_sec.insert(groth_derives[i], (i as u32)+(groth_elems.len() as u32));
+        id_to_sec.insert(groth_derives[i].clone(), (i as u32)+(groth_elems.len() as u32));
     }
     for row in tables {
         let sec_in = row.Deps.split(",").into_iter().map(|s| id_to_sec.get(s).unwrap().clone()).collect();
@@ -134,14 +136,74 @@ fn pre_miller(tables: Vec<TableRow>) -> HashMap<&'static str, u32> {
     return id_to_sec;
 }
 
-fn post_miller() {
-    // cinv^q -> froFp
-    // c^q2
-    // cinv^q3
-    // pi -> addEval
-    // precompute p1, q1
-
+fn assign_ids_to_public_params(start_identifier: u32) -> HashMap<String, u32> {
+    let pub_params = public_params();
+    let mut name_to_id: HashMap<String, u32> = HashMap::new();
+    for i in 0..pub_params.len() {
+        name_to_id.insert( pub_params[i].clone(), start_identifier + i as u32);
+    }
+    name_to_id
 }
 
 
+fn assign_ids_to_groth16_params(start_identifier: u32) -> HashMap<String, u32> {
+    let g_params = groth16_params();
+    let mut name_to_id: HashMap<String, u32> = HashMap::new();
+    for i in 0..g_params.len() {
+        name_to_id.insert( g_params[i].clone(), start_identifier + i as u32);
+    }
+    name_to_id
+}
 
+fn assign_ids_to_premiller_params(start_identifier: u32) -> HashMap<String, u32> {
+    let g_params = groth16_derivatives();
+    let mut name_to_id: HashMap<String, u32> = HashMap::new();
+    for i in 0..g_params.len() {
+        name_to_id.insert( g_params[i].clone(), start_identifier + i as u32);
+    }
+    name_to_id
+}
+
+fn assign_ids_to_miller_blocks(start_identifier: u32)-> (HashMap<String, u32>, String, String) {
+    let g_params = miller_config_gen();
+    let mut name_to_id: HashMap<String, u32> = HashMap::new();
+    let mut counter = 0;
+    let mut last_f_block_id = String::new();
+    let mut last_t4_block_id = String::new();
+    for t in g_params {
+        for r in t {
+            name_to_id.insert(r.ID.clone(), start_identifier + counter as u32);
+            counter += 1;
+            if r.name.starts_with("DD") {
+                last_f_block_id = r.ID;
+            } else if r.name.starts_with("Dbl") {
+                last_t4_block_id = r.ID;
+            }
+        }
+    }
+    (name_to_id, last_f_block_id, last_t4_block_id)
+}
+
+fn assign_ids_to_postmiller_params(start_identifier: u32) -> HashMap<String, u32> {
+    let g_params = post_miller_params();
+    let mut name_to_id: HashMap<String, u32> = HashMap::new();
+    for i in 0..g_params.len() {
+        name_to_id.insert( g_params[i].clone(), start_identifier + i as u32);
+    }
+    name_to_id
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    
+    #[test]
+    fn asign_link_ids() {
+        let pubp = assign_ids_to_public_params(0);
+        let grothp = assign_ids_to_groth16_params(pubp.len() as u32);
+        let premillp = assign_ids_to_premiller_params(grothp.len() as u32);
+        let (millp, _, _) = assign_ids_to_miller_blocks(premillp.len() as u32);
+        let postmillp = assign_ids_to_postmiller_params(millp.len() as u32);
+        println!("total bit commits {:?}", postmillp.len()+pubp.len() + grothp.len() + premillp.len() + millp.len());
+    }
+}
