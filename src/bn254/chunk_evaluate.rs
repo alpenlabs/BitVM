@@ -1,12 +1,19 @@
 
 use std::collections::{HashMap};
 use ark_bn254::g2::G2Affine;
+use ark_bn254::{Fq12, G1Affine};
+use ark_ff::{Field, UniformRand};
+use rand::SeedableRng;
+use rand_chacha::ChaCha20Rng;
 
 use crate::bn254::chunk_config::miller_config_gen;
-use crate::bn254::chunk_taps::{tap_add_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_point_add, tap_sparse_dense_mul};
+use crate::bn254::chunk_primitves::emulate_extern_hash_fps;
+use crate::bn254::chunk_taps::{tap_add_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_point_add, tap_sparse_dense_mul, HashBytes, HintOutFixedAcc, HintOutGrothC, HintOutGrothCInv, HintOutGrothS, HintOutPubIdentity};
 use crate::bn254::{ chunk_taps};
 
+use super::chunk_compile::assign_link_ids;
 use super::chunk_config::{groth16_derivatives, groth16_params, post_miller_config_gen, post_miller_params, pre_miller_config_gen, public_params};
+use super::chunk_taps::HintOut;
 use super::{chunk_taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4}};
 
 
@@ -155,81 +162,101 @@ fn compile_post_miller_circuit(id_map: HashMap<String, u32>, t2: ark_bn254::G2Af
     return id_map;
 }
 
-fn assign_ids_to_public_params(start_identifier: u32) -> HashMap<String, u32> {
-    let pub_params = public_params();
-    let mut name_to_id: HashMap<String, u32> = HashMap::new();
-    for i in 0..pub_params.len() {
-        name_to_id.insert( pub_params[i].clone(), start_identifier + i as u32);
-    }
-    name_to_id
+fn evaluate_public_params() -> Vec<HintOut> {
+    let mut prng = ChaCha20Rng::seed_from_u64(0); 
+    let idhash: HashBytes = [0u8; 64];
+    let q2 = G2Affine::rand(&mut prng);
+    let q3 = G2Affine::rand(&mut prng);
+    let fixed_acc = ark_bn254::Fq12::rand(&mut prng);
+    let id = HintOutPubIdentity {idhash, v: ark_bn254::Fq12::ONE};
+    let fixed_acc = HintOutFixedAcc {f: fixed_acc };
+    vec![
+        HintOut::PubIdentity(id),
+        HintOut::FieldElem(q3.y.c1),
+        HintOut::FieldElem(q3.y.c0),
+        HintOut::FieldElem(q3.x.c1),
+        HintOut::FieldElem(q3.x.c0),
+        HintOut::FieldElem(q2.y.c1),
+        HintOut::FieldElem(q2.y.c0),
+        HintOut::FieldElem(q2.x.c1),
+        HintOut::FieldElem(q2.x.c0),
+        HintOut::FixedAcc(fixed_acc),
+    ]
 }
 
+fn evaluate_groth16_params(p2: G1Affine, p3: G1Affine, p4: G1Affine, q4: G2Affine, c: Fq12, s: Fq12) -> Vec<HintOut> {
+    let cv = vec![c.c0.c0.c0,c.c0.c0.c1, c.c0.c1.c0, c.c0.c1.c1, c.c0.c2.c0,c.c0.c2.c1, c.c1.c0.c0,c.c1.c0.c1, c.c1.c1.c0, c.c1.c1.c1, c.c1.c2.c0,c.c1.c2.c1];
+    let chash = emulate_extern_hash_fps(cv.clone(), false);
+    let sv = vec![s.c0.c0.c0,s.c0.c0.c1, s.c0.c1.c0, s.c0.c1.c1, s.c0.c2.c0,s.c0.c2.c1, s.c1.c0.c0,s.c1.c0.c1, s.c1.c1.c0, s.c1.c1.c1, s.c1.c2.c0,s.c1.c2.c1];
+    let shash = emulate_extern_hash_fps(sv.clone(), false);
 
-fn assign_ids_to_groth16_params(start_identifier: u32) -> HashMap<String, u32> {
-    let g_params = groth16_params();
-    let mut name_to_id: HashMap<String, u32> = HashMap::new();
-    for i in 0..g_params.len() {
-        name_to_id.insert( g_params[i].clone(), start_identifier + i as u32);
-    }
-    name_to_id
+    let cvinv = c.inverse().unwrap();
+    let cvinvhash = emulate_extern_hash_fps(vec![cvinv.c0.c0.c0,cvinv.c0.c0.c1, cvinv.c0.c1.c0, cvinv.c0.c1.c1, cvinv.c0.c2.c0,cvinv.c0.c2.c1, cvinv.c1.c0.c0,cvinv.c1.c0.c1, cvinv.c1.c1.c0, cvinv.c1.c1.c1, cvinv.c1.c2.c0,cvinv.c1.c2.c1], false);
+
+    vec![
+        HintOut::FieldElem(p4.y),
+        HintOut::FieldElem(p4.x),
+        HintOut::FieldElem(p3.y),
+        HintOut::FieldElem(p3.x),
+        HintOut::FieldElem(p2.y),
+        HintOut::FieldElem(p2.x),
+        HintOut::FieldElem(cv[11]),
+        HintOut::FieldElem(cv[10]),
+        HintOut::FieldElem(cv[9]),
+        HintOut::FieldElem(cv[8]),
+        HintOut::FieldElem(cv[7]),
+        HintOut::FieldElem(cv[6]),
+        HintOut::FieldElem(cv[5]),
+        HintOut::FieldElem(cv[4]),
+        HintOut::FieldElem(cv[3]),
+        HintOut::FieldElem(cv[2]),
+        HintOut::FieldElem(cv[1]),
+        HintOut::FieldElem(cv[0]),
+        HintOut::GrothC(HintOutGrothC { c, chash }),
+        HintOut::FieldElem(sv[11]),
+        HintOut::FieldElem(sv[10]),
+        HintOut::FieldElem(sv[9]),
+        HintOut::FieldElem(sv[8]),
+        HintOut::FieldElem(sv[7]),
+        HintOut::FieldElem(sv[6]),
+        HintOut::FieldElem(sv[5]),
+        HintOut::FieldElem(sv[4]),
+        HintOut::FieldElem(sv[3]),
+        HintOut::FieldElem(sv[2]),
+        HintOut::FieldElem(sv[1]),
+        HintOut::FieldElem(sv[0]),
+        HintOut::GrothS(HintOutGrothS { s, shash }),
+        HintOut::GrothCInv(HintOutGrothCInv { cinv:cvinv, cinvhash: cvinvhash}),
+        HintOut::FieldElem(q4.y.c1),
+        HintOut::FieldElem(q4.y.c0),
+        HintOut::FieldElem(q4.x.c1),
+        HintOut::FieldElem(q4.x.c0),
+    ]
 }
 
-fn assign_ids_to_premiller_params(start_identifier: u32) -> HashMap<String, u32> {
-    let g_params = groth16_derivatives();
-    let mut name_to_id: HashMap<String, u32> = HashMap::new();
-    for i in 0..g_params.len() {
-        name_to_id.insert( g_params[i].clone(), start_identifier + i as u32);
-    }
-    name_to_id
+fn evaluate_pre_miller_circuit() {
+    // let tables = pre_miller_config_gen();
+    // let sec_key = "b138982ce17ac813d505b5b40b665d404e9528e7";
+
+    // for row in tables {
+    //     let sec_in = row.Deps.split(",").into_iter().map(|s| id_map.get(s).unwrap().clone()).collect();
+    //     println!("row ID {:?}", row.ID);
+    //     let sec_out: Vec<u32> = row.ID.split(",").into_iter().map(|s| id_map.get(s).unwrap().clone()).collect();
+    //     if row.name == "T4Init" {
+    //         tap_initT4(sec_key, sec_out[0],sec_in);
+    //     } else if row.name == "PreP" {
+    //         tap_precompute_P(sec_key, sec_out, sec_in);
+    //     } else if row.name == "HashC" {
+    //         tap_hash_c(sec_key, sec_out[0], sec_in);
+    //     } else if row.name == "DD1" {
+    //         tap_dense_dense_mul0(sec_key, sec_out[0], sec_in, true);
+    //     } else if row.name == "DD2" {
+    //         tap_dense_dense_mul1(sec_key, sec_out[0], sec_in, true);
+    //     }
+    // }
 }
 
-fn assign_ids_to_miller_blocks(start_identifier: u32)-> (HashMap<String, u32>, String, String) {
-    let g_params = miller_config_gen();
-    let mut name_to_id: HashMap<String, u32> = HashMap::new();
-    let mut counter = 0;
-    let mut last_f_block_id = String::new();
-    let mut last_t4_block_id = String::new();
-    for t in g_params {
-        for r in t {
-            name_to_id.insert(r.ID.clone(), start_identifier + counter as u32);
-            counter += 1;
-            if r.name.starts_with("DD") {
-                last_f_block_id = r.ID;
-            } else if r.name.starts_with("Dbl") {
-                last_t4_block_id = r.ID;
-            }
-        }
-    }
-    (name_to_id, last_f_block_id, last_t4_block_id)
-}
-
-fn assign_ids_to_postmiller_params(start_identifier: u32) -> HashMap<String, u32> {
-    let g_params = post_miller_params();
-    let mut name_to_id: HashMap<String, u32> = HashMap::new();
-    for i in 0..g_params.len() {
-        name_to_id.insert( g_params[i].clone(), start_identifier + i as u32);
-    }
-    name_to_id
-}
-
-pub(crate) fn assign_link_ids() -> (HashMap<String, u32>, String, String) {
-    let mut all_ids: HashMap<String, u32> = HashMap::new();
-    let pubp = assign_ids_to_public_params(0);
-    let grothp = assign_ids_to_groth16_params(pubp.len() as u32);
-    let premillp = assign_ids_to_premiller_params(grothp.len() as u32);
-    let (millp, f_blk, t4_blk) = assign_ids_to_miller_blocks(premillp.len() as u32);
-    let postmillp = assign_ids_to_postmiller_params(millp.len() as u32);
-    let total_len = pubp.len() + grothp.len() + premillp.len() + millp.len() + postmillp.len();
-    all_ids.extend(pubp);
-    all_ids.extend(grothp);
-    all_ids.extend(premillp);
-    all_ids.extend(millp);
-    all_ids.extend(postmillp);
-    assert_eq!(total_len, all_ids.len());
-    (all_ids, f_blk, t4_blk)
-}
-
-fn compile(q2: G2Affine, q3: G2Affine) {
+fn evaluate(q2: G2Affine, q3: G2Affine) {
     let (id_map, facc, tacc) = assign_link_ids();
     compile_pre_miller_circuit(id_map.clone());
     let (t2, t3) = compile_miller_circuit(id_map.clone(), q2, q3, q2, q3);
