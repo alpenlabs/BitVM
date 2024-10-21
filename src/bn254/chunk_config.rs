@@ -6,6 +6,111 @@ pub(crate) struct TableRow {
     pub(crate) Deps: String,
 }
 
+// these values are agreed during compile time
+pub(crate) fn public_params() -> Vec<String> {
+    vec![
+        String::from("identity"), // hash of Fp12::one()
+        String::from("Q3y1"), // vk
+        String::from("Q3y0"),
+        String::from("Q3x1"),
+        String::from("Q3x0"),
+        String::from("Q2y1"), // vk
+        String::from("Q2y0"),
+        String::from("Q2x1"),
+        String::from("Q2x0"),
+        String::from("f_fixed"), // hash of output of miller loop for fixed P,Q
+    ]
+}
+
+pub(crate) fn groth16_params() -> Vec<String> {
+    let r = vec![
+        "GP4y","GP4x",
+        "GP3y","GP3x",
+        "GP2y","GP2x",
+        "Gc11","Gc10","Gc9","Gc8","Gc7","Gc6","Gc5","Gc4","Gc3","Gc2","Gc1","Gc0",
+        "c",
+        "Gs11","Gs10","Gs9","Gs8","Gs7","Gs6","Gs5","Gs4","Gs3","Gs2","Gs1","Gs0",
+        "s",
+        "cinv",
+        "Q4y1","Q4y0","Q4x1","Q4x0",
+        ];
+    r.into_iter().map(|f|f.to_string()).collect()
+}
+
+pub(crate) fn groth16_derivatives() -> Vec<String> {
+    let r = vec![
+        "T4",
+        "P4y","P4x",
+        "P3y","P3x",
+        "P2y","P2x",
+        "cinv0",
+        ];
+    r.into_iter().map(|f|f.to_string()).collect()
+}
+
+pub(crate) fn post_miller_params() -> Vec<String> {
+    let num_params = 23;
+    let mut arr = vec![String::from("U"); num_params];
+    for i in 0..num_params {
+        arr[i] = format!("{}{}", arr[i], i);
+    }
+    arr
+}
+
+pub(crate) fn pre_miller_config_gen() -> Vec<TableRow> {
+    // Groth_{P2,P3,P4,c11,..c0,Hcinv}, Q4*, 
+    // T4: tap_init_Q4
+    // P3y,P3x,P2y,P2x,P4y,P4x: tap_precompute_P
+    // Q4y1,Q4y0,Q4x1,Q4x0,
+    // c: tap_hash_C
+    // cinv: tap_dmul_c_cinv
+    let tables: Vec<TableRow> = vec![
+        TableRow {name: String::from("T4Init"), ID: String::from("T4"), Deps: String::from("Q4y1,Q4y0,Q4x1,Q4x0")},
+        TableRow {name: String::from("PreP"), ID: String::from("P4y,P4x"), Deps: String::from("GP4y,GP4x")},
+        TableRow {name: String::from("PreP"), ID: String::from("P3y,P3x"), Deps: String::from("GP3y,GP3x")},
+        TableRow {name: String::from("PreP"), ID: String::from("P2y,P2x"), Deps: String::from("GP2y,GP2x")},
+        TableRow {name: String::from("HashC"), ID: String::from("c"), Deps: String::from("Gc11,Gc10,Gc9,Gc8,Gc7,Gc6,Gc5,Gc4,Gc3,Gc2,Gc1,Gc0")},
+        TableRow {name: String::from("HashC"), ID: String::from("s"), Deps: String::from("Gs11,Gs10,Gs9,Gs8,Gs7,Gs6,Gs5,Gs4,Gs3,Gs2,Gs1,Gs0")},
+        TableRow {name: String::from("DD1"), ID: String::from("cinv0"), Deps: String::from("c,cinv")},
+        TableRow {name: String::from("DD2"), ID: String::from("identity"), Deps: String::from("c,cinv,cinv0")},
+    ];
+    tables
+}
+
+pub(crate) fn post_miller_config_gen(f_acc: String, t4_acc: String) -> Vec<TableRow> {
+    let tables: Vec<TableRow> = vec![
+        TableRow {name: String::from("Frob"), ID: String::from("U0"), Deps: String::from("cinv")},
+        TableRow {name: String::from("Frob"), ID: String::from("U1"), Deps: String::from("c")},
+        TableRow {name: String::from("Frob"), ID: String::from("U2"), Deps: String::from("cinv")},
+
+        TableRow {name: String::from("DD1"), ID: String::from("U3"), Deps: String::from(format!("{f_acc},s"))},
+        TableRow {name: String::from("DD2"), ID: String::from("U4"), Deps: String::from(format!("{f_acc},s,U3"))},
+        TableRow {name: String::from("DD1"), ID: String::from("U5"), Deps: String::from("U4,U0")},
+        TableRow {name: String::from("DD2"), ID: String::from("U6"), Deps: String::from("U4,U0,U5")},
+        TableRow {name: String::from("DD1"), ID: String::from("U7"), Deps: String::from("U6,U1")},
+        TableRow {name: String::from("DD2"), ID: String::from("U8"), Deps: String::from("U6,U1,U7")},
+        TableRow {name: String::from("DD1"), ID: String::from("U9"), Deps: String::from("U8,U2")},
+        TableRow {name: String::from("DD2"), ID: String::from("U10"), Deps: String::from("U8,U2,U9")},
+
+        TableRow {name: String::from("Add"), ID: String::from("U11"), Deps: String::from(format!("{t4_acc},Q4y1,Q4y0,Q4x1,Q4x0,P4y,P4x"))},
+        TableRow {name: String::from("SD"), ID: String::from("U12"), Deps: String::from("U10,U11")},
+        TableRow {name: String::from("SS"), ID: String::from("U13"), Deps: String::from("P3y,P3x,P2y,P2x")},
+        TableRow {name: String::from("DD1"), ID: String::from("U14"), Deps: String::from("U12,U13")},
+        TableRow {name: String::from("DD2"), ID: String::from("U15"), Deps: String::from("U12,U13,U14")},
+
+        TableRow {name: String::from("Add"), ID: String::from("U16"), Deps: String::from("U11,Q4y1,Q4y0,Q4x1,Q4x0,P4y,P4x")},
+        TableRow {name: String::from("SD"), ID: String::from("U17"), Deps: String::from("U15,U16")},
+        TableRow {name: String::from("SS"), ID: String::from("U18"), Deps: String::from("P3y,P3x,P2y,P2x")},
+        TableRow {name: String::from("DD1"), ID: String::from("U19"), Deps: String::from("U17,U18")},
+        TableRow {name: String::from("DD2"), ID: String::from("U20"), Deps: String::from("U17,U18,U19")},
+
+        TableRow {name: String::from("DD1"), ID: String::from("U21"), Deps: String::from("U20,f_fixed")},
+        TableRow {name: String::from("DD2"), ID: String::from("U22"), Deps: String::from("U20,f_fixed,U21")},
+    //// SS1;S4;P3,P2;
+    ];
+    tables
+}
+
 // name;ID;Deps
 // Sqr;S1;f;
 // Dbl;S2;P4,Q4,T4;
@@ -290,77 +395,5 @@ pub(crate) fn miller_config_gen()->Vec<Vec<TableRow>> {
     }
 
     run()
-}
-
-// these values are agreed during compile time
-pub(crate) fn public_params() -> Vec<String> {
-    vec![
-        String::from("identity"), // hash of Fp12::one()
-        String::from("Q3y1"), // vk
-        String::from("Q3y0"),
-        String::from("Q3x1"),
-        String::from("Q3x0"),
-        String::from("Q2y1"), // vk
-        String::from("Q2y0"),
-        String::from("Q2x1"),
-        String::from("Q2x0"),
-        String::from("f_fixed"), // hash of output of miller loop for fixed P,Q
-    ]
-}
-
-pub(crate) fn groth16_params() -> Vec<String> {
-    let r = vec![
-        "GP4y","GP4x",
-        "GP3y","GP3x",
-        "GP2y","GP2x",
-        "Gc11","Gc10","Gc9","Gc8","Gc7","Gc6","Gc5","Gc4","Gc3","Gc2","Gc1","Gc0",
-        "c",
-        "Gs11","Gs10","Gs9","Gs8","Gs7","Gs6","Gs5","Gs4","Gs3","Gs2","Gs1","Gs0",
-        "s",
-        "cinv",
-        "Q4y1","Q4y0","Q4x1","Q4x0",
-        ];
-    r.into_iter().map(|f|f.to_string()).collect()
-}
-
-pub(crate) fn groth16_derivatives() -> Vec<String> {
-    let r = vec![
-        "T4",
-        "P4y","P4x",
-        "P3y","P3x",
-        "P2y","P2x",
-        "c",
-        "cinv0","cinv",
-        ];
-    r.into_iter().map(|f|f.to_string()).collect()
-}
-
-pub(crate) fn post_miller_params() -> Vec<String> {
-    let num_params = 18;
-    let mut arr = vec![String::from("U"); num_params];
-    for i in 0..num_params {
-        arr[i] = format!("{}{}", arr[i], i);
-    }
-    arr
-}
-
-pub(crate) fn pre_miller_config_gen() -> Vec<TableRow> {
-    // Groth_{P2,P3,P4,c11,..c0,Hcinv}, Q4*, 
-    // T4: tap_init_Q4
-    // P3y,P3x,P2y,P2x,P4y,P4x: tap_precompute_P
-    // Q4y1,Q4y0,Q4x1,Q4x0,
-    // c: tap_hash_C
-    // cinv: tap_dmul_c_cinv
-    let tables: Vec<TableRow> = vec![
-        TableRow {name: String::from("T4Init"), ID: String::from("T4"), Deps: String::from("Q4y1,Q4y0,Q4x1,Q4x0")},
-        TableRow {name: String::from("PreP"), ID: String::from("P4y,P4x"), Deps: String::from("GP4y,GP4x")},
-        TableRow {name: String::from("PreP"), ID: String::from("P3y,P3x"), Deps: String::from("GP3y,GP3x")},
-        TableRow {name: String::from("PreP"), ID: String::from("P2y,P2x"), Deps: String::from("GP2y,GP2x")},
-        TableRow {name: String::from("HashC"), ID: String::from("c"), Deps: String::from("Gc11,Gc10,Gc9,Gc8,Gc7,Gc6,Gc5,Gc4,Gc3,Gc2,Gc1,Gc0")},
-        TableRow {name: String::from("HashC"), ID: String::from("s"), Deps: String::from("Gs11,Gs10,Gs9,Gs8,Gs7,Gs6,Gs5,Gs4,Gs3,Gs2,Gs1,Gs0")},
-        TableRow {name: String::from("DD1"), ID: String::from("cinv0"), Deps: String::from("c,cinv")},
-        TableRow {name: String::from("DD2"), ID: String::from("identity"), Deps: String::from("c,cinv,cinv0")},
-    ];
-    tables
 }
 

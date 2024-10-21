@@ -1,10 +1,10 @@
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use crate::bn254::chunk_config::miller_config_gen;
 use crate::bn254::{ chunk_taps};
 use crate::treepp::*;
 
-use super::chunk_config::{groth16_derivatives, groth16_params, post_miller_params, public_params};
+use super::chunk_config::{groth16_derivatives, groth16_params, post_miller_params, pre_miller_config_gen, public_params};
 use super::{chunk_config::TableRow, chunk_taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4, tap_precompute_P}};
 
 
@@ -105,8 +105,8 @@ fn miller(id_to_sec: HashMap<&str, u32>) {
 }
 
 
-fn pre_miller(tables: Vec<TableRow>) -> HashMap<String, u32> {
-
+fn compile_pre_miller_circuit() -> HashMap<String, u32> {
+    let tables = pre_miller_config_gen();
     let sec_key = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
     let mut id_to_sec: HashMap<String, u32> = HashMap::new();
@@ -193,17 +193,26 @@ fn assign_ids_to_postmiller_params(start_identifier: u32) -> HashMap<String, u32
     name_to_id
 }
 
+fn assign_link_ids() -> (HashMap<String, u32>, String, String) {
+    let mut all_ids: HashMap<String, u32> = HashMap::new();
+    let pubp = assign_ids_to_public_params(0);
+    let grothp = assign_ids_to_groth16_params(pubp.len() as u32);
+    let premillp = assign_ids_to_premiller_params(grothp.len() as u32);
+    let (millp, f_blk, t4_blk) = assign_ids_to_miller_blocks(premillp.len() as u32);
+    let postmillp = assign_ids_to_postmiller_params(millp.len() as u32);
+    let total_len = pubp.len() + grothp.len() + premillp.len() + millp.len() + postmillp.len();
+    all_ids.extend(pubp);
+    all_ids.extend(grothp);
+    all_ids.extend(premillp);
+    all_ids.extend(millp);
+    all_ids.extend(postmillp);
+    assert_eq!(total_len, all_ids.len());
+    (all_ids, f_blk, t4_blk)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     
-    #[test]
-    fn asign_link_ids() {
-        let pubp = assign_ids_to_public_params(0);
-        let grothp = assign_ids_to_groth16_params(pubp.len() as u32);
-        let premillp = assign_ids_to_premiller_params(grothp.len() as u32);
-        let (millp, _, _) = assign_ids_to_miller_blocks(premillp.len() as u32);
-        let postmillp = assign_ids_to_postmiller_params(millp.len() as u32);
-        println!("total bit commits {:?}", postmillp.len()+pubp.len() + grothp.len() + premillp.len() + millp.len());
-    }
+
 }
