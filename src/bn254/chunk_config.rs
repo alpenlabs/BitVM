@@ -58,17 +58,14 @@ pub(crate) fn post_miller_params() -> Vec<String> {
 }
 
 pub(crate) fn pre_miller_config_gen() -> Vec<TableRow> {
-    // Groth_{P2,P3,P4,c11,..c0,Hcinv}, Q4*, 
-    // T4: tap_init_Q4
-    // P3y,P3x,P2y,P2x,P4y,P4x: tap_precompute_P
-    // Q4y1,Q4y0,Q4x1,Q4x0,
-    // c: tap_hash_C
-    // cinv: tap_dmul_c_cinv
     let tables: Vec<TableRow> = vec![
         TableRow {name: String::from("T4Init"), ID: String::from("T4"), Deps: String::from("Q4y1,Q4y0,Q4x1,Q4x0")},
-        TableRow {name: String::from("PreP"), ID: String::from("P4y,P4x"), Deps: String::from("GP4y,GP4x")},
-        TableRow {name: String::from("PreP"), ID: String::from("P3y,P3x"), Deps: String::from("GP3y,GP3x")},
-        TableRow {name: String::from("PreP"), ID: String::from("P2y,P2x"), Deps: String::from("GP2y,GP2x")},
+        TableRow {name: String::from("PrePy"), ID: String::from("P4y"), Deps: String::from("GP4y")},
+        TableRow {name: String::from("PrePx"), ID: String::from("P4x"), Deps: String::from("GP4y,GP4x,P4y")},
+        TableRow {name: String::from("PrePy"), ID: String::from("P3y"), Deps: String::from("GP3y")},
+        TableRow {name: String::from("PrePx"), ID: String::from("P3x"), Deps: String::from("GP3y,GP3x,P3y")},
+        TableRow {name: String::from("PrePy"), ID: String::from("P2y"), Deps: String::from("GP2y")},
+        TableRow {name: String::from("PrePx"), ID: String::from("P2x"), Deps: String::from("GP2y,GP2x,P2y")},
         TableRow {name: String::from("HashC"), ID: String::from("c"), Deps: String::from("Gc11,Gc10,Gc9,Gc8,Gc7,Gc6,Gc5,Gc4,Gc3,Gc2,Gc1,Gc0")},
         TableRow {name: String::from("HashC"), ID: String::from("s"), Deps: String::from("Gs11,Gs10,Gs9,Gs8,Gs7,Gs6,Gs5,Gs4,Gs3,Gs2,Gs1,Gs0")},
         TableRow {name: String::from("DD1"), ID: String::from("cinv0"), Deps: String::from("c,cinv")},
