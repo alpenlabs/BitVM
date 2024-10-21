@@ -8,7 +8,7 @@ use rand_chacha::ChaCha20Rng;
 
 use crate::bn254::chunk_config::miller_config_gen;
 use crate::bn254::chunk_primitves::emulate_extern_hash_fps;
-use crate::bn254::chunk_taps::{tap_add_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_point_add, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, HashBytes, HintOutFixedAcc, HintOutGrothC, HintOutGrothCInv, HintOutGrothS, HintOutPubIdentity};
+use crate::bn254::chunk_taps::{hint_hash_c, hint_init_T4, hints_dense_dense_mul0, hints_dense_dense_mul1, hints_precompute_Px, hints_precompute_Py, tap_add_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_point_add, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, HashBytes, HintInDblAdd, HintInDenseMul0, HintInDenseMul1, HintInDouble, HintInHashC, HintInInitT4, HintInPrecomputePx, HintInPrecomputePy, HintInSparseAdd, HintInSparseDbl, HintInSparseDenseMul, HintInSquaring, HintOutFixedAcc, HintOutGrothC, HintOutGrothCInv, HintOutGrothS, HintOutPubIdentity};
 use crate::bn254::{ chunk_taps};
 
 use super::chunk_compile::assign_link_ids;
@@ -18,7 +18,7 @@ use super::{chunk_taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c,
 
 
 // given a groth16 verification key, generate all of the tapscripts in compile mode
-fn compile_miller_circuit(id_to_sec: HashMap<String, u32>, t2: ark_bn254::G2Affine, t3: ark_bn254::G2Affine, q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine) -> (G2Affine, G2Affine) {
+fn evaluate_miller_circuit(id_to_sec: HashMap<String, u32>,hintmap: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine, t3: ark_bn254::G2Affine, q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine) -> (G2Affine, G2Affine) {
     // vk: (G1Affine, G2Affine, G2Affine, G2Affine)
     // groth16 is 1 G2 and 2 G1, P4, Q4, 
     // e(A,B)⋅e(vkα ,vkβ)=e(C,vkδ)⋅e(vkγ_ABC,vkγ)
@@ -56,39 +56,232 @@ fn compile_miller_circuit(id_to_sec: HashMap<String, u32>, t2: ark_bn254::G2Affi
         for block in blocks_of_a_loop {
             let self_index = get_index(&block.ID, id_to_sec.clone());
             let deps_indices = get_deps(&block.Deps, id_to_sec.clone());
+            let hints: Vec<HintOut> = block.Deps.split(",").into_iter().map(|s| hintmap.get(s).unwrap().clone()).collect();
             println!("{itr} ate {:?} ID {:?} deps {:?}", *bit, block.ID, block.Deps);
             println!("{itr} {} ID {:?} deps {:?}", block.name, self_index, deps_indices);
             let blk_name = block.name.clone();
             if blk_name == "Sqr" {
-                chunk_taps::tap_squaring(sec_key_for_bitcomms, self_index, deps_indices);
+                assert_eq!(hints.len(), 1);
+                let (hintout, _) = match hints[0].clone() {
+                    HintOut::DenseMul1(r) => {
+                        chunk_taps::hints_squaring(sec_key_for_bitcomms, self_index, deps_indices, HintInSquaring::from_dmul1(r))
+                    },
+                    HintOut::GrothCInv(r) => {
+                        chunk_taps::hints_squaring(sec_key_for_bitcomms, self_index, deps_indices, HintInSquaring::from_grothcinv(r))
+                    },
+                    HintOut::GrothC(r) => {
+                        chunk_taps::hints_squaring(sec_key_for_bitcomms, self_index, deps_indices, HintInSquaring::from_grothc(r))
+                    },
+                    _ => panic!("failed to match"),
+                };
+                hintmap.insert(block.ID.clone(), HintOut::Squaring(hintout));
             } else if blk_name == "DblAdd" {
-                chunk_taps::tap_point_ops(sec_key_for_bitcomms, self_index, deps_indices, *bit);
+                assert_eq!(hints.len(), 7);
+                let mut ps: Vec<ark_bn254::Fq> = vec![];
+                for i in 1..hints.len() {
+                    match hints[i].clone() {
+                        HintOut::FieldElem(f) => {
+                            ps.push(f);
+                        },
+                        _ => panic!()
+                    }
+                }
+                let p = G1Affine::new(ps[5], ps[4]);
+                let q = G2Affine::new(ark_bn254::Fq2::new(ps[3], ps[2]), ark_bn254::Fq2::new(ps[1], ps[0]));
+                let (hintout, _) = match hints[0].clone() {
+                    HintOut::InitT4(r) => {
+                        let hint_in = HintInDblAdd::from_initT4(r, p,q);
+                        chunk_taps::hint_point_ops(sec_key_for_bitcomms, self_index, deps_indices, hint_in,*bit)
+                    },
+                    HintOut::DblAdd(r) => {
+                        let hint_in = HintInDblAdd::from_doubleadd(r, p,q);
+                        chunk_taps::hint_point_ops(sec_key_for_bitcomms, self_index, deps_indices, hint_in,*bit)
+                    },
+                    HintOut::Double(r) => {
+                        let hint_in = HintInDblAdd::from_double(r, p,q);
+                        chunk_taps::hint_point_ops(sec_key_for_bitcomms, self_index, deps_indices, hint_in,*bit)
+                    },
+                    _ => panic!("failed to match"),
+                };
+                hintmap.insert(block.ID.clone(), HintOut::DblAdd(hintout));
             } else if blk_name == "Dbl" {
-                chunk_taps::tap_point_dbl(sec_key_for_bitcomms, self_index, deps_indices);
+                assert_eq!(hints.len(), 3);
+                let mut ps: Vec<ark_bn254::Fq> = vec![];
+                for i in 1..hints.len() {
+                    match hints[i].clone() {
+                        HintOut::FieldElem(f) => {
+                            ps.push(f);
+                        },
+                        _ => panic!()
+                    }
+                }
+                let p = G1Affine::new(ps[1], ps[0]);
+                let (hintout, _) = match hints[0].clone() {
+                    HintOut::InitT4(r) => {
+                        let hint_in = HintInDouble::from_initT4(r, p.x,p.y);
+                        chunk_taps::hint_point_dbl(sec_key_for_bitcomms, self_index, deps_indices, hint_in)
+                    },
+                    HintOut::DblAdd(r) => {
+                        let hint_in = HintInDouble::from_doubleadd(r, p.x,p.y);
+                        chunk_taps::hint_point_dbl(sec_key_for_bitcomms, self_index, deps_indices, hint_in)
+                    },
+                    HintOut::Double(r) => {
+                        let hint_in = HintInDouble::from_double(r, p.x,p.y);
+                        chunk_taps::hint_point_dbl(sec_key_for_bitcomms, self_index, deps_indices, hint_in)
+                    },
+                    _ => panic!("failed to match"),
+                };
+                hintmap.insert(block.ID.clone(), HintOut::Double(hintout));
             } else if blk_name == "SD1" {
-                chunk_taps::tap_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices, true);
+                assert_eq!(hints.len(), 2);
+                let dense = match hints[0].clone() {
+                        HintOut::Squaring(f) => f,
+                        _ => panic!()
+                    };
+                let (sd_hint, _) = match hints[1].clone() {
+                        HintOut::DblAdd(f) => {
+                            let hint_in = HintInSparseDenseMul::from_double_add_top(f, dense);
+                            chunk_taps::hints_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices, hint_in, true)
+                        },
+                        HintOut::Double(f) => {
+                            let hint_in = HintInSparseDenseMul::from_double(f, dense);
+                            chunk_taps::hints_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices, hint_in, true)
+                        }
+                        _ => panic!()
+                    };
+
+                hintmap.insert(block.ID.clone(), HintOut::SparseDenseMul(sd_hint));
             } else if blk_name == "SS1" {
-                let (_, a, b) = chunk_taps::tap_double_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices, nt2, nt3);
-                nt2 = a;
-                nt3 = b;
+                assert_eq!(hints.len(), 4);
+                let mut ps: Vec<ark_bn254::Fq> = vec![];
+                for i in 0..hints.len() {
+                    match hints[i].clone() {
+                        HintOut::FieldElem(f) => {
+                            ps.push(f);
+                        },
+                        _ => panic!()
+                    }
+                }
+                let p3 = G1Affine::new(ps[1], ps[0]);
+                let p2 = G1Affine::new(ps[3], ps[2]);
+                let hint_in: HintInSparseDbl = HintInSparseDbl::from_groth_and_aux(p2, p3, nt2, nt3);
+                let (hint_out, _) = chunk_taps::hint_double_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices, hint_in);
+                nt2 = hint_out.t2;
+                nt3 = hint_out.t3;
+                hintmap.insert(block.ID.clone(), HintOut::SparseDbl(hint_out));
             } else if blk_name == "DD1" {
-                chunk_taps::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, false);
+                assert!(hints.len() == 2);
+                let c = match hints[0].clone() {
+                    HintOut::SparseDenseMul(r) => r,
+                    _ => panic!("failed to match"),
+                };
+                let d = match hints[1].clone() {
+                    HintOut::SparseDbl(r) => r,
+                    _ => panic!("failed to match"),
+                };
+                let (hint_out,_) = hints_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, HintInDenseMul0::from_sparse_dense_dbl(c, d));
+                hintmap.insert(block.ID.clone(), HintOut::DenseMul0(hint_out));
             } else if blk_name == "DD2" {
-                chunk_taps::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices, false);
+                assert!(hints.len() == 2);
+                let c = match hints[0].clone() {
+                    HintOut::SparseDenseMul(r) => r,
+                    _ => panic!("failed to match"),
+                };
+                let d = match hints[1].clone() {
+                    HintOut::SparseDbl(r) => r,
+                    _ => panic!("failed to match"),
+                };
+                let (hint_out,_) = hints_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices, HintInDenseMul1::from_sparse_dense_dbl(c, d));
+                hintmap.insert(block.ID.clone(), HintOut::DenseMul1(hint_out));
             } else if blk_name == "DD3" {
-                chunk_taps::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, false);
+                assert!(hints.len() == 2);
+                let c = match hints[0].clone() {
+                    HintOut::DenseMul1(r) => r,
+                    _ => panic!("failed to match"),
+                };
+                let (hint_out, _) = match hints[1].clone() {
+                    HintOut::GrothCInv(r) => {
+                        hints_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, HintInDenseMul0::from_dense_cinv(c, r))
+                    },
+                    HintOut::GrothC(r) => {
+                        hints_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, HintInDenseMul0::from_dense_c(c, r))
+                    },
+                    _ => panic!("failed to match"),
+                };
+
+                hintmap.insert(block.ID.clone(), HintOut::DenseMul0(hint_out));
             } else if blk_name == "DD4" {
-                chunk_taps::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices, false);
+                assert!(hints.len() == 2);
+                let c = match hints[0].clone() {
+                    HintOut::DenseMul1(r) => r,
+                    _ => panic!("failed to match"),
+                };
+                let (hint_out, _) = match hints[1].clone() {
+                    HintOut::GrothCInv(r) => {
+                        hints_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices, HintInDenseMul1::from_dense_cinv(c, r))
+                    },
+                    HintOut::GrothC(r) => {
+                        hints_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices, HintInDenseMul1::from_dense_c(c, r))
+                    },
+                    _ => panic!("failed to match"),
+                };
+                hintmap.insert(block.ID.clone(), HintOut::DenseMul1(hint_out));
             } else if blk_name == "SD2" {
-                chunk_taps::tap_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices, false);
+                assert_eq!(hints.len(), 2);
+                let dense = match hints[0].clone() {
+                        HintOut::DenseMul1(f) => f,
+                        _ => panic!()
+                    };
+                let (sd_hint, _) = match hints[1].clone() {
+                        HintOut::DblAdd(f) => {
+                            let hint_in = HintInSparseDenseMul::from_doubl_add_bottom(f, dense);
+                            chunk_taps::hints_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices, hint_in, false)
+                        },
+                        _ => panic!()
+                    };
+                hintmap.insert(block.ID.clone(), HintOut::SparseDenseMul(sd_hint));
             } else if blk_name == "SS2" {
-                let (_, a, b) = chunk_taps::tap_add_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices, nt2, nt3, q2, q3);
-                nt2 = a;
-                nt3 = b;
+                assert_eq!(hints.len(), 4);
+                let mut ps: Vec<ark_bn254::Fq> = vec![];
+                for i in 0..hints.len() {
+                    match hints[i].clone() {
+                        HintOut::FieldElem(f) => {
+                            ps.push(f);
+                        },
+                        _ => panic!()
+                    }
+                }
+                let p3 = G1Affine::new(ps[1], ps[0]);
+                let p2 = G1Affine::new(ps[3], ps[2]);
+                let hint_in: HintInSparseAdd = HintInSparseAdd::from_groth_and_aux(p2, p3,q2, q3, nt2, nt3);
+                let (hint_out, _) = chunk_taps::hint_add_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices, hint_in);
+                nt2 = hint_out.t2;
+                nt3 = hint_out.t3;
+                hintmap.insert(block.ID.clone(), HintOut::SparseAdd(hint_out));
             } else if blk_name == "DD5" {
-                chunk_taps::tap_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, false);
+                assert!(hints.len() == 2);
+                let c = match hints[0].clone() {
+                    HintOut::SparseDenseMul(r) => r,
+                    _ => panic!("failed to match"),
+                };
+                let d = match hints[1].clone() {
+                    HintOut::SparseAdd(r) => r,
+                    _ => panic!("failed to match"),
+                };
+            let (hint_out,_) = hints_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, HintInDenseMul0::from_sparse_dense_add(c, d));
+            hintmap.insert(block.ID.clone(), HintOut::DenseMul0(hint_out));
             } else if blk_name == "DD6" {
-                chunk_taps::tap_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices, false);
+                assert!(hints.len() == 2);
+                let c = match hints[0].clone() {
+                    HintOut::SparseDenseMul(r) => r,
+                    _ => panic!("failed to match"),
+                };
+                let d = match hints[1].clone() {
+                    HintOut::SparseAdd(r) => r,
+                    _ => panic!("failed to match"),
+                };
+                let (hint_out,_) = hints_dense_dense_mul1(sec_key_for_bitcomms, self_index, deps_indices, HintInDenseMul1::from_sparse_dense_add(c, d));
+                hintmap.insert(block.ID.clone(), HintOut::DenseMul1(hint_out));
             } else {
                 println!("unhandled {:?}", blk_name);
                 panic!();
@@ -140,11 +333,9 @@ fn compile_post_miller_circuit(id_map: HashMap<String, u32>, t2: ark_bn254::G2Af
     return id_map;
 }
 
-fn evaluate_public_params() -> HashMap<String, HintOut> {
+fn evaluate_public_params(q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine) -> HashMap<String, HintOut> {
     let mut prng = ChaCha20Rng::seed_from_u64(0); 
     let idhash: HashBytes = [0u8; 64];
-    let q2 = G2Affine::rand(&mut prng);
-    let q3 = G2Affine::rand(&mut prng);
     let fixed_acc = ark_bn254::Fq12::rand(&mut prng);
     let id = HintOutPubIdentity {idhash, v: ark_bn254::Fq12::ONE};
     let fixed_acc = HintOutFixedAcc {f: fixed_acc };
@@ -221,35 +412,98 @@ fn evaluate_groth16_params(p2: G1Affine, p3: G1Affine, p4: G1Affine, q4: G2Affin
     id_to_witness
 }
 
-fn evaluate_pre_miller_circuit(id_map: HashMap<String, u32>) {
+fn evaluate_pre_miller_circuit(id_map: HashMap<String, u32>, hintmap: &mut HashMap<String, HintOut>) {
     let tables = pre_miller_config_gen();
     let sec_key = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
     for row in tables {
         let sec_in = row.Deps.split(",").into_iter().map(|s| id_map.get(s).unwrap().clone()).collect();
-        println!("row ID {:?}", row.ID);
+        let hints: Vec<HintOut> = row.Deps.split(",").into_iter().map(|s| hintmap.get(s).unwrap().clone()).collect();
         let sec_out = id_map.get(&row.ID).unwrap().clone();
         if row.name == "T4Init" {
-            tap_initT4(sec_key, sec_out,sec_in);
+            assert!(hints.len() == 4);
+            let mut xs = vec![];
+            for i in 0..hints.len() {
+                let x = match hints[i] {
+                    HintOut::FieldElem(r) => r,
+                    _ => panic!("failed to match"),
+                };
+                xs.push(x);
+            }
+            let (hint_res, _) = hint_init_T4(sec_key, sec_out,sec_in, HintInInitT4::from_groth_q4(xs));
+            hintmap.insert(row.ID, HintOut::InitT4(hint_res));
         } else if row.name == "PrePy" {
-            tap_precompute_Py(sec_key, sec_out, sec_in);
+            assert!(hints.len()== 1);
+            let pt = match hints[0] {
+                HintOut::FieldElem(r) => r,
+                _ => panic!("failed to match"),
+            };
+            let (pyd,_) = hints_precompute_Py(sec_key, sec_out, sec_in, HintInPrecomputePy::from_point(pt));
+            hintmap.insert(row.ID, HintOut::FieldElem(pyd));
         } else if row.name == "PrePx" {
-            tap_precompute_Px(sec_key, sec_out, sec_in);
+            assert!(hints.len() == 3);
+            let mut xs = vec![];
+            for i in 0..hints.len() {
+                let x = match hints[i] {
+                    HintOut::FieldElem(r) => r,
+                    _ => panic!("failed to match"),
+                };
+                xs.push(x);
+            }
+            let (pyd,_) = hints_precompute_Px(sec_key, sec_out, sec_in, HintInPrecomputePx::from_points(xs));
+            hintmap.insert(row.ID, HintOut::FieldElem(pyd));
         } else if row.name == "HashC" {
-            tap_hash_c(sec_key, sec_out, sec_in);
+            assert!(hints.len() == 12);
+            let mut xs = vec![];
+            for i in 0..hints.len() {
+                let x = match hints[i] {
+                    HintOut::FieldElem(r) => r,
+                    _ => panic!("failed to match"),
+                };
+                xs.push(x);
+            }
+            let (pyd,_) = hint_hash_c(sec_key, sec_out, sec_in, HintInHashC::from_points(xs));
+            hintmap.insert(row.ID, HintOut::HashC(pyd));
         } else if row.name == "DD1" {
-            tap_dense_dense_mul0(sec_key, sec_out, sec_in, true);
+            assert!(hints.len() == 2);
+                let c = match hints[0].clone() {
+                    HintOut::HashC(r) => r,
+                    _ => panic!("failed to match"),
+                };
+                let d = match hints[1].clone() {
+                    HintOut::GrothCInv(r) => r,
+                    _ => panic!("failed to match"),
+                };
+            let (pyd,_) = hints_dense_dense_mul0(sec_key, sec_out, sec_in, HintInDenseMul0::from_groth(c, d));
+            hintmap.insert(row.ID, HintOut::DenseMul0(pyd));
         } else if row.name == "DD2" {
-            tap_dense_dense_mul1(sec_key, sec_out, sec_in, true);
+            assert!(hints.len() == 3);
+            let a = match hints[0].clone() {
+                HintOut::HashC(r) => r,
+                _ => panic!("failed to match"),
+            };
+            let b = match hints[1].clone() {
+                HintOut::GrothCInv(r) => r,
+                _ => panic!("failed to match"),
+            };
+            let c0 = match hints[1].clone() {
+                HintOut::GrothCInv(r) => r,
+                _ => panic!("failed to match"),
+            };
+            let (pyd,_) = hints_dense_dense_mul1(sec_key, sec_out, sec_in, HintInDenseMul1::from_groth(a, b));
+            hintmap.insert(row.ID, HintOut::DenseMul1(pyd));
         }
     }
 }
 
-fn evaluate(p2: G1Affine, p3: G1Affine, p4: G1Affine, q4: G2Affine, c: Fq12, s: Fq12) {
+fn evaluate(p2: G1Affine, p3: G1Affine, p4: G1Affine,q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine, q4: G2Affine, c: Fq12, s: Fq12) {
     let (id_map, facc, tacc) = assign_link_ids();
-    evaluate_public_params();
-    evaluate_groth16_params(p2, p3, p4, q4, c, s);
-    evaluate_pre_miller_circuit(id_map.clone());
+    let mut hintmap: HashMap<String, HintOut> = HashMap::new();
+    let pubmap = evaluate_public_params(q2, q3);
+    hintmap.extend(pubmap);
+    let grothmap = evaluate_groth16_params(p2, p3, p4, q4, c, s);
+    hintmap.extend(grothmap);
+    evaluate_pre_miller_circuit(id_map.clone(), &mut hintmap);
     // let (t2, t3) = compile_miller_circuit(id_map.clone(), q2, q3, q2, q3);
     // compile_post_miller_circuit(id_map, t2, t3, q2, q3, facc, tacc);
 }
@@ -260,7 +514,15 @@ mod test {
 
     #[test]
     fn assign_sth() {
-
+        let mut prng = ChaCha20Rng::seed_from_u64(0); 
+        let idhash: HashBytes = [0u8; 64];
+        let q4 = G2Affine::rand(&mut prng);
+        let p2 = G1Affine::rand(&mut prng);
+        let p3 = G1Affine::rand(&mut prng);
+        let p4 = G1Affine::rand(&mut prng);
+        let c = ark_bn254::Fq12::rand(&mut prng);
+        let s = ark_bn254::Fq12::rand(&mut prng);
+        evaluate_groth16_params(p2, p3, p4, q4, c, s);
     }
 
 
