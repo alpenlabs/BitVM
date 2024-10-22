@@ -1509,8 +1509,17 @@ pub(crate) struct HintOutSparseAdd {
     pub(crate) f: ark_bn254::Fq12,
 }
 
-pub(crate) fn hint_add_eval_mul_for_fixed_Qs(sec_key: &str,sec_out: u32, sec_in: Vec<u32>, hint_in: HintInSparseAdd) -> (HintOutSparseAdd, Script) {
-    let (t2, t3, p2, p3, q2, q3) = (hint_in.t2, hint_in.t3, hint_in.p2, hint_in.p3, hint_in.q2, hint_in.q3);
+pub(crate) fn hint_add_eval_mul_for_fixed_Qs(sec_key: &str,sec_out: u32, sec_in: Vec<u32>, hint_in: HintInSparseAdd, ate: i8) -> (HintOutSparseAdd, Script) {
+    let (t2, t3, p2, p3, qq2, qq3) = (hint_in.t2, hint_in.t3, hint_in.p2, hint_in.p3, hint_in.q2, hint_in.q3);
+    let mut q2 = qq2.clone();
+    if ate == -1 {
+        q2 = q2.neg();
+    }
+    let mut q3 = qq3.clone();
+    if ate == -1 {
+        q3 = q3.neg();
+    }
+
     // First
     let alpha_t2 = (t2.y - q2.y) / (t2.x - q2.x);
     let bias_t2 = alpha_t2 * t2.x - t2.y;
@@ -2937,7 +2946,7 @@ mod test {
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
         let p3dash = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hint_in = HintInSparseAdd {t2, t3, p2: p2dash, p3: p3dash, q2, q3}; 
-        let (_, simulate_stack_input) = hint_add_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms,0, vec![1,2,3,4], hint_in);
+        let (_, simulate_stack_input) = hint_add_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms,0, vec![1,2,3,4], hint_in, 1);
     
         let tap_len = sparse_add_tapscript.len();
 
