@@ -83,8 +83,8 @@ fn evaluate_miller_circuit(id_to_sec: HashMap<String, u32>,hintmap: &mut HashMap
                         _ => panic!()
                     }
                 }
-                let q = G2Affine::new(ark_bn254::Fq2::new(ps[3], ps[2]), ark_bn254::Fq2::new(ps[1], ps[0]));
-                let p = G1Affine::new(ps[5], ps[4]);
+                let q = G2Affine::new_unchecked(ark_bn254::Fq2::new(ps[3], ps[2]), ark_bn254::Fq2::new(ps[1], ps[0]));
+                let p = G1Affine::new_unchecked(ps[5], ps[4]);
                 let (hintout, _) = match hints[0].clone() {
                     HintOut::InitT4(r) => {
                         let hint_in = HintInDblAdd::from_initT4(r, p,q);
@@ -112,7 +112,7 @@ fn evaluate_miller_circuit(id_to_sec: HashMap<String, u32>,hintmap: &mut HashMap
                         _ => panic!()
                     }
                 }
-                let p = G1Affine::new(ps[1], ps[0]);
+                let p = G1Affine::new_unchecked(ps[1], ps[0]);
                 let (hintout, _) = match hints[0].clone() {
                     HintOut::InitT4(r) => {
                         let hint_in = HintInDouble::from_initT4(r, p.x,p.y);
@@ -159,8 +159,8 @@ fn evaluate_miller_circuit(id_to_sec: HashMap<String, u32>,hintmap: &mut HashMap
                         _ => panic!()
                     }
                 }
-                let p3 = G1Affine::new(ps[1], ps[0]);
-                let p2 = G1Affine::new(ps[3], ps[2]);
+                let p3 = G1Affine::new_unchecked(ps[1], ps[0]);
+                let p2 = G1Affine::new_unchecked(ps[3], ps[2]);
                 let hint_in: HintInSparseDbl = HintInSparseDbl::from_groth_and_aux(p2, p3, nt2, nt3);
                 let (hint_out, _) = chunk_taps::hint_double_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices, hint_in);
                 nt2 = hint_out.t2;
@@ -242,8 +242,8 @@ fn evaluate_miller_circuit(id_to_sec: HashMap<String, u32>,hintmap: &mut HashMap
                         _ => panic!()
                     }
                 }
-                let p3 = G1Affine::new(ps[1], ps[0]);
-                let p2 = G1Affine::new(ps[3], ps[2]);
+                let p3 = G1Affine::new_unchecked(ps[1], ps[0]);
+                let p2 = G1Affine::new_unchecked(ps[3], ps[2]);
                 let hint_in: HintInSparseAdd = HintInSparseAdd::from_groth_and_aux(p2, p3,q2, q3, nt2, nt3);
                 let (hint_out, _) = chunk_taps::hint_add_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices, hint_in);
                 nt2 = hint_out.t2;
@@ -348,6 +348,10 @@ fn evaluate_post_miller_circuit(id_map: HashMap<String, u32>, hintmap: &mut Hash
                     let (hint_out,_) = hints_dense_dense_mul1(sec_key, sec_out, sec_in, HintInDenseMul1::from_dense_c(c, d));
                     hint_out
                 },
+                HintOut::FixedAcc(r) => {
+                    let (hint_out, _) = hints_dense_dense_mul1(sec_key, sec_out, sec_in, HintInDenseMul1::from_dense_fixed_acc(c, r));
+                    hint_out
+                },
                 _ => panic!("failed to match"),
             };
             hintmap.insert(row.ID.clone(), HintOut::DenseMul1(hint_out));
@@ -386,8 +390,8 @@ fn evaluate_post_miller_circuit(id_map: HashMap<String, u32>, hintmap: &mut Hash
                     _ => panic!()
                 }
             }
-            let p = G1Affine::new(ps[5], ps[4]);
-            let q = G2Affine::new(ark_bn254::Fq2::new(ps[3], ps[2]), ark_bn254::Fq2::new(ps[1], ps[0]));
+            let p = G1Affine::new_unchecked(ps[5], ps[4]);
+            let q = G2Affine::new_unchecked(ark_bn254::Fq2::new(ps[3], ps[2]), ark_bn254::Fq2::new(ps[1], ps[0]));
             let (hintout, _) = match hints_out[0].clone() {
                 HintOut::DblAdd(r) => {
                     let hint_in = HintInAdd::from_doubleadd(r, p.x, p.y, q);
@@ -429,8 +433,8 @@ fn evaluate_post_miller_circuit(id_map: HashMap<String, u32>, hintmap: &mut Hash
                     _ => panic!()
                 }
             }
-            let p2 = G1Affine::new(ps[3], ps[2]);
-            let p3 = G1Affine::new(ps[1], ps[0]);
+            let p2 = G1Affine::new_unchecked(ps[3], ps[2]);
+            let p3 = G1Affine::new_unchecked(ps[1], ps[0]);
             let hint_in: HintInSparseAdd = HintInSparseAdd::from_groth_and_aux(p2, p3,q2, q3, nt2, nt3);
             let (hint_out, _) = chunk_taps::hint_add_eval_mul_for_fixed_Qs(sec_key, sec_out, sec_in, hint_in);
             nt2 = hint_out.t2;
@@ -473,6 +477,7 @@ fn evaluate_groth16_params(p2: G1Affine, p3: G1Affine, p4: G1Affine, q4: G2Affin
 
     let cvinv = c.inverse().unwrap();
     let cvinvhash = emulate_extern_hash_fps(vec![cvinv.c0.c0.c0,cvinv.c0.c0.c1, cvinv.c0.c1.c0, cvinv.c0.c1.c1, cvinv.c0.c2.c0,cvinv.c0.c2.c1, cvinv.c1.c0.c0,cvinv.c1.c0.c1, cvinv.c1.c1.c0, cvinv.c1.c1.c1, cvinv.c1.c2.c0,cvinv.c1.c2.c1], false);
+    let cvinvhash2 = emulate_extern_hash_fps(vec![cvinv.c0.c0.c0,cvinv.c0.c0.c1, cvinv.c0.c1.c0, cvinv.c0.c1.c1, cvinv.c0.c2.c0,cvinv.c0.c2.c1, cvinv.c1.c0.c0,cvinv.c1.c0.c1, cvinv.c1.c1.c0, cvinv.c1.c1.c1, cvinv.c1.c2.c0,cvinv.c1.c2.c1], true);
 
     let gparams = groth16_params();
     let gouts = vec![
@@ -510,6 +515,7 @@ fn evaluate_groth16_params(p2: G1Affine, p3: G1Affine, p4: G1Affine, q4: G2Affin
         HintOut::FieldElem(sv[0]),
         HintOut::GrothC(HintOutGrothC { c:s, chash:shash }),
         HintOut::GrothC(HintOutGrothC { c:cvinv, chash: cvinvhash}),
+        HintOut::GrothC(HintOutGrothC { c:cvinv, chash: cvinvhash2}),
         HintOut::FieldElem(q4.y.c1),
         HintOut::FieldElem(q4.y.c0),
         HintOut::FieldElem(q4.x.c1),
@@ -579,16 +585,12 @@ fn evaluate_pre_miller_circuit(id_map: HashMap<String, u32>, hintmap: &mut HashM
                 hintmap.insert(row.ID, HintOut::HashC(hout));
             }
         } else if row.name == "HashC2" {
-            assert!(hints.len() == 12);
-            let mut xs = vec![];
-            for i in 0..hints.len() {
-                let x = match hints[i] {
-                    HintOut::FieldElem(r) => r,
-                    _ => panic!("failed to match"),
-                };
-                xs.push(x);
-            }
-            let (hout,_) = hint_hash_c2(sec_key, sec_out, sec_in, HintInHashC::from_points(xs));
+            assert!(hints.len() == 1);
+            let prev_hash = match hints[0].clone() {
+                HintOut::GrothC(r) => r,
+                _ => panic!("failed to match"),
+            };
+            let (hout,_) = hint_hash_c2(sec_key, sec_out, sec_in, HintInHashC::from_groth(prev_hash));
             if !hintmap.contains_key(&row.ID) {
                 hintmap.insert(row.ID, HintOut::HashC(hout));
             }
@@ -637,15 +639,16 @@ fn evaluate_pre_miller_circuit(id_map: HashMap<String, u32>, hintmap: &mut HashM
 }
 
 fn evaluate(p2: G1Affine, p3: G1Affine, p4: G1Affine,q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine, q4: G2Affine, c: Fq12, s: Fq12, fixed_acc: ark_bn254::Fq12) {
-    let (id_map, facc, tacc) = assign_link_ids();
+    let (id_to_sec, facc, tacc) = assign_link_ids();
     let mut hintmap: HashMap<String, HintOut> = HashMap::new();
     let pubmap = evaluate_public_params(q2, q3, fixed_acc);
     hintmap.extend(pubmap);
     let grothmap = evaluate_groth16_params(p2, p3, p4, q4, c, s);
     hintmap.extend(grothmap);
-    evaluate_pre_miller_circuit(id_map.clone(), &mut hintmap);
-    // let (t2, t3) = compile_miller_circuit(id_map.clone(), q2, q3, q2, q3);
-    // compile_post_miller_circuit(id_map, t2, t3, q2, q3, facc, tacc);
+    evaluate_pre_miller_circuit(id_to_sec.clone(), &mut hintmap);
+    let (nt2, nt3) = evaluate_miller_circuit(id_to_sec.clone(), &mut hintmap, q2, q3, q2, q3);
+    evaluate_post_miller_circuit(id_to_sec, &mut hintmap, nt2, nt3, q2, q3, facc, tacc);
+    println!("Done");
 }
 
 #[cfg(test)]
@@ -653,22 +656,18 @@ mod test {
     use super::*;
 
     #[test]
-    fn assign_sth() {
+    fn test_evaluate() {
         let mut prng = ChaCha20Rng::seed_from_u64(0); 
-        let idhash: HashBytes = [0u8; 64];
+        let q2 = G2Affine::rand(&mut prng);
+        let q3 = G2Affine::rand(&mut prng);
         let q4 = G2Affine::rand(&mut prng);
+
         let p2 = G1Affine::rand(&mut prng);
         let p3 = G1Affine::rand(&mut prng);
         let p4 = G1Affine::rand(&mut prng);
         let c = ark_bn254::Fq12::rand(&mut prng);
         let s = ark_bn254::Fq12::rand(&mut prng);
-        evaluate_groth16_params(p2, p3, p4, q4, c, s);
+        let fixed_acc = ark_bn254::Fq12::ONE;
+        evaluate(p2, p3, p4, q2, q3, q4, c, s, fixed_acc);
     }
-
-    #[test]
-    fn identity_get() {
-
-    }
-
-
 }

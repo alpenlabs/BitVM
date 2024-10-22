@@ -33,6 +33,7 @@ pub(crate) fn groth16_params() -> Vec<String> {
         "Gs11","Gs10","Gs9","Gs8","Gs7","Gs6","Gs5","Gs4","Gs3","Gs2","Gs1","Gs0",
         "s",
         "cinv",
+        "cinv2",
         "Q4y1","Q4y0","Q4x1","Q4x0",
         ];
     r.into_iter().map(|f|f.to_string()).collect()
@@ -68,7 +69,8 @@ pub(crate) fn pre_miller_config_gen() -> Vec<TableRow> {
         TableRow {name: String::from("PrePy"), ID: String::from("P2y"), Deps: String::from("GP2y")},
         TableRow {name: String::from("PrePx"), ID: String::from("P2x"), Deps: String::from("GP2y,GP2x,P2y")},
         TableRow {name: String::from("HashC"), ID: String::from("c"), Deps: String::from("Gc11,Gc10,Gc9,Gc8,Gc7,Gc6,Gc5,Gc4,Gc3,Gc2,Gc1,Gc0")},
-        TableRow {name: String::from("HashC2"), ID: String::from("c2"), Deps: String::from("Gc11,Gc10,Gc9,Gc8,Gc7,Gc6,Gc5,Gc4,Gc3,Gc2,Gc1,Gc0")},
+        TableRow {name: String::from("HashC2"), ID: String::from("c2"), Deps: String::from("c")},
+        TableRow {name: String::from("HashC2"), ID: String::from("cinv2"), Deps: String::from("cinv")},
         TableRow {name: String::from("HashC"), ID: String::from("s"), Deps: String::from("Gs11,Gs10,Gs9,Gs8,Gs7,Gs6,Gs5,Gs4,Gs3,Gs2,Gs1,Gs0")},
         TableRow {name: String::from("DD1"), ID: String::from("cinv0"), Deps: String::from("c2,cinv")},
         TableRow {name: String::from("DD2"), ID: String::from("identity"), Deps: String::from("c2,cinv,cinv0")},
@@ -222,7 +224,7 @@ pub(crate) fn miller_config_gen()->Vec<Vec<TableRow>> {
         let mut id_counter = 1;
 
         // Initial values for f and T4
-        let mut f_value = String::from("cinv"); // Starting value of f
+        let mut f_value = String::from("cinv2"); // Starting value of f
         let mut T4_value = String::from("T4"); // Starting value of T4
 
         // Define the half and full table structures
