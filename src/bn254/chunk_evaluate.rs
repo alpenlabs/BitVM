@@ -389,22 +389,29 @@ fn evaluate_post_miller_circuit(id_map: HashMap<String, u32>, hintmap: &mut Hash
             }
             let p = G1Affine::new_unchecked(ps[5], ps[4]);
             let q = G2Affine::new_unchecked(ark_bn254::Fq2::new(ps[3], ps[2]), ark_bn254::Fq2::new(ps[1], ps[0]));
-            let (hintout, _) = match hints_out[0].clone() {
-                HintOut::DblAdd(r) => {
-                    let hint_in = HintInAdd::from_doubleadd(r, p.x, p.y, q);
-                    chunk_taps::hint_point_add(sec_key, sec_out, sec_in, hint_in, 1)
-                },
-                HintOut::Double(r) => {
-                    let hint_in = HintInAdd::from_double(r, p.x,p.y, q);
-                    chunk_taps::hint_point_add(sec_key, sec_out, sec_in, hint_in, 1)
-                },
-                HintOut::Add(r) => {
-                    let hint_in = HintInAdd::from_add(r, p.x,p.y, q);
-                    chunk_taps::hint_point_add(sec_key, sec_out, sec_in, hint_in, -1)
-                },
-                _ => panic!("failed to match"),
-            };
-            hintmap.insert(row.ID.clone(), HintOut::Add(hintout));
+            if row.name == "Add1" {
+                let (hintout, _) = match hints_out[0].clone() {
+                    HintOut::DblAdd(r) => {
+                        let hint_in = HintInAdd::from_doubleadd(r, p.x, p.y, q);
+                        chunk_taps::hint_point_add(sec_key, sec_out, sec_in, hint_in, 1)
+                    },
+                    HintOut::Double(r) => {
+                        let hint_in = HintInAdd::from_double(r, p.x,p.y, q);
+                        chunk_taps::hint_point_add(sec_key, sec_out, sec_in, hint_in, 1)
+                    },
+                    _ => panic!("failed to match"),
+                };
+                hintmap.insert(row.ID.clone(), HintOut::Add(hintout));
+            } else {
+                let (hintout, _) = match hints_out[0].clone() {
+                    HintOut::Add(r) => {
+                        let hint_in = HintInAdd::from_add(r, p.x,p.y, q);
+                        chunk_taps::hint_point_add(sec_key, sec_out, sec_in, hint_in, -1)
+                    },
+                    _ => panic!("failed to match"),
+                };
+                hintmap.insert(row.ID.clone(), HintOut::Add(hintout));
+            }
         } else if row.name == "SD" {
             assert_eq!(hints_out.len(), 2);
             let dense = match hints_out[0].clone() {
@@ -419,7 +426,7 @@ fn evaluate_post_miller_circuit(id_map: HashMap<String, u32>, hintmap: &mut Hash
                     _ => panic!()
                 };
             hintmap.insert(row.ID.clone(), HintOut::SparseDenseMul(sd_hint));
-        } else if row.name == "SS" {
+        } else if row.name == "SS1" || row.name == "SS2" {
             assert_eq!(hints_out.len(), 4);
             let mut ps: Vec<ark_bn254::Fq> = vec![];
             for i in 0..hints_out.len() {
@@ -433,10 +440,17 @@ fn evaluate_post_miller_circuit(id_map: HashMap<String, u32>, hintmap: &mut Hash
             let p2 = G1Affine::new_unchecked(ps[3], ps[2]);
             let p3 = G1Affine::new_unchecked(ps[1], ps[0]);
             let hint_in: HintInSparseAdd = HintInSparseAdd::from_groth_and_aux(p2, p3,q2, q3, nt2, nt3);
-            let (hint_out, _) = chunk_taps::hint_add_eval_mul_for_fixed_Qs(sec_key, sec_out, sec_in, hint_in, -1);
-            nt2 = hint_out.t2;
-            nt3 = hint_out.t3;
-            hintmap.insert(row.ID.clone(), HintOut::SparseAdd(hint_out));
+            if row.name == "SS1" {
+                let (hint_out, _) = chunk_taps::hint_add_eval_mul_for_fixed_Qs_with_frob(sec_key, sec_out, sec_in, hint_in, 1);
+                nt2 = hint_out.t2;
+                nt3 = hint_out.t3;
+                hintmap.insert(row.ID.clone(), HintOut::SparseAdd(hint_out));
+            } else if row.name == "SS2" {
+                let (hint_out, _) = chunk_taps::hint_add_eval_mul_for_fixed_Qs_with_frob(sec_key, sec_out, sec_in, hint_in, -1);
+                nt2 = hint_out.t2;
+                nt3 = hint_out.t3;
+                hintmap.insert(row.ID.clone(), HintOut::SparseAdd(hint_out));
+            }
         } 
     }
     return id_map;
@@ -644,10 +658,9 @@ pub fn evaluate(p2: G1Affine, p3: G1Affine, p4: G1Affine,q2: ark_bn254::G2Affine
     hintmap.extend(grothmap);
     evaluate_pre_miller_circuit(id_to_sec.clone(), &mut hintmap);
     let (nt2, nt3) = evaluate_miller_circuit(id_to_sec.clone(), &mut hintmap, q2, q3, q2, q3);
+    evaluate_post_miller_circuit(id_to_sec, &mut hintmap, nt2, nt3, q2, q3, facc.clone(), tacc);
     println!("hintmap {:?}", hintmap);
     println!("facc {:?}", facc);
-
-    //evaluate_post_miller_circuit(id_to_sec, &mut hintmap, nt2, nt3, q2, q3, facc, tacc);
     println!("Done");
 }
 
@@ -768,12 +781,13 @@ mod test {
         );
         let t4 = q4;
 
-        let f = Bn254::multi_miller_loop_affine([p2,p3,p4], [q2,q3,q4]).0;
-        let k = Bn254::multi_miller_loop_affine([p1], [q1]).0;
+
+        let r = bn254::ell_coeffs::G2Prepared::from_affine(q4);
+
+        let f = Bn254::multi_miller_loop_affine([p4], [q4]).0;
     //     // let (c, wi) = compute_c_wi(f);
     //    // let c_inv = c.inverse().unwrap();
         println!("bn_facc_p234 {:?}", f);
-
 
         let c = ark_bn254::Fq12::ONE;
         let s = ark_bn254::Fq12::ONE;

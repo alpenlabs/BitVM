@@ -715,9 +715,7 @@ pub(crate) fn hint_point_add(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint
     assert_eq!(sec_in.len(), 7);
     let (tt, p, q) = (hint_in.t, hint_in.p, hint_in.q);
     let mut qq = q.clone();
-    // if ate == -1 {
-    //     qq = q.neg();
-    // }
+
     let mut frob_hint: Vec<Hint> = vec![];
     if ate == 1 {
         let beta_12x = BigUint::from_str("21575463638280843010398324269430826099269044274347216827212613867836435027261").unwrap();
@@ -742,7 +740,7 @@ pub(crate) fn hint_point_add(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint
             frob_hint.push(hint);
         }
 
-    } else if ate == -1 {
+    } else if ate == -1 { // todo: correct this code block
         let beta_22x = BigUint::from_str("21888242871839275220042445260109153167277707414472061641714758635765020556616").unwrap();
         let beta_22y = BigUint::from_str("0").unwrap();
         let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_22x.clone()), ark_bn254::Fq::from(beta_22y.clone())]).unwrap();
@@ -755,6 +753,9 @@ pub(crate) fn hint_point_add(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint
         }   
     }
 
+    if ate == -1 {
+        qq = q.neg();
+    }
 
  
     let alpha_chord = (tt.y - qq.y) / (tt.x - qq.x);
@@ -1665,6 +1666,164 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs(sec_key: &str, sec_out: u32, sec_in:
     };
     (sc, G2Affine::new_unchecked(x2, y2), G2Affine::new_unchecked(x3, y3))
 }
+
+
+pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(sec_key: &str,sec_out: u32, sec_in: Vec<u32>, hint_in: HintInSparseAdd, ate: i8) -> (HintOutSparseAdd, Script) {
+    let (t2, t3, p2, p3, qq2, qq3) = (hint_in.t2, hint_in.t3, hint_in.p2, hint_in.p3, hint_in.q2, hint_in.q3);
+    
+    // First
+    let mut qq = qq2.clone();
+    let mut frob_hint: Vec<Hint> = vec![];
+    if ate == 1 {
+        let beta_12x = BigUint::from_str("21575463638280843010398324269430826099269044274347216827212613867836435027261").unwrap();
+        let beta_12y = BigUint::from_str("10307601595873709700152284273816112264069230130616436755625194854815875713954").unwrap();
+        let beta_12 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_12x.clone()), ark_bn254::Fq::from(beta_12y.clone())]).unwrap();
+        let beta_13x = BigUint::from_str("2821565182194536844548159561693502659359617185244120367078079554186484126554").unwrap();
+        let beta_13y = BigUint::from_str("3505843767911556378687030309984248845540243509899259641013678093033130930403").unwrap();
+        let beta_13 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_13x.clone()), ark_bn254::Fq::from(beta_13y.clone())]).unwrap();
+    
+        qq.x.conjugate_in_place();    
+        let (_, hint_beta12_mul) = Fq2::hinted_mul(2, qq.x, 0, beta_12);
+        qq.x = qq.x * beta_12;
+    
+        qq.y.conjugate_in_place();
+        let (_, hint_beta13_mul) = Fq2::hinted_mul(2, qq.y, 0, beta_13);
+        qq.y = qq.y * beta_13;
+
+        for hint in hint_beta13_mul {
+            frob_hint.push(hint);
+        }
+        for hint in hint_beta12_mul {
+            frob_hint.push(hint);
+        }
+
+    } else if ate == -1 {
+        let beta_22x = BigUint::from_str("21888242871839275220042445260109153167277707414472061641714758635765020556616").unwrap();
+        let beta_22y = BigUint::from_str("0").unwrap();
+        let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_22x.clone()), ark_bn254::Fq::from(beta_22y.clone())]).unwrap();
+    
+        let (_, hint_beta22_mul) = Fq2::hinted_mul(2, qq.x, 0, beta_22);
+        qq.x = qq.x * beta_22;
+
+        for hint in hint_beta22_mul {
+            frob_hint.push(hint);
+        }   
+    }
+    let mut q2 = qq.clone();
+    if ate == -1 {
+        q2 = q2.neg();
+    }
+    let alpha_t2 = (t2.y - q2.y) / (t2.x - q2.x);
+    let bias_t2 = alpha_t2 * t2.x - t2.y;
+    let x2 = alpha_t2.square() - t2.x - q2.x;
+    let y2 = bias_t2 - alpha_t2 * x2;
+    let mut c2x = alpha_t2;
+    c2x.mul_assign_by_fp(&p2.x);
+    let mut c2y = bias_t2;
+    c2y.mul_assign_by_fp(&p2.y);
+    let mut f = ark_bn254::Fq12::zero();
+    f.c0.c0 = ark_bn254::Fq2::one(); // 0
+    f.c1.c0 = c2x; // 3
+    f.c1.c1 = c2y; // 4
+    
+
+
+    // Second
+    let mut qq = qq3.clone();
+    let mut frob_hint: Vec<Hint> = vec![];
+    if ate == 1 {
+        let beta_12x = BigUint::from_str("21575463638280843010398324269430826099269044274347216827212613867836435027261").unwrap();
+        let beta_12y = BigUint::from_str("10307601595873709700152284273816112264069230130616436755625194854815875713954").unwrap();
+        let beta_12 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_12x.clone()), ark_bn254::Fq::from(beta_12y.clone())]).unwrap();
+        let beta_13x = BigUint::from_str("2821565182194536844548159561693502659359617185244120367078079554186484126554").unwrap();
+        let beta_13y = BigUint::from_str("3505843767911556378687030309984248845540243509899259641013678093033130930403").unwrap();
+        let beta_13 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_13x.clone()), ark_bn254::Fq::from(beta_13y.clone())]).unwrap();
+    
+        qq.x.conjugate_in_place();    
+        let (_, hint_beta12_mul) = Fq2::hinted_mul(2, qq.x, 0, beta_12);
+        qq.x = qq.x * beta_12;
+    
+        qq.y.conjugate_in_place();
+        let (_, hint_beta13_mul) = Fq2::hinted_mul(2, qq.y, 0, beta_13);
+        qq.y = qq.y * beta_13;
+
+        for hint in hint_beta13_mul {
+            frob_hint.push(hint);
+        }
+        for hint in hint_beta12_mul {
+            frob_hint.push(hint);
+        }
+
+    } else if ate == -1 {
+        let beta_22x = BigUint::from_str("21888242871839275220042445260109153167277707414472061641714758635765020556616").unwrap();
+        let beta_22y = BigUint::from_str("0").unwrap();
+        let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_22x.clone()), ark_bn254::Fq::from(beta_22y.clone())]).unwrap();
+    
+        let (_, hint_beta22_mul) = Fq2::hinted_mul(2, qq.x, 0, beta_22);
+        qq.x = qq.x * beta_22;
+
+        for hint in hint_beta22_mul {
+            frob_hint.push(hint);
+        }   
+    }
+    let mut q3 = qq.clone();
+    if ate == -1 {
+        q3 = q3.neg();
+    }
+    let alpha_t3 = (t3.y - q3.y) / (t3.x - q3.x);
+    let bias_t3 = alpha_t3 * t3.x - t3.y;
+    let x3 = alpha_t3.square() - t3.x - q3.x;
+    let y3 = bias_t3 - alpha_t3 * x3;
+    let mut c3x = alpha_t3;
+    c3x.mul_assign_by_fp(&p3.x);
+    let mut c3y = bias_t3;
+    c3y.mul_assign_by_fp(&p3.y);
+
+    let mut b = f;
+    b.mul_by_034(&ark_bn254::Fq2::ONE, &c3x, &c3y);
+
+    let mut hints = vec![];
+    let (_, hint_ell_t2) = new_hinted_ell_by_constant_affine(p2.x, p2.y, alpha_t2, bias_t2);
+    let (_, hint_ell_t3) = new_hinted_ell_by_constant_affine(p3.x, p3.y, alpha_t3, bias_t3);
+    let (_, hint_sparse_dense_mul) = Fq12::hinted_mul_by_34(f, c3x, c3y);
+
+    for hint in hint_ell_t3 {
+        hints.push(hint);
+    }
+    for hint in hint_ell_t2 {
+        hints.push(hint);
+    }
+    for hint in hint_sparse_dense_mul {
+        hints.push(hint);
+    }
+
+    let b_hash = emulate_extern_hash_fps(vec![b.c0.c0.c0,b.c0.c0.c1, b.c0.c1.c0, b.c0.c1.c1, b.c0.c2.c0,b.c0.c2.c1, b.c1.c0.c0,b.c1.c0.c1, b.c1.c1.c0, b.c1.c1.c1, b.c1.c2.c0,b.c1.c2.c1], false);
+    let p2dash_x = emulate_fq_to_nibbles(p2.x);
+    let p2dash_y = emulate_fq_to_nibbles(p2.y);
+    let p3dash_x = emulate_fq_to_nibbles(p3.x);
+    let p3dash_y = emulate_fq_to_nibbles(p3.y);
+
+    let simulate_stack_input = script!{
+        for hint in hints { 
+            { hint.push() }
+        }
+        // bit commits
+        { winternitz_compact::sign(&format!("{}{:04X}", sec_key, sec_out), b_hash)}
+        { winternitz_compact::sign(&format!("{}{:04X}", sec_key, sec_in[3]), p2dash_x)}
+        { winternitz_compact::sign(&format!("{}{:04X}", sec_key, sec_in[2]), p2dash_y)}
+        { winternitz_compact::sign(&format!("{}{:04X}", sec_key, sec_in[1]), p3dash_x)}
+        { winternitz_compact::sign(&format!("{}{:04X}", sec_key, sec_in[0]), p3dash_y)}
+    };
+
+    let hint_out = HintOutSparseAdd {
+        t2: G2Affine::new_unchecked(x2, y2),
+        t3:  G2Affine::new_unchecked(x3, y3),
+        f: b,
+    };
+    
+    (hint_out, simulate_stack_input)
+}
+
 
 
 // SPARSE DENSE
