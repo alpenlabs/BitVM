@@ -1,3 +1,7 @@
+use ark_ec::bn::BnConfig;
+
+use crate::bn254::chunk_compile::ATE_LOOP_COUNT;
+
 
 #[derive(Debug)]
 pub(crate) struct TableRow {
@@ -214,11 +218,6 @@ pub(crate) fn miller_config_gen()->Vec<Vec<TableRow>> {
 
     fn run()-> Vec<Vec<TableRow>> {
         // Array specifying the type of table to generate
-        let ATE_LOOP_COUNT: Vec<i8> = vec![
-            0, 0, 0, 1, 0, 1, 0, -1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, -1, 0, 0, 0, 1, 0, -1, 0, 0,
-            0, 0, -1, 0, 0, 1, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 1, 0, -1, 0, 0, 0, -1,
-            0, -1, 0, 0, 0, 1, 0, 1, 1,
-        ];
 
         // Initialize the ID counter
         let mut id_counter = 1;
@@ -330,9 +329,10 @@ pub(crate) fn miller_config_gen()->Vec<Vec<TableRow>> {
         // Generate and print the sequence of tables
         let mut table_number = 1;
         let mut tables = vec![];
-        for i in ATE_LOOP_COUNT.iter().rev().skip(1) {
+        for j in (1..ATE_LOOP_COUNT.len()).rev() {
+            let i = ATE_LOOP_COUNT[j-1];
             let table;
-            if *i == 0 {
+            if i == 0 {
                 // Generate a half table
                 table = generate_table(
                     &half_table_structure,
@@ -345,7 +345,7 @@ pub(crate) fn miller_config_gen()->Vec<Vec<TableRow>> {
                 f_value = format!("S{}", id_counter + 5); // ID of DD2
                 T4_value = format!("S{}", id_counter + 1); // ID of Dbl
                 id_counter += 6; // Half table uses 6 IDs
-            } else if *i == 1 {
+            } else if i == 1 {
                 // Generate a full table
                 table = generate_table(
                     &full_table_structure,
@@ -358,7 +358,7 @@ pub(crate) fn miller_config_gen()->Vec<Vec<TableRow>> {
                 f_value = format!("S{}", id_counter + 11); // ID of DD6
                 T4_value = format!("S{}", id_counter + 1); // ID of Dbl
                 id_counter += 12; // Full table uses 12 IDs
-            } else if *i == -1 {
+            } else if i == -1 {
                 // Generate a full table with c replaced by cinv
                 table = generate_table(
                     &full_table_structure,

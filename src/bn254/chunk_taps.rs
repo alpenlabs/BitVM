@@ -38,8 +38,8 @@ impl HintInSquaring {
 
 #[derive(Debug, Clone)]
 pub(crate) struct HintOutSquaring {
-    b: ark_bn254::Fq12,
-    bhash: HashBytes,
+    pub(crate) b: ark_bn254::Fq12,
+    pub(crate) bhash: HashBytes,
 }
 
 #[derive(Debug, Clone)]
@@ -1312,7 +1312,7 @@ impl HintInSparseDbl {
 pub(crate) struct HintOutSparseDbl {
     pub(crate) t2: ark_bn254::G2Affine,
     pub(crate) t3: G2Affine, 
-    f: ark_bn254::Fq12,
+    pub(crate) f: ark_bn254::Fq12,
 }
 pub(crate) fn hint_double_eval_mul_for_fixed_Qs(sec_key: &str,sec_out: u32, sec_in: Vec<u32>, hint_in: HintInSparseDbl) -> (HintOutSparseDbl, Script) {
    assert_eq!(sec_in.len(), 4);
@@ -1739,7 +1739,7 @@ pub(crate) struct HintInSparseDenseMul {
 
 #[derive(Debug, Clone)]
 pub(crate) struct HintOutSparseDenseMul {
-    f: ark_bn254::Fq12,
+    pub(crate) f: ark_bn254::Fq12,
     hash_out: HashBytes,
 }
 
@@ -2515,16 +2515,6 @@ pub(crate) fn hints_frob_fp12(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hin
         {winternitz_compact::sign(&format!("{}{:04X}", sec_key, sec_out), ghash)}
     };
     (HintOutFrobFp12{f: g, fhash: ghash}, simulate_stack_input)
-}
-
-pub(crate) fn hint_miller_f_fixedPQ() {
-    let mut prng = ChaCha20Rng::seed_from_u64(0);
-    let p = ark_bn254::G1Affine::rand(&mut prng);
-    let a = ark_bn254::g2::G2Affine::rand(&mut prng);
-    let a_affine = a;
-
-    let c = Bn254::multi_miller_loop_affine([p], [a_affine]).0;
-
 }
 
 #[cfg(test)]

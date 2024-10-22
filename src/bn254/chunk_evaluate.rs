@@ -6,9 +6,10 @@ use ark_ff::{Field, UniformRand};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
+use crate::bn254::chunk_compile::ATE_LOOP_COUNT;
 use crate::bn254::chunk_config::miller_config_gen;
 use crate::bn254::chunk_primitves::emulate_extern_hash_fps;
-use crate::bn254::chunk_taps::{hint_hash_c, hint_hash_c2, hint_init_T4, hints_dense_dense_mul0, hints_dense_dense_mul1, hints_frob_fp12, hints_precompute_Px, hints_precompute_Py, tap_add_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_point_add, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, HashBytes, HintInAdd, HintInDblAdd, HintInDenseMul0, HintInDenseMul1, HintInDouble, HintInFrobFp12, HintInHashC, HintInInitT4, HintInPrecomputePx, HintInPrecomputePy, HintInSparseAdd, HintInSparseDbl, HintInSparseDenseMul, HintInSquaring, HintOutFixedAcc, HintOutFrobFp12, HintOutGrothC, HintOutPubIdentity};
+use crate::bn254::chunk_taps::{hint_hash_c, hint_hash_c2, hint_init_T4, hints_dense_dense_mul0, hints_dense_dense_mul1, hints_frob_fp12, hints_precompute_Px, hints_precompute_Py, tap_add_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_point_add, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, HashBytes, HintInAdd, HintInDblAdd, HintInDenseMul0, HintInDenseMul1, HintInDouble, HintInFrobFp12, HintInHashC, HintInInitT4, HintInPrecomputePx, HintInPrecomputePy, HintInSparseAdd, HintInSparseDbl, HintInSparseDenseMul, HintInSquaring, HintOutFixedAcc, HintOutFrobFp12, HintOutGrothC, HintOutPubIdentity, HintOutSparseDbl};
 use crate::bn254::{ chunk_taps};
 
 use super::chunk_compile::assign_link_ids;
@@ -28,11 +29,6 @@ fn evaluate_miller_circuit(id_to_sec: HashMap<String, u32>,hintmap: &mut HashMap
     // Verification key is P1, Q1, Q2, Q3
     // let (P1, Q1, Q2, Q3) = vk;
 
-    const ATE_LOOP_COUNT: &'static [i8] = &[
-         0, 0, 0, 1, 0, 1, 0, -1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, -1, 0, 0, 0, 1, 0, -1, 0, 0, 0,
-         0, -1, 0, 0, 1, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 1, 0, -1, 0, 0, 0, -1, 0,
-         -1, 0, 0, 0, 1, 0, 1, 1,
-     ];
     let blocks = miller_config_gen();
 
     let mut itr = 0;
@@ -51,7 +47,8 @@ fn evaluate_miller_circuit(id_to_sec: HashMap<String, u32>,hintmap: &mut HashMap
 
     let mut nt2 = t2.clone();
     let mut nt3 = t3.clone();
-    for bit in ATE_LOOP_COUNT.iter().rev().skip(1) {
+    for j in (1..ATE_LOOP_COUNT.len()).rev() {
+        let bit = &ATE_LOOP_COUNT[j-1];    
         let blocks_of_a_loop = &blocks[itr];
         for block in blocks_of_a_loop {
             let self_index = get_index(&block.ID, id_to_sec.clone());
@@ -71,6 +68,7 @@ fn evaluate_miller_circuit(id_to_sec: HashMap<String, u32>,hintmap: &mut HashMap
                     },
                     _ => panic!("failed to match"),
                 };
+                //println!("{bit} squaring out {:?}", hintout.b);
                 hintmap.insert(block.ID.clone(), HintOut::Squaring(hintout));
             } else if blk_name == "DblAdd" {
                 assert_eq!(hints.len(), 7);
@@ -100,6 +98,7 @@ fn evaluate_miller_circuit(id_to_sec: HashMap<String, u32>,hintmap: &mut HashMap
                     },
                     _ => panic!("failed to match"),
                 };
+                //println!("DblAdd {:?}", hintout);
                 hintmap.insert(block.ID.clone(), HintOut::DblAdd(hintout));
             } else if blk_name == "Dbl" {
                 assert_eq!(hints.len(), 3);
@@ -128,6 +127,7 @@ fn evaluate_miller_circuit(id_to_sec: HashMap<String, u32>,hintmap: &mut HashMap
                     },
                     _ => panic!("failed to match"),
                 };
+                //println!("Dbl {:?}", hintout);
                 hintmap.insert(block.ID.clone(), HintOut::Double(hintout));
             } else if blk_name == "SD1" {
                 assert_eq!(hints.len(), 2);
@@ -146,7 +146,7 @@ fn evaluate_miller_circuit(id_to_sec: HashMap<String, u32>,hintmap: &mut HashMap
                         }
                         _ => panic!()
                     };
-
+                // println!("{bit} sd out {:?}", sd_hint.f);
                 hintmap.insert(block.ID.clone(), HintOut::SparseDenseMul(sd_hint));
             } else if blk_name == "SS1" {
                 assert_eq!(hints.len(), 4);
@@ -176,6 +176,7 @@ fn evaluate_miller_circuit(id_to_sec: HashMap<String, u32>,hintmap: &mut HashMap
                     HintOut::SparseDbl(r) => r,
                     _ => panic!("failed to match"),
                 };
+                // d.f = ark_bn254::Fq12::ONE;
                 let (hint_out,_) = hints_dense_dense_mul0(sec_key_for_bitcomms, self_index, deps_indices, HintInDenseMul0::from_sparse_dense_dbl(c, d));
                 hintmap.insert(block.ID.clone(), HintOut::DenseMul0(hint_out));
             } else if blk_name == "DD2" {
@@ -638,7 +639,7 @@ fn evaluate_pre_miller_circuit(id_map: HashMap<String, u32>, hintmap: &mut HashM
     }
 }
 
-fn evaluate(p2: G1Affine, p3: G1Affine, p4: G1Affine,q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine, q4: G2Affine, c: Fq12, s: Fq12, fixed_acc: ark_bn254::Fq12) {
+pub fn evaluate(p2: G1Affine, p3: G1Affine, p4: G1Affine,q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine, q4: G2Affine, c: Fq12, s: Fq12, fixed_acc: ark_bn254::Fq12) {
     let (id_to_sec, facc, tacc) = assign_link_ids();
     let mut hintmap: HashMap<String, HintOut> = HashMap::new();
     let pubmap = evaluate_public_params(q2, q3, fixed_acc);
@@ -647,12 +648,23 @@ fn evaluate(p2: G1Affine, p3: G1Affine, p4: G1Affine,q2: ark_bn254::G2Affine, q3
     hintmap.extend(grothmap);
     evaluate_pre_miller_circuit(id_to_sec.clone(), &mut hintmap);
     let (nt2, nt3) = evaluate_miller_circuit(id_to_sec.clone(), &mut hintmap, q2, q3, q2, q3);
-    evaluate_post_miller_circuit(id_to_sec, &mut hintmap, nt2, nt3, q2, q3, facc, tacc);
+    println!("hintmap {:?}", hintmap);
+    println!("facc {:?}", facc);
+    //evaluate_post_miller_circuit(id_to_sec, &mut hintmap, nt2, nt3, q2, q3, facc, tacc);
     println!("Done");
 }
 
+// extract groth16 related params
+
 #[cfg(test)]
 mod test {
+    use std::ops::Neg;
+
+    use ark_bn254::Bn254;
+    use ark_ec::{AffineRepr, CurveGroup};
+
+    use crate::groth16::offchain_checker::compute_c_wi;
+
     use super::*;
 
     #[test]
@@ -667,6 +679,105 @@ mod test {
         let p4 = G1Affine::rand(&mut prng);
         let c = ark_bn254::Fq12::rand(&mut prng);
         let s = ark_bn254::Fq12::rand(&mut prng);
+        let fixed_acc = ark_bn254::Fq12::ONE;
+        evaluate(p2, p3, p4, q2, q3, q4, c, s, fixed_acc);
+    }
+
+    #[test]
+    fn test_groth16_verifier() {
+        use crate::{execute_script_as_chunks, execute_script_without_stack_limit};
+        use crate::groth16::verifier::Verifier;
+        use ark_bn254::Bn254;
+        use ark_crypto_primitives::snark::{CircuitSpecificSetupSNARK, SNARK};
+        use ark_ec::pairing::Pairing;
+        use ark_ff::PrimeField;
+        use ark_groth16::Groth16;
+        use ark_relations::lc;
+        use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+        use ark_std::{end_timer, start_timer, test_rng, UniformRand};
+        use bitcoin_script::script;
+        use rand::{RngCore, SeedableRng};
+
+        #[derive(Copy)]
+        struct DummyCircuit<F: PrimeField> {
+            pub a: Option<F>,
+            pub b: Option<F>,
+            pub num_variables: usize,
+            pub num_constraints: usize,
+        }
+
+        impl<F: PrimeField> Clone for DummyCircuit<F> {
+            fn clone(&self) -> Self {
+                DummyCircuit {
+                    a: self.a,
+                    b: self.b,
+                    num_variables: self.num_variables,
+                    num_constraints: self.num_constraints,
+                }
+            }
+        }
+
+        impl<F: PrimeField> ConstraintSynthesizer<F> for DummyCircuit<F> {
+            fn generate_constraints(self, cs: ConstraintSystemRef<F>) -> Result<(), SynthesisError> {
+                let a = cs.new_witness_variable(|| self.a.ok_or(SynthesisError::AssignmentMissing))?;
+                let b = cs.new_witness_variable(|| self.b.ok_or(SynthesisError::AssignmentMissing))?;
+                let c = cs.new_input_variable(|| {
+                    let a = self.a.ok_or(SynthesisError::AssignmentMissing)?;
+                    let b = self.b.ok_or(SynthesisError::AssignmentMissing)?;
+
+                    Ok(a * b)
+                })?;
+
+                for _ in 0..(self.num_variables - 3) {
+                    let _ = cs.new_witness_variable(|| self.a.ok_or(SynthesisError::AssignmentMissing))?;
+                }
+
+                for _ in 0..self.num_constraints - 1 {
+                    cs.enforce_constraint(lc!() + a, lc!() + b, lc!() + c)?;
+                }
+
+                cs.enforce_constraint(lc!(), lc!(), lc!())?;
+
+                Ok(())
+            }
+        }
+
+        type E = Bn254;
+        let k = 6;
+        let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
+        let circuit = DummyCircuit::<<E as Pairing>::ScalarField> {
+            a: Some(<E as Pairing>::ScalarField::rand(&mut rng)),
+            b: Some(<E as Pairing>::ScalarField::rand(&mut rng)),
+            num_variables: 10,
+            num_constraints: 1 << k,
+        };
+        let (pk, vk) = Groth16::<E>::setup(circuit, &mut rng).unwrap();
+    
+
+        let c = circuit.a.unwrap() * circuit.b.unwrap();
+
+        let proof = Groth16::<E>::prove(&pk, circuit, &mut rng).unwrap();
+    
+
+        let (_, msm_g1) = Verifier::prepare_inputs(&vec![c], &vk);
+        
+        // G1/G2 points for pairings
+        let (p1, p2, p3, p4) = (msm_g1.into_affine(), proof.c, vk.alpha_g1, proof.a);
+        let (q1, q2, q3, q4) = (
+            vk.gamma_g2.into_group().neg().into_affine(),
+            vk.delta_g2.into_group().neg().into_affine(),
+            -vk.beta_g2,
+            proof.b,
+        );
+        let t4 = q4;
+
+        let f = Bn254::multi_miller_loop_affine([p4], [q4]).0;
+        // let (c, wi) = compute_c_wi(f);
+       // let c_inv = c.inverse().unwrap();
+        println!("bn_facc {:?}", f);
+
+        let c = ark_bn254::Fq12::ONE;
+        let s = ark_bn254::Fq12::ONE;
         let fixed_acc = ark_bn254::Fq12::ONE;
         evaluate(p2, p3, p4, q2, q3, q4, c, s, fixed_acc);
     }

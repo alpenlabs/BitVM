@@ -1,6 +1,7 @@
 
 use std::collections::{HashMap};
 use ark_bn254::g2::G2Affine;
+use ark_ec::bn::BnConfig;
 
 use crate::bn254::chunk_config::miller_config_gen;
 use crate::bn254::chunk_taps::{tap_add_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_hash_c2, tap_point_add, tap_sparse_dense_mul};
@@ -9,6 +10,12 @@ use crate::bn254::{ chunk_taps};
 use super::chunk_config::{groth16_derivatives, groth16_params, post_miller_config_gen, post_miller_params, pre_miller_config_gen, public_params};
 use super::{chunk_taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4}};
 
+// pub const ATE_LOOP_COUNT: &'static [i8] = &[
+//     0, 0, 0, 1, 0, 1, 0, -1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, -1, 0, 0, 0, 1, 0, -1, 0, 0, 0,
+//     0, -1, 0, 0, 1, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 1, 0, -1, 0, 0, 0, -1, 0,
+//     -1, 0, 0, 0, 1, 0, 1, 1,
+// ];
+pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 
 // given a groth16 verification key, generate all of the tapscripts in compile mode
 fn compile_miller_circuit(id_to_sec: HashMap<String, u32>, t2: ark_bn254::G2Affine, t3: ark_bn254::G2Affine, q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine) -> (G2Affine, G2Affine) {
@@ -21,11 +28,7 @@ fn compile_miller_circuit(id_to_sec: HashMap<String, u32>, t2: ark_bn254::G2Affi
     // Verification key is P1, Q1, Q2, Q3
     // let (P1, Q1, Q2, Q3) = vk;
 
-    const ATE_LOOP_COUNT: &'static [i8] = &[
-         0, 0, 0, 1, 0, 1, 0, -1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, -1, 0, 0, 0, 1, 0, -1, 0, 0, 0,
-         0, -1, 0, 0, 1, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 1, 0, -1, 0, 0, 0, -1, 0,
-         -1, 0, 0, 0, 1, 0, 1, 1,
-     ];
+
     let blocks = miller_config_gen();
 
     let mut itr = 0;
@@ -44,7 +47,8 @@ fn compile_miller_circuit(id_to_sec: HashMap<String, u32>, t2: ark_bn254::G2Affi
 
     let mut nt2 = t2.clone();
     let mut nt3 = t3.clone();
-    for bit in ATE_LOOP_COUNT.iter().rev().skip(1) {
+    for j in (1..ATE_LOOP_COUNT.len()).rev() {
+        let bit = &ATE_LOOP_COUNT[j-1];
         let blocks_of_a_loop = &blocks[itr];
         for block in blocks_of_a_loop {
             let self_index = get_index(&block.ID, id_to_sec.clone());
