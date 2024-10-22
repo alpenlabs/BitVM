@@ -3,7 +3,7 @@ use std::collections::{HashMap};
 use ark_bn254::g2::G2Affine;
 
 use crate::bn254::chunk_config::miller_config_gen;
-use crate::bn254::chunk_taps::{tap_add_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_point_add, tap_sparse_dense_mul};
+use crate::bn254::chunk_taps::{tap_add_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_hash_c2, tap_point_add, tap_sparse_dense_mul};
 use crate::bn254::{ chunk_taps};
 
 use super::chunk_config::{groth16_derivatives, groth16_params, post_miller_config_gen, post_miller_params, pre_miller_config_gen, public_params};
@@ -101,17 +101,23 @@ fn compile_pre_miller_circuit(id_map: HashMap<String, u32>)  {
     for row in tables {
         let sec_in = row.Deps.split(",").into_iter().map(|s| id_map.get(s).unwrap().clone()).collect();
         println!("row ID {:?}", row.ID);
-        let sec_out: Vec<u32> = row.ID.split(",").into_iter().map(|s| id_map.get(s).unwrap().clone()).collect();
+        let sec_out = id_map.get(&row.ID).unwrap().clone();
         if row.name == "T4Init" {
-            tap_initT4(sec_key, sec_out[0],sec_in);
-        } else if row.name == "PreP" {
+            tap_initT4(sec_key, sec_out,sec_in);
+        } else if row.name == "PrePy" {
+            // tap_precompute_P(sec_key, sec_out, sec_in);
+        } else if row.name == "PrePx" {
             // tap_precompute_P(sec_key, sec_out, sec_in);
         } else if row.name == "HashC" {
-            tap_hash_c(sec_key, sec_out[0], sec_in);
+            tap_hash_c(sec_key, sec_out, sec_in);
+        } else if row.name == "HashC" {
+            tap_hash_c2(sec_key, sec_out, sec_in);
         } else if row.name == "DD1" {
-            tap_dense_dense_mul0(sec_key, sec_out[0], sec_in, true);
+            tap_dense_dense_mul0(sec_key, sec_out, sec_in, true);
         } else if row.name == "DD2" {
-            tap_dense_dense_mul1(sec_key, sec_out[0], sec_in, true);
+            tap_dense_dense_mul1(sec_key, sec_out, sec_in, true);
+        } else {
+            panic!()
         }
     }
 }

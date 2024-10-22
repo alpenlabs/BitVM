@@ -29,6 +29,7 @@ pub(crate) fn groth16_params() -> Vec<String> {
         "GP2y","GP2x",
         "Gc11","Gc10","Gc9","Gc8","Gc7","Gc6","Gc5","Gc4","Gc3","Gc2","Gc1","Gc0",
         "c",
+        "c2",
         "Gs11","Gs10","Gs9","Gs8","Gs7","Gs6","Gs5","Gs4","Gs3","Gs2","Gs1","Gs0",
         "s",
         "cinv",
@@ -67,9 +68,10 @@ pub(crate) fn pre_miller_config_gen() -> Vec<TableRow> {
         TableRow {name: String::from("PrePy"), ID: String::from("P2y"), Deps: String::from("GP2y")},
         TableRow {name: String::from("PrePx"), ID: String::from("P2x"), Deps: String::from("GP2y,GP2x,P2y")},
         TableRow {name: String::from("HashC"), ID: String::from("c"), Deps: String::from("Gc11,Gc10,Gc9,Gc8,Gc7,Gc6,Gc5,Gc4,Gc3,Gc2,Gc1,Gc0")},
+        TableRow {name: String::from("HashC2"), ID: String::from("c2"), Deps: String::from("Gc11,Gc10,Gc9,Gc8,Gc7,Gc6,Gc5,Gc4,Gc3,Gc2,Gc1,Gc0")},
         TableRow {name: String::from("HashC"), ID: String::from("s"), Deps: String::from("Gs11,Gs10,Gs9,Gs8,Gs7,Gs6,Gs5,Gs4,Gs3,Gs2,Gs1,Gs0")},
-        TableRow {name: String::from("DD1"), ID: String::from("cinv0"), Deps: String::from("c,cinv")},
-        TableRow {name: String::from("DD2"), ID: String::from("identity"), Deps: String::from("c,cinv,cinv0")},
+        TableRow {name: String::from("DD1"), ID: String::from("cinv0"), Deps: String::from("c2,cinv")},
+        TableRow {name: String::from("DD2"), ID: String::from("identity"), Deps: String::from("c2,cinv,cinv0")},
     ];
     tables
 }
@@ -92,8 +94,8 @@ pub(crate) fn post_miller_config_gen(f_acc: String, t4_acc: String) -> Vec<Table
         TableRow {name: String::from("Add1"), ID: String::from("U11"), Deps: String::from(format!("{t4_acc},Q4y1,Q4y0,Q4x1,Q4x0,P4y,P4x"))},
         TableRow {name: String::from("SD"), ID: String::from("U12"), Deps: String::from("U10,U11")},
         TableRow {name: String::from("SS"), ID: String::from("U13"), Deps: String::from("P3y,P3x,P2y,P2x")},
-        TableRow {name: String::from("DD1"), ID: String::from("U14"), Deps: String::from("U12,U13")},
-        TableRow {name: String::from("DD2"), ID: String::from("U15"), Deps: String::from("U12,U13,U14")},
+        TableRow {name: String::from("DD3"), ID: String::from("U14"), Deps: String::from("U12,U13")},
+        TableRow {name: String::from("DD4"), ID: String::from("U15"), Deps: String::from("U12,U13,U14")},
 
         TableRow {name: String::from("Add2"), ID: String::from("U16"), Deps: String::from("U11,Q4y1,Q4y0,Q4x1,Q4x0,P4y,P4x")},
         TableRow {name: String::from("SD"), ID: String::from("U17"), Deps: String::from("U15,U16")},
@@ -101,8 +103,8 @@ pub(crate) fn post_miller_config_gen(f_acc: String, t4_acc: String) -> Vec<Table
         TableRow {name: String::from("DD3"), ID: String::from("U19"), Deps: String::from("U17,U18")},
         TableRow {name: String::from("DD4"), ID: String::from("U20"), Deps: String::from("U17,U18,U19")},
 
-        TableRow {name: String::from("DD5"), ID: String::from("U21"), Deps: String::from("U20,f_fixed")},
-        TableRow {name: String::from("DD6"), ID: String::from("identity"), Deps: String::from("U20,f_fixed,U21")},
+        TableRow {name: String::from("DD1"), ID: String::from("U21"), Deps: String::from("U20,f_fixed")},
+        TableRow {name: String::from("DD2"), ID: String::from("identity"), Deps: String::from("U20,f_fixed,U21")},
     //// SS1;S4;P3,P2;
     ];
     tables
@@ -348,7 +350,7 @@ pub(crate) fn miller_config_gen()->Vec<Vec<TableRow>> {
                     id_counter,
                     &f_value,
                     &T4_value,
-                    false,
+                    true, // 1 => cinv
                 );
                 // Update f_value and T4_value based on the full table
                 f_value = format!("S{}", id_counter + 11); // ID of DD6
@@ -361,7 +363,7 @@ pub(crate) fn miller_config_gen()->Vec<Vec<TableRow>> {
                     id_counter,
                     &f_value,
                     &T4_value,
-                    true,
+                    false, // -1 => c
                 );
                 // Update f_value and T4_value based on the full table
                 f_value = format!("S{}", id_counter + 11); // ID of DD6

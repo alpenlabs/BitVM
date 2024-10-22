@@ -28,9 +28,6 @@ pub(crate) struct HintInSquaring {
 }
 
 impl HintInSquaring {
-    pub(crate) fn from_grothcinv(g: HintOutGrothCInv) -> Self {
-        HintInSquaring { a: g.cinv, ahash: g.cinvhash }
-    }
     pub(crate) fn from_grothc(g: HintOutGrothC) -> Self {
         HintInSquaring { a: g.c, ahash: g.chash }
     }
@@ -60,11 +57,7 @@ pub(crate) enum HintOut {
     FixedAcc(HintOutFixedAcc),
 
     FieldElem(ark_bn254::Fq),
-
-
-    GrothC(HintOutGrothC),
-    GrothS(HintOutGrothS),
-    GrothCInv(HintOutGrothCInv),
+    GrothC(HintOutGrothC), // c, s, cinv
 
     HashC(HintOutHashC),
     InitT4(HintOutInitT4),
@@ -1898,8 +1891,11 @@ pub(crate) struct HintInDenseMul0 {
 }
 
 impl HintInDenseMul0 {
-    pub(crate) fn from_groth(c: HintOutHashC, d: HintOutGrothCInv) -> Self {
-        Self { a: c.c, b: d.cinv }
+    pub(crate) fn from_groth_hc(c: HintOutHashC, d: HintOutGrothC) -> Self {
+        Self { a: c.c, b: d.c }
+    }
+    pub(crate) fn from_grothc(c: HintOutGrothC, d: HintOutGrothC) -> Self {
+        Self { a: c.c, b: d.c }
     }
     pub(crate) fn from_sparse_dense_dbl(c: HintOutSparseDenseMul, d: HintOutSparseDbl) -> Self {
         Self {a: c.f, b: d.f}
@@ -1909,9 +1905,6 @@ impl HintInDenseMul0 {
     }
     pub(crate) fn from_dense_c(c: HintOutDenseMul1, d: HintOutGrothC) -> Self {
         Self {a: c.c, b: d.c}
-    }
-    pub(crate) fn from_dense_cinv(c: HintOutDenseMul1, d: HintOutGrothCInv) -> Self {
-        Self {a: c.c, b: d.cinv}
     }
     pub(crate) fn from_dense_fixed_acc(c: HintOutDenseMul1, d: HintOutFixedAcc) -> Self {
         Self {a: c.c, b: d.f}
@@ -2034,8 +2027,11 @@ pub(crate) struct HintInDenseMul1 {
 }
 
 impl HintInDenseMul1 {
-    pub(crate) fn from_groth(c: HintOutHashC, d: HintOutGrothCInv) -> Self {
-        Self { a: c.c, b: d.cinv }
+    pub(crate) fn from_groth_hc(c: HintOutHashC, d: HintOutGrothC) -> Self {
+        Self { a: c.c, b: d.c }
+    }
+    pub(crate) fn from_grothc(c: HintOutGrothC, d: HintOutGrothC) -> Self {
+        Self { a: c.c, b: d.c }
     }
     pub(crate) fn from_sparse_dense_dbl(c: HintOutSparseDenseMul, d: HintOutSparseDbl) -> Self {
         Self {a: c.f, b: d.f}
@@ -2045,9 +2041,6 @@ impl HintInDenseMul1 {
     }
     pub(crate) fn from_dense_c(c: HintOutDenseMul1, d: HintOutGrothC) -> Self {
         Self {a: c.c, b: d.c}
-    }
-    pub(crate) fn from_dense_cinv(c: HintOutDenseMul1, d: HintOutGrothCInv) -> Self {
-        Self {a: c.c, b: d.cinv}
     }
     pub(crate) fn from_dense_fixed_acc(c: HintOutDenseMul1, d: HintOutFixedAcc) -> Self {
         Self {a: c.c, b: d.f}
@@ -2103,7 +2096,8 @@ pub(crate) struct HintOutPubIdentity {
 
 #[derive(Debug, Clone)]
 pub(crate) struct HintOutFixedAcc {
-    pub(crate) f: ark_bn254::Fq12
+    pub(crate) f: ark_bn254::Fq12,
+    pub(crate) fhash: HashBytes,
 }
 
 #[derive(Debug, Clone)]
@@ -2112,17 +2106,6 @@ pub(crate) struct HintOutGrothC {
     pub(crate) chash: HashBytes,
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct HintOutGrothS {
-    pub(crate) s: ark_bn254::Fq12,
-    pub(crate) shash: HashBytes,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct HintOutGrothCInv {
-    pub(crate) cinv: ark_bn254::Fq12,
-    pub(crate) cinvhash: HashBytes,
-}
 // PREMILLER
 
 pub(crate) struct HintInHashC {
@@ -2136,7 +2119,7 @@ impl HintInHashC {
     }
     pub(crate) fn from_points(gs: Vec<ark_bn254::Fq>) -> Self {
         let hash = emulate_extern_hash_fps(gs.clone(), false);
-        HintInHashC { c: ark_bn254::Fq12::new(ark_bn254::Fq6::new(ark_bn254::Fq2::new(gs[0], gs[1]), ark_bn254::Fq2::new(gs[2], gs[3]), ark_bn254::Fq2::new(gs[4], gs[5])), ark_bn254::Fq6::new(ark_bn254::Fq2::new(gs[6], gs[7]), ark_bn254::Fq2::new(gs[8], gs[9]), ark_bn254::Fq2::new(gs[10], gs[11]))), hashc: hash }
+        HintInHashC { c: ark_bn254::Fq12::new(ark_bn254::Fq6::new(ark_bn254::Fq2::new(gs[11], gs[10]), ark_bn254::Fq2::new(gs[9], gs[8]), ark_bn254::Fq2::new(gs[7], gs[6])), ark_bn254::Fq6::new(ark_bn254::Fq2::new(gs[5], gs[4]), ark_bn254::Fq2::new(gs[3], gs[2]), ark_bn254::Fq2::new(gs[1], gs[0]))), hashc: hash }
     }
 }
 
@@ -2206,6 +2189,68 @@ pub(crate) fn hint_hash_c(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint_in
     };
     (HintOutHashC{c: hint_in.c, hash_out: fhash}, simulate_stack_input)
 }
+
+// HASH_C
+pub(crate) fn tap_hash_c2(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+    assert_eq!(sec_in.len(), 12);
+    let bitcom_scr = script!{
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // f11 MSB
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} 
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} 
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[3]))} 
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[4]))} 
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[5]))} 
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[6]))} 
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[7]))} 
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[8]))} 
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[9]))} 
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[10]))}  // f1
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[11]))} // f0
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // f_hash
+        for _ in 0..12 {
+            {Fq::fromaltstack()}
+        }
+        // Stack:[f_hash_claim, f0, ..,f11]
+    };
+
+    let hash_scr = script!{
+        { hash_fp12() }
+        {Fq::equalverify(1, 0)}
+    };
+    let sc = script!{
+        {bitcom_scr}
+        {hash_scr}
+        OP_TRUE
+    };
+    sc
+}
+
+pub(crate) fn hint_hash_c2(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInHashC) ->  (HintOutHashC, Script) {
+    let f = hint_in.c;
+    let f = vec![f.c0.c0.c0,f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0,f.c0.c2.c1, f.c1.c0.c0,f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0,f.c1.c2.c1];
+    let fhash = emulate_extern_hash_fps(f.clone(), true);
+    let simulate_stack_input = script!{
+        // bit commits raw
+        {winternitz_compact::sign(&format!("{}{:04X}", sec_key, sec_out), fhash)}
+        for i in 0..12 {
+            {winternitz_compact::sign(&format!("{}{:04X}", sec_key, sec_in[11-i]), emulate_fq_to_nibbles(f[i]))}
+        }
+    };
+    (HintOutHashC{c: hint_in.c, hash_out: fhash}, simulate_stack_input)
+}
+
 
 // precompute P
 pub(crate) fn tap_precompute_Px(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
@@ -2282,12 +2327,14 @@ pub(crate) struct HintInPrecomputePx {
 }
 
 impl HintInPrecomputePx {
-    pub(crate) fn from_points(xs: Vec<ark_bn254::Fq>) -> Self {
-        Self { p: ark_bn254::G1Affine::new(xs[0], xs[1]), pdy: xs[2] }
+    pub(crate) fn from_points(v: Vec<ark_bn254::Fq>) -> Self {
+        // GP3y,GP3x,P3y
+        Self { p: ark_bn254::G1Affine::new(v[1], v[0]), pdy: v[2] }
     }
 }
 
 pub(crate) fn hints_precompute_Px(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInPrecomputePx) -> (ark_bn254::Fq, Script) {
+    assert_eq!(sec_in.len(), 3);
     let p = hint_in.p.clone();
     let pdx = -p.x/p.y;
     let pdy = p.y.inverse().unwrap();
@@ -2314,6 +2361,7 @@ pub(crate) fn hints_precompute_Px(sec_key: &str, sec_out: u32, sec_in: Vec<u32>,
 }
 
 pub(crate) fn hints_precompute_Py(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInPrecomputePy) -> (ark_bn254::Fq, Script) {
+    assert_eq!(sec_in.len(), 1);
     let p = hint_in.p.clone();
     let pdy = p.inverse().unwrap();
 
@@ -2375,8 +2423,9 @@ pub(crate) struct HintInInitT4 {
 impl HintInInitT4 {
     pub(crate) fn from_groth_q4(cs: Vec<ark_bn254::Fq>) -> Self {
         assert_eq!(cs.len(), 4);
+        //Q4y1,Q4y0,Q4x1,Q4x0
         Self { 
-            t4: ark_bn254::G2Affine::new(ark_bn254::Fq2::new(cs[0], cs[1]), ark_bn254::Fq2::new(cs[2], cs[3])) }
+            t4: ark_bn254::G2Affine::new(ark_bn254::Fq2::new(cs[3], cs[2]), ark_bn254::Fq2::new(cs[1], cs[0])) }
     }
 
 }
@@ -2452,9 +2501,6 @@ pub(crate) struct HintInFrobFp12 {
 }
 
 impl HintInFrobFp12 {
-    pub(crate) fn from_groth_cinv(g: HintOutGrothCInv) -> Self {
-        Self { f: g.cinv }
-    }
     pub(crate) fn from_groth_c(g: HintOutGrothC) -> Self {
         Self { f: g.c }
     }
@@ -2548,6 +2594,35 @@ mod test {
         let fhash = emulate_extern_hash_fps(vec![f.c0.c0.c0,f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0,f.c0.c2.c1, f.c1.c0.c0,f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0,f.c1.c2.c1], false);
         let hint_in = HintInHashC { c: f, hashc: fhash };
         let (_, simulate_stack_input) = hint_hash_c(&sec_key_for_bitcomms, 0, sec_in, hint_in);
+
+        let tap_len = hash_c_scr.len();
+        let script = script!{
+            {simulate_stack_input}
+            {hash_c_scr}
+        };
+
+        let res = execute_script(script);
+        assert!(res.success);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+        
+    }
+
+    #[test]
+    fn test_tap_hash_c2() {
+        // compile time
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let sec_in = vec![1,2,3,4,5,6,7,8,9,10,11,12];
+        let hash_c_scr = tap_hash_c2(&sec_key_for_bitcomms, 0, sec_in.clone());
+
+        // runtime
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let f = ark_bn254::Fq12::rand(&mut prng);
+        let fhash = emulate_extern_hash_fps(vec![f.c0.c0.c0,f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0,f.c0.c2.c1, f.c1.c0.c0,f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0,f.c1.c2.c1], true);
+        let hint_in = HintInHashC { c: f, hashc: fhash };
+        let (_, simulate_stack_input) = hint_hash_c2(&sec_key_for_bitcomms, 0, sec_in, hint_in);
 
         let tap_len = hash_c_scr.len();
         let script = script!{
