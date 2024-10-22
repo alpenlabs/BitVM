@@ -353,24 +353,23 @@ pub(crate) fn hint_point_dbl(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint
     // -bias
     let bias_minus_tangent = alpha_tangent * t.x - t.y;
 
+    //println!("hint_point_dbl alpha {:?} bias {:?}",alpha_tangent, bias_minus_tangent);
+
     let new_tx = alpha_tangent.square() - t.x.double();
     let new_ty = bias_minus_tangent - alpha_tangent * new_tx;
     let (_, hints_double_line) = new_hinted_affine_double_line(t.x, alpha_tangent, bias_minus_tangent);
     let (_, hints_check_tangent) = new_hinted_check_line_through_point(t.x, alpha_tangent, bias_minus_tangent);
 
-    let p_dash_x = -p.x/p.y;
-    let p_dash_y = p.y.inverse().unwrap();
-
 
     // affine mode as well
     let mut dbl_le0 = alpha_tangent;
-    dbl_le0.mul_assign_by_fp(&(-p.x / p.y));
+    dbl_le0.mul_assign_by_fp(&p.x);
 
     let mut dbl_le1 = bias_minus_tangent;
-    dbl_le1.mul_assign_by_fp(&(p.y.inverse().unwrap()));
+    dbl_le1.mul_assign_by_fp(&p.y);
 
 
-    let (_, hints_ell_tangent) = new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_tangent, bias_minus_tangent);
+    let (_, hints_ell_tangent) = new_hinted_ell_by_constant_affine(p.x, p.y, alpha_tangent, bias_minus_tangent);
 
     let mut all_qs = vec![];
     for hint in hints_check_tangent { 
@@ -383,8 +382,8 @@ pub(crate) fn hint_point_dbl(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint
         all_qs.push(hint)
     }
 
-    let pdash_x = emulate_fq_to_nibbles(-p.x/p.y);
-    let pdash_y = emulate_fq_to_nibbles(p.y.inverse().unwrap());
+    let pdash_x = emulate_fq_to_nibbles(p.x);
+    let pdash_y = emulate_fq_to_nibbles(p.y);
 
     let hash_new_t = emulate_extern_hash_fps(vec![new_tx.c0, new_tx.c1, new_ty.c0, new_ty.c1], true);
     let hash_dbl_le = emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
@@ -765,18 +764,18 @@ pub(crate) fn hint_point_add(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint
 
     let new_tx = alpha_chord.square() - tt.x - qq.x;
     let new_ty = bias_minus_chord - alpha_chord * new_tx;
-    let p_dash_x = -p.x/p.y;
-    let p_dash_y = p.y.inverse().unwrap();
+    let p_dash_x = p.x;
+    let p_dash_y = p.y;
 
     let (_, hints_check_chord_t) = new_hinted_check_line_through_point( tt.x, alpha_chord, bias_minus_chord);
     let (_, hints_check_chord_q) = new_hinted_check_line_through_point( qq.x, alpha_chord, bias_minus_chord);
     let (_, hints_add_line) = new_hinted_affine_add_line(tt.x, qq.x, alpha_chord, bias_minus_chord);
 
     let mut add_le0 = alpha_chord;
-    add_le0.mul_assign_by_fp(&(-p.x / p.y));
+    add_le0.mul_assign_by_fp(&p.x);
 
     let mut add_le1 = bias_minus_chord;
-    add_le1.mul_assign_by_fp(&(p.y.inverse().unwrap()));
+    add_le1.mul_assign_by_fp(&p.y);
 
 
     let (_, hints_ell_chord) = new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_chord, bias_minus_chord);
@@ -799,8 +798,8 @@ pub(crate) fn hint_point_add(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint
         all_qs.push(hint)
     }
 
-    let pdash_x = emulate_fq_to_nibbles(-p.x/p.y);
-    let pdash_y = emulate_fq_to_nibbles(p.y.inverse().unwrap());
+    let pdash_x = emulate_fq_to_nibbles(p.x);
+    let pdash_y = emulate_fq_to_nibbles(p.y);
     let qdash_x0 = emulate_fq_to_nibbles(q.x.c0);
     let qdash_x1 = emulate_fq_to_nibbles(q.x.c1);
     let qdash_y0 = emulate_fq_to_nibbles(q.y.c0);
@@ -1121,6 +1120,7 @@ pub(crate) fn tap_point_ops(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, ate: 
     sc
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct HintInDblAdd {
     t: ark_bn254::G2Affine,
     p:ark_bn254::G1Affine,
@@ -1176,6 +1176,8 @@ pub(crate) fn hint_point_ops(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint
     // -bias
     let bias_minus_tangent = alpha_tangent * t.x - t.y;
 
+    //println!("alphat {:?} biast {:?}", alpha_tangent, bias_minus_tangent);
+
     let tx = alpha_tangent.square() - t.x.double();
     let ty = bias_minus_tangent - alpha_tangent * tx;
     let (_, hints_double_line) = new_hinted_affine_double_line(t.x, alpha_tangent, bias_minus_tangent);
@@ -1188,10 +1190,12 @@ pub(crate) fn hint_point_ops(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint
     let bias_minus_chord = alpha_chord * tt.x - tt.y;
     assert_eq!(alpha_chord * tt.x - tt.y, bias_minus_chord);
 
+    //println!("alphac {:?} biasc {:?}", alpha_chord, bias_minus_chord);
+
     let new_tx = alpha_chord.square() - tt.x - qq.x;
     let new_ty = bias_minus_chord - alpha_chord * new_tx;
-    let p_dash_x = -p.x/p.y;
-    let p_dash_y = p.y.inverse().unwrap();
+    let p_dash_x = p.x;
+    let p_dash_y = p.y;
 
     let (_, hints_check_chord_t) = new_hinted_check_line_through_point( tt.x, alpha_chord, bias_minus_chord);
     let (_, hints_check_chord_q) = new_hinted_check_line_through_point( qq.x, alpha_chord, bias_minus_chord);
@@ -1199,16 +1203,16 @@ pub(crate) fn hint_point_ops(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint
 
     // affine mode as well
     let mut dbl_le0 = alpha_tangent;
-    dbl_le0.mul_assign_by_fp(&(-p.x / p.y));
+    dbl_le0.mul_assign_by_fp(&p.x);
 
     let mut dbl_le1 = bias_minus_tangent;
-    dbl_le1.mul_assign_by_fp(&(p.y.inverse().unwrap()));
+    dbl_le1.mul_assign_by_fp(&p.y);
 
     let mut add_le0 = alpha_chord;
-    add_le0.mul_assign_by_fp(&(-p.x / p.y));
+    add_le0.mul_assign_by_fp(&p.x);
 
     let mut add_le1 = bias_minus_chord;
-    add_le1.mul_assign_by_fp(&(p.y.inverse().unwrap()));
+    add_le1.mul_assign_by_fp(&p.y);
 
 
     let (_, hints_ell_tangent) = new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_tangent, bias_minus_tangent);
@@ -1237,8 +1241,8 @@ pub(crate) fn hint_point_ops(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint
         all_qs.push(hint)
     }
 
-    let pdash_x = emulate_fq_to_nibbles(-p.x/p.y);
-    let pdash_y = emulate_fq_to_nibbles(p.y.inverse().unwrap());
+    let pdash_x = emulate_fq_to_nibbles(p.x);
+    let pdash_y = emulate_fq_to_nibbles(p.y);
     let qdash_x0 = emulate_fq_to_nibbles(q.x.c0);
     let qdash_x1 = emulate_fq_to_nibbles(q.x.c1);
     let qdash_y0 = emulate_fq_to_nibbles(q.y.c0);
@@ -1285,7 +1289,7 @@ pub(crate) fn hint_point_ops(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint
     };
 
     let hint_out = HintOutDblAdd {
-        t: G2Affine::new_unchecked(tx, ty),
+        t: G2Affine::new_unchecked(new_tx, new_ty),
         add_le: (add_le0, add_le1),
         dbl_le: (dbl_le0, dbl_le1),
         hash_out: hash_root_claim,
@@ -1502,7 +1506,7 @@ impl HintInSparseAdd {
 pub(crate) struct HintOutSparseAdd {
     pub(crate) t2: ark_bn254::G2Affine,
     pub(crate) t3: G2Affine, 
-    f: ark_bn254::Fq12,
+    pub(crate) f: ark_bn254::Fq12,
 }
 
 pub(crate) fn hint_add_eval_mul_for_fixed_Qs(sec_key: &str,sec_out: u32, sec_in: Vec<u32>, hint_in: HintInSparseAdd) -> (HintOutSparseAdd, Script) {
