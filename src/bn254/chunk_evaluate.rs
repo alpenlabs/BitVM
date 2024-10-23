@@ -660,8 +660,6 @@ pub fn evaluate(p2: G1Affine, p3: G1Affine, p4: G1Affine,q2: ark_bn254::G2Affine
     let (nt2, nt3) = evaluate_miller_circuit(id_to_sec.clone(), &mut hintmap, q2, q3, q2, q3);
     evaluate_post_miller_circuit(id_to_sec, &mut hintmap, nt2, nt3, q2, q3, facc.clone(), tacc);
     println!("hintmap {:?}", hintmap);
-    println!("facc {:?}", facc);
-    println!("Done");
 }
 
 // extract groth16 related params
@@ -672,6 +670,7 @@ mod test {
 
     use ark_bn254::Bn254;
     use ark_ec::{AffineRepr, CurveGroup};
+    use test::chunk_taps::{hint_add_eval_mul_for_fixed_Qs_with_frob, hint_point_add};
 
     use crate::{bn254, groth16::offchain_checker::compute_c_wi};
 
@@ -779,19 +778,33 @@ mod test {
             -vk.beta_g2,
             proof.b,
         );
-        let t4 = q4;
 
+        println!();
+        println!();
 
-        let r = bn254::ell_coeffs::G2Prepared::from_affine(q4);
+        let f = Bn254::multi_miller_loop_affine([p2,p3,p4], [q2,q3,q4]).0;
 
-        let f = Bn254::multi_miller_loop_affine([p4], [q4]).0;
-    //     // let (c, wi) = compute_c_wi(f);
-    //    // let c_inv = c.inverse().unwrap();
-        println!("bn_facc_p234 {:?}", f);
+        println!("facc {:?}", f);
+        println!();
+        println!();
 
-        let c = ark_bn254::Fq12::ONE;
+        // let _ = bn254::ell_coeffs::G2Prepared::from(q4);
+
+        let c = ark_bn254::Fq12::ONE; // compute_c_wi()
         let s = ark_bn254::Fq12::ONE;
         let fixed_acc = ark_bn254::Fq12::ONE;
         evaluate(p2, p3, p4, q2, q3, q4, c, s, fixed_acc);
+
+        // let t = q3.clone();
+        // let p = p4.clone();
+    //     let hle = [0u8;64];
+
+    //    let sec_key = "b138982ce17ac813d505b5b40b665d404e9528e7";
+    //    let sec_out = 0;
+
+    //    let hint_in: HintInAdd = HintInAdd {t, p, q:q4, hash_le_aux: hle};
+    //    hint_point_add(sec_key, sec_out, vec![1,2,3,4,5,6,7], hint_in.clone(), 1);
+    //    println!("Second Loop");
+    //    hint_point_add(sec_key, sec_out, vec![1,2,3,4,5,6,7], hint_in, -1);
     }
 }

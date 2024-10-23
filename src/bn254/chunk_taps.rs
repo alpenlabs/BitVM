@@ -426,11 +426,12 @@ pub(crate) fn hint_point_dbl(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint
 }
 
 // POINT ADD
+#[derive(Debug, Clone)]
 pub(crate) struct HintInAdd {
-    t: ark_bn254::G2Affine,
-    p:ark_bn254::G1Affine,
-    q:ark_bn254::G2Affine,
-    hash_le_aux: HashBytes,
+    pub(crate) t: ark_bn254::G2Affine,
+    pub(crate) p:ark_bn254::G1Affine,
+    pub(crate) q:ark_bn254::G2Affine,
+    pub(crate) hash_le_aux: HashBytes,
     //hash_in: HashBytes, // in = Hash([Hash(T), Hash_le_aux])
 }
 
@@ -753,11 +754,6 @@ pub(crate) fn hint_point_add(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint
         }   
     }
 
-    if ate == -1 {
-        qq = q.neg();
-    }
-
- 
     let alpha_chord = (tt.y - qq.y) / (tt.x - qq.x);
     // -bias
     let bias_minus_chord = alpha_chord * tt.x - tt.y;
@@ -1669,11 +1665,13 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs(sec_key: &str, sec_out: u32, sec_in:
 
 
 pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(sec_key: &str,sec_out: u32, sec_in: Vec<u32>, hint_in: HintInSparseAdd, ate: i8) -> (HintOutSparseAdd, Script) {
+    
+    assert_eq!(sec_in.len(), 4);
     let (t2, t3, p2, p3, qq2, qq3) = (hint_in.t2, hint_in.t3, hint_in.p2, hint_in.p3, hint_in.q2, hint_in.q3);
     
     // First
     let mut qq = qq2.clone();
-    let mut frob_hint: Vec<Hint> = vec![];
+    let mut frob_hint2: Vec<Hint> = vec![];
     if ate == 1 {
         let beta_12x = BigUint::from_str("21575463638280843010398324269430826099269044274347216827212613867836435027261").unwrap();
         let beta_12y = BigUint::from_str("10307601595873709700152284273816112264069230130616436755625194854815875713954").unwrap();
@@ -1691,10 +1689,10 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(sec_key: &str,sec_out: u3
         qq.y = qq.y * beta_13;
 
         for hint in hint_beta13_mul {
-            frob_hint.push(hint);
+            frob_hint2.push(hint);
         }
         for hint in hint_beta12_mul {
-            frob_hint.push(hint);
+            frob_hint2.push(hint);
         }
 
     } else if ate == -1 {
@@ -1706,16 +1704,13 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(sec_key: &str,sec_out: u3
         qq.x = qq.x * beta_22;
 
         for hint in hint_beta22_mul {
-            frob_hint.push(hint);
+            frob_hint2.push(hint);
         }   
     }
-    let mut q2 = qq.clone();
-    if ate == -1 {
-        q2 = q2.neg();
-    }
-    let alpha_t2 = (t2.y - q2.y) / (t2.x - q2.x);
+
+    let alpha_t2 = (t2.y - qq.y) / (t2.x - qq.x);
     let bias_t2 = alpha_t2 * t2.x - t2.y;
-    let x2 = alpha_t2.square() - t2.x - q2.x;
+    let x2 = alpha_t2.square() - t2.x - qq.x;
     let y2 = bias_t2 - alpha_t2 * x2;
     let mut c2x = alpha_t2;
     c2x.mul_assign_by_fp(&p2.x);
@@ -1730,7 +1725,7 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(sec_key: &str,sec_out: u3
 
     // Second
     let mut qq = qq3.clone();
-    let mut frob_hint: Vec<Hint> = vec![];
+    let mut frob_hint3: Vec<Hint> = vec![];
     if ate == 1 {
         let beta_12x = BigUint::from_str("21575463638280843010398324269430826099269044274347216827212613867836435027261").unwrap();
         let beta_12y = BigUint::from_str("10307601595873709700152284273816112264069230130616436755625194854815875713954").unwrap();
@@ -1748,10 +1743,10 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(sec_key: &str,sec_out: u3
         qq.y = qq.y * beta_13;
 
         for hint in hint_beta13_mul {
-            frob_hint.push(hint);
+            frob_hint3.push(hint);
         }
         for hint in hint_beta12_mul {
-            frob_hint.push(hint);
+            frob_hint3.push(hint);
         }
 
     } else if ate == -1 {
@@ -1763,16 +1758,13 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(sec_key: &str,sec_out: u3
         qq.x = qq.x * beta_22;
 
         for hint in hint_beta22_mul {
-            frob_hint.push(hint);
+            frob_hint3.push(hint);
         }   
     }
-    let mut q3 = qq.clone();
-    if ate == -1 {
-        q3 = q3.neg();
-    }
-    let alpha_t3 = (t3.y - q3.y) / (t3.x - q3.x);
+
+    let alpha_t3 = (t3.y - qq.y) / (t3.x - qq.x);
     let bias_t3 = alpha_t3 * t3.x - t3.y;
-    let x3 = alpha_t3.square() - t3.x - q3.x;
+    let x3 = alpha_t3.square() - t3.x - qq.x;
     let y3 = bias_t3 - alpha_t3 * x3;
     let mut c3x = alpha_t3;
     c3x.mul_assign_by_fp(&p3.x);
@@ -1787,6 +1779,13 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(sec_key: &str,sec_out: u3
     let (_, hint_ell_t3) = new_hinted_ell_by_constant_affine(p3.x, p3.y, alpha_t3, bias_t3);
     let (_, hint_sparse_dense_mul) = Fq12::hinted_mul_by_34(f, c3x, c3y);
 
+
+    for hint in frob_hint3 {
+        hints.push(hint);
+    }
+    for hint in frob_hint2 {
+        hints.push(hint);
+    }
     for hint in hint_ell_t3 {
         hints.push(hint);
     }
@@ -2364,7 +2363,7 @@ pub(crate) fn hint_hash_c(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint_in
 
 // HASH_C
 pub(crate) fn tap_hash_c2(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
-    assert_eq!(sec_in.len(), 12);
+    assert_eq!(sec_in.len(), 1);
     let bitcom_scr = script!{
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // f11 MSB
         {Fq::toaltstack()}
@@ -2761,7 +2760,7 @@ mod test {
     fn test_tap_hash_c2() {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let sec_in = vec![1,2,3,4,5,6,7,8,9,10,11,12];
+        let sec_in = vec![1];
         let hash_c_scr = tap_hash_c2(&sec_key_for_bitcomms, 0, sec_in.clone());
 
         // runtime

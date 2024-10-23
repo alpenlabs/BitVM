@@ -50,7 +50,7 @@ pub(crate) fn groth16_derivatives() -> Vec<String> {
         "P3y","P3x",
         "P2y","P2x",
         "cinv0",
-        ];
+    ];
     r.into_iter().map(|f|f.to_string()).collect()
 }
 
