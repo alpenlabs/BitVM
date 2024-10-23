@@ -4,7 +4,7 @@ use ark_bn254::g2::G2Affine;
 use ark_ec::bn::BnConfig;
 
 use crate::bn254::chunk_config::miller_config_gen;
-use crate::bn254::chunk_taps::{tap_add_eval_mul_for_fixed_Qs, tap_add_eval_mul_for_fixed_Qs_with_frob, tap_frob_fp12, tap_hash_c2, tap_point_add, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul};
+use crate::bn254::chunk_taps::{tap_add_eval_mul_for_fixed_Qs, tap_add_eval_mul_for_fixed_Qs_with_frob, tap_frob_fp12, tap_hash_c2, tap_point_add_with_frob, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul};
 use crate::bn254::{ chunk_taps};
 use super::chunk_config::{groth16_derivatives, groth16_params, post_miller_config_gen, post_miller_params, pre_miller_config_gen, public_params};
 use super::{chunk_taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4}};
@@ -96,7 +96,7 @@ fn compile_miller_circuit(id_to_sec: HashMap<String, u32>,  q2: ark_bn254::G2Aff
                let sc = chunk_taps::tap_sparse_dense_mul(sec_key_for_bitcomms, self_index, deps_indices, false);
                scripts.push(sc);
             } else if blk_name == "SS2" {
-                let (sc, a, b) = chunk_taps::tap_add_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices, nt2, nt3, q2, q3);
+                let (sc, a, b) = chunk_taps::tap_add_eval_mul_for_fixed_Qs(sec_key_for_bitcomms, self_index, deps_indices, nt2, nt3, q2, q3, *bit);
                 scripts.push(sc);
                 nt2 = a;
                 nt3 = b;
@@ -189,10 +189,10 @@ fn compile_post_miller_circuit(id_map: HashMap<String, u32>, t2: ark_bn254::G2Af
             let sc = tap_dense_dense_mul1(sec_key, sec_out[0], sec_in, true);
             scripts.push(sc);
         } else if row.name == "Add1" {
-            let sc = tap_point_add(sec_key, sec_out[0], sec_in, 1);
+            let sc = tap_point_add_with_frob(sec_key, sec_out[0], sec_in, 1);
             scripts.push(sc);
         } else if row.name == "Add2" {
-            let sc = tap_point_add(sec_key, sec_out[0], sec_in, -1);
+            let sc = tap_point_add_with_frob(sec_key, sec_out[0], sec_in, -1);
             scripts.push(sc);
         } else if row.name == "SD" {
             let sc = tap_sparse_dense_mul(sec_key, sec_out[0], sec_in, false);

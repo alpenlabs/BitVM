@@ -470,7 +470,7 @@ pub(crate) struct HintOutAdd {
     hash_out: HashBytes,
 }
 
-pub(crate) fn tap_point_add(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, ate: i8) -> Script {
+pub(crate) fn tap_point_add_with_frob(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, ate: i8) -> Script {
     assert!(ate == 1 || ate == -1);
     assert_eq!(sec_in.len(), 7);
     let mut ate_unsigned_bit = 1;  // Q1 = pi(Q), T = T + Q1 // frob
@@ -662,7 +662,6 @@ pub(crate) fn tap_point_add(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, ate: 
             {beta12_mul}
             {Fq2::fromaltstack()}
         OP_ELSE
-            {Fq::neg(0)}
             {Fq2::toaltstack()}
             {fq2_push_not_montgomery(beta_22)} // beta_22
             {beta22_mul}
@@ -709,21 +708,24 @@ pub(crate) fn tap_point_add(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, ate: 
     sc
 }
 
-pub(crate) fn hint_point_add(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInAdd, ate: i8) -> (HintOutAdd, Script) {
-
+pub(crate) fn hint_point_add_with_frob(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInAdd, ate: i8) -> (HintOutAdd, Script) {
+    assert!(ate == 1 || ate == -1);
     assert_eq!(sec_in.len(), 7);
     let (tt, p, q) = (hint_in.t, hint_in.p, hint_in.q);
     let mut qq = q.clone();
 
+    let beta_12x = BigUint::from_str("21575463638280843010398324269430826099269044274347216827212613867836435027261").unwrap();
+    let beta_12y = BigUint::from_str("10307601595873709700152284273816112264069230130616436755625194854815875713954").unwrap();
+    let beta_12 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_12x.clone()), ark_bn254::Fq::from(beta_12y.clone())]).unwrap();
+    let beta_13x = BigUint::from_str("2821565182194536844548159561693502659359617185244120367078079554186484126554").unwrap();
+    let beta_13y = BigUint::from_str("3505843767911556378687030309984248845540243509899259641013678093033130930403").unwrap();
+    let beta_13 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_13x.clone()), ark_bn254::Fq::from(beta_13y.clone())]).unwrap();
+    let beta_22x = BigUint::from_str("21888242871839275220042445260109153167277707414472061641714758635765020556616").unwrap();
+    let beta_22y = BigUint::from_str("0").unwrap();
+    let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_22x.clone()), ark_bn254::Fq::from(beta_22y.clone())]).unwrap();
+
     let mut frob_hint: Vec<Hint> = vec![];
     if ate == 1 {
-        let beta_12x = BigUint::from_str("21575463638280843010398324269430826099269044274347216827212613867836435027261").unwrap();
-        let beta_12y = BigUint::from_str("10307601595873709700152284273816112264069230130616436755625194854815875713954").unwrap();
-        let beta_12 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_12x.clone()), ark_bn254::Fq::from(beta_12y.clone())]).unwrap();
-        let beta_13x = BigUint::from_str("2821565182194536844548159561693502659359617185244120367078079554186484126554").unwrap();
-        let beta_13y = BigUint::from_str("3505843767911556378687030309984248845540243509899259641013678093033130930403").unwrap();
-        let beta_13 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_13x.clone()), ark_bn254::Fq::from(beta_13y.clone())]).unwrap();
-    
         qq.x.conjugate_in_place();    
         let (_, hint_beta12_mul) = Fq2::hinted_mul(2, qq.x, 0, beta_12);
         qq.x = qq.x * beta_12;
@@ -740,10 +742,6 @@ pub(crate) fn hint_point_add(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint
         }
 
     } else if ate == -1 { // todo: correct this code block
-        let beta_22x = BigUint::from_str("21888242871839275220042445260109153167277707414472061641714758635765020556616").unwrap();
-        let beta_22y = BigUint::from_str("0").unwrap();
-        let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_22x.clone()), ark_bn254::Fq::from(beta_22y.clone())]).unwrap();
-    
         let (_, hint_beta22_mul) = Fq2::hinted_mul(2, qq.x, 0, beta_22);
         qq.x = qq.x * beta_22;
 
@@ -1586,19 +1584,26 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs(sec_key: &str,sec_out: u32, sec_in:
     (hint_out, simulate_stack_input)
 }
 
-pub(crate) fn tap_add_eval_mul_for_fixed_Qs(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, t2: G2Affine, t3: G2Affine, q2: G2Affine, q3: G2Affine) -> (Script, G2Affine, G2Affine) {
-    // WARN: use ate bit the way tap_point_add did
+pub(crate) fn tap_add_eval_mul_for_fixed_Qs(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, t2: G2Affine, t3: G2Affine, q2: G2Affine, q3: G2Affine, ate: i8) -> (Script, G2Affine, G2Affine) {
+    // WARN: use ate bit the way tap_point_ops did
     assert_eq!(sec_in.len(), 4);
+    assert!(ate == 1 || ate == -1);
 
+    let mut qq2 = q2.clone();
+    let mut qq3 = q3.clone();
+    if ate == -1 {
+        qq2 = qq2.neg();
+        qq3 = qq3.neg(); 
+    }
     // First
-    let alpha_t2 = (t2.y - q2.y) / (t2.x - q2.x);
+    let alpha_t2 = (t2.y - qq2.y) / (t2.x - qq2.x);
     let bias_t2 = alpha_t2 * t2.x - t2.y;
-    let x2 = alpha_t2.square() - t2.x - q2.x;
+    let x2 = alpha_t2.square() - t2.x - qq2.x;
     let y2 = bias_t2 - alpha_t2 * x2;
     // Second
-    let alpha_t3 = (t3.y - q3.y) / (t3.x - q3.x);
+    let alpha_t3 = (t3.y - qq3.y) / (t3.x - qq3.x);
     let bias_t3 = alpha_t3 * t3.x - t3.y;
-    let x3 = alpha_t3.square() - t3.x - q3.x;
+    let x3 = alpha_t3.square() - t3.x - qq3.x;
     let y3 = bias_t3 - alpha_t3 * x3;
 
     let (hinted_ell_t2,_) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::one(), ark_bn254::Fq::one(), alpha_t2, bias_t2);
@@ -2242,7 +2247,7 @@ pub(crate) fn tap_dense_dense_mul1(sec_key: &str, sec_out: u32, sec_in: Vec<u32>
         {bitcom_scr}
         {ops_scr}
         {hash_scr}
-        // OP_TRUE
+        OP_TRUE
     };
     scr
 }
@@ -2989,7 +2994,6 @@ mod test {
         let script = script! {
             { simulate_stack_input }
             { dense_dense_mul_script }
-            OP_TRUE
         };
 
         let exec_result = execute_script(script);
@@ -3086,7 +3090,7 @@ mod test {
 
         let ate = 1;
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let point_ops_tapscript = tap_point_add(sec_key_for_bitcomms, 0, vec![1,2,3,4,5,6, 7], ate);
+        let point_ops_tapscript = tap_point_add_with_frob(sec_key_for_bitcomms, 0, vec![1,2,3,4,5,6, 7], ate);
 
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let t = ark_bn254::G2Affine::rand(&mut prng);
@@ -3094,7 +3098,7 @@ mod test {
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hash_le_aux = [2u8;64];
         let hint_in = HintInAdd { t, p, q, hash_le_aux };
-        let (_, simulate_stack_input) = hint_point_add(sec_key_for_bitcomms, 0, vec![1,2,3,4,5,6, 7], hint_in, ate);
+        let (_, simulate_stack_input) = hint_point_add_with_frob(sec_key_for_bitcomms, 0, vec![1,2,3,4,5,6, 7], hint_in, ate);
 
         let tap_len = point_ops_tapscript.len();
         let script = script!{
@@ -3103,7 +3107,7 @@ mod test {
         };
 
         let res = execute_script(script);
-        //assert!(res.success);
+        assert!(res.success);
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
@@ -3153,14 +3157,15 @@ mod test {
         let q2 = ark_bn254::G2Affine::rand(&mut prng);
         let q3 = ark_bn254::G2Affine::rand(&mut prng);
     
+        let ate = -1;
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let (sparse_add_tapscript, _, _) = tap_add_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms,0, vec![1,2,3,4], t2, t3, q2, q3);
+        let (sparse_add_tapscript, _, _) = tap_add_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms,0, vec![1,2,3,4], t2, t3, q2, q3, ate);
         
         // Run time
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
         let p3dash = ark_bn254::g1::G1Affine::rand(&mut prng); 
         let hint_in = HintInSparseAdd {t2, t3, p2: p2dash, p3: p3dash, q2, q3}; 
-        let (_, simulate_stack_input) = hint_add_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms,0, vec![1,2,3,4], hint_in, 1);
+        let (_, simulate_stack_input) = hint_add_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms,0, vec![1,2,3,4], hint_in, ate);
     
         let tap_len = sparse_add_tapscript.len();
 
