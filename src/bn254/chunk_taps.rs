@@ -681,10 +681,8 @@ pub(crate) fn tap_point_add(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, ate: 
         {Fq::toaltstack()}
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // qdash_y1
         {Fq::toaltstack()}
-        //{ate_mul_y_toaltstack.clone()}
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // qdash_y0
         {Fq::toaltstack()}
-        //{ate_mul_y_toaltstack}
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[3]))} // qdash_x1
         {Fq::toaltstack()}
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[4]))} // qdash_x0
@@ -1083,6 +1081,7 @@ pub(crate) fn tap_point_ops(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, ate: 
             {Fq::toaltstack()}
         OP_ENDIF
     };
+
     let bitcomms_script = script!{
         {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // hash_root_claim
         {Fq::toaltstack()}
@@ -1507,6 +1506,7 @@ pub(crate) struct HintOutSparseAdd {
 }
 
 pub(crate) fn hint_add_eval_mul_for_fixed_Qs(sec_key: &str,sec_out: u32, sec_in: Vec<u32>, hint_in: HintInSparseAdd, ate: i8) -> (HintOutSparseAdd, Script) {
+    assert_eq!(sec_in.len(), 4);
     let (t2, t3, p2, p3, qq2, qq3) = (hint_in.t2, hint_in.t3, hint_in.p2, hint_in.p3, hint_in.q2, hint_in.q3);
     let mut q2 = qq2.clone();
     if ate == -1 {
@@ -1587,6 +1587,9 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs(sec_key: &str,sec_out: u32, sec_in:
 }
 
 pub(crate) fn tap_add_eval_mul_for_fixed_Qs(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, t2: G2Affine, t3: G2Affine, q2: G2Affine, q3: G2Affine) -> (Script, G2Affine, G2Affine) {
+    // WARN: use ate bit the way tap_point_add did
+    assert_eq!(sec_in.len(), 4);
+
     // First
     let alpha_t2 = (t2.y - q2.y) / (t2.x - q2.x);
     let bias_t2 = alpha_t2 * t2.x - t2.y;
@@ -1665,49 +1668,29 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs(sec_key: &str, sec_out: u32, sec_in:
 
 
 pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(sec_key: &str,sec_out: u32, sec_in: Vec<u32>, hint_in: HintInSparseAdd, ate: i8) -> (HintOutSparseAdd, Script) {
-    
     assert_eq!(sec_in.len(), 4);
     let (t2, t3, p2, p3, qq2, qq3) = (hint_in.t2, hint_in.t3, hint_in.p2, hint_in.p3, hint_in.q2, hint_in.q3);
     
+    let beta_12x = BigUint::from_str("21575463638280843010398324269430826099269044274347216827212613867836435027261").unwrap();
+    let beta_12y = BigUint::from_str("10307601595873709700152284273816112264069230130616436755625194854815875713954").unwrap();
+    let beta_12 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_12x.clone()), ark_bn254::Fq::from(beta_12y)]).unwrap();
+    let beta_13x = BigUint::from_str("2821565182194536844548159561693502659359617185244120367078079554186484126554").unwrap();
+    let beta_13y = BigUint::from_str("3505843767911556378687030309984248845540243509899259641013678093033130930403").unwrap();
+    let beta_13 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_13x.clone()), ark_bn254::Fq::from(beta_13y)]).unwrap();
+    let beta_22x = BigUint::from_str("21888242871839275220042445260109153167277707414472061641714758635765020556616").unwrap();
+    let beta_22y = BigUint::from_str("0").unwrap();
+    let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_22x.clone()), ark_bn254::Fq::from(beta_22y)]).unwrap();
+
     // First
     let mut qq = qq2.clone();
-    let mut frob_hint2: Vec<Hint> = vec![];
     if ate == 1 {
-        let beta_12x = BigUint::from_str("21575463638280843010398324269430826099269044274347216827212613867836435027261").unwrap();
-        let beta_12y = BigUint::from_str("10307601595873709700152284273816112264069230130616436755625194854815875713954").unwrap();
-        let beta_12 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_12x.clone()), ark_bn254::Fq::from(beta_12y.clone())]).unwrap();
-        let beta_13x = BigUint::from_str("2821565182194536844548159561693502659359617185244120367078079554186484126554").unwrap();
-        let beta_13y = BigUint::from_str("3505843767911556378687030309984248845540243509899259641013678093033130930403").unwrap();
-        let beta_13 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_13x.clone()), ark_bn254::Fq::from(beta_13y.clone())]).unwrap();
-    
         qq.x.conjugate_in_place();    
-        let (_, hint_beta12_mul) = Fq2::hinted_mul(2, qq.x, 0, beta_12);
         qq.x = qq.x * beta_12;
-    
         qq.y.conjugate_in_place();
-        let (_, hint_beta13_mul) = Fq2::hinted_mul(2, qq.y, 0, beta_13);
         qq.y = qq.y * beta_13;
-
-        for hint in hint_beta13_mul {
-            frob_hint2.push(hint);
-        }
-        for hint in hint_beta12_mul {
-            frob_hint2.push(hint);
-        }
-
     } else if ate == -1 {
-        let beta_22x = BigUint::from_str("21888242871839275220042445260109153167277707414472061641714758635765020556616").unwrap();
-        let beta_22y = BigUint::from_str("0").unwrap();
-        let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_22x.clone()), ark_bn254::Fq::from(beta_22y.clone())]).unwrap();
-    
-        let (_, hint_beta22_mul) = Fq2::hinted_mul(2, qq.x, 0, beta_22);
         qq.x = qq.x * beta_22;
-
-        for hint in hint_beta22_mul {
-            frob_hint2.push(hint);
-        }   
     }
-
     let alpha_t2 = (t2.y - qq.y) / (t2.x - qq.x);
     let bias_t2 = alpha_t2 * t2.x - t2.y;
     let x2 = alpha_t2.square() - t2.x - qq.x;
@@ -1720,48 +1703,17 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(sec_key: &str,sec_out: u3
     f.c0.c0 = ark_bn254::Fq2::one(); // 0
     f.c1.c0 = c2x; // 3
     f.c1.c1 = c2y; // 4
-    
-
 
     // Second
     let mut qq = qq3.clone();
-    let mut frob_hint3: Vec<Hint> = vec![];
     if ate == 1 {
-        let beta_12x = BigUint::from_str("21575463638280843010398324269430826099269044274347216827212613867836435027261").unwrap();
-        let beta_12y = BigUint::from_str("10307601595873709700152284273816112264069230130616436755625194854815875713954").unwrap();
-        let beta_12 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_12x.clone()), ark_bn254::Fq::from(beta_12y.clone())]).unwrap();
-        let beta_13x = BigUint::from_str("2821565182194536844548159561693502659359617185244120367078079554186484126554").unwrap();
-        let beta_13y = BigUint::from_str("3505843767911556378687030309984248845540243509899259641013678093033130930403").unwrap();
-        let beta_13 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_13x.clone()), ark_bn254::Fq::from(beta_13y.clone())]).unwrap();
-    
         qq.x.conjugate_in_place();    
-        let (_, hint_beta12_mul) = Fq2::hinted_mul(2, qq.x, 0, beta_12);
         qq.x = qq.x * beta_12;
-    
         qq.y.conjugate_in_place();
-        let (_, hint_beta13_mul) = Fq2::hinted_mul(2, qq.y, 0, beta_13);
         qq.y = qq.y * beta_13;
-
-        for hint in hint_beta13_mul {
-            frob_hint3.push(hint);
-        }
-        for hint in hint_beta12_mul {
-            frob_hint3.push(hint);
-        }
-
     } else if ate == -1 {
-        let beta_22x = BigUint::from_str("21888242871839275220042445260109153167277707414472061641714758635765020556616").unwrap();
-        let beta_22y = BigUint::from_str("0").unwrap();
-        let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_22x.clone()), ark_bn254::Fq::from(beta_22y.clone())]).unwrap();
-    
-        let (_, hint_beta22_mul) = Fq2::hinted_mul(2, qq.x, 0, beta_22);
         qq.x = qq.x * beta_22;
-
-        for hint in hint_beta22_mul {
-            frob_hint3.push(hint);
-        }   
     }
-
     let alpha_t3 = (t3.y - qq.y) / (t3.x - qq.x);
     let bias_t3 = alpha_t3 * t3.x - t3.y;
     let x3 = alpha_t3.square() - t3.x - qq.x;
@@ -1779,13 +1731,6 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(sec_key: &str,sec_out: u3
     let (_, hint_ell_t3) = new_hinted_ell_by_constant_affine(p3.x, p3.y, alpha_t3, bias_t3);
     let (_, hint_sparse_dense_mul) = Fq12::hinted_mul_by_34(f, c3x, c3y);
 
-
-    for hint in frob_hint3 {
-        hints.push(hint);
-    }
-    for hint in frob_hint2 {
-        hints.push(hint);
-    }
     for hint in hint_ell_t3 {
         hints.push(hint);
     }
@@ -1821,6 +1766,117 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(sec_key: &str,sec_out: u3
     };
     
     (hint_out, simulate_stack_input)
+}
+
+
+pub(crate) fn tap_add_eval_mul_for_fixed_Qs_with_frob(sec_key: &str,sec_out: u32, sec_in: Vec<u32>, t2: G2Affine, t3: G2Affine, qq2: G2Affine, qq3: G2Affine, ate: i8) -> (Script, G2Affine, G2Affine) {
+    assert_eq!(sec_in.len(), 4);
+
+    let beta_12x = BigUint::from_str("21575463638280843010398324269430826099269044274347216827212613867836435027261").unwrap();
+    let beta_12y = BigUint::from_str("10307601595873709700152284273816112264069230130616436755625194854815875713954").unwrap();
+    let beta_12 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_12x.clone()), ark_bn254::Fq::from(beta_12y)]).unwrap();
+    let beta_13x = BigUint::from_str("2821565182194536844548159561693502659359617185244120367078079554186484126554").unwrap();
+    let beta_13y = BigUint::from_str("3505843767911556378687030309984248845540243509899259641013678093033130930403").unwrap();
+    let beta_13 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_13x.clone()), ark_bn254::Fq::from(beta_13y)]).unwrap();
+    let beta_22x = BigUint::from_str("21888242871839275220042445260109153167277707414472061641714758635765020556616").unwrap();
+    let beta_22y = BigUint::from_str("0").unwrap();
+    let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([ark_bn254::Fq::from(beta_22x.clone()), ark_bn254::Fq::from(beta_22y)]).unwrap();
+
+    // First
+    let mut qq = qq2.clone();
+    if ate == 1 {
+        qq.x.conjugate_in_place();    
+        qq.x = qq.x * beta_12;
+        qq.y.conjugate_in_place();
+        qq.y = qq.y * beta_13;
+    } else if ate == -1 {
+        qq.x = qq.x * beta_22;
+    }
+    let alpha_t2 = (t2.y - qq.y) / (t2.x - qq.x);
+    let bias_t2 = alpha_t2 * t2.x - t2.y;
+    let x2 = alpha_t2.square() - t2.x - qq.x;
+    let y2 = bias_t2 - alpha_t2 * x2;
+    
+
+    // Second
+    let mut qq = qq3.clone();
+    if ate == 1 {
+        qq.x.conjugate_in_place();    
+        qq.x = qq.x * beta_12;
+        qq.y.conjugate_in_place();
+        qq.y = qq.y * beta_13;
+    } else if ate == -1 {
+        qq.x = qq.x * beta_22;
+    }
+    let alpha_t3 = (t3.y - qq.y) / (t3.x - qq.x);
+    let bias_t3 = alpha_t3 * t3.x - t3.y;
+    let x3 = alpha_t3.square() - t3.x - qq.x;
+    let y3 = bias_t3 - alpha_t3 * x3;
+
+    let (hinted_ell_t2,_) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::one(), ark_bn254::Fq::one(), alpha_t2, bias_t2);
+    let (hinted_ell_t3,_) = new_hinted_ell_by_constant_affine(ark_bn254::Fq::one(), ark_bn254::Fq::one(), alpha_t3, bias_t3);
+    let (hinted_sparse_dense_mul,_) = Fq12::hinted_mul_by_34(ark_bn254::Fq12::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+
+    let ops_scr = script!{
+        // tmul hints
+        // P2 
+        // P3
+        {fq2_push_not_montgomery(alpha_t2)} // baked
+        {fq2_push_not_montgomery(bias_t2)}
+        {fq2_push_not_montgomery(alpha_t3)}
+        {fq2_push_not_montgomery(bias_t3)}
+        
+        { Fq2::roll(8) } // P3
+        { hinted_ell_t3 }
+        {Fq2::toaltstack()} // c4
+        {Fq2::toaltstack()} // c3
+
+        { Fq2::roll(4) } // P2
+        { hinted_ell_t2 }
+        {Fq2::toaltstack()} // c4
+        {Fq2::toaltstack()} // c3
+
+        // insert fp12
+        {fq2_push_not_montgomery(ark_bn254::Fq2::one())} // f0
+        {fq2_push_not_montgomery(ark_bn254::Fq2::zero())} // f1
+        {fq2_push_not_montgomery(ark_bn254::Fq2::zero())} // f2
+        {Fq2::fromaltstack()} // f3
+        {Fq2::fromaltstack()} // f4
+        {fq2_push_not_montgomery(ark_bn254::Fq2::zero())} // f5
+
+        {Fq2::fromaltstack()} // c3
+        {Fq2::fromaltstack()} // c4
+
+        {hinted_sparse_dense_mul}
+    };
+
+    let bitcomms_script = script!{
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // P3y
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // P3x
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // P2y
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[3]))} // P2x
+        {Fq::toaltstack()}
+        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // bhash
+        for _ in 0..4 {
+            {Fq::fromaltstack()}
+        }
+        // Stack: [bhash, P2x, P2y, P3x, P3y]
+    };
+    let hash_scr = script!{
+        { hash_fp12_192() }
+        {Fq::equalverify(1, 0)}
+    };
+    let sc = script!{
+        {bitcomms_script}
+        {ops_scr}
+        {hash_scr}
+        OP_TRUE
+    };
+    
+    (sc, G2Affine::new_unchecked(x2, y2), G2Affine::new_unchecked(x3, y3))
 }
 
 
@@ -2223,7 +2279,7 @@ impl HintInDenseMul1 {
 
 #[derive(Debug, Clone)]
 pub(crate) struct HintOutDenseMul1 {
-    c: ark_bn254::Fq12,
+    pub(crate) c: ark_bn254::Fq12,
     hash_out: HashBytes,
 }
 pub(crate) fn hints_dense_dense_mul1(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInDenseMul1) -> (HintOutDenseMul1, Script) {
@@ -3102,7 +3158,7 @@ mod test {
         
         // Run time
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
-        let p3dash = ark_bn254::g1::G1Affine::rand(&mut prng);
+        let p3dash = ark_bn254::g1::G1Affine::rand(&mut prng); 
         let hint_in = HintInSparseAdd {t2, t3, p2: p2dash, p3: p3dash, q2, q3}; 
         let (_, simulate_stack_input) = hint_add_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms,0, vec![1,2,3,4], hint_in, 1);
     
@@ -3118,6 +3174,42 @@ mod test {
             println!("{i:} {:?}", exec_result.final_stack.get(i));
         }
         assert!(exec_result.success);
+        println!("stack len {:?} script len {:?}", exec_result.stats.max_nb_stack_items, tap_len);
+
+    }    
+
+
+    #[test]
+    fn test_tap_add_sparse_muls_with_frob() {
+
+        // Compile time: Ts are known in advance for fixed G2 pairing
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let t2 = ark_bn254::G2Affine::rand(&mut prng);
+        let t3 = ark_bn254::G2Affine::rand(&mut prng);
+        let q2 = ark_bn254::G2Affine::rand(&mut prng);
+        let q3 = ark_bn254::G2Affine::rand(&mut prng);
+    
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let (sparse_add_tapscript, _, _) = tap_add_eval_mul_for_fixed_Qs_with_frob(&sec_key_for_bitcomms,0, vec![1,2,3,4], t2, t3, q2, q3, 1);
+        
+        // Run time
+        let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
+        let p3dash = ark_bn254::g1::G1Affine::rand(&mut prng); 
+        let hint_in = HintInSparseAdd {t2, t3, p2: p2dash, p3: p3dash, q2, q3}; 
+        let (_, simulate_stack_input) = hint_add_eval_mul_for_fixed_Qs_with_frob(&sec_key_for_bitcomms,0, vec![1,2,3,4], hint_in, 1);
+    
+        let tap_len = sparse_add_tapscript.len();
+
+        let script = script! {
+            { simulate_stack_input }
+            { sparse_add_tapscript }
+        };
+
+        let exec_result = execute_script(script);
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:} {:?}", exec_result.final_stack.get(i));
+        }
+        //assert!(exec_result.success);
         println!("stack len {:?} script len {:?}", exec_result.stats.max_nb_stack_items, tap_len);
 
     }    

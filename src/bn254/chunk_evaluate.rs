@@ -659,7 +659,18 @@ pub fn evaluate(p2: G1Affine, p3: G1Affine, p4: G1Affine,q2: ark_bn254::G2Affine
     evaluate_pre_miller_circuit(id_to_sec.clone(), &mut hintmap);
     let (nt2, nt3) = evaluate_miller_circuit(id_to_sec.clone(), &mut hintmap, q2, q3, q2, q3);
     evaluate_post_miller_circuit(id_to_sec, &mut hintmap, nt2, nt3, q2, q3, facc.clone(), tacc);
-    println!("hintmap {:?}", hintmap);
+    let hint = hintmap.get("identity");
+    if hint.is_none() {
+        println!("debug hintmap {:?}", hintmap);
+    } else {
+        let hint = hint.unwrap();
+        match hint {
+            HintOut::DenseMul1(c)=> {
+                assert_eq!(c.c, ark_bn254::Fq12::ONE);
+            },
+            _ => {},
+        }
+    }
 }
 
 // extract groth16 related params
@@ -785,25 +796,9 @@ mod test {
         let f = Bn254::multi_miller_loop_affine([p1,p2,p3,p4], [q1,q2,q3,q4]).0;
         let p1q1 = Bn254::multi_miller_loop_affine([p1], [q1]).0;
 
-        println!("facc {:?}", f);
-        println!();
-        println!();
-
         let (c, s) = compute_c_wi(f);
 
         let fixed_acc = p1q1;
         evaluate(p2, p3, p4, q2, q3, q4, c, s, fixed_acc);
-
-        // let t = q3.clone();
-        // let p = p4.clone();
-    //     let hle = [0u8;64];
-
-    //    let sec_key = "b138982ce17ac813d505b5b40b665d404e9528e7";
-    //    let sec_out = 0;
-
-    //    let hint_in: HintInAdd = HintInAdd {t, p, q:q4, hash_le_aux: hle};
-    //    hint_point_add(sec_key, sec_out, vec![1,2,3,4,5,6,7], hint_in.clone(), 1);
-    //    println!("Second Loop");
-    //    hint_point_add(sec_key, sec_out, vec![1,2,3,4,5,6,7], hint_in, -1);
     }
 }
