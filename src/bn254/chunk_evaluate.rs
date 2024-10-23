@@ -782,17 +782,16 @@ mod test {
         println!();
         println!();
 
-        let f = Bn254::multi_miller_loop_affine([p2,p3,p4], [q2,q3,q4]).0;
+        let f = Bn254::multi_miller_loop_affine([p1,p2,p3,p4], [q1,q2,q3,q4]).0;
+        let p1q1 = Bn254::multi_miller_loop_affine([p1], [q1]).0;
 
         println!("facc {:?}", f);
         println!();
         println!();
 
-        // let _ = bn254::ell_coeffs::G2Prepared::from(q4);
+        let (c, s) = compute_c_wi(f);
 
-        let c = ark_bn254::Fq12::ONE; // compute_c_wi()
-        let s = ark_bn254::Fq12::ONE;
-        let fixed_acc = ark_bn254::Fq12::ONE;
+        let fixed_acc = p1q1;
         evaluate(p2, p3, p4, q2, q3, q4, c, s, fixed_acc);
 
         // let t = q3.clone();
