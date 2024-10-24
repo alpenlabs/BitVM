@@ -17,9 +17,12 @@ use super::chunk_config::{groth16_params, post_miller_config_gen, pre_miller_con
 use super::chunk_taps::HintOut;
 use super::{chunk_taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4}};
 
-
+use crate::{
+    bn254::{fp254impl::Fp254Impl, fq::Fq},
+    treepp::*,
+};
 // given a groth16 verification key, generate all of the tapscripts in compile mode
-fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hintmap: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine, t3: ark_bn254::G2Affine, q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine) -> (G2Affine, G2Affine) {
+fn evaluate_miller_circuit(exec_script: bool, link_ids: &HashMap<u32, Script>, id_to_sec: HashMap<String, u32>, hintmap: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine, t3: ark_bn254::G2Affine, q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine) -> (G2Affine, G2Affine) {
     // vk: (G1Affine, G2Affine, G2Affine, G2Affine)
     // groth16 is 1 G2 and 2 G1, P4, Q4, 
     // e(A,B)⋅e(vkα ,vkβ)=e(C,vkδ)⋅e(vkγ_ABC,vkγ)
@@ -71,7 +74,7 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                 };
                 if exec_script {
                     let ops_script = tap_squaring();
-                    let bcs_script = bitcom_squaring(sec_key, sec_out, sec_in.clone());
+                    let bcs_script = bitcom_squaring(link_ids, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
                         { bcs_script }
@@ -111,7 +114,7 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                 };
                 if exec_script {
                     let ops_script = tap_point_ops(*bit);
-                    let bcs_script = bitcom_point_ops(sec_key, sec_out, sec_in.clone(), *bit);
+                    let bcs_script = bitcom_point_ops(link_ids, sec_out, sec_in.clone(), *bit);
                     let script = script!{
                         { hint_script }
                         { bcs_script }
@@ -150,7 +153,7 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                 };
                 if exec_script {
                     let ops_script = tap_point_dbl();
-                    let bcs_script = bitcom_point_dbl(sec_key, sec_out, sec_in.clone());
+                    let bcs_script = bitcom_point_dbl(link_ids, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
                         { bcs_script }
@@ -179,7 +182,7 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                     };
                 if exec_script {
                     let ops_script = tap_sparse_dense_mul( true);
-                    let bcs_script = bitcom_sparse_dense_mul(sec_key, sec_out, sec_in.clone());
+                    let bcs_script = bitcom_sparse_dense_mul(link_ids, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
                         { bcs_script }
@@ -206,7 +209,7 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                 let (hint_out, hint_script) = chunk_taps::hint_double_eval_mul_for_fixed_Qs(sec_key, sec_out, sec_in.clone(), hint_in);
                 if exec_script {
                     let (ops_script,_,_) = tap_double_eval_mul_for_fixed_Qs(nt2, nt3);
-                    let bcs_script = bitcom_double_eval_mul_for_fixed_Qs(sec_key, sec_out, sec_in.clone());
+                    let bcs_script = bitcom_double_eval_mul_for_fixed_Qs(link_ids, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
                         { bcs_script }
@@ -231,7 +234,7 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                 let (hint_out, hint_script) = hints_dense_dense_mul0(sec_key, sec_out, sec_in.clone(), HintInDenseMul0::from_sparse_dense_dbl(c, d));
                 if exec_script {
                     let ops_script = tap_dense_dense_mul0(false);
-                    let bcs_script = bitcom_dense_dense_mul0(sec_key, sec_out, sec_in.clone());
+                    let bcs_script = bitcom_dense_dense_mul0(link_ids, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
                         { bcs_script }
@@ -254,7 +257,7 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                 let (hint_out, hint_script) = hints_dense_dense_mul1(sec_key, sec_out, sec_in.clone(), HintInDenseMul1::from_sparse_dense_dbl(c, d));
                 if exec_script {
                     let ops_script = tap_dense_dense_mul1( false);
-                    let bcs_script = bitcom_dense_dense_mul1(sec_key, sec_out, sec_in.clone());
+                    let bcs_script = bitcom_dense_dense_mul1(link_ids, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
                         { bcs_script }
@@ -278,7 +281,7 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                 };
                 if exec_script {
                     let ops_script = tap_dense_dense_mul0(false);
-                    let bcs_script = bitcom_dense_dense_mul0(sec_key, sec_out, sec_in.clone());
+                    let bcs_script = bitcom_dense_dense_mul0(link_ids, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
                         { bcs_script }
@@ -302,7 +305,7 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                 };
                 if exec_script {
                     let ops_script = tap_dense_dense_mul1( false);
-                    let bcs_script = bitcom_dense_dense_mul1(sec_key, sec_out, sec_in.clone());
+                    let bcs_script = bitcom_dense_dense_mul1(link_ids, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
                         { bcs_script }
@@ -327,7 +330,7 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                     };
                 if exec_script {
                     let ops_script = tap_sparse_dense_mul(false);
-                    let bcs_script = bitcom_sparse_dense_mul(sec_key, sec_out, sec_in.clone());
+                    let bcs_script = bitcom_sparse_dense_mul(link_ids, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
                         { bcs_script }
@@ -354,7 +357,7 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                 let (hint_out, hint_script) = chunk_taps::hint_add_eval_mul_for_fixed_Qs(sec_key, sec_out, sec_in.clone(), hint_in, *bit);
                 if exec_script {
                     let (ops_script, _, _) = tap_add_eval_mul_for_fixed_Qs(nt2, nt3, q2, q3, *bit);
-                    let bcs_script = bitcom_add_eval_mul_for_fixed_Qs(sec_key, sec_out, sec_in.clone());
+                    let bcs_script = bitcom_add_eval_mul_for_fixed_Qs(link_ids, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
                         { bcs_script }
@@ -379,7 +382,7 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                 let (hint_out, hint_script) = hints_dense_dense_mul0(sec_key, sec_out, sec_in.clone(), HintInDenseMul0::from_sparse_dense_add(c, d));
                 if exec_script {
                     let ops_script = tap_dense_dense_mul0( false);
-                    let bcs_script = bitcom_dense_dense_mul0(sec_key, sec_out, sec_in.clone());
+                    let bcs_script = bitcom_dense_dense_mul0(link_ids, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
                         { bcs_script }
@@ -402,7 +405,7 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                 let (hint_out, hint_script) = hints_dense_dense_mul1(sec_key, sec_out, sec_in.clone(), HintInDenseMul1::from_sparse_dense_add(c, d));
                 if exec_script {
                     let ops_script = tap_dense_dense_mul1( false);
-                    let bcs_script = bitcom_dense_dense_mul1(sec_key, sec_out, sec_in.clone());
+                    let bcs_script = bitcom_dense_dense_mul1(link_ids, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
                         { bcs_script }
@@ -423,7 +426,7 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
 
 }
 
-fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>, hintmap: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine,  t3: ark_bn254::G2Affine,  q2: ark_bn254::G2Affine,  q3: ark_bn254::G2Affine, facc: String, tacc: String ) -> HashMap<String, u32> {
+fn evaluate_post_miller_circuit(exec_script: bool, link_ids: &HashMap<u32, Script>,  id_map: HashMap<String, u32>, hintmap: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine,  t3: ark_bn254::G2Affine,  q2: ark_bn254::G2Affine,  q3: ark_bn254::G2Affine, facc: String, tacc: String ) -> HashMap<String, u32> {
     let tables = post_miller_config_gen(facc,tacc);
     let sec_key = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
@@ -450,7 +453,7 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
             let (h, hint_script) = hints_frob_fp12(sec_key, sec_out,sec_in.clone(), hint_in, power);
             if exec_script {
                 let ops_script = tap_frob_fp12(power);
-                let bcs_script = bitcom_frob_fp12(sec_key, sec_out, sec_in.clone());
+                let bcs_script = bitcom_frob_fp12(link_ids, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
                     { bcs_script }
@@ -480,7 +483,7 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
             };
             if exec_script {
                 let ops_script = tap_dense_dense_mul0( check_is_id);
-                let bcs_script = bitcom_dense_dense_mul0(sec_key, sec_out, sec_in.clone());
+                let bcs_script = bitcom_dense_dense_mul0(link_ids, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
                     { bcs_script }
@@ -510,7 +513,7 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
             };
             if exec_script {
                 let ops_script = tap_dense_dense_mul1(check_is_id);
-                let bcs_script = bitcom_dense_dense_mul1(sec_key, sec_out, sec_in.clone());
+                let bcs_script = bitcom_dense_dense_mul1(link_ids, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
                     { bcs_script }
@@ -533,7 +536,7 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
             let (hint_out,hint_script) = hints_dense_dense_mul0(sec_key, sec_out, sec_in.clone(), HintInDenseMul0::from_sparse_dense_add(c, d));
             if exec_script {
                 let ops_script = tap_dense_dense_mul0(false);
-                let bcs_script = bitcom_dense_dense_mul0(sec_key, sec_out, sec_in.clone());
+                let bcs_script = bitcom_dense_dense_mul0(link_ids, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
                     { bcs_script }
@@ -556,7 +559,7 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
             let (hint_out, hint_script) = hints_dense_dense_mul1(sec_key, sec_out, sec_in.clone(), HintInDenseMul1::from_sparse_dense_add(c, d));
             if exec_script {
                 let ops_script = tap_dense_dense_mul1(false);
-                let bcs_script = bitcom_dense_dense_mul1(sec_key, sec_out, sec_in.clone());
+                let bcs_script = bitcom_dense_dense_mul1(link_ids, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
                     { bcs_script }
@@ -593,7 +596,7 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
                 };
                 if exec_script {
                     let ops_script = tap_point_add_with_frob(1);
-                    let bcs_script = bitcom_point_add_with_frob(sec_key, sec_out, sec_in.clone());
+                    let bcs_script = bitcom_point_add_with_frob(link_ids, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
                         { bcs_script }
@@ -613,7 +616,7 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
                 };
                 if exec_script {
                     let ops_script = tap_point_add_with_frob( -1);
-                    let bcs_script = bitcom_point_add_with_frob(sec_key, sec_out, sec_in.clone());
+                    let bcs_script = bitcom_point_add_with_frob(link_ids, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
                         { bcs_script }
@@ -639,7 +642,7 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
                 };
             if exec_script {
                 let ops_script = tap_sparse_dense_mul(false);
-                let bcs_script = bitcom_sparse_dense_mul(sec_key, sec_out, sec_in.clone());
+                let bcs_script = bitcom_sparse_dense_mul(link_ids, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
                     { bcs_script }
@@ -667,7 +670,7 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
                 let (hint_out, hint_script) = chunk_taps::hint_add_eval_mul_for_fixed_Qs_with_frob(sec_key, sec_out, sec_in.clone(), hint_in, 1);
                 if exec_script {
                     let (ops_script, _, _) = tap_add_eval_mul_for_fixed_Qs_with_frob( nt2, nt3, q2, q3, 1);
-                    let bcs_script = bitcom_add_eval_mul_for_fixed_Qs_with_frob(sec_key, sec_out, sec_in.clone());
+                    let bcs_script = bitcom_add_eval_mul_for_fixed_Qs_with_frob(link_ids, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
                         { bcs_script }
@@ -683,7 +686,7 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
                 let (hint_out, hint_script) = chunk_taps::hint_add_eval_mul_for_fixed_Qs_with_frob(sec_key, sec_out, sec_in.clone(), hint_in, -1);
                 if exec_script {
                     let (ops_script, _, _) = tap_add_eval_mul_for_fixed_Qs_with_frob( nt2, nt3, q2, q3, -1);
-                    let bcs_script = bitcom_add_eval_mul_for_fixed_Qs_with_frob(sec_key, sec_out, sec_in.clone());
+                    let bcs_script = bitcom_add_eval_mul_for_fixed_Qs_with_frob(link_ids, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
                         { bcs_script }
@@ -786,7 +789,7 @@ fn evaluate_groth16_params(p2: G1Affine, p3: G1Affine, p4: G1Affine, q4: G2Affin
     id_to_witness
 }
 
-fn evaluate_pre_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>, hintmap: &mut HashMap<String, HintOut>) {
+fn evaluate_pre_miller_circuit(exec_script: bool, link_ids: &HashMap<u32, Script>, id_map: HashMap<String, u32>, hintmap: &mut HashMap<String, HintOut>) {
     let tables = pre_miller_config_gen();
     let sec_key = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
@@ -807,7 +810,7 @@ fn evaluate_pre_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>, 
             let (hint_res, hint_script) = hint_init_T4(sec_key, sec_out, sec_in.clone(), HintInInitT4::from_groth_q4(xs));
             if exec_script {
                 let ops_script = tap_initT4();
-                let bcs_script = bitcom_initT4(sec_key, sec_out, sec_in.clone());
+                let bcs_script = bitcom_initT4(link_ids, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
                     { bcs_script }
@@ -827,7 +830,7 @@ fn evaluate_pre_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>, 
             let (pyd,hint_script) = hints_precompute_Py(sec_key, sec_out, sec_in.clone(), HintInPrecomputePy::from_point(pt));
             if exec_script {
                 let ops_script = tap_precompute_Py();
-                let bcs_script = bitcom_precompute_Py(sec_key, sec_out, sec_in.clone());
+                let bcs_script = bitcom_precompute_Py(link_ids, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
                     { bcs_script }
@@ -850,7 +853,7 @@ fn evaluate_pre_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>, 
             let (pyd,hint_script) = hints_precompute_Px(sec_key, sec_out, sec_in.clone(), HintInPrecomputePx::from_points(xs));
             if exec_script {
                 let ops_script = tap_precompute_Px();
-                let bcs_script = bitcom_precompute_Px(sec_key, sec_out, sec_in.clone());
+                let bcs_script = bitcom_precompute_Px(link_ids, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
                     { bcs_script }
@@ -873,7 +876,7 @@ fn evaluate_pre_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>, 
             let (hout, hint_script) = hint_hash_c(sec_key, sec_out, sec_in.clone(), HintInHashC::from_points(xs));
             if exec_script {
                 let ops_script = tap_hash_c();
-                let bcs_script = bitcom_hash_c(sec_key, sec_out, sec_in.clone());
+                let bcs_script = bitcom_hash_c(link_ids, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
                     { bcs_script }
@@ -894,7 +897,7 @@ fn evaluate_pre_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>, 
             let (hout,hint_script) = hint_hash_c2(sec_key, sec_out, sec_in.clone(), HintInHashC::from_groth(prev_hash));
             if exec_script {
                 let ops_script = tap_hash_c2();
-                let bcs_script = bitcom_hash_c2(sec_key, sec_out, sec_in.clone());
+                let bcs_script = bitcom_hash_c2(link_ids, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
                     { bcs_script }
@@ -923,7 +926,7 @@ fn evaluate_pre_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>, 
             };
             if exec_script {
                 let ops_script = tap_dense_dense_mul0(true);
-                let bcs_script = bitcom_dense_dense_mul0(sec_key, sec_out, sec_in.clone());
+                let bcs_script = bitcom_dense_dense_mul0(link_ids, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
                     { ops_script }
@@ -953,7 +956,7 @@ fn evaluate_pre_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>, 
             };
             if exec_script {
                 let ops_script = tap_dense_dense_mul1(true);
-                let bcs_script = bitcom_dense_dense_mul1(sec_key, sec_out, sec_in.clone());
+                let bcs_script = bitcom_dense_dense_mul1(link_ids, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
                     { bcs_script }
@@ -967,16 +970,16 @@ fn evaluate_pre_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>, 
     }
 }
 
-pub fn evaluate(exec_script: bool, p2: G1Affine, p3: G1Affine, p4: G1Affine,q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine, q4: G2Affine, c: Fq12, s: Fq12, fixed_acc: ark_bn254::Fq12) {
+pub fn evaluate(exec_script: bool, link_ids: &HashMap<u32, Script>, p2: G1Affine, p3: G1Affine, p4: G1Affine,q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine, q4: G2Affine, c: Fq12, s: Fq12, fixed_acc: ark_bn254::Fq12) {
     let (id_to_sec, facc, tacc) = assign_link_ids();
     let mut hintmap: HashMap<String, HintOut> = HashMap::new();
     let pubmap = evaluate_public_params(q2, q3, fixed_acc);
     hintmap.extend(pubmap);
     let grothmap = evaluate_groth16_params(p2, p3, p4, q4, c, s);
     hintmap.extend(grothmap);
-    evaluate_pre_miller_circuit(exec_script, id_to_sec.clone(), &mut hintmap);
-    let (nt2, nt3) = evaluate_miller_circuit(exec_script, id_to_sec.clone(), &mut hintmap, q2, q3, q2, q3);
-    evaluate_post_miller_circuit(exec_script, id_to_sec, &mut hintmap, nt2, nt3, q2, q3, facc.clone(), tacc);
+    evaluate_pre_miller_circuit(exec_script, link_ids, id_to_sec.clone(), &mut hintmap);
+    let (nt2, nt3) = evaluate_miller_circuit(exec_script, link_ids, id_to_sec.clone(), &mut hintmap, q2, q3, q2, q3);
+    evaluate_post_miller_circuit(exec_script, link_ids, id_to_sec, &mut hintmap, nt2, nt3, q2, q3, facc.clone(), tacc);
     let hint = hintmap.get("identity");
     if hint.is_none() {
         println!("debug hintmap {:?}", hintmap);
@@ -1001,7 +1004,7 @@ mod test {
     use ark_ec::{AffineRepr, CurveGroup};
     use test::chunk_taps::{hint_add_eval_mul_for_fixed_Qs_with_frob, hint_point_add_with_frob};
 
-    use crate::{bn254, groth16::offchain_checker::compute_c_wi};
+    use crate::{bn254::{self, chunk_compile::keygen}, groth16::offchain_checker::compute_c_wi};
 
     use super::*;
 
@@ -1101,6 +1104,9 @@ mod test {
         let fixed_acc = p1q1;
 
         let exec_script = true;
-        evaluate(exec_script, p2, p3, p4, q2, q3, q4, c, s, fixed_acc);
+        let sec_key = "b138982ce17ac813d505b5b40b665d404e9528e7";
+
+        let link_ids = &keygen(sec_key);
+        evaluate(exec_script, link_ids, p2, p3, p4, q2, q3, q4, c, s, fixed_acc);
     }
 }

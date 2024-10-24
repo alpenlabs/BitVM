@@ -9,6 +9,7 @@ use bitcoin::opcodes::all::OP_VERIFY;
 use num_bigint::BigUint;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
+use std::collections::HashMap;
 use std::ops::Neg;
 use std::str::FromStr;
 use crate::{
@@ -98,12 +99,12 @@ pub(crate) fn hints_squaring(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hint
     
 }
 
-pub(crate) fn bitcom_squaring(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_squaring(link_ids: &HashMap<u32, Script>, sec_out: u32, sec_in: Vec<u32>) -> Script {
     assert_eq!(sec_in.len(), 1);
     script!{
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // hash_in
+        {link_ids.get(&sec_in[0]).unwrap().clone()}
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // hash_out
+        {link_ids.get(&sec_out).unwrap().clone()}
         {Fq::toaltstack()}
     }
     // stack: [hash_in, hash_out]
@@ -297,16 +298,16 @@ pub(crate) fn tap_point_dbl() -> Script {
     sc
 }
 
-pub(crate) fn bitcom_point_dbl(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_point_dbl(link_ids: &HashMap<u32, Script>, sec_out: u32, sec_in: Vec<u32>) -> Script {
     assert_eq!(sec_in.len(), 3);
     script!{
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // hash_out
+        {link_ids.get(&sec_out).unwrap().clone()} // hash_out
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // hash_in
+        {link_ids.get(&sec_in[0]).unwrap().clone()} // hash_in
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // pdash_y
+        {link_ids.get(&sec_in[1]).unwrap().clone()} // pdash_y
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // pdash_x
+        {link_ids.get(&sec_in[2]).unwrap().clone()} // pdash_x
 
         {Fq::fromaltstack()} // py
         {Fq::fromaltstack()} // in
@@ -694,24 +695,24 @@ pub(crate) fn tap_point_add_with_frob(ate: i8) -> Script {
     sc
 }
 
-pub(crate) fn bitcom_point_add_with_frob(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_point_add_with_frob(link_ids: &HashMap<u32, Script>, sec_out: u32, sec_in: Vec<u32>) -> Script {
     assert_eq!(sec_in.len(), 7);
     let bitcomms_script = script!{
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // hash_root_claim
+        {link_ids.get(&sec_out).unwrap().clone()} // hash_root_claim
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // hash_in
+        {link_ids.get(&sec_in[0]).unwrap().clone()} // hash_in
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // qdash_y1
+        {link_ids.get(&sec_in[1]).unwrap().clone()} // qdash_y1
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // qdash_y0
+        {link_ids.get(&sec_in[2]).unwrap().clone()} // qdash_y0
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[3]))} // qdash_x1
+        {link_ids.get(&sec_in[3]).unwrap().clone()} // qdash_x1
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[4]))} // qdash_x0
+        {link_ids.get(&sec_in[4]).unwrap().clone()} // qdash_x0
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[5]))} // pdash_y
+        {link_ids.get(&sec_in[5]).unwrap().clone()} // pdash_y
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[6]))} // pdash_x
+        {link_ids.get(&sec_in[6]).unwrap().clone()} // pdash_x
 
         // bring back from altstack
         for _ in 0..7 {
@@ -1088,7 +1089,7 @@ pub(crate) fn tap_point_ops(ate: i8) -> Script {
     sc
 }
 
-pub(crate) fn bitcom_point_ops(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, ate: i8) -> Script {
+pub(crate) fn bitcom_point_ops(link_ids: &HashMap<u32, Script>, sec_out: u32, sec_in: Vec<u32>, ate: i8) -> Script {
     assert!(ate == 1 || ate == -1);
     assert_eq!(sec_in.len(), 7);
     let mut ate_unsigned_bit = 1;
@@ -1108,21 +1109,21 @@ pub(crate) fn bitcom_point_ops(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, at
     };
 
     let bitcomms_script = script!{
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // hash_root_claim
+        {link_ids.get(&sec_out).unwrap().clone()}// hash_root_claim
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // hash_in
+        {link_ids.get(&sec_in[0]).unwrap().clone()} // hash_in
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // qdash_y1
+        {link_ids.get(&sec_in[1]).unwrap().clone()} // qdash_y1
         {ate_mul_y_toaltstack.clone()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // qdash_y0
+        {link_ids.get(&sec_in[2]).unwrap().clone()} // qdash_y0
         {ate_mul_y_toaltstack}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[3]))} // qdash_x1
+        {link_ids.get(&sec_in[3]).unwrap().clone()} // qdash_x1
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[4]))} // qdash_x0
+        {link_ids.get(&sec_in[4]).unwrap().clone()} // qdash_x0
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[5]))} // pdash_y
+        {link_ids.get(&sec_in[5]).unwrap().clone()} // pdash_y
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[6]))} // pdash_x
+        {link_ids.get(&sec_in[6]).unwrap().clone()} // pdash_x
 
         // bring back from altstack
         for _ in 0..7 {
@@ -1484,19 +1485,19 @@ pub(crate) fn tap_double_eval_mul_for_fixed_Qs(t2: G2Affine, t3: G2Affine) -> (S
     (sc, G2Affine::new_unchecked(x2, y2), G2Affine::new_unchecked(x3, y3))
 }
 
-pub(crate) fn bitcom_double_eval_mul_for_fixed_Qs(sec_key: &str,sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_double_eval_mul_for_fixed_Qs(link_ids: &HashMap<u32, Script>,sec_out: u32, sec_in: Vec<u32>) -> Script {
     assert_eq!(sec_in.len(), 4);
     
     let bitcomms_script = script!{
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // P3y
+        {link_ids.get(&sec_in[0]).unwrap().clone()} // P3y
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // P3x
+        {link_ids.get(&sec_in[1]).unwrap().clone()} // P3x
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // P2y
+        {link_ids.get(&sec_in[2]).unwrap().clone()} // P2y
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[3]))} // P2x
+        {link_ids.get(&sec_in[3]).unwrap().clone()} // P2x
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // bhash
+        {link_ids.get(&sec_out).unwrap().clone()} // bhash
         for _ in 0..4 {
             {Fq::fromaltstack()}
         }
@@ -1679,19 +1680,19 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs(t2: G2Affine, t3: G2Affine, q2: G2Af
     (sc, G2Affine::new_unchecked(x2, y2), G2Affine::new_unchecked(x3, y3))
 }
 
-pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs(link_ids: &HashMap<u32, Script>, sec_out: u32, sec_in: Vec<u32>) -> Script {
     assert_eq!(sec_in.len(), 4);
 
     let bitcomms_script = script!{
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // P3y
+        {link_ids.get(&sec_in[0]).unwrap().clone()} // P3y
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // P3x
+        {link_ids.get(&sec_in[1]).unwrap().clone()} // P3x
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // P2y
+        {link_ids.get(&sec_in[2]).unwrap().clone()} // P2y
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[3]))} // P2x
+        {link_ids.get(&sec_in[3]).unwrap().clone()} // P2x
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // bhash
+        {link_ids.get(&sec_out).unwrap().clone()} // bhash
         for _ in 0..4 {
             {Fq::fromaltstack()}
         }
@@ -1896,19 +1897,19 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs_with_frob(t2: G2Affine, t3: G2Affine
     (sc, G2Affine::new_unchecked(x2, y2), G2Affine::new_unchecked(x3, y3))
 }
 
-pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs_with_frob(sec_key: &str,sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs_with_frob(link_ids: &HashMap<u32, Script>, sec_out: u32, sec_in: Vec<u32>) -> Script {
     assert_eq!(sec_in.len(), 4);
 
     let bitcomms_script = script!{
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // P3y
+        {link_ids.get(&sec_in[0]).unwrap().clone()} // P3y
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // P3x
+        {link_ids.get(&sec_in[1]).unwrap().clone()} // P3x
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // P2y
+        {link_ids.get(&sec_in[2]).unwrap().clone()} // P2y
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[3]))} // P2x
+        {link_ids.get(&sec_in[3]).unwrap().clone()} // P2x
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // bhash
+        {link_ids.get(&sec_out).unwrap().clone()} // bhash
         for _ in 0..4 {
             {Fq::fromaltstack()}
         }
@@ -1981,14 +1982,14 @@ pub(crate) fn tap_sparse_dense_mul(dbl_blk: bool) -> Script {
     scr
 }
 
-pub(crate) fn bitcom_sparse_dense_mul(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_sparse_dense_mul(link_ids: &HashMap<u32, Script>, sec_out: u32, sec_in: Vec<u32>) -> Script {
     assert_eq!(sec_in.len(), 2);
     let bitcomms_script = script!{
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // hash_out
+        {link_ids.get(&sec_out).unwrap().clone()} // hash_out
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // hash_dense_in
+        {link_ids.get(&sec_in[0]).unwrap().clone()} // hash_dense_in
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // hash_sparse_in
+        {link_ids.get(&sec_in[1]).unwrap().clone()} // hash_sparse_in
         {Fq::toaltstack()}
         // Stack: [...,hash_out, hash_in1, hash_in2]
     };
@@ -2137,18 +2138,19 @@ pub(crate) fn tap_dense_dense_mul0( check_is_identity: bool) -> Script {
     scr
 }
 
-pub(crate) fn bitcom_dense_dense_mul0(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_dense_dense_mul0(link_ids: &HashMap<u32, Script>, sec_out: u32, sec_in: Vec<u32>) -> Script {
     assert_eq!(sec_in.len(), 2);
     let bitcom_scr = script!{
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // g
+        {link_ids.get(&sec_out).unwrap().clone()} // g
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // f // SD or DD output
+        {link_ids.get(&sec_in[0]).unwrap().clone()} // f // SD or DD output
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // c // SS or c' output
+        {link_ids.get(&sec_in[1]).unwrap().clone()} // c // SS or c' output
         {Fq::toaltstack()}
     };
     bitcom_scr
 }
+
 pub(crate) struct HintInDenseMul0 {
     pub(crate) a: ark_bn254::Fq12,
     pub(crate) b: ark_bn254::Fq12,
@@ -2268,16 +2270,16 @@ pub(crate) fn tap_dense_dense_mul1(check_is_identity: bool) -> Script {
     scr
 }
 
-pub(crate) fn bitcom_dense_dense_mul1(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_dense_dense_mul1(link_ids: &HashMap<u32, Script>, sec_out: u32, sec_in: Vec<u32>) -> Script {
     assert_eq!(sec_in.len(), 3);
     let bitcom_scr = script!{
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // g
+        {link_ids.get(&sec_out).unwrap().clone()} // g
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // f // SD or DD output
+        {link_ids.get(&sec_in[0]).unwrap().clone()} // f // SD or DD output
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // c // SS or c' output
+        {link_ids.get(&sec_in[1]).unwrap().clone()}// c // SS or c' output
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // c // SS or c' output
+        {link_ids.get(&sec_in[2]).unwrap().clone()} // c // SS or c' output
         {Fq::toaltstack()}
     };
     bitcom_scr
@@ -2407,34 +2409,14 @@ pub(crate) fn tap_hash_c() -> Script {
     sc
 }
 
-pub(crate) fn bitcom_hash_c(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_hash_c(link_ids: &HashMap<u32, Script>, sec_out: u32, sec_in: Vec<u32>) -> Script {
     assert_eq!(sec_in.len(), 12);
     let bitcom_scr = script!{
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // f11 MSB
-        {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} 
-        {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} 
-        {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[3]))} 
-        {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[4]))} 
-        {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[5]))} 
-        {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[6]))} 
-        {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[7]))} 
-        {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[8]))} 
-        {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[9]))} 
-        {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[10]))}  // f1
-        {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[11]))} // f0
-        {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // f_hash
+        for i in 0..12 { // 0->msb to lsb
+            {link_ids.get(&sec_in[i]).unwrap().clone()} // f11 MSB
+            {Fq::toaltstack()}
+        }
+        {link_ids.get(&sec_out).unwrap().clone()}  // f_hash
         for _ in 0..12 {
             {Fq::fromaltstack()}
         }
@@ -2481,12 +2463,12 @@ pub(crate) fn tap_hash_c2() -> Script {
     sc
 }
 
-pub(crate) fn bitcom_hash_c2(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_hash_c2(link_ids: &HashMap<u32, Script>, sec_out: u32, sec_in: Vec<u32>) -> Script {
     assert_eq!(sec_in.len(), 1);
     let bitcom_scr = script!{
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // f11 MSB
+        {link_ids.get(&sec_in[0]).unwrap().clone()}  // f11 MSB
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // f_hash
+        {link_ids.get(&sec_out).unwrap().clone()}  // f_hash
         {Fq::fromaltstack()}
         // Stack:[f_hash_claim, hash_in]
     };
@@ -2524,16 +2506,16 @@ pub(crate) fn tap_precompute_Px() -> Script {
     }
 }
 
-pub(crate) fn bitcom_precompute_Px(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_precompute_Px(link_ids: &HashMap<u32, Script>, sec_out: u32, sec_in: Vec<u32>) -> Script {
     assert_eq!(sec_in.len(), 3);
     let bitcomms_script = script!{
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // py
+        {link_ids.get(&sec_in[0]).unwrap().clone()}  // py
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // px
+        {link_ids.get(&sec_in[1]).unwrap().clone()}  // px
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // pyd
+        {link_ids.get(&sec_in[2]).unwrap().clone()}  // pyd
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // pxd
+        {link_ids.get(&sec_out).unwrap().clone()}  // pxd
 
         {Fq::fromaltstack()} // pyd
         {Fq::fromaltstack()} // px
@@ -2559,12 +2541,12 @@ pub(crate) fn tap_precompute_Py() -> Script {
     }
 }
 
-pub(crate) fn bitcom_precompute_Py(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_precompute_Py(link_ids: &HashMap<u32, Script>, sec_out: u32, sec_in: Vec<u32>) -> Script {
     assert_eq!(sec_in.len(), 1);
     let bitcomms_script = script!{
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // py
+        {link_ids.get(&sec_in[0]).unwrap().clone()}  // py
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // pyd
+        {link_ids.get(&sec_out).unwrap().clone()}  // pyd
         {Fq::fromaltstack()} // py
         // Stack: [hints, pyd, py]
     };
@@ -2660,18 +2642,18 @@ pub(crate) fn tap_initT4() -> Script {
     sc
 }
 
-pub(crate) fn bitcom_initT4(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_initT4(link_ids: &HashMap<u32, Script>, sec_out: u32, sec_in: Vec<u32>) -> Script {
     assert_eq!(sec_in.len(), 4);
     let bitcom_scr = script!{
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // y1
+        {link_ids.get(&sec_in[0]).unwrap().clone()} // y1
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[1]))} // y0
+        {link_ids.get(&sec_in[1]).unwrap().clone()} // y0
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[2]))} // x1
+        {link_ids.get(&sec_in[2]).unwrap().clone()} // x1
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[3]))} // x0
+        {link_ids.get(&sec_in[3]).unwrap().clone()} // x0
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // f_hash
+        {link_ids.get(&sec_out).unwrap().clone()} // f_hash
         for _ in 0..4 {
             {Fq::fromaltstack()}
         }
@@ -2752,11 +2734,11 @@ pub(crate) fn tap_frob_fp12(power: usize) -> Script {
     sc
 }
 
-pub(crate) fn bitcom_frob_fp12(sec_key: &str, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_frob_fp12(link_ids: &HashMap<u32, Script>, sec_out: u32, sec_in: Vec<u32>) -> Script {
     let bitcom_scr = script!{
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_out))} // hashout
+        {link_ids.get(&sec_out).unwrap().clone()} // hashout
         {Fq::toaltstack()}
-        {checksig_verify_fq(&format!("{}{:04X}", sec_key, sec_in[0]))} // hashin
+        {link_ids.get(&sec_in[0]).unwrap().clone()} // hashin
         {Fq::toaltstack()}
         // AltStack:[sec_out,sec_in]
     };
@@ -2801,6 +2783,8 @@ pub(crate) fn hints_frob_fp12(sec_key: &str, sec_out: u32, sec_in: Vec<u32>, hin
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
     use super::*;
     use ark_std::UniformRand;
     use rand::SeedableRng;
@@ -2815,15 +2799,23 @@ mod test {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let sec_in = vec![1];
+        let sec_out = 0;
         let power = 4;
         let frob_scr = tap_frob_fp12( power);
-        let bitcom_scr = bitcom_frob_fp12(&sec_key_for_bitcomms, 0, sec_in.clone());
+
+        let mut pub_scripts: HashMap<u32, Script> = HashMap::new();
+        pub_scripts.insert(sec_out, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out)));
+        for i in &sec_in {
+            pub_scripts.insert(*i, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, i)));
+        }
+
+        let bitcom_scr = bitcom_frob_fp12(&pub_scripts, sec_out, sec_in.clone());
         
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
         let hint_in: HintInFrobFp12 = HintInFrobFp12 { f };
-        let (_, simulate_stack_input) = hints_frob_fp12(&sec_key_for_bitcomms, 0, sec_in.clone(), hint_in, power);
+        let (_, simulate_stack_input) = hints_frob_fp12(&sec_key_for_bitcomms, sec_out, sec_in.clone(), hint_in, power);
         
         let tap_len = frob_scr.len();
         let script = script!{
@@ -2845,15 +2837,23 @@ mod test {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let sec_in = vec![1,2,3,4,5,6,7,8,9,10,11,12];
+        let sec_out = 0;
         let hash_c_scr = tap_hash_c();
-        let bitcom_scr = bitcom_hash_c(&sec_key_for_bitcomms, 0, sec_in.clone());
+
+        let mut pub_scripts: HashMap<u32, Script> = HashMap::new();
+        pub_scripts.insert(sec_out, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out)));
+        for i in &sec_in {
+            pub_scripts.insert(*i, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, i)));
+        }
+
+        let bitcom_scr = bitcom_hash_c(&pub_scripts, sec_out, sec_in.clone());
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fhash = emulate_extern_hash_fps(vec![f.c0.c0.c0,f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0,f.c0.c2.c1, f.c1.c0.c0,f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0,f.c1.c2.c1], false);
         let hint_in = HintInHashC { c: f, hashc: fhash };
-        let (_, simulate_stack_input) = hint_hash_c(&sec_key_for_bitcomms, 0, sec_in, hint_in);
+        let (_, simulate_stack_input) = hint_hash_c(&sec_key_for_bitcomms, sec_out, sec_in, hint_in);
 
         let tap_len = hash_c_scr.len();
         let script = script!{
@@ -2876,8 +2876,16 @@ mod test {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let sec_in = vec![1];
+        let sec_out = 0;
         let hash_c_scr = tap_hash_c2();
-        let bitcom_scr = bitcom_hash_c2(&sec_key_for_bitcomms, 0, sec_in.clone());
+
+        let mut pub_scripts: HashMap<u32, Script> = HashMap::new();
+        pub_scripts.insert(sec_out, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out)));
+        for i in &sec_in {
+            pub_scripts.insert(*i, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, i)));
+        }
+
+        let bitcom_scr = bitcom_hash_c2(&pub_scripts, sec_out, sec_in.clone());
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -2908,14 +2916,22 @@ mod test {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let sec_in = vec![1,2,3,4];
+        let sec_out = 0;
         let hash_c_scr = tap_initT4();
-        let bitcom_scr = bitcom_initT4(&sec_key_for_bitcomms, 0, sec_in.clone());
+
+        let mut pub_scripts: HashMap<u32, Script> = HashMap::new();
+        pub_scripts.insert(sec_out, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out)));
+        for i in &sec_in {
+            pub_scripts.insert(*i, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, i)));
+        }
+
+        let bitcom_scr = bitcom_initT4(&pub_scripts, sec_out, sec_in.clone());
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let t4 = ark_bn254::G2Affine::rand(&mut prng);
         let hint_in = HintInInitT4 {t4};
-        let (_, simulate_stack_input) = hint_init_T4(&sec_key_for_bitcomms, 0, sec_in, hint_in);
+        let (_, simulate_stack_input) = hint_init_T4(&sec_key_for_bitcomms, sec_out, sec_in, hint_in);
 
         let tap_len = hash_c_scr.len();
         let script = script!{
@@ -2939,13 +2955,22 @@ mod test {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let precompute_p = tap_precompute_Px();
-        let bitcom_scr = bitcom_precompute_Px(&sec_key_for_bitcomms, 0, vec![1,2,3]);
+        let sec_out = 0;
+        let sec_in = vec![1,2,3];
+
+        let mut pub_scripts: HashMap<u32, Script> = HashMap::new();
+        pub_scripts.insert(sec_out, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out)));
+        for i in &sec_in {
+            pub_scripts.insert(*i, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, i)));
+        }
+
+        let bitcom_scr = bitcom_precompute_Px(&pub_scripts, sec_out, sec_in.clone());
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hint_in = HintInPrecomputePx { p, pdy: p.y.inverse().unwrap() };
-        let (_, simulate_stack_input) = hints_precompute_Px(&sec_key_for_bitcomms, 0, vec![1,2,3], hint_in);
+        let (_, simulate_stack_input) = hints_precompute_Px(sec_key_for_bitcomms, sec_out, sec_in, hint_in);
 
 
         let tap_len = precompute_p.len();
@@ -2968,14 +2993,23 @@ mod test {
     fn test_precompute_Py() {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let sec_out = 0;
+        let sec_in = vec![1];
+
         let precompute_p = tap_precompute_Py();
-        let bitcom_scr = bitcom_precompute_Py(&sec_key_for_bitcomms, 0, vec![1]);
+        let mut pub_scripts: HashMap<u32, Script> = HashMap::new();
+        pub_scripts.insert(sec_out, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out)));
+        for i in &sec_in {
+            pub_scripts.insert(*i, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, i)));
+        }
+
+        let bitcom_scr = bitcom_precompute_Py(&pub_scripts, sec_out, sec_in.clone());
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let p = ark_bn254::Fq::rand(&mut prng);
         let hint_in = HintInPrecomputePy { p };
-        let (_, simulate_stack_input) = hints_precompute_Py(&sec_key_for_bitcomms, 0, vec![1], hint_in);
+        let (_, simulate_stack_input) = hints_precompute_Py(&sec_key_for_bitcomms, sec_out, sec_in, hint_in);
 
 
         let tap_len = precompute_p.len();
@@ -3000,7 +3034,17 @@ mod test {
         let dbl_blk = false;
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let sparse_dense_mul_script = tap_sparse_dense_mul( dbl_blk);
-        let bitcom_script = bitcom_sparse_dense_mul(&sec_key_for_bitcomms, 0, vec![1,2]);
+
+        let sec_out = 0;
+        let sec_in = vec![1,2];
+
+        let mut pub_scripts: HashMap<u32, Script> = HashMap::new();
+        pub_scripts.insert(sec_out, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out)));
+        for i in &sec_in {
+            pub_scripts.insert(*i, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, i)));
+        }
+
+        let bitcom_script = bitcom_sparse_dense_mul(&pub_scripts, 0, vec![1,2]);
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -3039,7 +3083,17 @@ mod test {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let dense_dense_mul_script = tap_dense_dense_mul0( true);
-        let bitcom_scr = bitcom_dense_dense_mul0(&sec_key_for_bitcomms, 0, vec![1,2]);
+
+        let sec_out = 0;
+        let sec_in = vec![1,2];
+
+        let mut pub_scripts: HashMap<u32, Script> = HashMap::new();
+        pub_scripts.insert(sec_out, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out)));
+        for i in &sec_in {
+            pub_scripts.insert(*i, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, i)));
+        }
+
+        let bitcom_scr = bitcom_dense_dense_mul0(&pub_scripts, 0, vec![1,2]);
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -3072,7 +3126,17 @@ mod test {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let dense_dense_mul_script = tap_dense_dense_mul1(false);
-        let bitcom_script = bitcom_dense_dense_mul1(&sec_key_for_bitcomms,0, vec![1,2,3]);
+
+        let sec_out = 0;
+        let sec_in = vec![1,2,3];
+
+        let mut pub_scripts: HashMap<u32, Script> = HashMap::new();
+        pub_scripts.insert(sec_out, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out)));
+        for i in &sec_in {
+            pub_scripts.insert(*i, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, i)));
+        }
+
+        let bitcom_script = bitcom_dense_dense_mul1(&pub_scripts,0, vec![1,2,3]);
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(17);
@@ -3101,16 +3165,25 @@ mod test {
     #[test]
     fn test_tap_fq12_hinted_square() {
         // compile time
-        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let msk = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let squaring_tapscript = tap_squaring();
-        let bitcomms_tapscript = bitcom_squaring(&sec_key_for_bitcomms, 0, vec![1]);
+        let sec_out = 0;
+        let sec_in = vec![1];
+        
+        let mut pub_scripts: HashMap<u32, Script> = HashMap::new();
+        pub_scripts.insert(sec_out, checksig_verify_fq(&format!("{}{:04X}", msk, sec_out)));
+        for i in &sec_in {
+            pub_scripts.insert(*i, checksig_verify_fq(&format!("{}{:04X}", msk, i)));
+        }
+
+        let bitcomms_tapscript = bitcom_squaring(&pub_scripts, sec_out, sec_in);
 
         // run time
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let a = ark_bn254::Fq12::rand(&mut prng);
         let ahash = emulate_extern_hash_fps(vec![a.c0.c0.c0,a.c0.c0.c1, a.c0.c1.c0, a.c0.c1.c1, a.c0.c2.c0,a.c0.c2.c1, a.c1.c0.c0,a.c1.c0.c1, a.c1.c1.c0, a.c1.c1.c1, a.c1.c2.c0,a.c1.c2.c1], true);
         let hint_in: HintInSquaring = HintInSquaring {a, ahash};
-        let (_, stack_data) = hints_squaring(&sec_key_for_bitcomms, 0, vec![1], hint_in);
+        let (_, stack_data) = hints_squaring(&msk, 0, vec![1], hint_in);
 
         let tap_len = squaring_tapscript.len();
         let script = script! {
@@ -3133,7 +3206,17 @@ mod test {
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let ate = 1;
         let point_ops_tapscript = tap_point_ops(ate);
-        let bitcom_script = bitcom_point_ops(sec_key_for_bitcomms, 0, vec![1,2,3,4,5,6,7], ate); // cleaner if ate could be removed
+
+        let sec_out = 0;
+        let sec_in = vec![1,2,3,4,5,6,7];
+
+        let mut pub_scripts: HashMap<u32, Script> = HashMap::new();
+        pub_scripts.insert(sec_out, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out)));
+        for i in &sec_in {
+            pub_scripts.insert(*i, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, i)));
+        }
+
+        let bitcom_script = bitcom_point_ops(&pub_scripts, 0, vec![1,2,3,4,5,6,7], ate); // cleaner if ate could be removed
 
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let t = ark_bn254::G2Affine::rand(&mut prng);
@@ -3164,7 +3247,17 @@ mod test {
 
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let point_ops_tapscript = tap_point_dbl();
-        let bitcom_script = bitcom_point_dbl(sec_key_for_bitcomms, 0, vec![1,2,3]);
+
+        let sec_out = 0;
+        let sec_in = vec![1,2,3];
+
+        let mut pub_scripts: HashMap<u32, Script> = HashMap::new();
+        pub_scripts.insert(sec_out, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out)));
+        for i in &sec_in {
+            pub_scripts.insert(*i, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, i)));
+        }
+        
+        let bitcom_script = bitcom_point_dbl(&pub_scripts, 0, vec![1,2,3]);
 
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let t = ark_bn254::G2Affine::rand(&mut prng);
@@ -3196,7 +3289,17 @@ mod test {
         let ate = 1;
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let point_ops_tapscript = tap_point_add_with_frob(ate);
-        let bitcom_script = bitcom_point_add_with_frob(sec_key_for_bitcomms, 0, vec![1,2,3,4,5,6, 7]);
+
+        let sec_out = 0;
+        let sec_in = vec![1,2,3,4,5,6,7];
+
+        let mut pub_scripts: HashMap<u32, Script> = HashMap::new();
+        pub_scripts.insert(sec_out, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out)));
+        for i in &sec_in {
+            pub_scripts.insert(*i, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, i)));
+        }
+
+        let bitcom_script = bitcom_point_add_with_frob(&pub_scripts, 0, vec![1,2,3,4,5,6, 7]);
 
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let t = ark_bn254::G2Affine::rand(&mut prng);
@@ -3232,7 +3335,17 @@ mod test {
     
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let (sparse_dbl_tapscript,_,_) = tap_double_eval_mul_for_fixed_Qs(t2, t3);
-        let bitcom_script = bitcom_double_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms,0, vec![1,2,3,4]);
+
+        let sec_out = 0;
+        let sec_in = vec![1,2,3,4];
+
+        let mut pub_scripts: HashMap<u32, Script> = HashMap::new();
+        pub_scripts.insert(sec_out, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out)));
+        for i in &sec_in {
+            pub_scripts.insert(*i, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, i)));
+        }
+
+        let bitcom_script = bitcom_double_eval_mul_for_fixed_Qs(&pub_scripts,0, vec![1,2,3,4]);
         
         // Run time
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
@@ -3272,7 +3385,17 @@ mod test {
         let ate = -1;
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let (sparse_add_tapscript, _, _) = tap_add_eval_mul_for_fixed_Qs(t2, t3, q2, q3, ate);
-        let bitcom_script = bitcom_add_eval_mul_for_fixed_Qs(&sec_key_for_bitcomms,0, vec![1,2,3,4]);
+
+        let sec_out = 0;
+        let sec_in = vec![1,2,3,4];
+
+        let mut pub_scripts: HashMap<u32, Script> = HashMap::new();
+        pub_scripts.insert(sec_out, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out)));
+        for i in &sec_in {
+            pub_scripts.insert(*i, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, i)));
+        }
+
+        let bitcom_script = bitcom_add_eval_mul_for_fixed_Qs(&pub_scripts,0, vec![1,2,3,4]);
         
         // Run time
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
@@ -3310,7 +3433,17 @@ mod test {
     
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let (sparse_add_tapscript, _, _) = tap_add_eval_mul_for_fixed_Qs_with_frob( t2, t3, q2, q3, 1);
-        let bitcom_script = bitcom_add_eval_mul_for_fixed_Qs_with_frob(&sec_key_for_bitcomms,0, vec![1,2,3,4]);
+
+        let sec_out = 0;
+        let sec_in = vec![1,2,3,4];
+
+        let mut pub_scripts: HashMap<u32, Script> = HashMap::new();
+        pub_scripts.insert(sec_out, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out)));
+        for i in &sec_in {
+            pub_scripts.insert(*i, checksig_verify_fq(&format!("{}{:04X}", sec_key_for_bitcomms, i)));
+        }
+
+        let bitcom_script = bitcom_add_eval_mul_for_fixed_Qs_with_frob(&pub_scripts,0, vec![1,2,3,4]);
         
         // Run time
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
