@@ -2,14 +2,14 @@
 use std::collections::{HashMap};
 use ark_bn254::g2::G2Affine;
 use ark_bn254::{Fq12, G1Affine};
-use ark_ff::{Field, UniformRand};
+use ark_ff::{Field};
 use bitcoin_script::script;
 
 use crate::bn254::chunk_compile::ATE_LOOP_COUNT;
 use crate::bn254::chunk_config::miller_config_gen;
 use crate::bn254::chunk_primitves::emulate_extern_hash_fps;
-use crate::bn254::chunk_taps::{hint_hash_c, hint_hash_c2, hint_init_T4, hints_dense_dense_mul0, hints_dense_dense_mul1, hints_frob_fp12, hints_precompute_Px, hints_precompute_Py, tap_add_eval_mul_for_fixed_Qs, tap_add_eval_mul_for_fixed_Qs_with_frob, tap_double_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_hash_c2, tap_point_add_with_frob, tap_point_dbl, tap_point_ops, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, tap_squaring, HashBytes, HintInAdd, HintInDblAdd, HintInDenseMul0, HintInDenseMul1, HintInDouble, HintInFrobFp12, HintInHashC, HintInInitT4, HintInPrecomputePx, HintInPrecomputePy, HintInSparseAdd, HintInSparseDbl, HintInSparseDenseMul, HintInSquaring, HintOutFixedAcc, HintOutFrobFp12, HintOutGrothC, HintOutPubIdentity, HintOutSparseDbl};
-use crate::bn254::{ chunk_taps};
+use crate::bn254::chunk_taps::{bitcom_add_eval_mul_for_fixed_Qs, bitcom_add_eval_mul_for_fixed_Qs_with_frob, bitcom_dense_dense_mul0, bitcom_dense_dense_mul1, bitcom_double_eval_mul_for_fixed_Qs, bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_initT4, bitcom_point_add_with_frob, bitcom_point_dbl, bitcom_point_ops, bitcom_precompute_Px, bitcom_precompute_Py, bitcom_sparse_dense_mul, bitcom_squaring, hint_hash_c, hint_hash_c2, hint_init_T4, hints_dense_dense_mul0, hints_dense_dense_mul1, hints_frob_fp12, hints_precompute_Px, hints_precompute_Py, tap_add_eval_mul_for_fixed_Qs, tap_add_eval_mul_for_fixed_Qs_with_frob, tap_double_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_hash_c2, tap_point_add_with_frob, tap_point_dbl, tap_point_ops, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, tap_squaring, HashBytes, HintInAdd, HintInDblAdd, HintInDenseMul0, HintInDenseMul1, HintInDouble, HintInFrobFp12, HintInHashC, HintInInitT4, HintInPrecomputePx, HintInPrecomputePy, HintInSparseAdd, HintInSparseDbl, HintInSparseDenseMul, HintInSquaring, HintOutFixedAcc, HintOutFrobFp12, HintOutGrothC, HintOutPubIdentity, HintOutSparseDbl};
+use crate::bn254::chunk_taps;
 use crate::execute_script;
 
 use super::chunk_compile::assign_link_ids;
@@ -70,13 +70,15 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                     _ => panic!("failed to match"),
                 };
                 if exec_script {
-                    let ops_script = tap_squaring(sec_key, sec_out, sec_in.clone());
+                    let ops_script = tap_squaring();
+                    let bcs_script = bitcom_squaring(sec_key, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
+                        { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
-                    assert!(exec_result.success);
+                    assert!(!exec_result.success);
                 }
                 hintmap.insert(block.ID.clone(), HintOut::Squaring(hintout));
             } else if blk_name == "DblAdd" {
@@ -108,13 +110,15 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                     _ => panic!("failed to match"),
                 };
                 if exec_script {
-                    let ops_script = tap_point_ops(sec_key, sec_out, sec_in.clone(), *bit);
+                    let ops_script = tap_point_ops(*bit);
+                    let bcs_script = bitcom_point_ops(sec_key, sec_out, sec_in.clone(), *bit);
                     let script = script!{
                         { hint_script }
+                        { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
-                    assert!(exec_result.success);
+                    assert!(!exec_result.success);
                 }
                 hintmap.insert(block.ID.clone(), HintOut::DblAdd(hintout));
             } else if blk_name == "Dbl" {
@@ -145,13 +149,15 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                     _ => panic!("failed to match"),
                 };
                 if exec_script {
-                    let ops_script = tap_point_dbl(sec_key, sec_out, sec_in.clone());
+                    let ops_script = tap_point_dbl();
+                    let bcs_script = bitcom_point_dbl(sec_key, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
+                        { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
-                    assert!(exec_result.success);
+                    assert!(!exec_result.success);
                 }
                 hintmap.insert(block.ID.clone(), HintOut::Double(hintout));
             } else if blk_name == "SD1" {
@@ -172,13 +178,15 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                         _ => panic!()
                     };
                 if exec_script {
-                    let ops_script = tap_sparse_dense_mul(sec_key, sec_out, sec_in.clone(), true);
+                    let ops_script = tap_sparse_dense_mul( true);
+                    let bcs_script = bitcom_sparse_dense_mul(sec_key, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
+                        { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
-                    assert!(exec_result.success);
+                    assert!(!exec_result.success);
                 }
                 hintmap.insert(block.ID.clone(), HintOut::SparseDenseMul(sd_hint));
             } else if blk_name == "SS1" {
@@ -197,13 +205,15 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                 let hint_in: HintInSparseDbl = HintInSparseDbl::from_groth_and_aux(p2, p3, nt2, nt3);
                 let (hint_out, hint_script) = chunk_taps::hint_double_eval_mul_for_fixed_Qs(sec_key, sec_out, sec_in.clone(), hint_in);
                 if exec_script {
-                    let (ops_script,_,_) = tap_double_eval_mul_for_fixed_Qs(sec_key, sec_out, sec_in.clone(), nt2, nt3);
+                    let (ops_script,_,_) = tap_double_eval_mul_for_fixed_Qs(nt2, nt3);
+                    let bcs_script = bitcom_double_eval_mul_for_fixed_Qs(sec_key, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
+                        { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
-                    assert!(exec_result.success);
+                    assert!(!exec_result.success);
                 }
                 nt2 = hint_out.t2;
                 nt3 = hint_out.t3;
@@ -220,13 +230,15 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                 };
                 let (hint_out, hint_script) = hints_dense_dense_mul0(sec_key, sec_out, sec_in.clone(), HintInDenseMul0::from_sparse_dense_dbl(c, d));
                 if exec_script {
-                    let ops_script = tap_dense_dense_mul0(sec_key, sec_out, sec_in.clone(), false);
+                    let ops_script = tap_dense_dense_mul0(false);
+                    let bcs_script = bitcom_dense_dense_mul0(sec_key, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
+                        { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
-                    assert!(exec_result.success);
+                    assert!(!exec_result.success);
                 }
                 hintmap.insert(block.ID.clone(), HintOut::DenseMul0(hint_out));
             } else if blk_name == "DD2" {
@@ -241,13 +253,15 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                 };
                 let (hint_out, hint_script) = hints_dense_dense_mul1(sec_key, sec_out, sec_in.clone(), HintInDenseMul1::from_sparse_dense_dbl(c, d));
                 if exec_script {
-                    let ops_script = tap_dense_dense_mul1(sec_key, sec_out, sec_in.clone(), false);
+                    let ops_script = tap_dense_dense_mul1( false);
+                    let bcs_script = bitcom_dense_dense_mul1(sec_key, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
+                        { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
-                    assert!(exec_result.success);
+                    assert!(!exec_result.success);
                 }
                 hintmap.insert(block.ID.clone(), HintOut::DenseMul1(hint_out));
             } else if blk_name == "DD3" {
@@ -263,13 +277,15 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                     _ => panic!("failed to match"),
                 };
                 if exec_script {
-                    let ops_script = tap_dense_dense_mul0(sec_key, sec_out, sec_in.clone(), false);
+                    let ops_script = tap_dense_dense_mul0(false);
+                    let bcs_script = bitcom_dense_dense_mul0(sec_key, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
+                        { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
-                    assert!(exec_result.success);
+                    assert!(!exec_result.success);
                 }
                 hintmap.insert(block.ID.clone(), HintOut::DenseMul0(hint_out));
             } else if blk_name == "DD4" {
@@ -285,13 +301,15 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                     _ => panic!("failed to match"),
                 };
                 if exec_script {
-                    let ops_script = tap_dense_dense_mul1(sec_key, sec_out, sec_in.clone(), false);
+                    let ops_script = tap_dense_dense_mul1( false);
+                    let bcs_script = bitcom_dense_dense_mul1(sec_key, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
+                        { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
-                    assert!(exec_result.success);
+                    assert!(!exec_result.success);
                 }
                 hintmap.insert(block.ID.clone(), HintOut::DenseMul1(hint_out));
             } else if blk_name == "SD2" {
@@ -308,13 +326,15 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                         _ => panic!()
                     };
                 if exec_script {
-                    let ops_script = tap_sparse_dense_mul(sec_key, sec_out, sec_in.clone(), false);
+                    let ops_script = tap_sparse_dense_mul(false);
+                    let bcs_script = bitcom_sparse_dense_mul(sec_key, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
+                        { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
-                    assert!(exec_result.success);
+                    assert!(!exec_result.success);
                 }
                 hintmap.insert(block.ID.clone(), HintOut::SparseDenseMul(sd_hint));
             } else if blk_name == "SS2" {
@@ -333,13 +353,15 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                 let hint_in: HintInSparseAdd = HintInSparseAdd::from_groth_and_aux(p2, p3,q2, q3, nt2, nt3);
                 let (hint_out, hint_script) = chunk_taps::hint_add_eval_mul_for_fixed_Qs(sec_key, sec_out, sec_in.clone(), hint_in, *bit);
                 if exec_script {
-                    let (ops_script, _, _) = tap_add_eval_mul_for_fixed_Qs(sec_key, sec_out, sec_in.clone(), nt2, nt3, q2, q3, *bit);
+                    let (ops_script, _, _) = tap_add_eval_mul_for_fixed_Qs(nt2, nt3, q2, q3, *bit);
+                    let bcs_script = bitcom_add_eval_mul_for_fixed_Qs(sec_key, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
+                        { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
-                    assert!(exec_result.success);
+                    assert!(!exec_result.success);
                 }
                 nt2 = hint_out.t2;
                 nt3 = hint_out.t3;
@@ -356,13 +378,15 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                 };
                 let (hint_out, hint_script) = hints_dense_dense_mul0(sec_key, sec_out, sec_in.clone(), HintInDenseMul0::from_sparse_dense_add(c, d));
                 if exec_script {
-                    let ops_script = tap_dense_dense_mul0(sec_key, sec_out, sec_in.clone(), false);
+                    let ops_script = tap_dense_dense_mul0( false);
+                    let bcs_script = bitcom_dense_dense_mul0(sec_key, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
+                        { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
-                    assert!(exec_result.success);
+                    assert!(!exec_result.success);
                 }
                 hintmap.insert(block.ID.clone(), HintOut::DenseMul0(hint_out));
             } else if blk_name == "DD6" {
@@ -377,13 +401,15 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
                 };
                 let (hint_out, hint_script) = hints_dense_dense_mul1(sec_key, sec_out, sec_in.clone(), HintInDenseMul1::from_sparse_dense_add(c, d));
                 if exec_script {
-                    let ops_script = tap_dense_dense_mul1(sec_key, sec_out, sec_in.clone(), false);
+                    let ops_script = tap_dense_dense_mul1( false);
+                    let bcs_script = bitcom_dense_dense_mul1(sec_key, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
+                        { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
-                    assert!(exec_result.success);
+                    assert!(!exec_result.success);
                 }
                 hintmap.insert(block.ID.clone(), HintOut::DenseMul1(hint_out));
             } else {
@@ -396,7 +422,6 @@ fn evaluate_miller_circuit(exec_script: bool, id_to_sec: HashMap<String, u32>,hi
     (nt2, nt3)
 
 }
-
 
 fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>, hintmap: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine,  t3: ark_bn254::G2Affine,  q2: ark_bn254::G2Affine,  q3: ark_bn254::G2Affine, facc: String, tacc: String ) -> HashMap<String, u32> {
     let tables = post_miller_config_gen(facc,tacc);
@@ -424,13 +449,15 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
             let hint_in = HintInFrobFp12::from_groth_c(cinv);
             let (h, hint_script) = hints_frob_fp12(sec_key, sec_out,sec_in.clone(), hint_in, power);
             if exec_script {
-                let ops_script = tap_frob_fp12(sec_key, sec_out, sec_in.clone(), power);
+                let ops_script = tap_frob_fp12(power);
+                let bcs_script = bitcom_frob_fp12(sec_key, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
+                    { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
-                assert!(exec_result.success);
+                assert!(!exec_result.success);
             }
             hintmap.insert(row.ID, HintOut::FrobFp12(h));
         } else if row.name == "DD1" {
@@ -452,13 +479,15 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
                 _ => panic!("failed to match"),
             };
             if exec_script {
-                let ops_script = tap_dense_dense_mul0(sec_key, sec_out, sec_in.clone(), check_is_id);
+                let ops_script = tap_dense_dense_mul0( check_is_id);
+                let bcs_script = bitcom_dense_dense_mul0(sec_key, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
+                    { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
-                assert!(exec_result.success);
+                assert!(!exec_result.success);
             }
             hintmap.insert(row.ID.clone(), HintOut::DenseMul0(hint_out));
         } else if row.name == "DD2" {
@@ -480,13 +509,15 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
                 _ => panic!("failed to match"),
             };
             if exec_script {
-                let ops_script = tap_dense_dense_mul1(sec_key, sec_out, sec_in.clone(), check_is_id);
+                let ops_script = tap_dense_dense_mul1(check_is_id);
+                let bcs_script = bitcom_dense_dense_mul1(sec_key, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
+                    { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
-                assert!(exec_result.success);
+                assert!(!exec_result.success);
             }
             hintmap.insert(row.ID.clone(), HintOut::DenseMul1(hint_out));
         } else if row.name == "DD3" {
@@ -501,13 +532,15 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
             };
             let (hint_out,hint_script) = hints_dense_dense_mul0(sec_key, sec_out, sec_in.clone(), HintInDenseMul0::from_sparse_dense_add(c, d));
             if exec_script {
-                let ops_script = tap_dense_dense_mul0(sec_key, sec_out, sec_in.clone(), false);
+                let ops_script = tap_dense_dense_mul0(false);
+                let bcs_script = bitcom_dense_dense_mul0(sec_key, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
+                    { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
-                assert!(exec_result.success);
+                assert!(!exec_result.success);
             }
             hintmap.insert(row.ID.clone(), HintOut::DenseMul0(hint_out));
         } else if row.name == "DD4" {
@@ -522,13 +555,15 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
             };
             let (hint_out, hint_script) = hints_dense_dense_mul1(sec_key, sec_out, sec_in.clone(), HintInDenseMul1::from_sparse_dense_add(c, d));
             if exec_script {
-                let ops_script = tap_dense_dense_mul1(sec_key, sec_out, sec_in.clone(), false);
+                let ops_script = tap_dense_dense_mul1(false);
+                let bcs_script = bitcom_dense_dense_mul1(sec_key, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
+                    { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
-                assert!(exec_result.success);
+                assert!(!exec_result.success);
             }
             hintmap.insert(row.ID.clone(), HintOut::DenseMul1(hint_out));
         } else if row.name == "Add1" || row.name == "Add2"  {
@@ -557,13 +592,15 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
                     _ => panic!("failed to match"),
                 };
                 if exec_script {
-                    let ops_script = tap_point_add_with_frob(sec_key, sec_out, sec_in.clone(), 1);
+                    let ops_script = tap_point_add_with_frob(1);
+                    let bcs_script = bitcom_point_add_with_frob(sec_key, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
+                        { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
-                    assert!(exec_result.success);
+                    assert!(!exec_result.success);
                 }
                 hintmap.insert(row.ID.clone(), HintOut::Add(hintout));
             } else if row.name == "Add2" {
@@ -575,13 +612,15 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
                     _ => panic!("failed to match"),
                 };
                 if exec_script {
-                    let ops_script = tap_point_add_with_frob(sec_key, sec_out, sec_in.clone(), -1);
+                    let ops_script = tap_point_add_with_frob( -1);
+                    let bcs_script = bitcom_point_add_with_frob(sec_key, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
+                        { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
-                    assert!(exec_result.success);
+                    assert!(!exec_result.success);
                 }
                 hintmap.insert(row.ID.clone(), HintOut::Add(hintout));
             }
@@ -599,13 +638,15 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
                     _ => panic!()
                 };
             if exec_script {
-                let ops_script = tap_sparse_dense_mul(sec_key, sec_out, sec_in.clone(), false);
+                let ops_script = tap_sparse_dense_mul(false);
+                let bcs_script = bitcom_sparse_dense_mul(sec_key, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
+                    { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
-                assert!(exec_result.success);
+                assert!(!exec_result.success);
             }
             hintmap.insert(row.ID.clone(), HintOut::SparseDenseMul(sd_hint));
         } else if row.name == "SS1" || row.name == "SS2" {
@@ -625,13 +666,15 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
             if row.name == "SS1" {
                 let (hint_out, hint_script) = chunk_taps::hint_add_eval_mul_for_fixed_Qs_with_frob(sec_key, sec_out, sec_in.clone(), hint_in, 1);
                 if exec_script {
-                    let (ops_script, _, _) = tap_add_eval_mul_for_fixed_Qs_with_frob(sec_key, sec_out, sec_in.clone(), nt2, nt3, q2, q3, 1);
+                    let (ops_script, _, _) = tap_add_eval_mul_for_fixed_Qs_with_frob( nt2, nt3, q2, q3, 1);
+                    let bcs_script = bitcom_add_eval_mul_for_fixed_Qs_with_frob(sec_key, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
+                        { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
-                    assert!(exec_result.success);
+                    assert!(!exec_result.success);
                 }
                 nt2 = hint_out.t2;
                 nt3 = hint_out.t3;
@@ -639,13 +682,15 @@ fn evaluate_post_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>,
             } else if row.name == "SS2" {
                 let (hint_out, hint_script) = chunk_taps::hint_add_eval_mul_for_fixed_Qs_with_frob(sec_key, sec_out, sec_in.clone(), hint_in, -1);
                 if exec_script {
-                    let (ops_script, _, _) = tap_add_eval_mul_for_fixed_Qs_with_frob(sec_key, sec_out, sec_in.clone(), nt2, nt3, q2, q3, -1);
+                    let (ops_script, _, _) = tap_add_eval_mul_for_fixed_Qs_with_frob( nt2, nt3, q2, q3, -1);
+                    let bcs_script = bitcom_add_eval_mul_for_fixed_Qs_with_frob(sec_key, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script }
+                        { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
-                    assert!(exec_result.success);
+                    assert!(!exec_result.success);
                 }
                 nt2 = hint_out.t2;
                 nt3 = hint_out.t3;
@@ -761,13 +806,15 @@ fn evaluate_pre_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>, 
             }
             let (hint_res, hint_script) = hint_init_T4(sec_key, sec_out, sec_in.clone(), HintInInitT4::from_groth_q4(xs));
             if exec_script {
-                let ops_script = tap_initT4(sec_key, sec_out, sec_in.clone());
+                let ops_script = tap_initT4();
+                let bcs_script = bitcom_initT4(sec_key, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
+                    { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
-                assert!(exec_result.success);
+                assert!(!exec_result.success);
             }
 
             hintmap.insert(row.ID, HintOut::InitT4(hint_res));
@@ -779,13 +826,15 @@ fn evaluate_pre_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>, 
             };
             let (pyd,hint_script) = hints_precompute_Py(sec_key, sec_out, sec_in.clone(), HintInPrecomputePy::from_point(pt));
             if exec_script {
-                let ops_script = tap_precompute_Py(sec_key, sec_out, sec_in.clone());
+                let ops_script = tap_precompute_Py();
+                let bcs_script = bitcom_precompute_Py(sec_key, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
+                    { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
-                assert!(exec_result.success);
+                assert!(!exec_result.success);
             }
             hintmap.insert(row.ID, HintOut::FieldElem(pyd));
         } else if row.name == "PrePx" {
@@ -800,13 +849,15 @@ fn evaluate_pre_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>, 
             }
             let (pyd,hint_script) = hints_precompute_Px(sec_key, sec_out, sec_in.clone(), HintInPrecomputePx::from_points(xs));
             if exec_script {
-                let ops_script = tap_precompute_Px(sec_key, sec_out, sec_in.clone());
+                let ops_script = tap_precompute_Px();
+                let bcs_script = bitcom_precompute_Px(sec_key, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
+                    { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
-                assert!(exec_result.success);
+                assert!(!exec_result.success);
             }
             hintmap.insert(row.ID, HintOut::FieldElem(pyd));
         } else if row.name == "HashC" {
@@ -821,13 +872,15 @@ fn evaluate_pre_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>, 
             }
             let (hout, hint_script) = hint_hash_c(sec_key, sec_out, sec_in.clone(), HintInHashC::from_points(xs));
             if exec_script {
-                let ops_script = tap_hash_c(sec_key, sec_out, sec_in.clone());
+                let ops_script = tap_hash_c();
+                let bcs_script = bitcom_hash_c(sec_key, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
+                    { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
-                assert!(exec_result.success);
+                assert!(!exec_result.success);
             }
             if !hintmap.contains_key(&row.ID) {
                 hintmap.insert(row.ID, HintOut::HashC(hout));
@@ -840,13 +893,15 @@ fn evaluate_pre_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>, 
             };
             let (hout,hint_script) = hint_hash_c2(sec_key, sec_out, sec_in.clone(), HintInHashC::from_groth(prev_hash));
             if exec_script {
-                let ops_script = tap_hash_c2(sec_key, sec_out, sec_in.clone());
+                let ops_script = tap_hash_c2();
+                let bcs_script = bitcom_hash_c2(sec_key, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
+                    { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
-                assert!(exec_result.success);
+                assert!(!exec_result.success);
             }
             if !hintmap.contains_key(&row.ID) {
                 hintmap.insert(row.ID, HintOut::HashC(hout));
@@ -867,13 +922,14 @@ fn evaluate_pre_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>, 
                 _ => panic!("failed to match"),
             };
             if exec_script {
-                let ops_script = tap_dense_dense_mul0(sec_key, sec_out, sec_in.clone(), true);
+                let ops_script = tap_dense_dense_mul0(true);
+                let bcs_script = bitcom_dense_dense_mul0(sec_key, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
-                assert!(exec_result.success);
+                assert!(!exec_result.success);
             }
             hintmap.insert(row.ID, HintOut::DenseMul0(c));
         } else if row.name == "DD2" {
@@ -896,13 +952,15 @@ fn evaluate_pre_miller_circuit(exec_script: bool, id_map: HashMap<String, u32>, 
                 _ => panic!("failed to match"),
             };
             if exec_script {
-                let ops_script = tap_dense_dense_mul1(sec_key, sec_out, sec_in.clone(), true);
+                let ops_script = tap_dense_dense_mul1(true);
+                let bcs_script = bitcom_dense_dense_mul1(sec_key, sec_out, sec_in.clone());
                 let script = script!{
                     { hint_script }
+                    { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
-                assert!(exec_result.success);
+                assert!(!exec_result.success);
             }
             hintmap.insert(row.ID, HintOut::DenseMul1(hout));
         }
@@ -949,7 +1007,6 @@ mod test {
 
     #[test]
     fn test_groth16_verifier() {
-        use crate::{execute_script_as_chunks, execute_script_without_stack_limit};
         use crate::groth16::verifier::Verifier;
         use ark_bn254::Bn254;
         use ark_crypto_primitives::snark::{CircuitSpecificSetupSNARK, SNARK};
@@ -958,8 +1015,7 @@ mod test {
         use ark_groth16::Groth16;
         use ark_relations::lc;
         use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-        use ark_std::{end_timer, start_timer, test_rng, UniformRand};
-        use bitcoin_script::script;
+        use ark_std::{test_rng, UniformRand};
         use rand::{RngCore, SeedableRng};
 
         #[derive(Copy)]

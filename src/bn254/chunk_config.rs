@@ -1,6 +1,6 @@
 use ark_ec::bn::BnConfig;
 
-use crate::bn254::chunk_compile::ATE_LOOP_COUNT;
+pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 
 
 #[derive(Debug)]
