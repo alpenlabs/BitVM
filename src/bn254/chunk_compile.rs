@@ -432,13 +432,13 @@ pub(crate) fn assign_link_ids() -> (HashMap<String, u32>, String, String) {
     let mut total_len = 0;
     let pubp = assign_ids_to_public_params(0);
     total_len += pubp.len();
-    let grothp = assign_ids_to_groth16_params(pubp.len() as u32);
+    let grothp = assign_ids_to_groth16_params(total_len as u32);
     total_len += grothp.len();
-    let premillp = assign_ids_to_premiller_params(grothp.len() as u32);
+    let premillp = assign_ids_to_premiller_params(total_len as u32);
     total_len += premillp.len();
-    let (millp, f_blk, t4_blk) = assign_ids_to_miller_blocks(premillp.len() as u32);
+    let (millp, f_blk, t4_blk) = assign_ids_to_miller_blocks(total_len as u32);
     total_len += millp.len();
-    let postmillp = assign_ids_to_postmiller_params(millp.len() as u32);
+    let postmillp = assign_ids_to_postmiller_params(total_len as u32);
     total_len += postmillp.len();
 
     all_ids.extend(pubp);
@@ -504,5 +504,19 @@ mod test {
         //     println!("DELIM");
         //     println!("{:?}", pubs);
         // }
+    }
+
+    #[test]
+    fn test_link() {
+        let (hashmap, facc, tacc) = assign_link_ids();
+        let mut key_value_vec: Vec<(&String, &u32)> = hashmap.iter().collect();
+
+        // Sort the vector by value
+        key_value_vec.sort_by(|a, b| a.1.cmp(b.1));
+    
+        // Iterate over the sorted vector and print the key-value pairs
+        for (key, value) in key_value_vec {
+            println!("{}: {}", key, value);
+        }
     }
 }
