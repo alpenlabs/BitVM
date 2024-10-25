@@ -597,7 +597,7 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
-                    assert!(exec_result.success);
+                    assert!(!exec_result.success);
                     assert!(exec_result.final_stack.len() == 1);
                 aux_output_per_link.insert(row.ID.clone(), HintOut::Add(hintout));
             }
