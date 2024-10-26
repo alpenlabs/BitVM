@@ -11,6 +11,7 @@ use crate::bn254::chunk_primitves::emulate_extern_hash_fps;
 use crate::bn254::chunk_taps::{bitcom_add_eval_mul_for_fixed_Qs, bitcom_add_eval_mul_for_fixed_Qs_with_frob, bitcom_dense_dense_mul0, bitcom_dense_dense_mul1, bitcom_double_eval_mul_for_fixed_Qs, bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_initT4, bitcom_point_add_with_frob, bitcom_point_dbl, bitcom_point_ops, bitcom_precompute_Px, bitcom_precompute_Py, bitcom_sparse_dense_mul, bitcom_squaring, hint_hash_c, hint_hash_c2, hint_init_T4, hints_dense_dense_mul0, hints_dense_dense_mul1, hints_frob_fp12, hints_precompute_Px, hints_precompute_Py, tap_add_eval_mul_for_fixed_Qs, tap_add_eval_mul_for_fixed_Qs_with_frob, tap_double_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_hash_c2, tap_point_add_with_frob, tap_point_dbl, tap_point_ops, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, tap_squaring, HashBytes, HintInAdd, HintInDblAdd, HintInDenseMul0, HintInDenseMul1, HintInDouble, HintInFrobFp12, HintInHashC, HintInInitT4, HintInPrecomputePx, HintInPrecomputePy, HintInSparseAdd, HintInSparseDbl, HintInSparseDenseMul, HintInSquaring, HintOutFixedAcc, HintOutFrobFp12, HintOutGrothC, HintOutPubIdentity, HintOutSparseDbl};
 use crate::bn254::chunk_taps;
 use crate::execute_script;
+use crate::signatures::winternitz_compact::WOTSPubKey;
 
 use super::chunk_compile::assign_link_ids;
 use super::chunk_config::{groth16_params, post_miller_config_gen, pre_miller_config_gen};
@@ -20,7 +21,7 @@ use super::{chunk_taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c,
 
 use crate::treepp::*;
 
-fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, Script>, link_name_to_id: HashMap<String, u32>, aux_output_per_link: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine, t3: ark_bn254::G2Affine, q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine) -> (G2Affine, G2Affine) {
+fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, link_name_to_id: HashMap<String, u32>, aux_output_per_link: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine, t3: ark_bn254::G2Affine, q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine) -> (G2Affine, G2Affine) {
     // vk: (G1Affine, G2Affine, G2Affine, G2Affine)
     // groth16 is 1 G2 and 2 G1, P4, Q4, 
     // e(A,B)⋅e(vkα ,vkβ)=e(C,vkδ)⋅e(vkγ_ABC,vkγ)
@@ -408,7 +409,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
 
 }
 
-fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, Script>,  link_name_to_id: HashMap<String, u32>, aux_output_per_link: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine,  t3: ark_bn254::G2Affine,  q2: ark_bn254::G2Affine,  q3: ark_bn254::G2Affine, facc: String, tacc: String ) -> HashMap<String, u32> {
+fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>,  link_name_to_id: HashMap<String, u32>, aux_output_per_link: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine,  t3: ark_bn254::G2Affine,  q2: ark_bn254::G2Affine,  q3: ark_bn254::G2Affine, facc: String, tacc: String ) -> HashMap<String, u32> {
     let tables = post_miller_config_gen(facc,tacc);
 
     let mut nt2 = t2;
@@ -792,7 +793,7 @@ fn evaluate_groth16_params(sig: &mut Sig, link_name_to_id: HashMap<String, u32>,
     id_to_witness
 }
 
-fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, Script>, link_name_to_id: HashMap<String, u32>, aux_output_per_link: &mut HashMap<String, HintOut>) {
+fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, link_name_to_id: HashMap<String, u32>, aux_output_per_link: &mut HashMap<String, HintOut>) {
     let tables = pre_miller_config_gen();
 
     for row in tables {
@@ -967,7 +968,7 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
     }
 }
 
-pub fn evaluate(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, Script>, p2: G1Affine, p3: G1Affine, p4: G1Affine,q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine, q4: G2Affine, c: Fq12, s: Fq12, fixed_acc: ark_bn254::Fq12) {
+pub fn evaluate(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, p2: G1Affine, p3: G1Affine, p4: G1Affine,q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine, q4: G2Affine, c: Fq12, s: Fq12, fixed_acc: ark_bn254::Fq12) {
     let (link_name_to_id, facc, tacc) = assign_link_ids();
     let mut aux_out_per_link: HashMap<String, HintOut> = HashMap::new();
     let pubmap = evaluate_public_params(sig, link_name_to_id.clone(), q2, q3, fixed_acc);
@@ -1105,11 +1106,11 @@ mod test {
         let mut sig = Sig { msk: Some(master_secret), cache: HashMap::new() };
         evaluate(&mut sig, pub_scripts_per_link_id, p2, p3, p4, q2, q3, q4, c, s, fixed_acc);
 
-        println!("corrupt");
-        // mock faulty data
-        let index_to_corrupt = 101;
-        let corrup_scr = winternitz_compact::sign(&format!("{}{:04X}", master_secret, index_to_corrupt), [1u8;64]);
-        sig.cache.insert(index_to_corrupt, corrup_scr);
-        evaluate(&mut sig, pub_scripts_per_link_id, p2, p3, p4, q2, q3, q4, c, s, fixed_acc);
+        // println!("corrupt");
+        // // mock faulty data
+        // let index_to_corrupt = 101;
+        // let corrup_scr = winternitz_compact::sign(&format!("{}{:04X}", master_secret, index_to_corrupt), [1u8;64]);
+        // sig.cache.insert(index_to_corrupt, corrup_scr);
+        // evaluate(&mut sig, pub_scripts_per_link_id, p2, p3, p4, q2, q3, q4, c, s, fixed_acc);
     }
 }

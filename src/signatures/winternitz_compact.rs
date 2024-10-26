@@ -238,12 +238,43 @@ pub fn checksig_verify(secret_key: &str) -> Script {
 }
 
 
+pub type WOTSPubKey = Vec<Vec<u8>>;
+
+pub fn get_pub_key(secret_key: &str) -> WOTSPubKey {
+    fn pubkey(secret_key: &str, digit_index: u32) -> Vec<u8> {
+        let mut secret_i = match hex_decode(secret_key) {
+            Ok(bytes) => bytes,
+            Err(_) => panic!("Invalid hex string {:?}", secret_key),
+        };
+    
+        secret_i.push(digit_index as u8);
+    
+        let mut hash = hash160::Hash::hash(&secret_i);
+    
+        for _ in 0..D {
+            hash = hash160::Hash::hash(&hash[..]);
+        }
+    
+        let hash_bytes = hash.as_byte_array().to_vec();
+        return hash_bytes
+    }
+
+    let mut pubkeys: Vec<Vec<u8>> = Vec::new();
+    for digit_index in 0..N {
+        let p = pubkey(secret_key, N-1-digit_index);
+        pubkeys.push(p);
+    }
+
+    pubkeys
+}
+
 /// Winternitz Signature verification
 ///
 /// Note that the script inputs are malleable.
 ///
 /// Optimized by @SergioDemianLerner, @tomkosm
-pub fn checksig_verify_fq(secret_key: &str) -> Script {
+pub fn checksig_verify_fq(pub_key: WOTSPubKey) -> Script {
+    
     pub fn NMUL(n: u32) -> Script {
         let n_bits = u32::BITS - n.leading_zeros();
         let bits = (0..n_bits).map(|i| 1 & (n >> i)).collect::<Vec<_>>();
@@ -292,7 +323,7 @@ pub fn checksig_verify_fq(secret_key: &str) -> Script {
         // Repeat this for every of the n many digits
         for digit_index in 0..N {
 
-            { public_key(secret_key, N - 1 - digit_index) }
+            { pub_key[digit_index as usize].clone() }
 
 
             // Check if hash is equal with public key and add digit to altstack.
@@ -412,9 +443,10 @@ mod test {
             script.len() as f64 / (N0 * 4) as f64
         );
 
+        let pubkey = get_pub_key(MY_SECKEY);
         let sc = script! {
             { sign(MY_SECKEY, MESSAGE) }
-            { checksig_verify_fq(MY_SECKEY) }
+            { checksig_verify_fq(pubkey) }
             OP_TRUE
         };
         let res = execute_script(sc);
