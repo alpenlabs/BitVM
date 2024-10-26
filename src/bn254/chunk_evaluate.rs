@@ -799,7 +799,7 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
         let sec_in: Vec<u32> = row.Deps.split(",").into_iter().map(|s| link_name_to_id.get(s).unwrap().clone()).collect();
         let hints: Vec<HintOut> = row.Deps.split(",").into_iter().map(|s| aux_output_per_link.get(s).unwrap().clone()).collect();
         let sec_out = link_name_to_id.get(&row.ID).unwrap().clone();
-        println!("row name {:?}", row.name);
+        println!("row name {:?} ID {:?}", row.name, sec_out);
         if row.name == "T4Init" {
             assert!(hints.len() == 4);
             let mut xs = vec![];
@@ -1000,7 +1000,7 @@ mod test {
 
     use ark_ec::{AffineRepr, CurveGroup};
 
-    use crate::{bn254::{chunk_compile::keygen}, groth16::offchain_checker::compute_c_wi};
+    use crate::{bn254::chunk_compile::keygen, groth16::offchain_checker::compute_c_wi, signatures::winternitz_compact};
 
     use super::*;
 
@@ -1103,6 +1103,13 @@ mod test {
 
         let pub_scripts_per_link_id = &keygen(master_secret);
         let mut sig = Sig { msk: Some(master_secret), cache: HashMap::new() };
+        evaluate(&mut sig, pub_scripts_per_link_id, p2, p3, p4, q2, q3, q4, c, s, fixed_acc);
+
+        println!("corrupt");
+        // mock faulty data
+        let index_to_corrupt = 101;
+        let corrup_scr = winternitz_compact::sign(&format!("{}{:04X}", master_secret, index_to_corrupt), [1u8;64]);
+        sig.cache.insert(index_to_corrupt, corrup_scr);
         evaluate(&mut sig, pub_scripts_per_link_id, p2, p3, p4, q2, q3, q4, c, s, fixed_acc);
     }
 }

@@ -2610,8 +2610,6 @@ pub(crate) fn hint_hash_c2(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_i
 
 // precompute P
 pub(crate) fn tap_precompute_Px() -> Script {
-    // let mut prng = ChaCha20Rng::seed_from_u64(0); // todo: remove prng use later, pt can be any valid mock data
-    // let pt = ark_bn254::G1Affine::rand(&mut prng);
     let (eval_x, _) =  new_hinted_x_from_eval_point(G1Affine::new_unchecked(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE));
 
     let ops_scr = script!{
