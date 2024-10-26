@@ -1,7 +1,9 @@
+use crate::bn254::chunk_primitves::unpack_limbs_to_nibbles;
 use crate::bn254::chunk_taps::tup_to_scr;
-use crate::bn254::utils::{fq_push_not_montgomery, new_hinted_affine_add_line, new_hinted_affine_double_line, new_hinted_check_line_through_point};
+use crate::bn254::utils::{fq_push_not_montgomery, hinted_affine_add_line};
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
+use bitcoin::opcodes::all::{ OP_1ADD, OP_2DROP, OP_ADD, OP_DEPTH, OP_DROP, OP_DUP, OP_ENDIF, OP_FROMALTSTACK, OP_NUMEQUAL, OP_PICK, OP_ROLL, OP_TOALTSTACK};
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
@@ -9,28 +11,94 @@ use crate::{
 use num_traits::One;
 
 use super::chunk_taps::{Sig};
+use super::fq2::Fq2;
 use super::utils::{Hint};
 
 fn tap_msm() {
-    let (hinted_check_tangent1, _) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
-    let (hinted_double_line1, _) = new_hinted_affine_double_line(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+    let (hinted_check_tangent1, _) = hinted_check_line_through_point_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
+    let (hinted_double_line1, _) = hinted_affine_double_line_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
     
-    let (hinted_check_tangent2, _) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
-    let (hinted_double_line2, _) = new_hinted_affine_double_line(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+    let (hinted_check_tangent2, _) = hinted_check_line_through_point_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
+    let (hinted_double_line2, _) = hinted_affine_double_line_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
     
-    let (hinted_check_tangent3, _) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
-    let (hinted_double_line3, _) = new_hinted_affine_double_line(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+    let (hinted_check_tangent3, _) = hinted_check_line_through_point_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
+    let (hinted_double_line3, _) = hinted_affine_double_line_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
     
-    let (hinted_check_tangent4, _) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
-    let (hinted_double_line4, _) = new_hinted_affine_double_line(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+    let (hinted_check_tangent4, _) = hinted_check_line_through_point_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
+    let (hinted_double_line4, _) = hinted_affine_double_line_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
 
-    let (hinted_check_chord_t, _) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
-    let (hinted_check_chord_q, _) = new_hinted_check_line_through_point(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
-    let (hinted_add_line, _) = new_hinted_affine_add_line(ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one(), ark_bn254::Fq2::one());
+    let (hinted_check_chord_t, _) = hinted_check_line_through_point_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
+    let (hinted_check_chord_q, _) = hinted_check_line_through_point_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
+    let (hinted_add_line, _) = hinted_affine_add_line_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
 
     // alpha, bias
+    let ops_script = script!{
+
+        //[a, b, tx, ty]
+
+        {hinted_check_tangent1}
+        {Fq::drop()}
+        {hinted_double_line1}
+
+        {hinted_check_tangent2}
+        {Fq::drop()}
+        {hinted_double_line2}
+
+        {hinted_check_tangent3}
+        {Fq::drop()}
+        {hinted_double_line3}
+
+        {hinted_check_tangent4}
+        {Fq::drop()}
+        {hinted_double_line4}
+
+        { hinted_check_chord_q }
+        { hinted_check_chord_t }
+
+    };
 }
 
+fn tap_bake_precompute(q: ark_bn254::G1Affine, window: u8) -> Script {
+    let mut p_mul: Vec<ark_bn254::G1Affine> = Vec::new();
+    p_mul.push(ark_bn254::G1Affine::zero());
+    for _ in 1..(1 << window) {
+        p_mul.push((p_mul.last().unwrap().clone() + q.clone()).into_affine());
+    }
+    script!{
+        for i in 0..(1 << window) {
+            OP_DUP {i} OP_NUMEQUAL
+            OP_IF 
+                {fq_push_not_montgomery(p_mul[i].x)}
+                {fq_push_not_montgomery(p_mul[i].y)}
+            OP_ENDIF
+        }
+        OP_DEPTH OP_1SUB OP_ROLL OP_DROP
+    }
+
+}
+
+fn tap_extract_window_segment_from_scalar(index: usize) -> Script {
+    const N: usize = 32;
+    script!{
+        {unpack_limbs_to_nibbles()}
+        {N-1-index} OP_DUP OP_ADD // double
+        OP_1ADD // +1
+        OP_DUP OP_TOALTSTACK
+        OP_ROLL
+        OP_FROMALTSTACK OP_ROLL
+        OP_TOALTSTACK OP_TOALTSTACK
+        for _ in 0..N-1 {
+            OP_2DROP
+        }
+        OP_FROMALTSTACK 
+        OP_DUP OP_ADD
+        OP_DUP OP_ADD 
+        OP_DUP OP_ADD
+        OP_DUP OP_ADD 
+        OP_FROMALTSTACK
+        OP_ADD
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct HintInMSM {
@@ -178,7 +246,8 @@ fn get_byte_mul_g1(scalar: ark_bn254::Fr, window: u8, index: usize, base: ark_bn
     .map(|slice| slice.into_iter().fold(0, |acc, &b| (acc << 1) + b as u32))
     .collect::<Vec<u32>>();
     
-    let precomputed_q = p_mul[chunks[index] as usize];
+    let item = chunks[index];
+    let precomputed_q = p_mul[item as usize];
     return precomputed_q;
 }
 
@@ -191,7 +260,6 @@ fn hint_msm(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInMSM, i
     assert!(qs.len() <= num_pubs);
     assert_eq!(qs.len(), hint_in.scalars.len());
 
-    
     // constants
     let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
     let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
@@ -200,7 +268,7 @@ fn hint_msm(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInMSM, i
 
     let mut hints_tangent: Vec<Hint> = Vec::new();
 
-    if index != 0 {
+    if t.y != ark_bn254::Fq::ZERO {
         for _ in 0..window {
             let mut alpha = t.x.square();
             alpha /= t.y;
@@ -226,29 +294,38 @@ fn hint_msm(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInMSM, i
             aux_tangent.push(bias_minus);
         }
     }
-
     let mut hints_chord: Vec<Hint> = Vec::new();
     let mut aux_chord = vec![];
     for (qi, qq) in qs.iter().enumerate() {
         let q = get_byte_mul_g1(hint_in.scalars[qi], window, index, *qq);
-        let alpha = (t.y - q.y) / (t.x - q.x);
-        let bias_minus = alpha * t.x - t.y;
-        assert_eq!(alpha * t.x - t.y, bias_minus);  
-        aux_chord.push(alpha);
-        aux_chord.push(bias_minus);  
-
-        let (_, hints_check_chord_t) = hinted_affine_double_line_g1( t.x, alpha, bias_minus);
-        let (_, hints_check_chord_q) = hinted_affine_double_line_g1( q.x, alpha, bias_minus);
-        let (_, hints_add_line) = hinted_affine_add_line_g1(t.x, q.x, alpha, bias_minus);
-
-        for hint in hints_check_chord_q {
-            hints_chord.push(hint)
-        }
-        for hint in hints_check_chord_t {
-            hints_chord.push(hint)
-        }
-        for hint in hints_add_line {
-            hints_chord.push(hint)
+        if  t.y == ark_bn254::Fq::ZERO {
+            t = q.clone();
+            continue;
+        } else {
+            let alpha = (t.y - q.y) / (t.x - q.x);
+            let bias_minus = alpha * t.x - t.y;
+            
+            let new_tx = alpha.square() - t.x - q.x;
+            let new_ty = bias_minus - alpha * new_tx;
+            
+            t.x = new_tx;
+            t.y = new_ty;
+     
+            let (_, hints_check_chord_t) = hinted_affine_double_line_g1( t.x, alpha, bias_minus);
+            let (_, hints_check_chord_q) = hinted_affine_double_line_g1( q.x, alpha, bias_minus);
+            let (_, hints_add_line) = hinted_affine_add_line_g1(t.x, q.x, alpha, bias_minus);
+    
+            for hint in hints_check_chord_q {
+                hints_chord.push(hint)
+            }
+            for hint in hints_check_chord_t {
+                hints_chord.push(hint)
+            }
+            for hint in hints_add_line {
+                hints_chord.push(hint)
+            }
+            aux_chord.push(alpha);
+            aux_chord.push(bias_minus);  
         }
     }
 
@@ -287,9 +364,12 @@ fn hint_msm(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInMSM, i
 mod test {
     use std::collections::HashMap;
 
+    use crate::bn254::{fq2::Fq2, utils::fr_push_not_montgomery};
+
     use super::*;
     use ark_bn254::G1Affine;
-    use ark_ff::{BigInteger, PrimeField, UniformRand};
+    use ark_ff::{UniformRand};
+    use bitcoin::opcodes::{all::OP_EQUALVERIFY, OP_TRUE};
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
@@ -320,15 +400,79 @@ mod test {
         let window = 8;
         let num_bits = 256;
         let mut hint_in = HintInMSM { 
-            t: G1Affine::new_unchecked(ark_bn254::Fq::one(), ark_bn254::Fq::one()), 
-            scalars: vec![ark_bn254::Fr::ONE],
+            t: G1Affine::identity(), 
+            scalars: vec![ark_bn254::Fr::rand(&mut prng), ark_bn254::Fr::rand(&mut prng)],
         };
-        let qs = vec![G1Affine::rand(&mut prng)];
+        let qs = vec![G1Affine::rand(&mut prng), G1Affine::rand(&mut prng)];
+
         for i in 0..num_bits/window {
+            println!("index {:?}", i);
             let (aux, scr) = hint_msm(&mut sig, sec_out, sec_in.clone(), hint_in.clone(), i, qs.clone());
             hint_in.t = aux.t;
         }
-        println!("hint_in.t {:?}", hint_in.t);
-        println!("check {:?}", hint_in.t == qs[0] - hint_in.t);
+        println!("check {:?}", hint_in.t == qs[0] * hint_in.scalars[0] + qs[1] * hint_in.scalars[1]);
+    }
+
+    #[test]
+    fn test_precompute_table() {
+        let window = 8;
+        let mut prng = ChaCha20Rng::seed_from_u64(2); 
+        let q = G1Affine::rand(&mut prng);
+        let mut p_mul: Vec<ark_bn254::G1Affine> = Vec::new();
+        p_mul.push(ark_bn254::G1Affine::zero());
+        for _ in 1..(1 << window) {
+            p_mul.push((p_mul.last().unwrap().clone() + q.clone()).into_affine());
+        }
+
+        let scr = tap_bake_precompute(q, window);
+        let index = u32::rand(&mut prng) % (1 << window);
+        println!("script len {:?}", scr.len());
+        let script = script!{
+            {index}
+            {scr}
+            {fq_push_not_montgomery(p_mul[index as usize].y)}
+            {Fq::equalverify(1, 0)}
+            {fq_push_not_montgomery(p_mul[index as usize].x)}
+            {Fq::equalverify(1, 0)}
+            OP_TRUE
+        };
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        assert!(res.success);
+
+    }
+
+    #[test]
+    fn test_extract_window_from_scalar() {
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let scalar = ark_bn254::Fr::rand(&mut prng);
+
+        let index = u32::rand(&mut prng) % 32;
+        let window = 8;
+
+        let chunks = scalar
+        .into_bigint()
+        .to_bits_be()
+        .iter()
+        .map(|b| if *b { 1_u8 } else { 0_u8 })
+        .collect::<Vec<_>>()
+        .chunks(window as usize)
+        .map(|slice| slice.into_iter().fold(0, |acc, &b| (acc << 1) + b as u32))
+        .collect::<Vec<u32>>();
+        let chunk_match = chunks[index as usize];
+        println!("chunk_match {:?}", chunk_match);
+        let script = script!{
+            {fr_push_not_montgomery(scalar)}
+            {tap_extract_window_segment_from_scalar(index as usize)}
+            {chunk_match}
+            OP_EQUALVERIFY
+            OP_TRUE
+        };
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
     }
 }

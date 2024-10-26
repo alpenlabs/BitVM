@@ -6,7 +6,7 @@ use ark_ec::bn::BnConfig;
 use crate::bn254::chunk_config::miller_config_gen;
 use crate::bn254::chunk_taps::{bitcom_add_eval_mul_for_fixed_Qs_with_frob, bitcom_dense_dense_mul0, bitcom_dense_dense_mul1, bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_initT4, bitcom_point_add_with_frob, bitcom_precompute_Px, bitcom_precompute_Py, bitcom_sparse_dense_mul, tap_add_eval_mul_for_fixed_Qs, tap_add_eval_mul_for_fixed_Qs_with_frob, tap_frob_fp12, tap_hash_c2, tap_point_add_with_frob, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul};
 use crate::bn254::{ chunk_taps};
-use crate::signatures::winternitz_compact::{checksig_verify_fq, get_pub_key, WOTSPubKey};
+use crate::signatures::winternitz_compact::{get_pub_key, WOTSPubKey};
 use super::chunk_config::{groth16_derivatives, groth16_params, post_miller_config_gen, post_miller_params, pre_miller_config_gen, public_params};
 use super::{chunk_taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4}};
 
