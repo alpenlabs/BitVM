@@ -9,6 +9,8 @@ use crate::{
     treepp::*,
 };
 
+use super::utils::fr_push_not_montgomery;
+
 
 fn split_digit(window: u32, index: u32) -> Script {
     script! {
@@ -446,6 +448,24 @@ pub(crate) fn emulate_extern_hash_nibbles(msgs: Vec<[u8;64]>) -> [u8; 64] {
 pub(crate) fn emulate_fq_to_nibbles(msg: ark_bn254::Fq) -> [u8;64] {
     let scr = script!{
         {fq_push_not_montgomery(msg)}
+        {unpack_limbs_to_nibbles()}
+    };
+    let exec_result = execute_script(scr);
+    let mut arr = [0u8; 64];
+    for i in 0..exec_result.final_stack.len() {
+        let v = exec_result.final_stack.get(i);
+        if v.is_empty() {
+            arr[i] = 0;
+        } else {
+            arr[i] = v[0];
+        }
+    }
+    arr
+}
+
+pub(crate) fn emulate_fr_to_nibbles(msg: ark_bn254::Fr) -> [u8;64] {
+    let scr = script!{
+        {fr_push_not_montgomery(msg)}
         {unpack_limbs_to_nibbles()}
     };
     let exec_result = execute_script(scr);

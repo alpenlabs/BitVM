@@ -86,17 +86,7 @@ pub(crate) fn hint_squaring(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_
 
     
     let tup = vec![(sec_out, b_hash), (sec_in[0], a_hash)];
-    let mut bc_elems = vec![];
-    for (skey, elem) in tup {
-        let bcelem = if sig.cache.contains_key(&skey) {
-            sig.cache.get(&skey).unwrap().clone()
-        } else {
-            let v = winternitz_compact::sign(&format!("{}{:04X}", sig.msk.unwrap(), skey), elem);
-            sig.cache.insert(skey, v.clone());
-            v
-        };
-        bc_elems.push(bcelem);
-    }
+    let mut bc_elems = tup_to_scr(sig, tup);
 
 
     // data passed to stack in runtime 

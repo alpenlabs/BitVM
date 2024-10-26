@@ -1,6 +1,9 @@
-use crate::bn254::chunk_primitves::unpack_limbs_to_nibbles;
+use std::collections::HashMap;
+
+use crate::bn254::chunk_primitves::{emulate_extern_hash_fps, emulate_fq_to_nibbles, emulate_fr_to_nibbles, unpack_limbs_to_nibbles};
 use crate::bn254::chunk_taps::tup_to_scr;
 use crate::bn254::utils::{fq_push_not_montgomery, hinted_affine_add_line};
+use crate::signatures::winternitz_compact::{checksig_verify_fq, WOTSPubKey};
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
 use bitcoin::opcodes::all::{ OP_1ADD, OP_2DROP, OP_ADD, OP_DEPTH, OP_DROP, OP_DUP, OP_ENDIF, OP_FROMALTSTACK, OP_NUMEQUAL, OP_PICK, OP_ROLL, OP_TOALTSTACK};
@@ -14,18 +17,10 @@ use super::chunk_taps::{Sig};
 use super::fq2::Fq2;
 use super::utils::{Hint};
 
-fn tap_msm() {
-    let (hinted_check_tangent1, _) = hinted_check_line_through_point_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
-    let (hinted_double_line1, _) = hinted_affine_double_line_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
-    
-    let (hinted_check_tangent2, _) = hinted_check_line_through_point_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
-    let (hinted_double_line2, _) = hinted_affine_double_line_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
-    
-    let (hinted_check_tangent3, _) = hinted_check_line_through_point_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
-    let (hinted_double_line3, _) = hinted_affine_double_line_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
-    
-    let (hinted_check_tangent4, _) = hinted_check_line_through_point_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
-    let (hinted_double_line4, _) = hinted_affine_double_line_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
+fn tap_msm(window: u8, pub_ins: u8, msm_tap_index: u8) {
+
+    let (hinted_check_tangent, _) = hinted_check_line_through_point_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
+    let (hinted_double_line, _) = hinted_affine_double_line_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
 
     let (hinted_check_chord_t, _) = hinted_check_line_through_point_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
     let (hinted_check_chord_q, _) = hinted_check_line_through_point_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
@@ -34,27 +29,26 @@ fn tap_msm() {
     // alpha, bias
     let ops_script = script!{
 
-        //[a, b, tx, ty]
+        {Fq::fromaltstack()}
+        {Fq::fromaltstack()}
+        // [a, b, tx, ty]
+        for _ in 0..window {
+            {Fq::copy(3)}
+            {Fq::copy(3)}
+            {hinted_check_tangent.clone()}
+            {Fq::drop()}
+            {hinted_double_line.clone()}
+        }
 
-        {hinted_check_tangent1}
-        {Fq::drop()}
-        {hinted_double_line1}
-
-        {hinted_check_tangent2}
-        {Fq::drop()}
-        {hinted_double_line2}
-
-        {hinted_check_tangent3}
-        {Fq::drop()}
-        {hinted_double_line3}
-
-        {hinted_check_tangent4}
-        {Fq::drop()}
-        {hinted_double_line4}
-
-        { hinted_check_chord_q }
-        { hinted_check_chord_t }
-
+        for _ in 0..pub_ins {
+            {Fq::copy(3)}
+            {Fq::copy(3)}
+            { hinted_check_chord_t.clone() }
+            {Fq::copy(3)}
+            {Fq::copy(3)}
+            {msm_tap_index}
+            { hinted_check_chord_q.clone() }
+        }
     };
 }
 
@@ -259,6 +253,7 @@ fn hint_msm(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInMSM, i
     let mut t = hint_in.t.clone();
     assert!(qs.len() <= num_pubs);
     assert_eq!(qs.len(), hint_in.scalars.len());
+    assert_eq!(sec_in.len(), hint_in.scalars.len());
 
     // constants
     let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
@@ -290,8 +285,8 @@ fn hint_msm(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInMSM, i
                 hints_tangent.push(hint);
             }
             
-            aux_tangent.push(alpha);
             aux_tangent.push(bias_minus);
+            aux_tangent.push(alpha);
         }
     }
     let mut hints_chord: Vec<Hint> = Vec::new();
@@ -324,30 +319,40 @@ fn hint_msm(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInMSM, i
             for hint in hints_add_line {
                 hints_chord.push(hint)
             }
-            aux_chord.push(alpha);
-            aux_chord.push(bias_minus);  
+            aux_chord.push(bias_minus);
+            aux_chord.push(alpha);  
         }
     }
 
-    let tup = vec![
+    let mut tup = vec![
+        (sec_out, emulate_extern_hash_fps(vec![t.x, t.y], true)),
     ];
+
+    let mut hash_scalars = vec![];
+    for i in 0..hint_in.scalars.len() {
+        let idx = hint_in.scalars.len()-1-i;
+        let tup = (sec_in[idx], emulate_fr_to_nibbles(hint_in.scalars[idx]));
+        hash_scalars.push(tup);
+    }
+ 
+    tup.extend_from_slice(&hash_scalars);
    
     let bc_elems = tup_to_scr(sig, tup);
 
 
     let simulate_stack_input = script! {
         // tmul hints
-        for hint in hints_tangent {
+        for hint in hints_tangent { // check_tangent then double line
             {hint.push()}
         }
-        for hint in hints_chord {
+        for hint in hints_chord { // check chord q, t, add line
             {hint.push()}
         }
-        for aux in aux_tangent {
-            {fq_push_not_montgomery(aux)}
+        for i in 0..aux_chord.len() { // 
+            {fq_push_not_montgomery(aux_chord[aux_chord.len()-1-i])}
         }
-        for aux in aux_chord {
-            {fq_push_not_montgomery(aux)}
+        for i in 0..aux_tangent.len() {
+            {fq_push_not_montgomery(aux_tangent[aux_tangent.len()-i-i])}
         }
 
         for bc in bc_elems {
@@ -358,6 +363,19 @@ fn hint_msm(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInMSM, i
     let hint_out = HintOutMSM {t};
 
     (hint_out, simulate_stack_input)
+}
+
+pub(crate) fn bitcom_msm(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_in: Vec<u32>) -> Script {
+    script!{
+        for sec in sec_in {
+            {checksig_verify_fq(link_ids.get(&sec).unwrap().clone())}
+            {Fq::toaltstack()}
+        }
+        {checksig_verify_fq(link_ids.get(&sec_out).unwrap().clone())}
+        {Fq::toaltstack()}
+    }
+    // altstack: [k2, k1, k0, acc]
+    // stack: []
 }
 
 #[cfg(test)]
