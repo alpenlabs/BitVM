@@ -140,7 +140,7 @@ pub(crate) fn tap_squaring()-> Script {
         OP_VERIFY // verify that output doesn't match
     };
     let sc = script!{
-        { Fq12::copy(0)}
+        {Fq12::copy(0)}
         {sq_script}
         {hash_sc}
         OP_TRUE
