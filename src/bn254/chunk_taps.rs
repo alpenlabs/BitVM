@@ -86,7 +86,7 @@ pub(crate) fn hint_squaring(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_
 
     
     let tup = vec![(sec_out, b_hash), (sec_in[0], a_hash)];
-    let mut bc_elems = tup_to_scr(sig, tup);
+    let bc_elems = tup_to_scr(sig, tup);
 
 
     // data passed to stack in runtime 
@@ -3650,6 +3650,5 @@ pub_scripts.insert(*i, pk);
         println!("stack len {:?} script len {:?}", exec_result.stats.max_nb_stack_items, tap_len);
 
     }    
-
 
  }

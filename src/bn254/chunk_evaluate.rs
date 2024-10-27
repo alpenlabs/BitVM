@@ -13,13 +13,11 @@ use crate::bn254::chunk_taps;
 use crate::execute_script;
 use crate::signatures::winternitz_compact::WOTSPubKey;
 
-use super::chunk_compile::assign_link_ids;
-use super::chunk_config::{groth16_params, post_miller_config_gen, pre_miller_config_gen};
+use super::chunk_config::{assign_link_ids, groth16_config_gen, post_miller_config_gen, pre_miller_config_gen};
 use super::chunk_primitves::emulate_fq_to_nibbles;
 use super::chunk_taps::{tup_to_scr, HintOut, Sig};
 use super::{chunk_taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4}};
 
-use crate::treepp::*;
 
 fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, link_name_to_id: HashMap<String, u32>, aux_output_per_link: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine, t3: ark_bn254::G2Affine, q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine) -> (G2Affine, G2Affine) {
     // vk: (G1Affine, G2Affine, G2Affine, G2Affine)
@@ -51,12 +49,12 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
         let blocks_of_a_loop = &blocks[itr];
         for k in 0..blocks_of_a_loop.len() {
             let block = &blocks_of_a_loop[k];
-            let sec_out = get_index(&block.ID, link_name_to_id.clone());
-            let sec_in = get_deps(&block.Deps, link_name_to_id.clone());
-            let hints: Vec<HintOut> = block.Deps.split(",").into_iter().map(|s| aux_output_per_link.get(s).unwrap().clone()).collect();
-            println!("{itr} ate {:?} ID {:?} deps {:?}", *bit, block.ID, block.Deps);
-            println!("{itr} {} ID {:?} deps {:?}", block.name, sec_out, sec_in);
-            let blk_name = block.name.clone();
+            let sec_out = get_index(&block.link_id, link_name_to_id.clone());
+            let sec_in = get_deps(&block.dependencies, link_name_to_id.clone());
+            let hints: Vec<HintOut> = block.dependencies.split(",").into_iter().map(|s| aux_output_per_link.get(s).unwrap().clone()).collect();
+            println!("{itr} ate {:?} ID {:?} deps {:?}", *bit, block.link_id, block.dependencies);
+            println!("{itr} {} ID {:?} deps {:?}", block.category, sec_out, sec_in);
+            let blk_name = block.category.clone();
             if blk_name == "Sqr" {
                 assert_eq!(hints.len(), 1);
                 let (hintout, hint_script) = match hints[0].clone() {
@@ -78,7 +76,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let exec_result = execute_script(script);
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-                aux_output_per_link.insert(block.ID.clone(), HintOut::Squaring(hintout));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::Squaring(hintout));
             } else if blk_name == "DblAdd" {
                 assert_eq!(hints.len(), 7);
                 let mut ps: Vec<ark_bn254::Fq> = vec![];
@@ -117,7 +115,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let exec_result = execute_script(script);
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-                aux_output_per_link.insert(block.ID.clone(), HintOut::DblAdd(hintout));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::DblAdd(hintout));
             } else if blk_name == "Dbl" {
                 assert_eq!(hints.len(), 3);
                 let mut ps: Vec<ark_bn254::Fq> = vec![];
@@ -155,7 +153,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let exec_result = execute_script(script);
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-                aux_output_per_link.insert(block.ID.clone(), HintOut::Double(hintout));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::Double(hintout));
             } else if blk_name == "SD1" {
                 assert_eq!(hints.len(), 2);
                 let dense = match hints[0].clone() {
@@ -183,7 +181,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let exec_result = execute_script(script);
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-                aux_output_per_link.insert(block.ID.clone(), HintOut::SparseDenseMul(sd_hint));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::SparseDenseMul(sd_hint));
             } else if blk_name == "SS1" {
                 assert_eq!(hints.len(), 4);
                 let mut ps: Vec<ark_bn254::Fq> = vec![];
@@ -211,7 +209,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                 assert!(exec_result.final_stack.len() == 1);
                 nt2 = hint_out.t2;
                 nt3 = hint_out.t3;
-                aux_output_per_link.insert(block.ID.clone(), HintOut::SparseDbl(hint_out));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::SparseDbl(hint_out));
             } else if blk_name == "DD1" {
                 assert!(hints.len() == 2);
                 let c = match hints[0].clone() {
@@ -233,7 +231,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let exec_result = execute_script(script);
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-                aux_output_per_link.insert(block.ID.clone(), HintOut::DenseMul0(hint_out));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::DenseMul0(hint_out));
             } else if blk_name == "DD2" {
                 assert!(hints.len() == 3);
                 let c = match hints[0].clone() {
@@ -255,7 +253,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let exec_result = execute_script(script);
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-                aux_output_per_link.insert(block.ID.clone(), HintOut::DenseMul1(hint_out));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::DenseMul1(hint_out));
             } else if blk_name == "DD3" {
                 assert!(hints.len() == 2);
                 let c = match hints[0].clone() {
@@ -278,7 +276,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let exec_result = execute_script(script);
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-                aux_output_per_link.insert(block.ID.clone(), HintOut::DenseMul0(hint_out));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::DenseMul0(hint_out));
             } else if blk_name == "DD4" {
                 assert!(hints.len() == 3);
                 let c = match hints[0].clone() {
@@ -301,7 +299,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let exec_result = execute_script(script);
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-                aux_output_per_link.insert(block.ID.clone(), HintOut::DenseMul1(hint_out));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::DenseMul1(hint_out));
             } else if blk_name == "SD2" {
                 assert_eq!(hints.len(), 2);
                 let dense = match hints[0].clone() {
@@ -325,7 +323,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let exec_result = execute_script(script);
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-                aux_output_per_link.insert(block.ID.clone(), HintOut::SparseDenseMul(sd_hint));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::SparseDenseMul(sd_hint));
             } else if blk_name == "SS2" {
                 assert_eq!(hints.len(), 4);
                 let mut ps: Vec<ark_bn254::Fq> = vec![];
@@ -353,7 +351,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                 assert!(exec_result.final_stack.len() == 1);
                 nt2 = hint_out.t2;
                 nt3 = hint_out.t3;
-                aux_output_per_link.insert(block.ID.clone(), HintOut::SparseAdd(hint_out));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::SparseAdd(hint_out));
             } else if blk_name == "DD5" {
                 assert!(hints.len() == 2);
                 let c = match hints[0].clone() {
@@ -375,7 +373,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let exec_result = execute_script(script);
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-                aux_output_per_link.insert(block.ID.clone(), HintOut::DenseMul0(hint_out));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::DenseMul0(hint_out));
             } else if blk_name == "DD6" {
                 assert!(hints.len() == 3);
                 let c = match hints[0].clone() {
@@ -397,7 +395,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let exec_result = execute_script(script);
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-                aux_output_per_link.insert(block.ID.clone(), HintOut::DenseMul1(hint_out));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::DenseMul1(hint_out));
             } else {
                 println!("unhandled {:?}", blk_name);
                 panic!();
@@ -415,20 +413,20 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
     let mut nt2 = t2;
     let mut nt3 = t3;
     for row in tables {
-        let sec_in: Vec<u32> = row.Deps.split(",").into_iter().map(|s| link_name_to_id.get(s).unwrap().clone()).collect();
-        println!("row ID {:?}", row.ID);
-        let sec_out = link_name_to_id.get(&row.ID).unwrap().clone();
-        let hints_out: Vec<HintOut> = row.Deps.split(",").into_iter().map(|s| aux_output_per_link.get(s).unwrap().clone()).collect();
-        if row.name.starts_with("Frob") {
+        let sec_in: Vec<u32> = row.dependencies.split(",").into_iter().map(|s| link_name_to_id.get(s).unwrap().clone()).collect();
+        println!("row ID {:?}", row.link_id);
+        let sec_out = link_name_to_id.get(&row.link_id).unwrap().clone();
+        let hints_out: Vec<HintOut> = row.dependencies.split(",").into_iter().map(|s| aux_output_per_link.get(s).unwrap().clone()).collect();
+        if row.category.starts_with("Frob") {
             assert_eq!(hints_out.len(), 1);
             let cinv = match hints_out[0].clone() {
                 HintOut::GrothC(f) => f,
                 _ => panic!()
             };
             let mut power = 1;
-            if row.name == "Frob2" {
+            if row.category == "Frob2" {
                 power = 2;
-            } else if row.name == "Frob3" {
+            } else if row.category == "Frob3" {
                 power = 3;
             }
             let hint_in = HintInFrobFp12::from_groth_c(cinv);
@@ -443,8 +441,8 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 let exec_result = execute_script(script);
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-            aux_output_per_link.insert(row.ID, HintOut::FrobFp12(h));
-        } else if row.name == "DD1" {
+            aux_output_per_link.insert(row.link_id, HintOut::FrobFp12(h));
+        } else if row.category == "DD1" {
             assert!(hints_out.len() == 2);
             let c = match hints_out[0].clone() {
                 HintOut::DenseMul1(r) => r,
@@ -472,8 +470,8 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 let exec_result = execute_script(script);
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-            aux_output_per_link.insert(row.ID.clone(), HintOut::DenseMul0(hint_out));
-        } else if row.name == "DD2" {
+            aux_output_per_link.insert(row.link_id.clone(), HintOut::DenseMul0(hint_out));
+        } else if row.category == "DD2" {
             assert!(hints_out.len() == 3);
             let c = match hints_out[0].clone() {
                 HintOut::DenseMul1(r) => r,
@@ -501,8 +499,8 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 let exec_result = execute_script(script);
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-            aux_output_per_link.insert(row.ID.clone(), HintOut::DenseMul1(hint_out));
-        } else if row.name == "DD3" {
+            aux_output_per_link.insert(row.link_id.clone(), HintOut::DenseMul1(hint_out));
+        } else if row.category == "DD3" {
             assert!(hints_out.len() == 2);
             let c = match hints_out[0].clone() {
                 HintOut::SparseDenseMul(r) => r,
@@ -523,8 +521,8 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 let exec_result = execute_script(script);
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-            aux_output_per_link.insert(row.ID.clone(), HintOut::DenseMul0(hint_out));
-        } else if row.name == "DD4" {
+            aux_output_per_link.insert(row.link_id.clone(), HintOut::DenseMul0(hint_out));
+        } else if row.category == "DD4" {
             assert!(hints_out.len() == 3);
             let c = match hints_out[0].clone() {
                 HintOut::SparseDenseMul(r) => r,
@@ -545,8 +543,8 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 let exec_result = execute_script(script);
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-            aux_output_per_link.insert(row.ID.clone(), HintOut::DenseMul1(hint_out));
-        } else if row.name == "Add1" || row.name == "Add2"  {
+            aux_output_per_link.insert(row.link_id.clone(), HintOut::DenseMul1(hint_out));
+        } else if row.category == "Add1" || row.category == "Add2"  {
             assert_eq!(hints_out.len(), 7);
             let mut ps: Vec<ark_bn254::Fq> = vec![];
             for i in 1..hints_out.len() {
@@ -559,7 +557,7 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
             }
             let p = G1Affine::new_unchecked(ps[5], ps[4]);
             let q = G2Affine::new_unchecked(ark_bn254::Fq2::new(ps[3], ps[2]), ark_bn254::Fq2::new(ps[1], ps[0]));
-            if row.name == "Add1" {
+            if row.category == "Add1" {
                 let (hintout, hint_script) = match hints_out[0].clone() {
                     HintOut::DblAdd(r) => {
                         let hint_in = HintInAdd::from_doubleadd(r, p.x, p.y, q);
@@ -581,8 +579,8 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                     let exec_result = execute_script(script);
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-                aux_output_per_link.insert(row.ID.clone(), HintOut::Add(hintout));
-            } else if row.name == "Add2" {
+                aux_output_per_link.insert(row.link_id.clone(), HintOut::Add(hintout));
+            } else if row.category == "Add2" {
                 let (hintout, hint_script) = match hints_out[0].clone() {
                     HintOut::Add(r) => {
                         let hint_in = HintInAdd::from_add(r, p.x,p.y, q);
@@ -600,9 +598,9 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                     let exec_result = execute_script(script);
                     assert!(!exec_result.success);
                     assert!(exec_result.final_stack.len() == 1);
-                aux_output_per_link.insert(row.ID.clone(), HintOut::Add(hintout));
+                aux_output_per_link.insert(row.link_id.clone(), HintOut::Add(hintout));
             }
-        } else if row.name == "SD" {
+        } else if row.category == "SD" {
             assert_eq!(hints_out.len(), 2);
             let dense = match hints_out[0].clone() {
                     HintOut::DenseMul1(f) => f,
@@ -625,8 +623,8 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 let exec_result = execute_script(script);
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-            aux_output_per_link.insert(row.ID.clone(), HintOut::SparseDenseMul(sd_hint));
-        } else if row.name == "SS1" || row.name == "SS2" {
+            aux_output_per_link.insert(row.link_id.clone(), HintOut::SparseDenseMul(sd_hint));
+        } else if row.category == "SS1" || row.category == "SS2" {
             assert_eq!(hints_out.len(), 4);
             let mut ps: Vec<ark_bn254::Fq> = vec![];
             for i in 0..hints_out.len() {
@@ -640,7 +638,7 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
             let p2 = G1Affine::new_unchecked(ps[3], ps[2]);
             let p3 = G1Affine::new_unchecked(ps[1], ps[0]);
             let hint_in: HintInSparseAdd = HintInSparseAdd::from_groth_and_aux(p2, p3,q2, q3, nt2, nt3);
-            if row.name == "SS1" {
+            if row.category == "SS1" {
                 let (hint_out, hint_script) = chunk_taps::hint_add_eval_mul_for_fixed_Qs_with_frob(sig, sec_out, sec_in.clone(), hint_in, 1);
                     let (ops_script, _, _) = tap_add_eval_mul_for_fixed_Qs_with_frob( nt2, nt3, q2, q3, 1);
                     let bcs_script = bitcom_add_eval_mul_for_fixed_Qs_with_frob(pub_scripts_per_link_id, sec_out, sec_in.clone());
@@ -654,8 +652,8 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 assert!(exec_result.final_stack.len() == 1);
                 nt2 = hint_out.t2;
                 nt3 = hint_out.t3;
-                aux_output_per_link.insert(row.ID.clone(), HintOut::SparseAdd(hint_out));
-            } else if row.name == "SS2" {
+                aux_output_per_link.insert(row.link_id.clone(), HintOut::SparseAdd(hint_out));
+            } else if row.category == "SS2" {
                 let (hint_out, hint_script) = chunk_taps::hint_add_eval_mul_for_fixed_Qs_with_frob(sig, sec_out, sec_in.clone(), hint_in, -1);
                     let (ops_script, _, _) = tap_add_eval_mul_for_fixed_Qs_with_frob( nt2, nt3, q2, q3, -1);
                     let bcs_script = bitcom_add_eval_mul_for_fixed_Qs_with_frob(pub_scripts_per_link_id, sec_out, sec_in.clone());
@@ -669,7 +667,7 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 assert!(exec_result.final_stack.len() == 1);
                 nt2 = hint_out.t2;
                 nt3 = hint_out.t3;
-                aux_output_per_link.insert(row.ID.clone(), HintOut::SparseAdd(hint_out));
+                aux_output_per_link.insert(row.link_id.clone(), HintOut::SparseAdd(hint_out));
             }
         } 
     }
@@ -728,7 +726,7 @@ fn evaluate_groth16_params(sig: &mut Sig, link_name_to_id: HashMap<String, u32>,
     let cvinvhash = emulate_extern_hash_fps(vec![cvinv.c0.c0.c0,cvinv.c0.c0.c1, cvinv.c0.c1.c0, cvinv.c0.c1.c1, cvinv.c0.c2.c0,cvinv.c0.c2.c1, cvinv.c1.c0.c0,cvinv.c1.c0.c1, cvinv.c1.c1.c0, cvinv.c1.c1.c1, cvinv.c1.c2.c0,cvinv.c1.c2.c1], false);
     let cvinvhash2 = emulate_extern_hash_fps(vec![cvinv.c0.c0.c0,cvinv.c0.c0.c1, cvinv.c0.c1.c0, cvinv.c0.c1.c1, cvinv.c0.c2.c0,cvinv.c0.c2.c1, cvinv.c1.c0.c0,cvinv.c1.c0.c1, cvinv.c1.c1.c0, cvinv.c1.c1.c1, cvinv.c1.c2.c0,cvinv.c1.c2.c1], true);
 
-    let gparams = groth16_params();
+    let gparams = groth16_config_gen();
     let gouts = vec![
         HintOut::FieldElem(p4.y),
         HintOut::FieldElem(p4.x),
@@ -774,7 +772,7 @@ fn evaluate_groth16_params(sig: &mut Sig, link_name_to_id: HashMap<String, u32>,
 
     let mut id_to_witness: HashMap<String, HintOut> = HashMap::new();
     for i in 0..gparams.len() {
-        id_to_witness.insert(gparams[i].clone(), gouts[i].clone());
+        id_to_witness.insert(gparams[i].link_id.clone(), gouts[i].clone());
     }
 
     let mut tups: Vec<(u32, [u8;64])> = Vec::new(); 
@@ -797,11 +795,11 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
     let tables = pre_miller_config_gen();
 
     for row in tables {
-        let sec_in: Vec<u32> = row.Deps.split(",").into_iter().map(|s| link_name_to_id.get(s).unwrap().clone()).collect();
-        let hints: Vec<HintOut> = row.Deps.split(",").into_iter().map(|s| aux_output_per_link.get(s).unwrap().clone()).collect();
-        let sec_out = link_name_to_id.get(&row.ID).unwrap().clone();
-        println!("row name {:?} ID {:?}", row.name, sec_out);
-        if row.name == "T4Init" {
+        let sec_in: Vec<u32> = row.dependencies.split(",").into_iter().map(|s| link_name_to_id.get(s).unwrap().clone()).collect();
+        let hints: Vec<HintOut> = row.dependencies.split(",").into_iter().map(|s| aux_output_per_link.get(s).unwrap().clone()).collect();
+        let sec_out = link_name_to_id.get(&row.link_id).unwrap().clone();
+        println!("row name {:?} ID {:?}", row.category, sec_out);
+        if row.category == "T4Init" {
             assert!(hints.len() == 4);
             let mut xs = vec![];
             for i in 0..hints.len() {
@@ -823,8 +821,8 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
 
-            aux_output_per_link.insert(row.ID, HintOut::InitT4(hint_res));
-        } else if row.name == "PrePy" {
+            aux_output_per_link.insert(row.link_id, HintOut::InitT4(hint_res));
+        } else if row.category == "PrePy" {
             assert!(hints.len()== 1);
             let pt = match hints[0] {
                 HintOut::FieldElem(r) => r,
@@ -841,8 +839,8 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 let exec_result = execute_script(script);
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-            aux_output_per_link.insert(row.ID, HintOut::FieldElem(pyd));
-        } else if row.name == "PrePx" {
+            aux_output_per_link.insert(row.link_id, HintOut::FieldElem(pyd));
+        } else if row.category == "PrePx" {
             assert!(hints.len() == 3);
             let mut xs = vec![];
             for i in 0..hints.len() {
@@ -863,8 +861,8 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 let exec_result = execute_script(script);
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-            aux_output_per_link.insert(row.ID, HintOut::FieldElem(pyd));
-        } else if row.name == "HashC" {
+            aux_output_per_link.insert(row.link_id, HintOut::FieldElem(pyd));
+        } else if row.category == "HashC" {
             assert!(hints.len() == 12);
             let mut xs = vec![];
             for i in 0..hints.len() {
@@ -885,10 +883,10 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 let exec_result = execute_script(script);
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-            if !aux_output_per_link.contains_key(&row.ID) {
-                aux_output_per_link.insert(row.ID, HintOut::HashC(hout));
+            if !aux_output_per_link.contains_key(&row.link_id) {
+                aux_output_per_link.insert(row.link_id, HintOut::HashC(hout));
             }
-        } else if row.name == "HashC2" {
+        } else if row.category == "HashC2" {
             assert!(hints.len() == 1);
             let prev_hash = match hints[0].clone() {
                 HintOut::GrothC(r) => r,
@@ -905,10 +903,10 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 let exec_result = execute_script(script);
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-            if !aux_output_per_link.contains_key(&row.ID) {
-                aux_output_per_link.insert(row.ID, HintOut::HashC(hout));
+            if !aux_output_per_link.contains_key(&row.link_id) {
+                aux_output_per_link.insert(row.link_id, HintOut::HashC(hout));
             }
-        } else if row.name == "DD1" {
+        } else if row.category == "DD1" {
             assert!(hints.len() == 2);
             let d = match hints[1].clone() {
                 HintOut::GrothC(r) => r,
@@ -933,8 +931,8 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 let exec_result = execute_script(script);
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-            aux_output_per_link.insert(row.ID, HintOut::DenseMul0(c));
-        } else if row.name == "DD2" {
+            aux_output_per_link.insert(row.link_id, HintOut::DenseMul0(c));
+        } else if row.category == "DD2" {
             assert!(hints.len() == 3);
             let b = match hints[1].clone() {
                 HintOut::GrothC(r) => r,
@@ -963,7 +961,7 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 let exec_result = execute_script(script);
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
-            aux_output_per_link.insert(row.ID, HintOut::DenseMul1(hout));
+            aux_output_per_link.insert(row.link_id, HintOut::DenseMul1(hout));
         }
     }
 }
@@ -980,7 +978,7 @@ pub fn evaluate(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey
     let (nt2, nt3) = evaluate_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, q2, q3, q2, q3);
     evaluate_post_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id, &mut aux_out_per_link, nt2, nt3, q2, q3, facc.clone(), tacc);
     
-    let hint = aux_out_per_link.get("identity");
+    let hint = aux_out_per_link.get("fin");
     if hint.is_none() {
         println!("debug hintmap {:?}", aux_out_per_link);
     } else {
@@ -1001,7 +999,7 @@ mod test {
 
     use ark_ec::{AffineRepr, CurveGroup};
 
-    use crate::{bn254::chunk_compile::keygen, groth16::offchain_checker::compute_c_wi, signatures::winternitz_compact};
+    use crate::{bn254::chunk_config::keygen, groth16::offchain_checker::compute_c_wi, signatures::winternitz_compact};
 
     use super::*;
 

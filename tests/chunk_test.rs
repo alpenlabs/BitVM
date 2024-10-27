@@ -1,7 +1,7 @@
 
 #[cfg(test)]
 mod test {
-    use bitvm::{bn254::chunk_compile::{generate_assertion_script_public_keys, generate_assertion_spending_key_lengths, generate_verifier_public_keys, keygen}, signatures::winternitz_compact::checksig_verify_fq};
+    use bitvm::{bn254::{chunk_compile::{generate_assertion_script_public_keys, generate_assertion_spending_key_lengths, generate_verifier_public_keys}, chunk_config::keygen}, signatures::winternitz_compact::checksig_verify_fq};
 
 
     #[test]
