@@ -14,7 +14,7 @@ const fn ceil_div(numerator: u32, denominator: u32) -> u32 {
 macro_rules! impl_wots {
     ($N_BITS:literal) => {
         paste::paste! {
-            mod [<wots $N_BITS>] {
+            pub mod [<wots $N_BITS>] {
                 use super::*;
 
                 pub const N_BITS: u32 = $N_BITS;
@@ -188,6 +188,7 @@ macro_rules! impl_wots {
 }
 
 impl_wots!(32);
+impl_wots!(128);
 impl_wots!(160);
 impl_wots!(256);
 
