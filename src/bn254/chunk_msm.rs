@@ -21,7 +21,7 @@ use super::fq2::Fq2;
 use super::utils::{Hint};
 
 fn tap_msm(window: usize, msm_tap_index: usize,qs: Vec<ark_bn254::G1Affine>) -> Script {
-
+    assert!(qs.len() > 0);
     let (hinted_check_tangent, _) = hinted_check_line_through_point_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
     let (hinted_double_line, _) = hinted_affine_double_line_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
 
@@ -29,34 +29,6 @@ fn tap_msm(window: usize, msm_tap_index: usize,qs: Vec<ark_bn254::G1Affine>) -> 
     let (hinted_check_chord_q, _) = hinted_check_line_through_point_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
     let (hinted_add_line, _) = hinted_affine_add_line_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
 
-    // alpha, bias
-    let ops_script = script!{
-
-        {Fq::fromaltstack()}
-        {Fq::fromaltstack()}
-        // [a, b, tx, ty]
-        for _ in 0..window {
-            {Fq::copy(3)}
-            {Fq::copy(3)}
-            {hinted_check_tangent.clone()}
-            {Fq::drop()}
-            {hinted_double_line.clone()}
-        }
-
-        for i in 0..1 {
-            {Fq::copy(3)}
-            {Fq::copy(3)}
-            { hinted_check_chord_t.clone() }
-            {Fq::copy(3)}
-            {Fq::copy(3)}
-            {Fq::fromaltstack()}
-            {tap_extract_window_segment_from_scalar(msm_tap_index as usize)}
-            {tap_bake_precompute(qs[i], window)}
-            { hinted_check_chord_q.clone() }
-            //
-            {hinted_add_line.clone()}
-        }
-    };
 
     let doubling_loop = script!{
         // [alpha, bias, tx, ty]
@@ -72,7 +44,7 @@ fn tap_msm(window: usize, msm_tap_index: usize,qs: Vec<ark_bn254::G1Affine>) -> 
         }
     };
 
-    let new_ops_script = script!{
+    let ops_script = script!{
         {msm_tap_index} 0 OP_NUMEQUAL
         OP_IF 
             {Fq2::copy(0)}
@@ -117,11 +89,11 @@ fn tap_msm(window: usize, msm_tap_index: usize,qs: Vec<ark_bn254::G1Affine>) -> 
             {Fq2::copy(6)}
             // [alpha, bias,tx,ty, qx, qy, ntx, nty, alpha, bias]
             {Fq2::copy(2)}
-            {hinted_check_chord_t}
+            {hinted_check_chord_t.clone()}
             //[alpha, bias, qx, qy, ntx, nty]
             {Fq2::copy(6)}
             {Fq2::copy(4)}
-            {hinted_check_chord_q}
+            {hinted_check_chord_q.clone()}
             //[alpha, bias,tx,ty, qx, qy, ntx, nty]
             {Fq::drop()}
             {Fq::roll(1)} {Fq::drop()}
@@ -130,9 +102,34 @@ fn tap_msm(window: usize, msm_tap_index: usize,qs: Vec<ark_bn254::G1Affine>) -> 
             //[tx, ty, qx, ntx, bias, alpha]
             {Fq::roll(2)} {Fq::roll(3)}
             //[tx, ty, bias, alpha, ntx, qx]
-            {hinted_add_line}
+            {hinted_add_line.clone()}
             // [t,nt]
         OP_ENDIF
+
+        for i in 1..qs.len() {
+            {Fq::fromaltstack()} // scalar
+            {tap_extract_window_segment_from_scalar(msm_tap_index as usize)}
+            {tap_bake_precompute(qs[i], window)}
+            {Fq2::roll(2)}
+            //[alpha, bias, tx, ty, qx, qy, ntx, nty]
+            {Fq2::copy(6)}
+            // [alpha, bias,tx,ty, qx, qy, ntx, nty, alpha, bias]
+            {Fq2::copy(2)}
+            {hinted_check_chord_t.clone()}
+            //[alpha, bias, qx, qy, ntx, nty]
+            {Fq2::copy(6)}
+            {Fq2::copy(4)}
+            {hinted_check_chord_q.clone()}
+            //[alpha, bias,tx,ty, qx, qy, ntx, nty]
+            {Fq::drop()}
+            {Fq::roll(1)} {Fq::drop()}
+            //[alpha, bias, tx, ty, qx, ntx]
+            {Fq::roll(4)} {Fq::roll(5)}
+            //[tx, ty, qx, ntx, bias, alpha]
+            {Fq::roll(2)} {Fq::roll(3)}
+            //[tx, ty, bias, alpha, ntx, qx]
+            {hinted_add_line.clone()}
+        }
 
     };
 
@@ -153,7 +150,7 @@ fn tap_msm(window: usize, msm_tap_index: usize,qs: Vec<ark_bn254::G1Affine>) -> 
     };
 
     let sc = script!{
-        {new_ops_script}
+        {ops_script}
         {hash_script}
         // OP_TRUE
     };
@@ -463,7 +460,6 @@ fn hint_msm(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInMSM, m
     tup.push((sec_out,  emulate_extern_hash_fps(vec![t.x, t.y], true)));
     let bc_elems = tup_to_scr(sig, tup);
 
-    println!("hints_tangent len {}", hints_tangent.len());
     let simulate_stack_input = script! {
         // // tmul hints
         for hint in hints_tangent { // check_tangent then double line
@@ -527,15 +523,15 @@ mod test {
 
     #[test]
     fn test_hint() {
-        let mut prng = ChaCha20Rng::seed_from_u64(0); 
+        let mut prng = ChaCha20Rng::seed_from_u64(1); 
 
         // constants
         let num_bits: usize = 256;
         let window = 8;
-        let pub_ins = 1;
+        let pub_ins = 3;
         let msk = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let mut sec_in: Vec<u32> = (0..pub_ins).collect();
-        let mut sec_out = 4;
+        let mut sec_out = pub_ins;
         let mut sig = Sig {msk: Some(msk), cache: HashMap::new()};
         let qs: Vec<G1Affine> = (0..pub_ins).map(|_| G1Affine::rand(&mut prng)).collect(); 
         // run time
@@ -564,12 +560,14 @@ mod test {
             let msm_ops = tap_msm(window, i, qs.clone());
             let (aux, stack_data) = hint_msm(&mut sig, sec_out, sec_in.clone(), hint_in.clone(), i as usize, qs.clone());
 
+
             let script = script!{
                 {stack_data}
                 {bitcomms_tapscript}
                 {msm_ops}
                 OP_TRUE
             };
+            println!("script len {:?}", script.len());
             hint_in.t = aux.t;
             let exec_result = execute_script(script);
             for i in 0..exec_result.final_stack.len() {
@@ -577,7 +575,9 @@ mod test {
             }
             assert!(exec_result.success);
             println!("ts len {}", exec_result.stats.max_nb_stack_items);
-            println!("check valid {:?}", qs[0] * hint_in.scalars[0] == aux.t);
+            if i == num_bits/window -1 {
+                println!("check valid {:?}", qs[0] * hint_in.scalars[0] + qs[1] * hint_in.scalars[1] + qs[2] * hint_in.scalars[2]  == aux.t);
+            }
         }
 
     }
