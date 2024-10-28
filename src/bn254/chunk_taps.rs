@@ -75,7 +75,7 @@ pub struct Sig {
 }
 
 // SQUARING
-pub(crate) fn hint_squaring(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInSquaring)-> (HintOutSquaring, Script) {
+pub(crate) fn hint_squaring(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInSquaring)-> (HintOutSquaring, Script) {
     assert_eq!(sec_in.len(), 1);
     let a = hint_in.a;
     let (_, hints) = Fq12::hinted_square(a);
@@ -110,8 +110,10 @@ pub(crate) fn hint_squaring(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_
     
 }
 
-pub(crate) fn bitcom_squaring(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_squaring(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: Link, sec_in: Vec<Link>) -> Script {
     assert_eq!(sec_in.len(), 1);
+    let sec_out = sec_out.0;
+    let sec_in: Vec<u32> = sec_in.into_iter().map(|x| x.0).collect();
     script!{
         {checksig_verify_fq(link_ids.get(&sec_in[0]).unwrap().clone())}
         {Fq::toaltstack()}
@@ -309,8 +311,10 @@ pub(crate) fn tap_point_dbl() -> Script {
     sc
 }
 
-pub(crate) fn bitcom_point_dbl(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_point_dbl(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: Link, sec_in: Vec<Link>) -> Script {
     assert_eq!(sec_in.len(), 3);
+    let sec_out = sec_out.0;
+    let sec_in: Vec<u32> = sec_in.into_iter().map(|x| x.0).collect();
     script!{
         {checksig_verify_fq(link_ids.get(&sec_out).unwrap().clone())} // hash_out
         {Fq::toaltstack()}
@@ -363,14 +367,14 @@ pub(crate) struct HintOutDouble {
     hash_out: HashBytes,
 }
 
-pub(crate) fn tup_to_scr(sig: &mut Sig, tup: Vec<(u32, [u8;64])>) -> Vec<Script> {
+pub(crate) fn tup_to_scr(sig: &mut Sig, tup: Vec<(Link, [u8;64])>) -> Vec<Script> {
     let mut bc_elems = vec![];
     for (skey, elem) in tup {
-        let bcelem = if sig.cache.contains_key(&skey) {
-            sig.cache.get(&skey).unwrap().clone()
+        let bcelem = if sig.cache.contains_key(&skey.0) {
+            sig.cache.get(&skey.0).unwrap().clone()
         } else {
-            let v = winternitz_compact::sign(&format!("{}{:04X}", sig.msk.unwrap(), skey), elem);
-            sig.cache.insert(skey, v.clone());
+            let v = winternitz_compact::sign(&format!("{}{:04X}", sig.msk.unwrap(), skey.0), elem);
+            sig.cache.insert(skey.0, v.clone());
             v
         };
         bc_elems.push(bcelem);
@@ -378,7 +382,9 @@ pub(crate) fn tup_to_scr(sig: &mut Sig, tup: Vec<(u32, [u8;64])>) -> Vec<Script>
     bc_elems
 }
 
-pub(crate) fn hint_point_dbl(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInDouble) -> (HintOutDouble, Script) {
+pub type Link = (u32, bool);
+
+pub(crate) fn hint_point_dbl(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInDouble) -> (HintOutDouble, Script) {
     assert_eq!(sec_in.len(), 3);
     let t = hint_in.t;
     let p = hint_in.p;
@@ -724,8 +730,10 @@ pub(crate) fn tap_point_add_with_frob(ate: i8) -> Script {
     sc
 }
 
-pub(crate) fn bitcom_point_add_with_frob(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_point_add_with_frob(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: Link, sec_in: Vec<Link>) -> Script {
     assert_eq!(sec_in.len(), 7);
+    let sec_out = sec_out.0;
+    let sec_in: Vec<u32> = sec_in.into_iter().map(|x| x.0).collect();
     let bitcomms_script = script!{
         {checksig_verify_fq(link_ids.get(&sec_out).unwrap().clone())} // hash_root_claim
         {Fq::toaltstack()}
@@ -752,7 +760,7 @@ pub(crate) fn bitcom_point_add_with_frob(link_ids: &HashMap<u32, WOTSPubKey>, se
     bitcomms_script
 }
 
-pub(crate) fn hint_point_add_with_frob(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInAdd, ate: i8) -> (HintOutAdd, Script) {
+pub(crate) fn hint_point_add_with_frob(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInAdd, ate: i8) -> (HintOutAdd, Script) {
     assert!(ate == 1 || ate == -1);
     assert_eq!(sec_in.len(), 7);
     let (tt, p, q) = (hint_in.t, hint_in.p, hint_in.q);
@@ -1124,7 +1132,7 @@ pub(crate) fn tap_point_ops(ate: i8) -> Script {
     sc
 }
 
-pub(crate) fn bitcom_point_ops(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_in: Vec<u32>, ate: i8) -> Script {
+pub(crate) fn bitcom_point_ops(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: Link, sec_in: Vec<Link>, ate: i8) -> Script {
     assert!(ate == 1 || ate == -1);
     assert_eq!(sec_in.len(), 7);
     let mut ate_unsigned_bit = 1;
@@ -1143,6 +1151,8 @@ pub(crate) fn bitcom_point_ops(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32
         OP_ENDIF
     };
 
+    let sec_out = sec_out.0;
+    let sec_in: Vec<u32> = sec_in.into_iter().map(|x| x.0).collect();
     let bitcomms_script = script!{
         {checksig_verify_fq(link_ids.get(&sec_out).unwrap().clone())}// hash_root_claim
         {Fq::toaltstack()}
@@ -1208,7 +1218,7 @@ impl HintInDblAdd {
     }
 }
 
-pub(crate) fn hint_point_ops(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInDblAdd, ate: i8) -> (HintOutDblAdd, Script) {
+pub(crate) fn hint_point_ops(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInDblAdd, ate: i8) -> (HintOutDblAdd, Script) {
     assert_eq!(sec_in.len(), 7);
     let (t, p, q) = (hint_in.t, hint_in.p, hint_in.q);
 
@@ -1375,7 +1385,7 @@ pub(crate) struct HintOutSparseDbl {
     pub(crate) f: ark_bn254::Fq12,
 }
 
-pub(crate) fn hint_double_eval_mul_for_fixed_Qs(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInSparseDbl) -> (HintOutSparseDbl, Script) {
+pub(crate) fn hint_double_eval_mul_for_fixed_Qs(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInSparseDbl) -> (HintOutSparseDbl, Script) {
    assert_eq!(sec_in.len(), 4);
    let (t2, t3, p2, p3) = (hint_in.t2, hint_in.t3, hint_in.p2, hint_in.p3);
     // First
@@ -1538,9 +1548,11 @@ pub(crate) fn tap_double_eval_mul_for_fixed_Qs(t2: G2Affine, t3: G2Affine) -> (S
     (sc, G2Affine::new_unchecked(x2, y2), G2Affine::new_unchecked(x3, y3))
 }
 
-pub(crate) fn bitcom_double_eval_mul_for_fixed_Qs(link_ids: &HashMap<u32, WOTSPubKey>,sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_double_eval_mul_for_fixed_Qs(link_ids: &HashMap<u32, WOTSPubKey>,sec_out: Link, sec_in: Vec<Link>) -> Script {
     assert_eq!(sec_in.len(), 4);
     
+    let sec_out = sec_out.0;
+    let sec_in: Vec<u32> = sec_in.into_iter().map(|x| x.0).collect();
     let bitcomms_script = script!{
         {checksig_verify_fq(link_ids.get(&sec_in[0]).unwrap().clone())} // P3y
         {Fq::toaltstack()}
@@ -1581,7 +1593,7 @@ pub(crate) struct HintOutSparseAdd {
     pub(crate) f: ark_bn254::Fq12,
 }
 
-pub(crate) fn hint_add_eval_mul_for_fixed_Qs(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInSparseAdd, ate: i8) -> (HintOutSparseAdd, Script) {
+pub(crate) fn hint_add_eval_mul_for_fixed_Qs(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInSparseAdd, ate: i8) -> (HintOutSparseAdd, Script) {
     assert_eq!(sec_in.len(), 4);
     let (t2, t3, p2, p3, qq2, qq3) = (hint_in.t2, hint_in.t3, hint_in.p2, hint_in.p3, hint_in.q2, hint_in.q3);
     let mut q2 = qq2.clone();
@@ -1741,9 +1753,11 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs(t2: G2Affine, t3: G2Affine, q2: G2Af
     (sc, G2Affine::new_unchecked(x2, y2), G2Affine::new_unchecked(x3, y3))
 }
 
-pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: Link, sec_in: Vec<Link>) -> Script {
     assert_eq!(sec_in.len(), 4);
 
+    let sec_out = sec_out.0;
+    let sec_in: Vec<u32> = sec_in.into_iter().map(|x| x.0).collect();
     let bitcomms_script = script!{
         {checksig_verify_fq(link_ids.get(&sec_in[0]).unwrap().clone())} // P3y
         {Fq::toaltstack()}
@@ -1762,7 +1776,7 @@ pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs(link_ids: &HashMap<u32, WOTSPubKe
     bitcomms_script
 }
 
-pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(sig: &mut Sig,sec_out: u32, sec_in: Vec<u32>, hint_in: HintInSparseAdd, ate: i8) -> (HintOutSparseAdd, Script) {
+pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(sig: &mut Sig,sec_out: Link, sec_in: Vec<Link>, hint_in: HintInSparseAdd, ate: i8) -> (HintOutSparseAdd, Script) {
     assert_eq!(sec_in.len(), 4);
     let (t2, t3, p2, p3, qq2, qq3) = (hint_in.t2, hint_in.t3, hint_in.p2, hint_in.p3, hint_in.q2, hint_in.q3);
     
@@ -1965,9 +1979,11 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs_with_frob(t2: G2Affine, t3: G2Affine
     (sc, G2Affine::new_unchecked(x2, y2), G2Affine::new_unchecked(x3, y3))
 }
 
-pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs_with_frob(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs_with_frob(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: Link, sec_in: Vec<Link>) -> Script {
     assert_eq!(sec_in.len(), 4);
 
+    let sec_out = sec_out.0;
+    let sec_in: Vec<u32> = sec_in.into_iter().map(|x| x.0).collect();
     let bitcomms_script = script!{
         {checksig_verify_fq(link_ids.get(&sec_in[0]).unwrap().clone())} // P3y
         {Fq::toaltstack()}
@@ -2050,8 +2066,10 @@ pub(crate) fn tap_sparse_dense_mul(dbl_blk: bool) -> Script {
     scr
 }
 
-pub(crate) fn bitcom_sparse_dense_mul(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_sparse_dense_mul(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: Link, sec_in: Vec<Link>) -> Script {
     assert_eq!(sec_in.len(), 2);
+    let sec_out = sec_out.0;
+    let sec_in: Vec<u32> = sec_in.into_iter().map(|x| x.0).collect();
     let bitcomms_script = script!{
         {checksig_verify_fq(link_ids.get(&sec_out).unwrap().clone())} // hash_out
         {Fq::toaltstack()}
@@ -2106,7 +2124,7 @@ impl HintInSparseDenseMul {
     }
 }
 
-pub(crate) fn hint_sparse_dense_mul(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInSparseDenseMul, dbl_blk: bool) -> (HintOutSparseDenseMul, Script) {
+pub(crate) fn hint_sparse_dense_mul(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInSparseDenseMul, dbl_blk: bool) -> (HintOutSparseDenseMul, Script) {
     assert_eq!(sec_in.len(), 2);
     let (f, dbl_le0, dbl_le1) = (hint_in.a, hint_in.le0, hint_in.le1);
     let (_, hints) = Fq12::hinted_mul_by_34(f, dbl_le0, dbl_le1);
@@ -2209,8 +2227,10 @@ pub(crate) fn tap_dense_dense_mul0( check_is_identity: bool) -> Script {
     scr
 }
 
-pub(crate) fn bitcom_dense_dense_mul0(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_dense_dense_mul0(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: Link, sec_in: Vec<Link>) -> Script {
     assert_eq!(sec_in.len(), 2);
+    let sec_out = sec_out.0;
+    let sec_in: Vec<u32> = sec_in.into_iter().map(|x| x.0).collect();
     let bitcom_scr = script!{
         {checksig_verify_fq(link_ids.get(&sec_out).unwrap().clone())} // od
         {Fq::toaltstack()}
@@ -2258,7 +2278,7 @@ pub(crate) struct HintOutDenseMul0 {
     hash_out: HashBytes,
 }
 
-pub(crate) fn hints_dense_dense_mul0(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInDenseMul0) -> (HintOutDenseMul0, Script) {
+pub(crate) fn hints_dense_dense_mul0(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInDenseMul0) -> (HintOutDenseMul0, Script) {
     assert_eq!(sec_in.len(), 2);
     let (f, g) = (hint_in.a, hint_in.b);
     let h = f * g; 
@@ -2353,8 +2373,10 @@ pub(crate) fn tap_dense_dense_mul1(check_is_identity: bool) -> Script {
     scr
 }
 
-pub(crate) fn bitcom_dense_dense_mul1(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_dense_dense_mul1(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: Link, sec_in: Vec<Link>) -> Script {
     assert_eq!(sec_in.len(), 3);
+    let sec_out = sec_out.0;
+    let sec_in: Vec<u32> = sec_in.into_iter().map(|x| x.0).collect();
     let bitcom_scr = script!{
         {checksig_verify_fq(link_ids.get(&sec_out).unwrap().clone())} // g
         {Fq::toaltstack()}
@@ -2404,7 +2426,7 @@ pub(crate) struct HintOutDenseMul1 {
     hash_out: HashBytes,
 }
 
-pub(crate) fn hints_dense_dense_mul1(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInDenseMul1) -> (HintOutDenseMul1, Script) {
+pub(crate) fn hints_dense_dense_mul1(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInDenseMul1) -> (HintOutDenseMul1, Script) {
     let (f, g) = (hint_in.a, hint_in.b);
     let (_, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
     let h = f * g;    
@@ -2505,8 +2527,10 @@ pub(crate) fn tap_hash_c() -> Script {
     sc
 }
 
-pub(crate) fn bitcom_hash_c(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_hash_c(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: Link, sec_in: Vec<Link>) -> Script {
     assert_eq!(sec_in.len(), 12);
+    let sec_out = sec_out.0;
+    let sec_in: Vec<u32> = sec_in.into_iter().map(|x| x.0).collect();
     let bitcom_scr = script!{
         for i in 0..12 { // 0->msb to lsb
             {checksig_verify_fq(link_ids.get(&sec_in[i]).unwrap().clone())} // f11 MSB
@@ -2521,7 +2545,7 @@ pub(crate) fn bitcom_hash_c(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, s
     bitcom_scr
 }
 
-pub(crate) fn hint_hash_c(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInHashC) ->  (HintOutHashC, Script) {
+pub(crate) fn hint_hash_c(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInHashC) ->  (HintOutHashC, Script) {
     let f = hint_in.c;
     let f = vec![f.c0.c0.c0,f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0,f.c0.c2.c1, f.c1.c0.c0,f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0,f.c1.c2.c1];
     let fhash = emulate_extern_hash_fps(f.clone(), false);
@@ -2565,8 +2589,10 @@ pub(crate) fn tap_hash_c2() -> Script {
     sc
 }
 
-pub(crate) fn bitcom_hash_c2(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_hash_c2(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: Link, sec_in: Vec<Link>) -> Script {
     assert_eq!(sec_in.len(), 1);
+    let sec_out = sec_out.0;
+    let sec_in: Vec<u32> = sec_in.into_iter().map(|x| x.0).collect();
     let bitcom_scr = script!{
         {checksig_verify_fq(link_ids.get(&sec_in[0]).unwrap().clone())}  // f11 MSB
         {Fq::toaltstack()}
@@ -2577,7 +2603,7 @@ pub(crate) fn bitcom_hash_c2(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, 
     bitcom_scr
 }
 
-pub(crate) fn hint_hash_c2(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInHashC) ->  (HintOutHashC, Script) {
+pub(crate) fn hint_hash_c2(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInHashC) ->  (HintOutHashC, Script) {
     let f = hint_in.c;
     let f = vec![f.c0.c0.c0,f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0,f.c0.c2.c1, f.c1.c0.c0,f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0,f.c1.c2.c1];
     let outhash = emulate_extern_hash_fps(f.clone(), true);
@@ -2613,8 +2639,10 @@ pub(crate) fn tap_precompute_Px() -> Script {
     }
 }
 
-pub(crate) fn bitcom_precompute_Px(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_precompute_Px(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: Link, sec_in: Vec<Link>) -> Script {
     assert_eq!(sec_in.len(), 3);
+    let sec_out = sec_out.0;
+    let sec_in: Vec<u32> = sec_in.into_iter().map(|x| x.0).collect();
     let bitcomms_script = script!{
         {checksig_verify_fq(link_ids.get(&sec_in[0]).unwrap().clone())}  // py
         {Fq::toaltstack()}
@@ -2648,8 +2676,10 @@ pub(crate) fn tap_precompute_Py() -> Script {
     }
 }
 
-pub(crate) fn bitcom_precompute_Py(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_precompute_Py(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: Link, sec_in: Vec<Link>) -> Script {
     assert_eq!(sec_in.len(), 1);
+    let sec_out = sec_out.0;
+    let sec_in: Vec<u32> = sec_in.into_iter().map(|x| x.0).collect();
     let bitcomms_script = script!{
         {checksig_verify_fq(link_ids.get(&sec_in[0]).unwrap().clone())}  // py
         {Fq::toaltstack()}
@@ -2682,7 +2712,7 @@ impl HintInPrecomputePx {
     }
 }
 
-pub(crate) fn hints_precompute_Px(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInPrecomputePx) -> (ark_bn254::Fq, Script) {
+pub(crate) fn hints_precompute_Px(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInPrecomputePx) -> (ark_bn254::Fq, Script) {
     assert_eq!(sec_in.len(), 3);
     let p = hint_in.p.clone();
     let pdx = -p.x/p.y;
@@ -2712,7 +2742,7 @@ pub(crate) fn hints_precompute_Px(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>,
     (pdx, simulate_stack_input)
 }
 
-pub(crate) fn hints_precompute_Py(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInPrecomputePy) -> (ark_bn254::Fq, Script) {
+pub(crate) fn hints_precompute_Py(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInPrecomputePy) -> (ark_bn254::Fq, Script) {
     assert_eq!(sec_in.len(), 1);
     let p = hint_in.p.clone();
     let pdy = p.inverse().unwrap();
@@ -2756,8 +2786,10 @@ pub(crate) fn tap_initT4() -> Script {
     sc
 }
 
-pub(crate) fn bitcom_initT4(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_initT4(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: Link, sec_in: Vec<Link>) -> Script {
     assert_eq!(sec_in.len(), 4);
+    let sec_out = sec_out.0;
+    let sec_in: Vec<u32> = sec_in.into_iter().map(|x| x.0).collect();
     let bitcom_scr = script!{
         {checksig_verify_fq(link_ids.get(&sec_in[0]).unwrap().clone())} // y1
         {Fq::toaltstack()}
@@ -2796,7 +2828,7 @@ pub(crate) struct HintOutInitT4 {
     hash_le_aux: HashBytes,
 }
 
-pub(crate) fn hint_init_T4(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInInitT4) -> (HintOutInitT4, Script) {
+pub(crate) fn hint_init_T4(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInInitT4) -> (HintOutInitT4, Script) {
     assert_eq!(sec_in.len(), 4);
     let t4 = hint_in.t4;
     let t4hash = emulate_extern_hash_fps(vec![t4.x.c0, t4.x.c1, t4.y.c0, t4.y.c1], false);
@@ -2855,8 +2887,9 @@ pub(crate) fn tap_frob_fp12(power: usize) -> Script {
     sc
 }
 
-pub(crate) fn bitcom_frob_fp12(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_in: Vec<u32>) -> Script {
-    
+pub(crate) fn bitcom_frob_fp12(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: Link, sec_in: Vec<Link>) -> Script {
+    let sec_out = sec_out.0;
+    let sec_in: Vec<u32> = sec_in.into_iter().map(|x| x.0).collect();
     let bitcom_scr = script!{
         {checksig_verify_fq(link_ids.get(&sec_out).unwrap().clone())} // hashout
         {Fq::toaltstack()}
@@ -2882,7 +2915,7 @@ pub(crate) struct HintOutFrobFp12 {
     f: ark_bn254::Fq12,
     fhash: HashBytes,
 }
-pub(crate) fn hints_frob_fp12(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInFrobFp12, power: usize) -> (HintOutFrobFp12, Script) {
+pub(crate) fn hints_frob_fp12(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInFrobFp12, power: usize) -> (HintOutFrobFp12, Script) {
     assert_eq!(sec_in.len(), 1);
     let f = hint_in.f;
     let (_, hints_frobenius_map) = Fq12::hinted_frobenius_map(power, f);
@@ -2918,11 +2951,14 @@ mod test {
 
     use super::*;
     use ark_std::UniformRand;
-    use rand::SeedableRng;
+    use bitcoin::opcodes::OP_TRUE;
+    use num_bigint::RandomBits;
+    use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha20Rng;
-    use test::winternitz_compact::get_pub_key;
+    use test::winternitz_compact::{field_reconstruction, get_pub_key};
     use crate::bn254::chunk_primitves::{emulate_extern_hash_fps, emulate_extern_hash_nibbles, emulate_fq_to_nibbles, emulate_nibbles_to_limbs};
     use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq6_push_not_montgomery};
+    use crate::signatures::winterntiz_compact_hash;
     use ark_ff::Field;
 
 
@@ -2942,6 +2978,9 @@ mod test {
             let pk = get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
             pub_scripts.insert(*i, pk);
         }
+
+        let sec_out = (sec_out, true);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
 
         let bitcom_scr = bitcom_frob_fp12(&pub_scripts, sec_out, sec_in.clone());
         
@@ -2982,6 +3021,8 @@ mod test {
             pub_scripts.insert(*i, pk);
         }
 
+        let sec_out = (sec_out, true);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
         let bitcom_scr = bitcom_hash_c(&pub_scripts, sec_out, sec_in.clone());
 
         // runtime
@@ -3024,6 +3065,9 @@ pub_scripts.insert(sec_out, pk);
 pub_scripts.insert(*i, pk);
         }
 
+        let sec_out = (sec_out, true);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+
         let bitcom_scr = bitcom_hash_c2(&pub_scripts, sec_out, sec_in.clone());
 
         // runtime
@@ -3031,7 +3075,7 @@ pub_scripts.insert(*i, pk);
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fhash = emulate_extern_hash_fps(vec![f.c0.c0.c0,f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0,f.c0.c2.c1, f.c1.c0.c0,f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0,f.c1.c2.c1], false);
         let hint_in = HintInHashC { c: f, hashc: fhash };
-        let (_, simulate_stack_input) = hint_hash_c2(&mut Sig { msk: Some(sec_key_for_bitcomms), cache: HashMap::new() }, 0, sec_in, hint_in);
+        let (_, simulate_stack_input) = hint_hash_c2(&mut Sig { msk: Some(sec_key_for_bitcomms), cache: HashMap::new() }, sec_out, sec_in, hint_in);
 
         let tap_len = hash_c_scr.len();
         let script = script!{
@@ -3065,6 +3109,9 @@ pub_scripts.insert(sec_out, pk);
             let pk = get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
 pub_scripts.insert(*i, pk);
         }
+
+        let sec_out = (sec_out, true);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
 
         let bitcom_scr = bitcom_initT4(&pub_scripts, sec_out, sec_in.clone());
 
@@ -3107,6 +3154,9 @@ pub_scripts.insert(sec_out, pk);
 pub_scripts.insert(*i, pk);
         }
 
+        let sec_out = (sec_out, true);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+
         let bitcom_scr = bitcom_precompute_Px(&pub_scripts, sec_out, sec_in.clone());
 
         // runtime
@@ -3147,6 +3197,9 @@ pub_scripts.insert(sec_out, pk);
             let pk = get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
 pub_scripts.insert(*i, pk);
         }
+
+        let sec_out = (sec_out, true);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
 
         let bitcom_scr = bitcom_precompute_Py(&pub_scripts, sec_out, sec_in.clone());
 
@@ -3191,7 +3244,10 @@ pub_scripts.insert(sec_out, pk);
 pub_scripts.insert(*i, pk);
         }
 
-        let bitcom_script = bitcom_sparse_dense_mul(&pub_scripts, 0, vec![1,2]);
+        let sec_out = (sec_out, true);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+
+        let bitcom_script = bitcom_sparse_dense_mul(&pub_scripts, sec_out, sec_in.clone());
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -3205,7 +3261,9 @@ pub_scripts.insert(*i, pk);
             hash_other_le: [2u8; 64],
             hash_aux_T: [3u8; 64],
         };
-        let (_, simulate_stack_input) = hint_sparse_dense_mul(&mut Sig { msk: Some(sec_key_for_bitcomms), cache: HashMap::new() }, 0, vec![1,2], hint_in, dbl_blk);
+
+
+        let (_, simulate_stack_input) = hint_sparse_dense_mul(&mut Sig { msk: Some(sec_key_for_bitcomms), cache: HashMap::new() }, sec_out, sec_in, hint_in, dbl_blk);
 
         let tap_len = sparse_dense_mul_script.len();
 
@@ -3242,7 +3300,11 @@ pub_scripts.insert(sec_out, pk);
 pub_scripts.insert(*i, pk);
         }
 
-        let bitcom_scr = bitcom_dense_dense_mul0(&pub_scripts, 0, vec![1,2]);
+
+        let sec_out = (sec_out, true);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+
+        let bitcom_scr = bitcom_dense_dense_mul0(&pub_scripts, sec_out, sec_in.clone());
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -3254,7 +3316,9 @@ pub_scripts.insert(*i, pk);
             a: f,
             b: g,
         };
-        let (_, simulate_stack_input) = hints_dense_dense_mul0(&mut Sig { msk: Some(sec_key_for_bitcomms), cache: HashMap::new() }, 0, vec![1,2], hint_in);
+
+
+        let (_, simulate_stack_input) = hints_dense_dense_mul0(&mut Sig { msk: Some(sec_key_for_bitcomms), cache: HashMap::new() }, sec_out, sec_in, hint_in);
 
         let tap_len = dense_dense_mul_script.len();
 
@@ -3288,7 +3352,10 @@ pub_scripts.insert(sec_out, pk);
 pub_scripts.insert(*i, pk);
         }
 
-        let bitcom_script = bitcom_dense_dense_mul1(&pub_scripts,0, vec![1,2,3]);
+        let sec_out = (sec_out, true);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+
+        let bitcom_script = bitcom_dense_dense_mul1(&pub_scripts,sec_out, sec_in.clone());
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(17);
@@ -3298,7 +3365,10 @@ pub_scripts.insert(*i, pk);
             a: f,
             b: g,
         };
-        let (_, simulate_stack_input) = hints_dense_dense_mul1(&mut Sig { msk: Some(sec_key_for_bitcomms), cache: HashMap::new() },0, vec![1,2,3], hint_in);
+
+
+
+        let (_, simulate_stack_input) = hints_dense_dense_mul1(&mut Sig { msk: Some(sec_key_for_bitcomms), cache: HashMap::new() },sec_out, sec_in, hint_in);
 
         let tap_len = dense_dense_mul_script.len();
 
@@ -3330,7 +3400,10 @@ pub_scripts.insert(*i, pk);
             pub_scripts.insert(*i, pk);
         }
 
-        let bitcomms_tapscript = bitcom_squaring(&pub_scripts, sec_out, sec_in);
+        let sec_out = (sec_out, true);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+
+        let bitcomms_tapscript = bitcom_squaring(&pub_scripts, sec_out, sec_in.clone());
 
         // run time
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -3342,7 +3415,7 @@ pub_scripts.insert(*i, pk);
             msk: Some(&msk),
             cache: HashMap::new(),
         };
-        let (_, stack_data) = hint_squaring(&mut sig, 0, vec![1], hint_in);
+        let (_, stack_data) = hint_squaring(&mut sig, sec_out, sec_in, hint_in);
 
         let tap_len = squaring_tapscript.len();
         let script = script! {
@@ -3377,7 +3450,11 @@ pub_scripts.insert(sec_out, pk);
 pub_scripts.insert(*i, pk);
         }
 
-        let bitcom_script = bitcom_point_ops(&pub_scripts, 0, vec![1,2,3,4,5,6,7], ate); // cleaner if ate could be removed
+        let sec_out = (sec_out, true);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+
+
+        let bitcom_script = bitcom_point_ops(&pub_scripts, sec_out, sec_in.clone(), ate); // cleaner if ate could be removed
 
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let t = ark_bn254::G2Affine::rand(&mut prng);
@@ -3387,7 +3464,7 @@ pub_scripts.insert(*i, pk);
         let hint_in = HintInDblAdd { t, p, q, hash_le_aux };
 
         let mut sig = Sig {msk: Some(sec_key_for_bitcomms), cache: HashMap::new()};
-        let (_,  simulate_stack_input) = hint_point_ops(&mut sig, 0, vec![1,2,3,4,5,6,7], hint_in, ate);
+        let (_,  simulate_stack_input) = hint_point_ops(&mut sig, sec_out, sec_in, hint_in, ate);
 
         let tap_len = point_ops_tapscript.len();
         let script = script!{
@@ -3421,8 +3498,12 @@ pub_scripts.insert(sec_out, pk);
             let pk = get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
 pub_scripts.insert(*i, pk);
         }
+
+        let sec_out = (sec_out, true);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+
         
-        let bitcom_script = bitcom_point_dbl(&pub_scripts, 0, vec![1,2,3]);
+        let bitcom_script = bitcom_point_dbl(&pub_scripts, sec_out, sec_in.clone());
 
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let t = ark_bn254::G2Affine::rand(&mut prng);
@@ -3434,7 +3515,7 @@ pub_scripts.insert(*i, pk);
             msk: Some(&sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input) = hint_point_dbl(&mut sig, 0, vec![1,2,3], hint_in);
+        let (_, simulate_stack_input) = hint_point_dbl(&mut sig, sec_out, sec_in.clone(), hint_in);
         
         let tap_len = point_ops_tapscript.len();
         let script = script!{
@@ -3470,7 +3551,11 @@ pub_scripts.insert(sec_out, pk);
 pub_scripts.insert(*i, pk);
         }
 
-        let bitcom_script = bitcom_point_add_with_frob(&pub_scripts, 0, vec![1,2,3,4,5,6, 7]);
+        let sec_out = (sec_out, true);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+
+
+        let bitcom_script = bitcom_point_add_with_frob(&pub_scripts, sec_out, sec_in.clone());
 
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let t = ark_bn254::G2Affine::rand(&mut prng);
@@ -3480,7 +3565,7 @@ pub_scripts.insert(*i, pk);
         let hint_in = HintInAdd { t, p, q, hash_le_aux };
 
         let mut sig = Sig { msk: Some(sec_key_for_bitcomms), cache: HashMap::new() };
-        let (_, simulate_stack_input) = hint_point_add_with_frob(&mut sig, 0, vec![1,2,3,4,5,6, 7], hint_in, ate);
+        let (_, simulate_stack_input) = hint_point_add_with_frob(&mut sig, sec_out, sec_in, hint_in, ate);
 
         let tap_len = point_ops_tapscript.len();
         let script = script!{
@@ -3520,7 +3605,11 @@ pub_scripts.insert(sec_out, pk);
 pub_scripts.insert(*i, pk);
         }
 
-        let bitcom_script = bitcom_double_eval_mul_for_fixed_Qs(&pub_scripts,0, vec![1,2,3,4]);
+        let sec_out = (sec_out, true);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+
+
+        let bitcom_script = bitcom_double_eval_mul_for_fixed_Qs(&pub_scripts,sec_out, sec_in.clone());
         
         // Run time
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
@@ -3528,7 +3617,7 @@ pub_scripts.insert(*i, pk);
         let hint_in = HintInSparseDbl {t2, t3, p2: p2dash, p3: p3dash}; 
 
         let mut sig = Sig {msk: Some(sec_key_for_bitcomms), cache: HashMap::new()};
-        let (_, simulate_stack_input) = hint_double_eval_mul_for_fixed_Qs(&mut sig,0, vec![1,2,3,4], hint_in);
+        let (_, simulate_stack_input) = hint_double_eval_mul_for_fixed_Qs(&mut sig,sec_out, sec_in, hint_in);
 
         let tap_len = sparse_dbl_tapscript.len();
 
@@ -3574,7 +3663,10 @@ pub_scripts.insert(sec_out, pk);
 pub_scripts.insert(*i, pk);
         }
 
-        let bitcom_script = bitcom_add_eval_mul_for_fixed_Qs(&pub_scripts,0, vec![1,2,3,4]);
+        let sec_out = (sec_out, true);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+
+        let bitcom_script = bitcom_add_eval_mul_for_fixed_Qs(&pub_scripts,sec_out, sec_in.clone());
         
         // Run time
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
@@ -3582,7 +3674,7 @@ pub_scripts.insert(*i, pk);
         let hint_in = HintInSparseAdd {t2, t3, p2: p2dash, p3: p3dash, q2, q3}; 
 
         let mut sig = Sig {msk: Some(sec_key_for_bitcomms), cache: HashMap::new()};
-        let (_, simulate_stack_input) = hint_add_eval_mul_for_fixed_Qs(&mut sig,0, vec![1,2,3,4], hint_in, ate);
+        let (_, simulate_stack_input) = hint_add_eval_mul_for_fixed_Qs(&mut sig,sec_out, sec_in, hint_in, ate);
     
         let tap_len = sparse_add_tapscript.len();
 
@@ -3626,13 +3718,16 @@ pub_scripts.insert(sec_out, pk);
 pub_scripts.insert(*i, pk);
         }
 
-        let bitcom_script = bitcom_add_eval_mul_for_fixed_Qs_with_frob(&pub_scripts,0, vec![1,2,3,4]);
+        let sec_out = (sec_out, true);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+
+        let bitcom_script = bitcom_add_eval_mul_for_fixed_Qs_with_frob(&pub_scripts,sec_out, sec_in.clone());
         
         // Run time
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
         let p3dash = ark_bn254::g1::G1Affine::rand(&mut prng); 
         let hint_in = HintInSparseAdd {t2, t3, p2: p2dash, p3: p3dash, q2, q3}; 
-        let (_, simulate_stack_input) = hint_add_eval_mul_for_fixed_Qs_with_frob(&mut Sig{msk: Some(sec_key_for_bitcomms), cache: HashMap::new()},0, vec![1,2,3,4], hint_in, 1);
+        let (_, simulate_stack_input) = hint_add_eval_mul_for_fixed_Qs_with_frob(&mut Sig{msk: Some(sec_key_for_bitcomms), cache: HashMap::new()},sec_out, sec_in, hint_in, 1);
     
         let tap_len = sparse_add_tapscript.len();
 
@@ -3646,9 +3741,51 @@ pub_scripts.insert(*i, pk);
         for i in 0..exec_result.final_stack.len() {
             println!("{i:} {:?}", exec_result.final_stack.get(i));
         }
-        //assert!(exec_result.success);
+        assert!(!exec_result.success);
         println!("stack len {:?} script len {:?}", exec_result.stats.max_nb_stack_items, tap_len);
 
     }    
 
+    // #[test]
+    // fn nib_reconstruction() {
+    //     let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+    //     let mut prng = ChaCha20Rng::seed_from_u64(1);
+    //     let pt = ark_bn254::Fq::rand(&mut prng);
+    //     let pt_nib:[u8;40] = emulate_fq_to_nibbles(pt)[24..64].try_into().unwrap();
+    //     let pubkey = winterntiz_compact_hash::get_pub_key(sec_key_for_bitcomms);
+    //     let sig = winterntiz_compact_hash::sign(sec_key_for_bitcomms, pt_nib);
+    //     let lock_script = winterntiz_compact_hash::checksig_verify_fq(pubkey);
+    //     let script = script!{
+    //         {sig}
+    //         {lock_script}
+    //         {fq_push_not_montgomery(pt)}
+    //     };
+    //     println!("pt_nib {:?}", pt_nib);
+    //     let tap_len = script.len();
+    //     let exec_result = execute_script(script);
+    //     for i in 0..exec_result.final_stack.len() {
+    //         println!("{i:} {:?}", exec_result.final_stack.get(i));
+    //     }
+    //     assert!(exec_result.success);
+    //     println!("stack len {:?} script len {:?}", exec_result.stats.max_nb_stack_items, tap_len);
+    // }
+
+    //#[test]
+    // fn truncated_hashing_test() {
+    //     let mut prng = ChaCha20Rng::seed_from_u64(1);
+    //     let pt = ark_bn254::Fq::rand(&mut prng);
+
+    //     let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
+    //     let script = script!{
+    //         {fq_push_not_montgomery(pt)}
+    //         {unpack_limbs_to_nibbles()}
+    //         {fq_push_not_montgomery(pt)}
+    //         {unpack_limbs_to_nibbles()}
+    //         {hash_64b_75k}
+    //     };
+    //     let exec_result = execute_script(script);
+    //     for i in 0..exec_result.final_stack.len() {
+    //         println!("{i:} {:?}", exec_result.final_stack.get(i));
+    //     }
+    // }
  }

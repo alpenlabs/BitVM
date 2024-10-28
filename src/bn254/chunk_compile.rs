@@ -4,7 +4,7 @@ use ark_bn254::g2::G2Affine;
 use ark_ec::bn::BnConfig;
 
 use crate::bn254::chunk_config::miller_config_gen;
-use crate::bn254::chunk_taps::{bitcom_add_eval_mul_for_fixed_Qs_with_frob, bitcom_dense_dense_mul0, bitcom_dense_dense_mul1, bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_initT4, bitcom_point_add_with_frob, bitcom_precompute_Px, bitcom_precompute_Py, bitcom_sparse_dense_mul, tap_add_eval_mul_for_fixed_Qs, tap_add_eval_mul_for_fixed_Qs_with_frob, tap_frob_fp12, tap_hash_c2, tap_point_add_with_frob, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul};
+use crate::bn254::chunk_taps::{bitcom_add_eval_mul_for_fixed_Qs_with_frob, bitcom_dense_dense_mul0, bitcom_dense_dense_mul1, bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_initT4, bitcom_point_add_with_frob, bitcom_precompute_Px, bitcom_precompute_Py, bitcom_sparse_dense_mul, tap_add_eval_mul_for_fixed_Qs, tap_add_eval_mul_for_fixed_Qs_with_frob, tap_frob_fp12, tap_hash_c2, tap_point_add_with_frob, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, Link};
 use crate::bn254::{ chunk_taps};
 use crate::signatures::winternitz_compact::{get_pub_key, WOTSPubKey};
 use crate::signatures::wots::{wots160, wots256};
@@ -25,7 +25,7 @@ use crate::{
 pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 
 // given a groth16 verification key, generate all of the tapscripts in compile mode
-fn compile_miller_circuit(link_ids: &HashMap<u32, WOTSPubKey>, id_to_sec: HashMap<String, u32>,  q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine) -> (Vec<Script>, G2Affine, G2Affine) {
+fn compile_miller_circuit(link_ids: &HashMap<u32, WOTSPubKey>, id_to_sec: HashMap<String, (u32, bool)>,  q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine) -> (Vec<Script>, G2Affine, G2Affine) {
     // vk: (G1Affine, G2Affine, G2Affine, G2Affine)
     // groth16 is 1 G2 and 2 G1, P4, Q4, 
     // e(A,B)⋅e(vkα ,vkβ)=e(C,vkδ)⋅e(vkγ_ABC,vkγ)
@@ -42,12 +42,12 @@ fn compile_miller_circuit(link_ids: &HashMap<u32, WOTSPubKey>, id_to_sec: HashMa
     // println!("max id {:?}", max_id);
 
 
-    fn get_index(blk_name: &str, id_to_sec: HashMap<String, u32>)-> u32 {
+    fn get_index(blk_name: &str, id_to_sec: HashMap<String, (u32, bool)>)-> Link {
         id_to_sec.get(blk_name).unwrap().clone()
     }
 
-    fn get_deps(deps: &str, id_to_sec: HashMap<String, u32>) -> Vec<u32> {
-        let splits: Vec<u32>= deps.split(",").into_iter().map(|s| get_index(s, id_to_sec.clone())).collect();
+    fn get_deps(deps: &str, id_to_sec: HashMap<String, (u32, bool)>) -> Vec<Link> {
+        let splits: Vec<Link>= deps.split(",").into_iter().map(|s| get_index(s, id_to_sec.clone())).collect();
         splits
     }
 
@@ -184,7 +184,7 @@ fn compile_miller_circuit(link_ids: &HashMap<u32, WOTSPubKey>, id_to_sec: HashMa
 }
 
 
-fn compile_pre_miller_circuit(link_ids: &HashMap<u32, WOTSPubKey>, id_map: HashMap<String, u32>) -> Vec<Script>   {
+fn compile_pre_miller_circuit(link_ids: &HashMap<u32, WOTSPubKey>, id_map: HashMap<String, (u32, bool)>) -> Vec<Script>   {
     let tables = pre_miller_config_gen();
 
     let mut scripts = vec![];
@@ -256,16 +256,16 @@ fn compile_pre_miller_circuit(link_ids: &HashMap<u32, WOTSPubKey>, id_map: HashM
 
 }
 
-fn compile_post_miller_circuit(link_ids: &HashMap<u32, WOTSPubKey>, id_map: HashMap<String, u32>, t2: ark_bn254::G2Affine,  t3: ark_bn254::G2Affine,  q2: ark_bn254::G2Affine,  q3: ark_bn254::G2Affine, facc: String, tacc: String ) -> (HashMap<String, u32>, Vec<Script>) {
+fn compile_post_miller_circuit(link_ids: &HashMap<u32, WOTSPubKey>, id_map: HashMap<String, (u32, bool)>, t2: ark_bn254::G2Affine,  t3: ark_bn254::G2Affine,  q2: ark_bn254::G2Affine,  q3: ark_bn254::G2Affine, facc: String, tacc: String ) -> Vec<Script> {
     let tables = post_miller_config_gen(facc,tacc);
 
     let mut nt2 = t2;
     let mut nt3 = t3;
     let mut scripts = vec![];
     for row in tables {
-        let sec_in: Vec<u32> = row.dependencies.split(",").into_iter().map(|s| id_map.get(s).unwrap().clone()).collect();
+        let sec_in: Vec<Link> = row.dependencies.split(",").into_iter().map(|s| id_map.get(s).unwrap().clone()).collect();
         println!("row ID {:?}", row.link_id);
-        let sec_out: Vec<u32> = row.link_id.split(",").into_iter().map(|s| id_map.get(s).unwrap().clone()).collect();
+        let sec_out: Vec<Link> = row.link_id.split(",").into_iter().map(|s| id_map.get(s).unwrap().clone()).collect();
         if row.category == "Frob1" {
             let sc1 = tap_frob_fp12(1);
             let sc2 = bitcom_frob_fp12(link_ids, sec_out[0],sec_in);
@@ -368,7 +368,7 @@ fn compile_post_miller_circuit(link_ids: &HashMap<u32, WOTSPubKey>, id_map: Hash
             nt3=b;
         }
     }
-    return (id_map, scripts);
+    return scripts;
 }
 
 pub struct AssertPublicKeys {
@@ -458,7 +458,7 @@ fn compile(vk: Vkey, link_ids: &HashMap<u32, WOTSPubKey>) -> Vec<Script> {
     scrs.extend(scr);
     let (scr, t2, t3) = compile_miller_circuit(&link_ids, id_map.clone(), q2, q3);
     scrs.extend(scr);
-    let (_, scr) = compile_post_miller_circuit(&link_ids, id_map, t2, t3, q2, q3, facc, tacc);
+    let scr = compile_post_miller_circuit(&link_ids, id_map, t2, t3, q2, q3, facc, tacc);
     scrs.extend(scr);
     scrs
 }
@@ -492,17 +492,5 @@ mod test {
         // }
     }
 
-    #[test]
-    fn test_link() {
-        let (hashmap, facc, tacc) = assign_link_ids();
-        let mut key_value_vec: Vec<(&String, &u32)> = hashmap.iter().collect();
 
-        // Sort the vector by value
-        key_value_vec.sort_by(|a, b| a.1.cmp(b.1));
-    
-        // Iterate over the sorted vector and print the key-value pairs
-        for (key, value) in key_value_vec {
-            println!("{}: {}", key, value);
-        }
-    }
 }

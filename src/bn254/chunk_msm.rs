@@ -16,7 +16,7 @@ use crate::{
 use num_traits::One;
 
 use super::chunk_primitves::hash_fp2;
-use super::chunk_taps::{Sig};
+use super::chunk_taps::{Link, Sig};
 use super::fq2::Fq2;
 use super::utils::{Hint};
 
@@ -359,7 +359,7 @@ fn get_byte_mul_g1(scalar: ark_bn254::Fr, window: u8, index: usize, base: ark_bn
     return precomputed_q;
 }
 
-fn hint_msm(sig: &mut Sig, sec_out: u32, sec_in: Vec<u32>, hint_in: HintInMSM, msm_tap_index: usize, qs: Vec<ark_bn254::G1Affine>,) -> (HintOutMSM, Script) {
+fn hint_msm(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInMSM, msm_tap_index: usize, qs: Vec<ark_bn254::G1Affine>,) -> (HintOutMSM, Script) {
     const window: u8 = 8;
     const num_pubs: usize = 4;
 
@@ -558,7 +558,11 @@ mod test {
             }
             let bitcomms_tapscript = bitcom_msm(&pub_scripts, sec_out, sec_in.clone());
             let msm_ops = tap_msm(window, i, qs.clone());
-            let (aux, stack_data) = hint_msm(&mut sig, sec_out, sec_in.clone(), hint_in.clone(), i as usize, qs.clone());
+            
+            let msec_out = (sec_out, true);
+            let msec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+
+            let (aux, stack_data) = hint_msm(&mut sig, msec_out, msec_in.clone(), hint_in.clone(), i as usize, qs.clone());
 
 
             let script = script!{

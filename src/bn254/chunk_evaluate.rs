@@ -8,7 +8,7 @@ use bitcoin_script::script;
 use crate::bn254::chunk_compile::ATE_LOOP_COUNT;
 use crate::bn254::chunk_config::miller_config_gen;
 use crate::bn254::chunk_primitves::emulate_extern_hash_fps;
-use crate::bn254::chunk_taps::{bitcom_add_eval_mul_for_fixed_Qs, bitcom_add_eval_mul_for_fixed_Qs_with_frob, bitcom_dense_dense_mul0, bitcom_dense_dense_mul1, bitcom_double_eval_mul_for_fixed_Qs, bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_initT4, bitcom_point_add_with_frob, bitcom_point_dbl, bitcom_point_ops, bitcom_precompute_Px, bitcom_precompute_Py, bitcom_sparse_dense_mul, bitcom_squaring, hint_hash_c, hint_hash_c2, hint_init_T4, hints_dense_dense_mul0, hints_dense_dense_mul1, hints_frob_fp12, hints_precompute_Px, hints_precompute_Py, tap_add_eval_mul_for_fixed_Qs, tap_add_eval_mul_for_fixed_Qs_with_frob, tap_double_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_hash_c2, tap_point_add_with_frob, tap_point_dbl, tap_point_ops, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, tap_squaring, HashBytes, HintInAdd, HintInDblAdd, HintInDenseMul0, HintInDenseMul1, HintInDouble, HintInFrobFp12, HintInHashC, HintInInitT4, HintInPrecomputePx, HintInPrecomputePy, HintInSparseAdd, HintInSparseDbl, HintInSparseDenseMul, HintInSquaring, HintOutFixedAcc, HintOutFrobFp12, HintOutGrothC, HintOutPubIdentity, HintOutSparseDbl};
+use crate::bn254::chunk_taps::{bitcom_add_eval_mul_for_fixed_Qs, bitcom_add_eval_mul_for_fixed_Qs_with_frob, bitcom_dense_dense_mul0, bitcom_dense_dense_mul1, bitcom_double_eval_mul_for_fixed_Qs, bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_initT4, bitcom_point_add_with_frob, bitcom_point_dbl, bitcom_point_ops, bitcom_precompute_Px, bitcom_precompute_Py, bitcom_sparse_dense_mul, bitcom_squaring, hint_hash_c, hint_hash_c2, hint_init_T4, hints_dense_dense_mul0, hints_dense_dense_mul1, hints_frob_fp12, hints_precompute_Px, hints_precompute_Py, tap_add_eval_mul_for_fixed_Qs, tap_add_eval_mul_for_fixed_Qs_with_frob, tap_double_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_hash_c2, tap_point_add_with_frob, tap_point_dbl, tap_point_ops, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, tap_squaring, HashBytes, HintInAdd, HintInDblAdd, HintInDenseMul0, HintInDenseMul1, HintInDouble, HintInFrobFp12, HintInHashC, HintInInitT4, HintInPrecomputePx, HintInPrecomputePy, HintInSparseAdd, HintInSparseDbl, HintInSparseDenseMul, HintInSquaring, HintOutFixedAcc, HintOutFrobFp12, HintOutGrothC, HintOutPubIdentity, HintOutSparseDbl, Link};
 use crate::bn254::chunk_taps;
 use crate::execute_script;
 use crate::signatures::winternitz_compact::WOTSPubKey;
@@ -19,7 +19,7 @@ use super::chunk_taps::{tup_to_scr, HintOut, Sig};
 use super::{chunk_taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4}};
 
 
-fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, link_name_to_id: HashMap<String, u32>, aux_output_per_link: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine, t3: ark_bn254::G2Affine, q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine) -> (G2Affine, G2Affine) {
+fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, link_name_to_id: HashMap<String, (u32, bool)>, aux_output_per_link: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine, t3: ark_bn254::G2Affine, q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine) -> (G2Affine, G2Affine) {
     // vk: (G1Affine, G2Affine, G2Affine, G2Affine)
     // groth16 is 1 G2 and 2 G1, P4, Q4, 
     // e(A,B)⋅e(vkα ,vkβ)=e(C,vkδ)⋅e(vkγ_ABC,vkγ)
@@ -33,12 +33,12 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
 
     let mut itr = 0;
 
-    fn get_index(blk_name: &str, id_to_sec: HashMap<String, u32>)-> u32 {
+    fn get_index(blk_name: &str, id_to_sec: HashMap<String, (u32, bool)>)-> Link {
         id_to_sec.get(blk_name).unwrap().clone()
     }
 
-    fn get_deps(deps: &str, id_to_sec: HashMap<String, u32>) -> Vec<u32> {
-        let splits: Vec<u32>= deps.split(",").into_iter().map(|s| get_index(s, id_to_sec.clone())).collect();
+    fn get_deps(deps: &str, id_to_sec: HashMap<String, (u32, bool)>) -> Vec<Link> {
+        let splits: Vec<Link>= deps.split(",").into_iter().map(|s| get_index(s, id_to_sec.clone())).collect();
         splits
     }
 
@@ -407,13 +407,13 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
 
 }
 
-fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>,  link_name_to_id: HashMap<String, u32>, aux_output_per_link: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine,  t3: ark_bn254::G2Affine,  q2: ark_bn254::G2Affine,  q3: ark_bn254::G2Affine, facc: String, tacc: String ) -> HashMap<String, u32> {
+fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>,  link_name_to_id: HashMap<String, (u32, bool)>, aux_output_per_link: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine,  t3: ark_bn254::G2Affine,  q2: ark_bn254::G2Affine,  q3: ark_bn254::G2Affine, facc: String, tacc: String )  {
     let tables = post_miller_config_gen(facc,tacc);
 
     let mut nt2 = t2;
     let mut nt3 = t3;
     for row in tables {
-        let sec_in: Vec<u32> = row.dependencies.split(",").into_iter().map(|s| link_name_to_id.get(s).unwrap().clone()).collect();
+        let sec_in: Vec<Link> = row.dependencies.split(",").into_iter().map(|s| link_name_to_id.get(s).unwrap().clone()).collect();
         println!("row ID {:?}", row.link_id);
         let sec_out = link_name_to_id.get(&row.link_id).unwrap().clone();
         let hints_out: Vec<HintOut> = row.dependencies.split(",").into_iter().map(|s| aux_output_per_link.get(s).unwrap().clone()).collect();
@@ -671,10 +671,9 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
             }
         } 
     }
-    return link_name_to_id;
 }
 
-fn evaluate_public_params(sig: &mut Sig, link_name_to_id: HashMap<String, u32>, q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine, fixed_acc: ark_bn254::Fq12) -> HashMap<String, HintOut> {
+fn evaluate_public_params(sig: &mut Sig, link_name_to_id: HashMap<String, (u32, bool)>, q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine, fixed_acc: ark_bn254::Fq12) -> HashMap<String, HintOut> {
     let f = ark_bn254::Fq12::ONE;
     let idhash = emulate_extern_hash_fps(vec![f.c0.c0.c0,f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0,f.c0.c2.c1, f.c1.c0.c0,f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0,f.c1.c2.c1], true);
     let fixedacc_hash = emulate_extern_hash_fps(vec![fixed_acc.c0.c0.c0,fixed_acc.c0.c0.c1, fixed_acc.c0.c1.c0, fixed_acc.c0.c1.c1, fixed_acc.c0.c2.c0,fixed_acc.c0.c2.c1, fixed_acc.c1.c0.c0,fixed_acc.c1.c0.c1, fixed_acc.c1.c1.c0, fixed_acc.c1.c1.c1, fixed_acc.c1.c2.c0,fixed_acc.c1.c2.c1], false);
@@ -714,7 +713,7 @@ fn evaluate_public_params(sig: &mut Sig, link_name_to_id: HashMap<String, u32>, 
     id_to_witness
 }
 
-fn evaluate_groth16_params(sig: &mut Sig, link_name_to_id: HashMap<String, u32>, p2: G1Affine, p3: G1Affine, p4: G1Affine, q4: G2Affine, c: Fq12, s: Fq12) -> HashMap<String, HintOut> {
+fn evaluate_groth16_params(sig: &mut Sig, link_name_to_id: HashMap<String, (u32, bool)>, p2: G1Affine, p3: G1Affine, p4: G1Affine, q4: G2Affine, c: Fq12, s: Fq12) -> HashMap<String, HintOut> {
     let cv = vec![c.c0.c0.c0,c.c0.c0.c1, c.c0.c1.c0, c.c0.c1.c1, c.c0.c2.c0,c.c0.c2.c1, c.c1.c0.c0,c.c1.c0.c1, c.c1.c1.c0, c.c1.c1.c1, c.c1.c2.c0,c.c1.c2.c1];
     let chash = emulate_extern_hash_fps(cv.clone(), false);
     let chash2 = emulate_extern_hash_fps(cv.clone(), true);
@@ -777,7 +776,7 @@ fn evaluate_groth16_params(sig: &mut Sig, link_name_to_id: HashMap<String, u32>,
 
     let mut tups: Vec<(u32, [u8;64])> = Vec::new(); 
     for (txt, wit) in id_to_witness.iter() {
-        let id = link_name_to_id.get(txt).unwrap().clone();
+        let id = link_name_to_id.get(txt).unwrap().clone().0;
         match wit {
             HintOut::FieldElem(f) => {
                 tups.push((id, emulate_fq_to_nibbles(*f)));
@@ -791,11 +790,11 @@ fn evaluate_groth16_params(sig: &mut Sig, link_name_to_id: HashMap<String, u32>,
     id_to_witness
 }
 
-fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, link_name_to_id: HashMap<String, u32>, aux_output_per_link: &mut HashMap<String, HintOut>) {
+fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, link_name_to_id: HashMap<String, (u32, bool)>, aux_output_per_link: &mut HashMap<String, HintOut>) {
     let tables = pre_miller_config_gen();
 
     for row in tables {
-        let sec_in: Vec<u32> = row.dependencies.split(",").into_iter().map(|s| link_name_to_id.get(s).unwrap().clone()).collect();
+        let sec_in: Vec<Link> = row.dependencies.split(",").into_iter().map(|s| link_name_to_id.get(s).unwrap().clone()).collect();
         let hints: Vec<HintOut> = row.dependencies.split(",").into_iter().map(|s| aux_output_per_link.get(s).unwrap().clone()).collect();
         let sec_out = link_name_to_id.get(&row.link_id).unwrap().clone();
         println!("row name {:?} ID {:?}", row.category, sec_out);

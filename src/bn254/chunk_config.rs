@@ -428,43 +428,43 @@ pub(crate) fn miller_config_gen()->Vec<Vec<ScriptItem>> {
 }
 
 
-fn assign_ids_to_public_params(start_identifier: u32) -> HashMap<String, u32> {
+fn assign_ids_to_public_params(start_identifier: u32) -> HashMap<String, (u32, bool)> {
     let pub_params = public_params_config_gen();
-    let mut name_to_id: HashMap<String, u32> = HashMap::new();
+    let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
     for i in 0..pub_params.len() {
-        name_to_id.insert( pub_params[i].link_id.clone(), start_identifier + i as u32);
+        name_to_id.insert( pub_params[i].link_id.clone(), (start_identifier + i as u32, pub_params[i].is_type_field));
     }
     name_to_id
 }
 
 
-fn assign_ids_to_groth16_params(start_identifier: u32) -> HashMap<String, u32> {
+fn assign_ids_to_groth16_params(start_identifier: u32) -> HashMap<String, (u32, bool)> {
     let g_params = groth16_config_gen();
-    let mut name_to_id: HashMap<String, u32> = HashMap::new();
+    let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
     for i in 0..g_params.len() {
-        name_to_id.insert( g_params[i].link_id.clone(), start_identifier + i as u32);
+        name_to_id.insert( g_params[i].link_id.clone(), (start_identifier + i as u32, g_params[i].is_type_field));
     }
     name_to_id
 }
 
-fn assign_ids_to_premiller_params(start_identifier: u32) -> HashMap<String, u32> {
+fn assign_ids_to_premiller_params(start_identifier: u32) -> HashMap<String, (u32, bool)> {
     let g_params = premiller_config_gen();
-    let mut name_to_id: HashMap<String, u32> = HashMap::new();
+    let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
     for i in 0..g_params.len() {
-        name_to_id.insert( g_params[i].link_id.clone(), start_identifier + i as u32);
+        name_to_id.insert( g_params[i].link_id.clone(), (start_identifier + i as u32, g_params[i].is_type_field));
     }
     name_to_id
 }
 
-fn assign_ids_to_miller_blocks(start_identifier: u32)-> (HashMap<String, u32>, String, String) {
+fn assign_ids_to_miller_blocks(start_identifier: u32)-> (HashMap<String, (u32, bool)>, String, String) {
     let g_params = miller_config_gen();
-    let mut name_to_id: HashMap<String, u32> = HashMap::new();
+    let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
     let mut counter = 0;
     let mut last_f_block_id = String::new();
     let mut last_t4_block_id = String::new();
     for t in g_params {
         for r in t {
-            name_to_id.insert(r.link_id.clone(), start_identifier + counter as u32);
+            name_to_id.insert(r.link_id.clone(), (start_identifier + counter as u32, r.is_type_field));
             counter += 1;
             if r.category.starts_with("DD") {
                 last_f_block_id = r.link_id;
@@ -476,17 +476,17 @@ fn assign_ids_to_miller_blocks(start_identifier: u32)-> (HashMap<String, u32>, S
     (name_to_id, last_f_block_id, last_t4_block_id)
 }
 
-fn assign_ids_to_postmiller_params(start_identifier: u32) -> HashMap<String, u32> {
+fn assign_ids_to_postmiller_params(start_identifier: u32) -> HashMap<String, (u32, bool)> {
     let g_params = post_miller_config_gen(String::new(), String::new());
-    let mut name_to_id: HashMap<String, u32> = HashMap::new();
+    let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
     for i in 0..g_params.len() {
-        name_to_id.insert( g_params[i].link_id.clone(), start_identifier + i as u32);
+        name_to_id.insert( g_params[i].link_id.clone(), (start_identifier + i as u32, g_params[i].is_type_field));
     }
     name_to_id
 }
 
-pub(crate) fn assign_link_ids() -> (HashMap<String, u32>, String, String) {
-    let mut all_ids: HashMap<String, u32> = HashMap::new();
+pub(crate) fn assign_link_ids() -> (HashMap<String, (u32, bool)>, String, String) {
+    let mut all_ids: HashMap<String, (u32, bool)> = HashMap::new();
     let mut total_len = 0;
     let pubp = assign_ids_to_public_params(0);
     total_len += pubp.len();
