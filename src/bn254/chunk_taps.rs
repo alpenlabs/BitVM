@@ -2849,8 +2849,6 @@ pub(crate) struct HintOutInitT4 {
 }
 
 pub(crate) fn hint_init_T4(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInInitT4) -> (HintOutInitT4, Script) {
-    println!("sec_out {:?}", sec_out);
-    println!("sec_in {:?}", sec_in);
     assert_eq!(sec_in.len(), 4);
     let t4 = hint_in.t4;
     let t4hash = emulate_extern_hash_fps(vec![t4.x.c0, t4.x.c1, t4.y.c0, t4.y.c1], false);
@@ -3080,11 +3078,11 @@ mod test {
         let hash_c_scr = tap_hash_c2();
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-let pk = get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
-pub_scripts.insert(sec_out, pk);
+        let pk = get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
             let pk = get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
-pub_scripts.insert(*i, pk);
+            pub_scripts.insert(*i, pk);
         }
 
         let sec_out = (sec_out, true);
@@ -3125,11 +3123,11 @@ pub_scripts.insert(*i, pk);
         let hash_c_scr = tap_initT4();
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-let pk = get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
-pub_scripts.insert(sec_out, pk);
+        let pk = winterntiz_compact_hash::get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
-pub_scripts.insert(*i, pk);
+            let pk = winternitz_compact::get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            pub_scripts.insert(*i, pk);
         }
 
         let sec_out = (sec_out, false);
@@ -3415,10 +3413,10 @@ pub_scripts.insert(*i, pk);
         let sec_in = vec![1];
         
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = get_pub_key(&format!("{}{:04X}", msk, sec_out));
+        let pk = winterntiz_compact_hash::get_pub_key(&format!("{}{:04X}", msk, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = get_pub_key(&format!("{}{:04X}", msk, i));
+            let pk = winterntiz_compact_hash::get_pub_key(&format!("{}{:04X}", msk, i));
             pub_scripts.insert(*i, pk);
         }
 
@@ -3792,22 +3790,27 @@ pub_scripts.insert(*i, pk);
     //     println!("stack len {:?} script len {:?}", exec_result.stats.max_nb_stack_items, tap_len);
     // }
 
-    //#[test]
+    // #[test]
     // fn truncated_hashing_test() {
     //     let mut prng = ChaCha20Rng::seed_from_u64(1);
-    //     let pt = ark_bn254::Fq::rand(&mut prng);
+    //     let a = ark_bn254::Fq12::rand(&mut prng);
+    //     let ahash = emulate_extern_hash_fps(vec![a.c0.c0.c0,a.c0.c0.c1, a.c0.c1.c0, a.c0.c1.c1, a.c0.c2.c0,a.c0.c2.c1, a.c1.c0.c0,a.c1.c0.c1, a.c1.c1.c0, a.c1.c1.c1, a.c1.c2.c0,a.c1.c2.c1], true);
+    //     let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        
+    //     let sig = winterntiz_compact_hash::sign(sec_key_for_bitcomms, ahash[24..64].try_into().unwrap());
+        
+    //     let pub_key = winterntiz_compact_hash::get_pub_key(sec_key_for_bitcomms);
+    //     let lock = winterntiz_compact_hash::checksig_verify_fq(pub_key);
 
-    //     let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
     //     let script = script!{
-    //         {fq_push_not_montgomery(pt)}
-    //         {unpack_limbs_to_nibbles()}
-    //         {fq_push_not_montgomery(pt)}
-    //         {unpack_limbs_to_nibbles()}
-    //         {hash_64b_75k}
+    //         {sig}
+    //         {lock}
+    //         OP_TRUE
     //     };
     //     let exec_result = execute_script(script);
     //     for i in 0..exec_result.final_stack.len() {
     //         println!("{i:} {:?}", exec_result.final_stack.get(i));
     //     }
+    //     println!("ahash {:?}", ahash);
     // }
  }

@@ -509,7 +509,7 @@ pub(crate) fn bitcom_msm(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_
 mod test {
     use std::collections::HashMap;
 
-    use crate::{bn254::{fq2::Fq2, utils::fr_push_not_montgomery}, signatures::winternitz_compact::get_pub_key};
+    use crate::{bn254::{fq2::Fq2, utils::fr_push_not_montgomery}, signatures::{ winterntiz_compact_hash}};
 
     use super::*;
     use ark_bn254::G1Affine;
@@ -550,10 +550,10 @@ mod test {
             }
             sec_out = sec_in.last().unwrap() + 1;
             let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-            let pk = get_pub_key(&format!("{}{:04X}", msk, sec_out));
+            let pk = winterntiz_compact_hash::get_pub_key(&format!("{}{:04X}", msk, sec_out));
             pub_scripts.insert(sec_out, pk);
             for i in &sec_in {
-                let pk = get_pub_key(&format!("{}{:04X}", msk, i));
+                let pk = winterntiz_compact_hash::get_pub_key(&format!("{}{:04X}", msk, i));
                 pub_scripts.insert(*i, pk);
             }
             let bitcomms_tapscript = bitcom_msm(&pub_scripts, sec_out, sec_in.clone());

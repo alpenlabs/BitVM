@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use ark_ec::bn::BnConfig;
 
-use crate::signatures::winternitz_compact::{get_pub_key, WOTSPubKey};
+use crate::signatures::{winternitz_compact::{self, get_pub_key, WOTSPubKey}, winterntiz_compact_hash};
 
 pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 
@@ -512,8 +512,14 @@ pub fn keygen(msk: &str) -> HashMap<u32, WOTSPubKey> {
     // given master secret key and number of links, generate pub keys
     let (links, _,_) = assign_link_ids();
     let mut scripts = HashMap::new();
-    for link_id in 0..links.len() {
-        let pub_key = get_pub_key(&format!("{}{:04X}", msk, link_id));
+    for (_, link) in links {
+        let link_id = link.0;
+        let mut pub_key = vec![];
+        if link.1 {
+            pub_key = winternitz_compact::get_pub_key(&format!("{}{:04X}", msk, link.0));
+        } else {
+            pub_key = winterntiz_compact_hash::get_pub_key(&format!("{}{:04X}", msk, link.0));
+        }
         //let s = checksig_verify_fq(pub_key);
         scripts.insert(link_id as u32, pub_key);
     }
