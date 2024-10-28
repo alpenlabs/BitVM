@@ -2,7 +2,7 @@ use crate::bn254::chunk_primitves::{emulate_extern_hash_nibbles, emulate_fq_to_n
 use crate::bn254::fq6::Fq6;
 use crate::bn254::utils::{ fq2_push_not_montgomery, fq_push_not_montgomery, new_hinted_affine_add_line, new_hinted_affine_double_line, new_hinted_check_line_through_point, new_hinted_ell_by_constant_affine, new_hinted_x_from_eval_point, new_hinted_y_from_eval_point};
 use crate::signatures::winternitz_compact::{self, WOTSPubKey};
-use crate::signatures::winternitz_compact_hash;
+use crate::signatures::{winternitz, winternitz_compact_hash, winternitz_hash};
 use ark_bn254::{Bn254, G1Affine, G2Affine};
 use ark_ec::pairing::Pairing;
 use ark_ff::{AdditiveGroup, Field, UniformRand, Zero};
@@ -76,8 +76,9 @@ pub(crate) enum HintOut {
 #[derive(Debug, Clone)]
 pub struct Sig {
     pub(crate) msk: Option<&'static str>,
-    pub(crate) cache: HashMap<u32, Script>
+    pub(crate) cache: HashMap<u32, Vec<Script>>
 }
+
 
 // SQUARING
 pub(crate) fn hint_squaring(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInSquaring)-> (HintOutSquaring, Script) {
@@ -386,25 +387,33 @@ pub(crate) struct HintOutDouble {
 }
 
 pub(crate) fn tup_to_scr(sig: &mut Sig, tup: Vec<(Link, [u8;64])>) -> Vec<Script> {
-    let mut bc_elems = vec![];
+    let mut compact_bc_scripts = vec![];
     for (skey, elem) in tup {
         let bcelem = if sig.cache.contains_key(&skey.0) {
             sig.cache.get(&skey.0).unwrap().clone()
         } else {
             if skey.1 {
-                let v = winternitz_compact::sign(&format!("{}{:04X}", sig.msk.unwrap(), skey.0), elem);
+                let v = winternitz::sign_digits(&format!("{}{:04X}", sig.msk.unwrap(), skey.0), elem);
                 sig.cache.insert(skey.0, v.clone());
                 v
             } else {
-                let v = winternitz_compact_hash::sign(&format!("{}{:04X}", sig.msk.unwrap(), skey.0), elem[24..64].try_into().unwrap());
+                let v = winternitz_hash::sign_digits(&format!("{}{:04X}", sig.msk.unwrap(), skey.0), elem[24..64].try_into().unwrap());
                 sig.cache.insert(skey.0, v.clone());
                 v
             }
         };
-        bc_elems.push(bcelem);
+            // to compact form
+        let mut compact_sig = script!{};
+        for i in 0..bcelem.len() {
+            if i%2 == 0 {
+                compact_sig = compact_sig.push_script(bcelem[i].clone().compile());
+            }
+        }
+        compact_bc_scripts.push(compact_sig);
     }
-    bc_elems
+    compact_bc_scripts
 }
+
 
 pub type Link = (u32, bool);
 
