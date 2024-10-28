@@ -4,6 +4,7 @@ use ark_bn254::g2::G2Affine;
 use ark_bn254::{Fq12, G1Affine};
 use ark_ff::{Field};
 use bitcoin::opcodes::OP_TRUE;
+use bitcoin::Script;
 use bitcoin_script::script;
 
 use crate::bn254::chunk_compile::ATE_LOOP_COUNT;
@@ -794,7 +795,7 @@ fn evaluate_groth16_params(sig: &mut Sig, link_name_to_id: HashMap<String, (u32,
     id_to_witness
 }
 
-fn evaluate_msm(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, link_name_to_id: HashMap<String, (u32, bool)>, aux_output_per_link: &mut HashMap<String, HintOut>, pub_ins: usize, qs: Vec<ark_bn254::G1Affine>) {
+fn evaluate_msm(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, link_name_to_id: HashMap<String, (u32, bool)>, aux_output_per_link: &mut HashMap<String, HintOut>, pub_ins: usize, qs: Vec<ark_bn254::G1Affine>) -> Option<(u32, bitcoin_script::Script)> {
     let tables = msm_config_gen(String::from("k0,k1"));
     let mut msm_tap_index = 0;
     for row in tables {
@@ -825,21 +826,31 @@ fn evaluate_msm(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey
             let ops_script = tap_msm(8, msm_tap_index, qs.clone());
             let bcs_script = bitcom_msm(pub_scripts_per_link_id, sec_out, sec_in.clone());
             let script = script!{
-                { hint_script }
+                { hint_script.clone() }
                 { bcs_script }
                 { ops_script }
             };
             let exec_result = execute_script(script);
             assert!(!exec_result.success);
             assert!(exec_result.final_stack.len() == 1);
-            
+            if exec_result.success {
+                return Some((sec_out.0, hint_script));
+            } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                for i in 0..exec_result.final_stack.len() {
+                    println!("{i:} {:?}", exec_result.final_stack.get(i));
+                }
+                panic!()
+            }
+
             aux_output_per_link.insert(row.link_id, HintOut::MSM(hint_res));
         }
         msm_tap_index += 1;
     }
+
+    None
 }
 
-fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, link_name_to_id: HashMap<String, (u32, bool)>, aux_output_per_link: &mut HashMap<String, HintOut>) {
+fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, link_name_to_id: HashMap<String, (u32, bool)>, aux_output_per_link: &mut HashMap<String, HintOut>) -> Option<(u32, bitcoin_script::Script)> {
     let tables = pre_miller_config_gen();
 
     for row in tables {
@@ -887,6 +898,7 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 let exec_result = execute_script(script);
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
+
             aux_output_per_link.insert(row.link_id, HintOut::FieldElem(pyd));
         } else if row.category == "PrePx" {
             assert!(hints.len() == 3);
@@ -909,6 +921,7 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 let exec_result = execute_script(script);
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
+
             aux_output_per_link.insert(row.link_id, HintOut::FieldElem(pyd));
         } else if row.category == "HashC" {
             assert!(hints.len() == 12);
@@ -1031,19 +1044,29 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
             let (_, hint_script) = hint_hash_p(sig, sec_out, sec_in.clone(), HintInHashP{c: G1Affine::new_unchecked(p3x, p3y), hashc: hout.hasht});
             let bcs_script = bitcom_hash_p(pub_scripts_per_link_id, sec_out, sec_in.clone());
             let script = script!{
-                { hint_script }
+                { hint_script.clone() }
                 { bcs_script }
                 { ops_script }
             };
             let exec_result = execute_script(script);
+            if exec_result.success {
+                println!("success ");
+                return Some((sec_out.0, hint_script));
+            } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                for i in 0..exec_result.final_stack.len() {
+                    println!("{i:} {:?}", exec_result.final_stack.get(i));
+                }
+                panic!()
+            }
             assert!(!exec_result.success);
             assert!(exec_result.final_stack.len() == 1);
             //ScriptItem {category: String::from("P3Hash"), link_id: String::from("M31"), dependencies: String::from("GP3y,GP3x"), is_type_field: false},
         }
     }
+    None
 }
 
-pub fn evaluate(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, p2: G1Affine, p3: G1Affine, p4: G1Affine,q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine, q4: G2Affine, c: Fq12, s: Fq12, fixed_acc: ark_bn254::Fq12, ks: Vec<ark_bn254::Fr>, ks_vks: Vec<ark_bn254::G1Affine>) {
+pub fn evaluate(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, p2: G1Affine, p3: G1Affine, p4: G1Affine,q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine, q4: G2Affine, c: Fq12, s: Fq12, fixed_acc: ark_bn254::Fq12, ks: Vec<ark_bn254::Fr>, ks_vks: Vec<ark_bn254::G1Affine>) -> Option<(u32, bitcoin_script::Script)> {
     let (link_name_to_id, facc, tacc) = assign_link_ids();
     let mut aux_out_per_link: HashMap<String, HintOut> = HashMap::new();
     let pubmap = evaluate_public_params(sig, link_name_to_id.clone(), q2, q3, fixed_acc);
@@ -1053,8 +1076,12 @@ pub fn evaluate(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey
 
     evaluate_msm(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, ks.len(), ks_vks);
     
-    evaluate_pre_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link);
-    
+    let re = evaluate_pre_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link);
+    if re.is_some() {
+        println!("return outside");
+        return re;
+    }
+
     let (nt2, nt3) = evaluate_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, q2, q3, q2, q3);
     evaluate_post_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, nt2, nt3, q2, q3, facc.clone(), tacc);
 
@@ -1070,6 +1097,7 @@ pub fn evaluate(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey
             _ => {},
         }
     }
+    None
 }
 
 
@@ -1079,7 +1107,7 @@ mod test {
 
     use ark_ec::{AffineRepr, CurveGroup};
 
-    use crate::{bn254::{chunk_config::keygen, chunk_msm::try_msm}, groth16::offchain_checker::compute_c_wi, signatures::winternitz_compact};
+    use crate::{bn254::{chunk_config::keygen, chunk_msm::try_msm, chunk_utils::read_assertions_from_a_file}, groth16::offchain_checker::compute_c_wi, signatures::winternitz_compact};
 
     use super::*;
 
@@ -1185,7 +1213,22 @@ mod test {
 
         let pub_scripts_per_link_id = &keygen(master_secret);
         let mut sig = Sig { msk: Some(master_secret), cache: HashMap::new() };
-        evaluate(&mut sig, pub_scripts_per_link_id, p2, p3, p4, q2, q3, q4, c, s, fixed_acc, vec![pub_commit, ark_bn254::Fr::ONE], vec![vk.gamma_abc_g1[1], vk.gamma_abc_g1[0]]);
+        let res = evaluate(&mut sig, pub_scripts_per_link_id, p2, p3, p4, q2, q3, q4, c, s, fixed_acc, vec![pub_commit, pub_commit], vec![vk.gamma_abc_g1[1], vk.gamma_abc_g1[0]]);
+        if res.is_some() {
+            let res = res.unwrap();
+            let compiled = read_assertions_from_a_file("compile.json");
+            let compiled_script = compiled.get(&res.0).unwrap()[0].clone();
+            let hint_script = res.1;
+
+            println!("exec script {:?}", res.0);
+            let script = script!{
+                    { hint_script }
+                    { compiled_script }
+                };
+            let exec_result = execute_script(script);
+            println!("check execution {}", exec_result.success);
+        }
+
 
         // println!("corrupt");
         // // mock faulty data

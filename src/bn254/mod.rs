@@ -19,3 +19,4 @@ pub mod chunk_config;
 pub mod chunk_compile;
 pub mod chunk_evaluate;
 pub mod chunk_msm;
+pub mod chunk_utils;
