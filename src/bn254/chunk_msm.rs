@@ -1,14 +1,11 @@
 use std::collections::HashMap;
 
-use crate::bn254::chunk_primitves::{emulate_extern_hash_fps, emulate_fq_to_nibbles, emulate_fr_to_nibbles, unpack_limbs_to_nibbles};
-use crate::bn254::chunk_taps::tup_to_scr;
-use crate::bn254::curves::G1Affine;
-use crate::bn254::utils::{fq2_push_not_montgomery, fq_push_not_montgomery, hinted_affine_add_line};
-use crate::signatures::winternitz_compact::{checksig_verify_fq, WOTSPubKey};
+use crate::bn254::chunk_primitves::{emulate_extern_hash_fps, emulate_fr_to_nibbles, unpack_limbs_to_nibbles};
+use crate::bn254::chunk_taps::{tup_to_scr, wots_locking_script};
+use crate::bn254::utils::fq_push_not_montgomery;
+use crate::signatures::winternitz_compact::{WOTSPubKey};
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
-use bitcoin::opcodes::all::{ OP_1ADD, OP_2DROP, OP_ADD, OP_DEPTH, OP_DROP, OP_DUP, OP_ELSE, OP_ENDIF, OP_FROMALTSTACK, OP_NUMEQUAL, OP_PICK, OP_RETURN, OP_ROLL, OP_TOALTSTACK};
-use bitcoin::opcodes::OP_TRUE;
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
@@ -490,14 +487,14 @@ fn hint_msm(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInMSM,
     (hint_out, simulate_stack_input)
 }
 
-pub(crate) fn bitcom_msm(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_in: Vec<u32>) -> Script {
+pub(crate) fn bitcom_msm(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: Link, sec_in: Vec<Link>) -> Script {
     // if i == 0, sec_in.len() == num_pubs
     // if i > 0, sec_in.len() == num_pubs + 1
     script!{
-        {checksig_verify_fq(link_ids.get(&sec_out).unwrap().clone())} // hash_acc_out
+        {wots_locking_script(sec_out, link_ids)} // hash_acc_out
         {Fq::toaltstack()}
         for i in 0..sec_in.len() { // scalars, hash_acc_in
-            {checksig_verify_fq(link_ids.get(&sec_in[sec_in.len()-1-i]).unwrap().clone())}
+            {wots_locking_script(sec_in[sec_in.len()-1-i], link_ids)}
             {Fq::toaltstack()}
         }
     }
@@ -509,7 +506,7 @@ pub(crate) fn bitcom_msm(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: u32, sec_
 mod test {
     use std::collections::HashMap;
 
-    use crate::{bn254::{fq2::Fq2, utils::fr_push_not_montgomery}, signatures::{ winterntiz_compact_hash}};
+    use crate::{bn254::{fq2::Fq2, utils::fr_push_not_montgomery}, signatures::{ winternitz_compact, winternitz_compact_hash}};
 
     use super::*;
     use ark_bn254::G1Affine;
@@ -550,17 +547,28 @@ mod test {
             }
             sec_out = sec_in.last().unwrap() + 1;
             let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-            let pk = winterntiz_compact_hash::get_pub_key(&format!("{}{:04X}", msk, sec_out));
+            let pk = winternitz_compact_hash::get_pub_key(&format!("{}{:04X}", msk, sec_out));
             pub_scripts.insert(sec_out, pk);
-            for i in &sec_in {
-                let pk = winterntiz_compact_hash::get_pub_key(&format!("{}{:04X}", msk, i));
-                pub_scripts.insert(*i, pk);
+            for j in 0..sec_in.len() {
+                let i = &sec_in[j];
+                if j == pub_ins as usize {
+                    let pk = winternitz_compact_hash::get_pub_key(&format!("{}{:04X}", msk, i));
+                    pub_scripts.insert(*i, pk);                    
+                } else {
+                    let pk = winternitz_compact::get_pub_key(&format!("{}{:04X}", msk, i));
+                    pub_scripts.insert(*i, pk);
+                }
             }
-            let bitcomms_tapscript = bitcom_msm(&pub_scripts, sec_out, sec_in.clone());
+            let msec_out = (sec_out, false);
+            let mut msec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+            if msec_in.len() == pub_ins as usize + 1 {
+                let last = msec_in.pop().unwrap();
+                msec_in.push((last.0, false));
+            }
+            let bitcomms_tapscript = bitcom_msm(&pub_scripts, msec_out, msec_in.clone());
             let msm_ops = tap_msm(window, i, qs.clone());
             
-            let msec_out = (sec_out, true);
-            let msec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+
 
             let (aux, stack_data) = hint_msm(&mut sig, msec_out, msec_in.clone(), hint_in.clone(), i as usize, qs.clone());
 

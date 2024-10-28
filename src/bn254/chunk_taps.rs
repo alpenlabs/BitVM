@@ -2,7 +2,7 @@ use crate::bn254::chunk_primitves::{emulate_extern_hash_nibbles, emulate_fq_to_n
 use crate::bn254::fq6::Fq6;
 use crate::bn254::utils::{ fq2_push_not_montgomery, fq_push_not_montgomery, new_hinted_affine_add_line, new_hinted_affine_double_line, new_hinted_check_line_through_point, new_hinted_ell_by_constant_affine, new_hinted_x_from_eval_point, new_hinted_y_from_eval_point};
 use crate::signatures::winternitz_compact::{self, WOTSPubKey};
-use crate::signatures::winterntiz_compact_hash;
+use crate::signatures::winternitz_compact_hash;
 use ark_bn254::{Bn254, G1Affine, G2Affine};
 use ark_ec::pairing::Pairing;
 use ark_ff::{AdditiveGroup, Field, UniformRand, Zero};
@@ -118,7 +118,7 @@ pub(crate) fn wots_locking_script(link: Link, link_ids: &HashMap<u32, WOTSPubKey
         }
     } else {
         script!{
-            {winterntiz_compact_hash::checksig_verify_fq(link_ids.get(&link.0).unwrap().clone())}
+            {winternitz_compact_hash::checksig_verify_fq(link_ids.get(&link.0).unwrap().clone())}
         }
     }
 
@@ -392,7 +392,7 @@ pub(crate) fn tup_to_scr(sig: &mut Sig, tup: Vec<(Link, [u8;64])>) -> Vec<Script
                 sig.cache.insert(skey.0, v.clone());
                 v
             } else {
-                let v = winterntiz_compact_hash::sign(&format!("{}{:04X}", sig.msk.unwrap(), skey.0), elem[24..64].try_into().unwrap());
+                let v = winternitz_compact_hash::sign(&format!("{}{:04X}", sig.msk.unwrap(), skey.0), elem[24..64].try_into().unwrap());
                 sig.cache.insert(skey.0, v.clone());
                 v
             }
@@ -2978,7 +2978,7 @@ mod test {
     use test::winternitz_compact::{field_reconstruction, get_pub_key};
     use crate::bn254::chunk_primitves::{emulate_extern_hash_fps, emulate_extern_hash_nibbles, emulate_fq_to_nibbles, emulate_nibbles_to_limbs};
     use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq6_push_not_montgomery};
-    use crate::signatures::winterntiz_compact_hash;
+    use crate::signatures::winternitz_compact_hash;
     use ark_ff::Field;
 
 
@@ -3123,7 +3123,7 @@ mod test {
         let hash_c_scr = tap_initT4();
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = winterntiz_compact_hash::get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        let pk = winternitz_compact_hash::get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
             let pk = winternitz_compact::get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
@@ -3413,10 +3413,10 @@ pub_scripts.insert(*i, pk);
         let sec_in = vec![1];
         
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = winterntiz_compact_hash::get_pub_key(&format!("{}{:04X}", msk, sec_out));
+        let pk = winternitz_compact_hash::get_pub_key(&format!("{}{:04X}", msk, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = winterntiz_compact_hash::get_pub_key(&format!("{}{:04X}", msk, i));
+            let pk = winternitz_compact_hash::get_pub_key(&format!("{}{:04X}", msk, i));
             pub_scripts.insert(*i, pk);
         }
 
