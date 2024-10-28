@@ -4,11 +4,12 @@ use ark_bn254::g2::G2Affine;
 use ark_ec::bn::BnConfig;
 
 use crate::bn254::chunk_config::miller_config_gen;
-use crate::bn254::chunk_taps::{bitcom_add_eval_mul_for_fixed_Qs_with_frob, bitcom_dense_dense_mul0, bitcom_dense_dense_mul1, bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_initT4, bitcom_point_add_with_frob, bitcom_precompute_Px, bitcom_precompute_Py, bitcom_sparse_dense_mul, tap_add_eval_mul_for_fixed_Qs, tap_add_eval_mul_for_fixed_Qs_with_frob, tap_frob_fp12, tap_hash_c2, tap_point_add_with_frob, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, Link};
+use crate::bn254::chunk_msm::{bitcom_msm, tap_msm};
+use crate::bn254::chunk_taps::{bitcom_add_eval_mul_for_fixed_Qs_with_frob, bitcom_dense_dense_mul0, bitcom_dense_dense_mul1, bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_hash_p, bitcom_initT4, bitcom_point_add_with_frob, bitcom_precompute_Px, bitcom_precompute_Py, bitcom_sparse_dense_mul, tap_add_eval_mul_for_fixed_Qs, tap_add_eval_mul_for_fixed_Qs_with_frob, tap_frob_fp12, tap_hash_c2, tap_hash_p, tap_point_add_with_frob, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, Link};
 use crate::bn254::{ chunk_taps};
 use crate::signatures::winternitz_compact::{WOTSPubKey};
 use crate::signatures::wots::{wots160, wots256};
-use super::chunk_config::{assign_link_ids, groth16_config_gen, premiller_config_gen, post_miller_config_gen, pre_miller_config_gen, public_params_config_gen};
+use super::chunk_config::{assign_link_ids, groth16_config_gen, msm_config_gen, post_miller_config_gen, pre_miller_config_gen, premiller_config_gen, public_params_config_gen};
 use super::{chunk_taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4}};
 
 use crate::{
@@ -248,6 +249,14 @@ fn compile_pre_miller_circuit(link_ids: &HashMap<u32, WOTSPubKey>, id_map: HashM
                     {sc2}
                     {sc1}
             });
+        } else if row.category == "P3Hash" {
+            let sc1 = tap_hash_p();
+            let sc2 = bitcom_hash_p(link_ids, sec_out, sec_in);
+            scripts.push(
+                script!{
+                    {sc2}
+                    {sc1}
+            });
         } else {
             panic!()
         }
@@ -371,6 +380,32 @@ fn compile_post_miller_circuit(link_ids: &HashMap<u32, WOTSPubKey>, id_map: Hash
     return scripts;
 }
 
+fn compile_msm_circuit(link_ids: &HashMap<u32, WOTSPubKey>, id_map: HashMap<String, (u32, bool)>, qs: Vec<ark_bn254::G1Affine>) -> Vec<Script> {
+    let rows = msm_config_gen(String::from("k0,k1"));
+
+    let mut msm_tap_index = 0;
+    let mut scripts = vec![];
+    for row in rows {
+        let sec_in: Vec<Link> = row.dependencies.split(",").into_iter().map(|s| id_map.get(s).unwrap().clone()).collect();
+        println!("row ID {:?}", row.link_id);
+        let sec_out = id_map.get(&row.link_id).unwrap().clone();
+
+        if row.category == "MSM" {
+            let sc1 = tap_msm(8, msm_tap_index, qs.clone());
+            let sc2 = bitcom_msm(link_ids, sec_out,sec_in);
+            scripts.push(
+                script!{
+                    {sc2}
+                    {sc1}
+            });
+        } else {
+            panic!()
+        }
+        msm_tap_index += 1;
+    }
+    scripts
+}
+
 pub struct AssertPublicKeys {
     pub p160: HashMap<u32, wots160::PublicKey>,
     pub p256: HashMap<u32, wots256::PublicKey>,
@@ -447,13 +482,16 @@ pub fn generate_assertion_spending_key_lengths(apk: &AssertPublicKeys) -> Vec<us
 
 struct Vkey {
     q2: G2Affine, 
-    q3: G2Affine
+    q3: G2Affine,
+    p3vk: Vec<ark_bn254::G1Affine>,
 }
 
 fn compile(vk: Vkey, link_ids: &HashMap<u32, WOTSPubKey>) -> Vec<Script> {
     let (q2, q3) = (vk.q2, vk.q3);
     let mut scrs: Vec<Script> = vec![];
     let (id_map, facc, tacc) = assign_link_ids();
+    let scr = compile_msm_circuit(&link_ids, id_map.clone(), vk.p3vk);
+    scrs.extend(scr);
     let scr = compile_pre_miller_circuit(&link_ids, id_map.clone());
     scrs.extend(scr);
     let (scr, t2, t3) = compile_miller_circuit(&link_ids, id_map.clone(), q2, q3);
@@ -478,10 +516,12 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let q2 = ark_bn254::G2Affine::rand(&mut prng);
         let q3 = ark_bn254::G2Affine::rand(&mut prng);
+        let vka = ark_bn254::G1Affine::rand(&mut prng);
+        let vkb = ark_bn254::G1Affine::rand(&mut prng);
         let sec_key = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
         let link_ids = keygen(sec_key);
-        let vk = Vkey { q2, q3};
+        let vk = Vkey { q2, q3, p3vk: vec![vka, vkb]};
         let bcs = compile(vk, &link_ids);
 
        // let scrs= compile(sec_key, );

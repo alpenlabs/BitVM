@@ -200,6 +200,43 @@ mod tests {
     use super::{wots160, wots256, wots32};
 
     #[test]
+    fn test_wots() {
+        let secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let public_key = wots32::generate_public_key(&secret);
+
+        // let msg = "a0b1d2c3";
+        // let msg_bytes = hex::decode(&msg).unwrap();
+
+        const MESSAGE: [u8; 64] = [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
+            1, 2, 3, 4,
+        ];
+        let msg_bytes = MESSAGE.to_vec();
+
+        let script = script! {
+            { wots256::compact::sign(&secret, &msg_bytes) }
+        };
+
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:3} {:?}", res.final_stack.get(i));
+        }
+
+        println!("NEXT THING");
+
+        let script = script! {
+            { wots256::sign(&secret, &msg_bytes) }
+        };
+
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:3} {:?}", res.final_stack.get(i));
+        }
+    }
+
+    #[test]
     fn test_wots32() {
         let secret = "a01b23c45d67e89f";
         let public_key = wots32::generate_public_key(&secret);

@@ -3038,7 +3038,7 @@ mod test {
     use num_bigint::RandomBits;
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha20Rng;
-    use test::winternitz_compact::{field_reconstruction, get_pub_key};
+    use test::winternitz_compact::{get_pub_key};
     use crate::bn254::chunk_primitves::{emulate_extern_hash_fps, emulate_extern_hash_nibbles, emulate_fq_to_nibbles, emulate_nibbles_to_limbs};
     use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq6_push_not_montgomery};
     use crate::signatures::winternitz_compact_hash;
