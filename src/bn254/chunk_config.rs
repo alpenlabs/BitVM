@@ -86,7 +86,8 @@ pub(crate) fn msm_config_gen(pub_ins: String) -> Vec<ScriptItem> {
         ScriptItem {category: String::from("MSM"), link_id: String::from("M0"), dependencies: pub_ins.clone(), is_type_field: false}, // k0, k1, k2
     ];
     for i in 1..32 {
-        items.push(ScriptItem {category: String::from("MSM"), link_id: String::from(format!("M{}", i)), dependencies: String::from(format!("{:?},M{}", &pub_ins, i-1)), is_type_field: false}) // k0,k1,k2,M
+        
+        items.push(ScriptItem {category: String::from("MSM"), link_id: String::from(format!("M{}", i)), dependencies: String::from(format!("{pub_ins},M{}", i-1)), is_type_field: false}) // k0,k1,k2,M
     }
     items
 }

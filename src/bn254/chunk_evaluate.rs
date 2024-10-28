@@ -3,6 +3,7 @@ use std::collections::{HashMap};
 use ark_bn254::g2::G2Affine;
 use ark_bn254::{Fq12, G1Affine};
 use ark_ff::{Field};
+use bitcoin::opcodes::OP_TRUE;
 use bitcoin_script::script;
 
 use crate::bn254::chunk_compile::ATE_LOOP_COUNT;
@@ -797,11 +798,13 @@ fn evaluate_msm(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey
     let tables = msm_config_gen(String::from("k0,k1"));
     let mut msm_tap_index = 0;
     for row in tables {
+        println!("itr {:?} ID {:?} deps {:?}", msm_tap_index, row.link_id, row.dependencies);
         let sec_in: Vec<Link> = row.dependencies.split(",").into_iter().map(|s| link_name_to_id.get(s).unwrap().clone()).collect();
         let hints: Vec<HintOut> = row.dependencies.split(",").into_iter().map(|s| aux_output_per_link.get(s).unwrap().clone()).collect();
         let sec_out = link_name_to_id.get(&row.link_id).unwrap().clone();
+        println!(" {} ID {:?} deps {:?}", row.category, sec_out, sec_in);
         if row.category == "MSM" {
-            assert!(hints.len() == pub_ins || hints.len() == pub_ins + 1);
+            assert!((hints.len() == pub_ins && msm_tap_index == 0) || (hints.len() == pub_ins + 1 && msm_tap_index > 0));
             let mut scalars = vec![];
             for i in 0..pub_ins {
                 let x = match hints[i] {
@@ -829,7 +832,7 @@ fn evaluate_msm(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey
             let exec_result = execute_script(script);
             assert!(!exec_result.success);
             assert!(exec_result.final_stack.len() == 1);
-
+            
             aux_output_per_link.insert(row.link_id, HintOut::MSM(hint_res));
         }
         msm_tap_index += 1;
@@ -1020,9 +1023,11 @@ pub fn evaluate(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey
     aux_out_per_link.extend(grothmap);
 
     evaluate_pre_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link);
+    evaluate_msm(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, ks.len(), ks_vks);
+    
     let (nt2, nt3) = evaluate_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, q2, q3, q2, q3);
     evaluate_post_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, nt2, nt3, q2, q3, facc.clone(), tacc);
-    evaluate_msm(sig, pub_scripts_per_link_id, link_name_to_id, &mut aux_out_per_link, ks.len(), ks_vks);
+
     let hint = aux_out_per_link.get("fin");
     if hint.is_none() {
         println!("debug hintmap {:?}", aux_out_per_link);
@@ -1044,7 +1049,7 @@ mod test {
 
     use ark_ec::{AffineRepr, CurveGroup};
 
-    use crate::{bn254::chunk_config::keygen, groth16::offchain_checker::compute_c_wi, signatures::winternitz_compact};
+    use crate::{bn254::{chunk_config::keygen, chunk_msm::try_msm}, groth16::offchain_checker::compute_c_wi, signatures::winternitz_compact};
 
     use super::*;
 
@@ -1117,12 +1122,12 @@ mod test {
         let (pk, vk) = Groth16::<E>::setup(circuit, &mut rng).unwrap();
     
 
-        let c = circuit.a.unwrap() * circuit.b.unwrap();
+        let pub_commit = circuit.a.unwrap() * circuit.b.unwrap();
 
         let proof = Groth16::<E>::prove(&pk, circuit, &mut rng).unwrap();
     
 
-        let (_, msm_g1) = Verifier::prepare_inputs(&vec![c], &vk);
+        let (_, msm_g1) = Verifier::prepare_inputs(&vec![pub_commit], &vk);
         
         // G1/G2 points for pairings
         let (p1, p2, p3, p4) = (msm_g1.into_affine(), proof.c, vk.alpha_g1, proof.a);
@@ -1132,9 +1137,9 @@ mod test {
             -vk.beta_g2,
             proof.b,
         );
-        // p1, q1: MSM
-        // p3, q3: fixed, precomputed
-        // 
+
+        println!("expected msm {:?}", p1);
+
 
         println!();
         println!();
@@ -1148,9 +1153,10 @@ mod test {
 
         let master_secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
+
         let pub_scripts_per_link_id = &keygen(master_secret);
         let mut sig = Sig { msk: Some(master_secret), cache: HashMap::new() };
-        evaluate(&mut sig, pub_scripts_per_link_id, p1, p2, p4, q1, q2, q4, c, s, fixed_acc, vec![], vec![]);
+        evaluate(&mut sig, pub_scripts_per_link_id, p1, p2, p4, q1, q2, q4, c, s, fixed_acc, vec![pub_commit, ark_bn254::Fr::ONE], vec![vk.gamma_abc_g1[1], vk.gamma_abc_g1[0]]);
 
         // println!("corrupt");
         // // mock faulty data
