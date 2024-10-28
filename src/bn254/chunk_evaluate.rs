@@ -4,7 +4,6 @@ use ark_bn254::g2::G2Affine;
 use ark_bn254::{Fq12, G1Affine};
 use ark_ff::{Field};
 use bitcoin::opcodes::OP_TRUE;
-use bitcoin::Script;
 use bitcoin_script::script;
 
 use crate::bn254::chunk_compile::ATE_LOOP_COUNT;
@@ -20,9 +19,9 @@ use super::chunk_config::{assign_link_ids, groth16_config_gen, msm_config_gen, p
 use super::chunk_primitves::emulate_fq_to_nibbles;
 use super::chunk_taps::{tup_to_scr, HintOut, Sig};
 use super::{chunk_taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4}};
+use crate::treepp::*;
 
-
-fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, link_name_to_id: HashMap<String, (u32, bool)>, aux_output_per_link: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine, t3: ark_bn254::G2Affine, q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine) -> (G2Affine, G2Affine) {
+fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, link_name_to_id: HashMap<String, (u32, bool)>, aux_output_per_link: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine, t3: ark_bn254::G2Affine, q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine) -> (G2Affine, G2Affine, Option<(u32, Script)>) {
     // vk: (G1Affine, G2Affine, G2Affine, G2Affine)
     // groth16 is 1 G2 and 2 G1, P4, Q4, 
     // e(A,B)⋅e(vkα ,vkβ)=e(C,vkδ)⋅e(vkγ_ABC,vkγ)
@@ -72,11 +71,20 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let ops_script = tap_squaring();
                     let bcs_script = bitcom_squaring(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script!{
-                        { hint_script }
+                       { hint_script.clone() }
                         { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
+                    if exec_result.success {
+                        println!("success ");
+                        return (nt2, nt3, Some((sec_out.0, hint_script)));
+                    } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                        for i in 0..exec_result.final_stack.len() {
+                            println!("{i:} {:?}", exec_result.final_stack.get(i));
+                        }
+                        panic!()
+                    }
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
                 aux_output_per_link.insert(block.link_id.clone(), HintOut::Squaring(hintout));
@@ -111,11 +119,20 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let ops_script = tap_point_ops(*bit);
                     let bcs_script = bitcom_point_ops(pub_scripts_per_link_id, sec_out, sec_in.clone(), *bit);
                     let script = script!{
-                        { hint_script }
+                       { hint_script.clone() }
                         { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
+                    if exec_result.success {
+                        println!("success ");
+                        return (nt2, nt3, Some((sec_out.0, hint_script)));
+                    } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                        for i in 0..exec_result.final_stack.len() {
+                            println!("{i:} {:?}", exec_result.final_stack.get(i));
+                        }
+                        panic!()
+                    }
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
                 aux_output_per_link.insert(block.link_id.clone(), HintOut::DblAdd(hintout));
@@ -149,11 +166,20 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let ops_script = tap_point_dbl();
                     let bcs_script = bitcom_point_dbl(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script!{
-                        { hint_script }
+                       { hint_script.clone() }
                         { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
+                    if exec_result.success {
+                        println!("success ");
+                        return (nt2, nt3, Some((sec_out.0, hint_script)));
+                    } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                        for i in 0..exec_result.final_stack.len() {
+                            println!("{i:} {:?}", exec_result.final_stack.get(i));
+                        }
+                        panic!()
+                    }
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
                 aux_output_per_link.insert(block.link_id.clone(), HintOut::Double(hintout));
@@ -177,11 +203,20 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let ops_script = tap_sparse_dense_mul( true);
                     let bcs_script = bitcom_sparse_dense_mul(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script!{
-                        { hint_script }
+                       { hint_script.clone() }
                         { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
+                    if exec_result.success {
+                        println!("success ");
+                        return (nt2, nt3, Some((sec_out.0, hint_script)));
+                    } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                        for i in 0..exec_result.final_stack.len() {
+                            println!("{i:} {:?}", exec_result.final_stack.get(i));
+                        }
+                        panic!()
+                    }
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
                 aux_output_per_link.insert(block.link_id.clone(), HintOut::SparseDenseMul(sd_hint));
@@ -203,11 +238,20 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let (ops_script,_,_) = tap_double_eval_mul_for_fixed_Qs(nt2, nt3);
                     let bcs_script = bitcom_double_eval_mul_for_fixed_Qs(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script!{
-                        { hint_script }
+                       { hint_script.clone() }
                         { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
+                    if exec_result.success {
+                        println!("success ");
+                        return (nt2, nt3, Some((sec_out.0, hint_script)));
+                    } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                        for i in 0..exec_result.final_stack.len() {
+                            println!("{i:} {:?}", exec_result.final_stack.get(i));
+                        }
+                        panic!()
+                    }
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
                 nt2 = hint_out.t2;
@@ -227,11 +271,20 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let ops_script = tap_dense_dense_mul0(false);
                     let bcs_script = bitcom_dense_dense_mul0(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script!{
-                        { hint_script }
+                       { hint_script.clone() }
                         { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
+                    if exec_result.success {
+                        println!("success ");
+                        return (nt2, nt3, Some((sec_out.0, hint_script)));
+                    } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                        for i in 0..exec_result.final_stack.len() {
+                            println!("{i:} {:?}", exec_result.final_stack.get(i));
+                        }
+                        panic!()
+                    }
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
                 aux_output_per_link.insert(block.link_id.clone(), HintOut::DenseMul0(hint_out));
@@ -249,11 +302,20 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let ops_script = tap_dense_dense_mul1( false);
                     let bcs_script = bitcom_dense_dense_mul1(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script!{
-                        { hint_script }
+                       { hint_script.clone() }
                         { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
+                    if exec_result.success {
+                        println!("success ");
+                        return (nt2, nt3, Some((sec_out.0, hint_script)));
+                    } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                        for i in 0..exec_result.final_stack.len() {
+                            println!("{i:} {:?}", exec_result.final_stack.get(i));
+                        }
+                        panic!()
+                    }
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
                 aux_output_per_link.insert(block.link_id.clone(), HintOut::DenseMul1(hint_out));
@@ -272,11 +334,20 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let ops_script = tap_dense_dense_mul0(false);
                     let bcs_script = bitcom_dense_dense_mul0(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script!{
-                        { hint_script }
+                       { hint_script.clone() }
                         { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
+                    if exec_result.success {
+                        println!("success ");
+                        return (nt2, nt3, Some((sec_out.0, hint_script)));
+                    } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                        for i in 0..exec_result.final_stack.len() {
+                            println!("{i:} {:?}", exec_result.final_stack.get(i));
+                        }
+                        panic!()
+                    }
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
                 aux_output_per_link.insert(block.link_id.clone(), HintOut::DenseMul0(hint_out));
@@ -295,11 +366,20 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let ops_script = tap_dense_dense_mul1( false);
                     let bcs_script = bitcom_dense_dense_mul1(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script!{
-                        { hint_script }
+                       { hint_script.clone() }
                         { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
+                    if exec_result.success {
+                        println!("success ");
+                        return (nt2, nt3, Some((sec_out.0, hint_script)));
+                    } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                        for i in 0..exec_result.final_stack.len() {
+                            println!("{i:} {:?}", exec_result.final_stack.get(i));
+                        }
+                        panic!()
+                    }
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
                 aux_output_per_link.insert(block.link_id.clone(), HintOut::DenseMul1(hint_out));
@@ -319,11 +399,20 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let ops_script = tap_sparse_dense_mul(false);
                     let bcs_script = bitcom_sparse_dense_mul(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script!{
-                        { hint_script }
+                       { hint_script.clone() }
                         { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
+                    if exec_result.success {
+                        println!("success ");
+                        return (nt2, nt3, Some((sec_out.0, hint_script)));
+                    } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                        for i in 0..exec_result.final_stack.len() {
+                            println!("{i:} {:?}", exec_result.final_stack.get(i));
+                        }
+                        panic!()
+                    }
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
                 aux_output_per_link.insert(block.link_id.clone(), HintOut::SparseDenseMul(sd_hint));
@@ -345,11 +434,20 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let (ops_script, _, _) = tap_add_eval_mul_for_fixed_Qs(nt2, nt3, q2, q3, *bit);
                     let bcs_script = bitcom_add_eval_mul_for_fixed_Qs(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script!{
-                        { hint_script }
+                       { hint_script.clone() }
                         { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
+                    if exec_result.success {
+                        println!("success ");
+                        return (nt2, nt3, Some((sec_out.0, hint_script)));
+                    } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                        for i in 0..exec_result.final_stack.len() {
+                            println!("{i:} {:?}", exec_result.final_stack.get(i));
+                        }
+                        panic!()
+                    }
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
                 nt2 = hint_out.t2;
@@ -369,11 +467,20 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let ops_script = tap_dense_dense_mul0( false);
                     let bcs_script = bitcom_dense_dense_mul0(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script!{
-                        { hint_script }
+                       { hint_script.clone() }
                         { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
+                    if exec_result.success {
+                        println!("success ");
+                        return (nt2, nt3, Some((sec_out.0, hint_script)));
+                    } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                        for i in 0..exec_result.final_stack.len() {
+                            println!("{i:} {:?}", exec_result.final_stack.get(i));
+                        }
+                        panic!()
+                    }
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
                 aux_output_per_link.insert(block.link_id.clone(), HintOut::DenseMul0(hint_out));
@@ -391,11 +498,20 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     let ops_script = tap_dense_dense_mul1( false);
                     let bcs_script = bitcom_dense_dense_mul1(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script!{
-                        { hint_script }
+                       { hint_script.clone() }
                         { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
+                    if exec_result.success {
+                        println!("success ");
+                        return (nt2, nt3, Some((sec_out.0, hint_script)));
+                    } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                        for i in 0..exec_result.final_stack.len() {
+                            println!("{i:} {:?}", exec_result.final_stack.get(i));
+                        }
+                        panic!()
+                    }
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
                 aux_output_per_link.insert(block.link_id.clone(), HintOut::DenseMul1(hint_out));
@@ -406,11 +522,11 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
         }
         itr += 1;
     }   
-    (nt2, nt3)
+    (nt2, nt3, None)
 
 }
 
-fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>,  link_name_to_id: HashMap<String, (u32, bool)>, aux_output_per_link: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine,  t3: ark_bn254::G2Affine,  q2: ark_bn254::G2Affine,  q3: ark_bn254::G2Affine, facc: String, tacc: String )  {
+fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>,  link_name_to_id: HashMap<String, (u32, bool)>, aux_output_per_link: &mut HashMap<String, HintOut>, t2: ark_bn254::G2Affine,  t3: ark_bn254::G2Affine,  q2: ark_bn254::G2Affine,  q3: ark_bn254::G2Affine, facc: String, tacc: String ) -> Option<(u32, Script)>  {
     let tables = post_miller_config_gen(facc,tacc);
 
     let mut nt2 = t2;
@@ -437,11 +553,20 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 let ops_script = tap_frob_fp12(power);
                 let bcs_script = bitcom_frob_fp12(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script!{
-                    { hint_script }
+                    { hint_script.clone() }
                     { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
+                if exec_result.success {
+                    println!("success ");
+                    return Some((sec_out.0, hint_script));
+                } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                    for i in 0..exec_result.final_stack.len() {
+                        println!("{i:} {:?}", exec_result.final_stack.get(i));
+                    }
+                    panic!()
+                }
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             aux_output_per_link.insert(row.link_id, HintOut::FrobFp12(h));
@@ -466,11 +591,20 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 let ops_script = tap_dense_dense_mul0( check_is_id);
                 let bcs_script = bitcom_dense_dense_mul0(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script!{
-                    { hint_script }
+                    { hint_script.clone() }
                     { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
+                if exec_result.success {
+                    println!("success ");
+                    return Some((sec_out.0, hint_script));
+                } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                    for i in 0..exec_result.final_stack.len() {
+                        println!("{i:} {:?}", exec_result.final_stack.get(i));
+                    }
+                    panic!()
+                }
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             aux_output_per_link.insert(row.link_id.clone(), HintOut::DenseMul0(hint_out));
@@ -495,11 +629,20 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 let ops_script = tap_dense_dense_mul1(check_is_id);
                 let bcs_script = bitcom_dense_dense_mul1(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script!{
-                    { hint_script }
+                    { hint_script.clone() }
                     { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
+                if exec_result.success {
+                    println!("success ");
+                    return Some((sec_out.0, hint_script));
+                } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                    for i in 0..exec_result.final_stack.len() {
+                        println!("{i:} {:?}", exec_result.final_stack.get(i));
+                    }
+                    panic!()
+                }
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             aux_output_per_link.insert(row.link_id.clone(), HintOut::DenseMul1(hint_out));
@@ -517,11 +660,20 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 let ops_script = tap_dense_dense_mul0(false);
                 let bcs_script = bitcom_dense_dense_mul0(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script!{
-                    { hint_script }
+                    { hint_script.clone() }
                     { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
+                if exec_result.success {
+                    println!("success ");
+                    return Some((sec_out.0, hint_script));
+                } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                    for i in 0..exec_result.final_stack.len() {
+                        println!("{i:} {:?}", exec_result.final_stack.get(i));
+                    }
+                    panic!()
+                }
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             aux_output_per_link.insert(row.link_id.clone(), HintOut::DenseMul0(hint_out));
@@ -539,11 +691,20 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 let ops_script = tap_dense_dense_mul1(false);
                 let bcs_script = bitcom_dense_dense_mul1(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script!{
-                    { hint_script }
+                    { hint_script.clone() }
                     { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
+                if exec_result.success {
+                    println!("success ");
+                    return Some((sec_out.0, hint_script));
+                } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                    for i in 0..exec_result.final_stack.len() {
+                        println!("{i:} {:?}", exec_result.final_stack.get(i));
+                    }
+                    panic!()
+                }
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             aux_output_per_link.insert(row.link_id.clone(), HintOut::DenseMul1(hint_out));
@@ -575,13 +736,22 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                     let ops_script = tap_point_add_with_frob(1);
                     let bcs_script = bitcom_point_add_with_frob(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script!{
-                        { hint_script }
+                        { hint_script.clone() }
                         { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
+                    if exec_result.success {
+                        println!("success ");
+                        return Some((sec_out.0, hint_script));
+                    } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                        for i in 0..exec_result.final_stack.len() {
+                            println!("{i:} {:?}", exec_result.final_stack.get(i));
+                        }
+                        panic!()
+                    }
                     assert!(!exec_result.success);
-                assert!(exec_result.final_stack.len() == 1);
+                    assert!(exec_result.final_stack.len() == 1);
                 aux_output_per_link.insert(row.link_id.clone(), HintOut::Add(hintout));
             } else if row.category == "Add2" {
                 let (hintout, hint_script) = match hints_out[0].clone() {
@@ -595,10 +765,19 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                     let bcs_script = bitcom_point_add_with_frob(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script!{
                         { hint_script.clone() }
-                        { bcs_script.clone() }
+                        { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
+                    if exec_result.success {
+                        println!("success ");
+                        return Some((sec_out.0, hint_script));
+                    } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                        for i in 0..exec_result.final_stack.len() {
+                            println!("{i:} {:?}", exec_result.final_stack.get(i));
+                        }
+                        panic!()
+                    }
                     assert!(!exec_result.success);
                     assert!(exec_result.final_stack.len() == 1);
                 aux_output_per_link.insert(row.link_id.clone(), HintOut::Add(hintout));
@@ -619,11 +798,20 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 let ops_script = tap_sparse_dense_mul(false);
                 let bcs_script = bitcom_sparse_dense_mul(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script!{
-                    { hint_script }
+                    { hint_script.clone() }
                     { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
+                if exec_result.success {
+                    println!("success ");
+                    return Some((sec_out.0, hint_script));
+                } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                    for i in 0..exec_result.final_stack.len() {
+                        println!("{i:} {:?}", exec_result.final_stack.get(i));
+                    }
+                    panic!()
+                }
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             aux_output_per_link.insert(row.link_id.clone(), HintOut::SparseDenseMul(sd_hint));
@@ -646,11 +834,20 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                     let (ops_script, _, _) = tap_add_eval_mul_for_fixed_Qs_with_frob( nt2, nt3, q2, q3, 1);
                     let bcs_script = bitcom_add_eval_mul_for_fixed_Qs_with_frob(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script!{
-                        { hint_script }
+                        { hint_script.clone() }
                         { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
+                    if exec_result.success {
+                        println!("success ");
+                        return Some((sec_out.0, hint_script));
+                    } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                        for i in 0..exec_result.final_stack.len() {
+                            println!("{i:} {:?}", exec_result.final_stack.get(i));
+                        }
+                        panic!()
+                    }
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
                 nt2 = hint_out.t2;
@@ -661,11 +858,20 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                     let (ops_script, _, _) = tap_add_eval_mul_for_fixed_Qs_with_frob( nt2, nt3, q2, q3, -1);
                     let bcs_script = bitcom_add_eval_mul_for_fixed_Qs_with_frob(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script!{
-                        { hint_script }
+                        { hint_script.clone() }
                         { bcs_script }
                         { ops_script }
                     };
                     let exec_result = execute_script(script);
+                    if exec_result.success {
+                        println!("success ");
+                        return Some((sec_out.0, hint_script));
+                    } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                        for i in 0..exec_result.final_stack.len() {
+                            println!("{i:} {:?}", exec_result.final_stack.get(i));
+                        }
+                        panic!()
+                    }
                     assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
                 nt2 = hint_out.t2;
@@ -674,6 +880,8 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
             }
         } 
     }
+
+    None
 }
 
 fn evaluate_public_params(sig: &mut Sig, link_name_to_id: HashMap<String, (u32, bool)>, q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine, fixed_acc: ark_bn254::Fq12) -> HashMap<String, HintOut> {
@@ -831,9 +1039,8 @@ fn evaluate_msm(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey
                 { ops_script }
             };
             let exec_result = execute_script(script);
-            assert!(!exec_result.success);
-            assert!(exec_result.final_stack.len() == 1);
             if exec_result.success {
+                println!("success ");
                 return Some((sec_out.0, hint_script));
             } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                 for i in 0..exec_result.final_stack.len() {
@@ -841,6 +1048,8 @@ fn evaluate_msm(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey
                 }
                 panic!()
             }
+            assert!(!exec_result.success);
+            assert!(exec_result.final_stack.len() == 1);
 
             aux_output_per_link.insert(row.link_id, HintOut::MSM(hint_res));
         }
@@ -872,11 +1081,20 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 let ops_script = tap_initT4();
                 let bcs_script = bitcom_initT4(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script!{
-                    { hint_script }
+                    { hint_script.clone() }
                     { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
+                if exec_result.success {
+                    println!("success ");
+                    return Some((sec_out.0, hint_script));
+                } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                    for i in 0..exec_result.final_stack.len() {
+                        println!("{i:} {:?}", exec_result.final_stack.get(i));
+                    }
+                    panic!()
+                }
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
 
@@ -891,11 +1109,20 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 let ops_script = tap_precompute_Py();
                 let bcs_script = bitcom_precompute_Py(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script!{
-                    { hint_script }
+                    { hint_script.clone() }
                     { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
+                if exec_result.success {
+                    println!("success ");
+                    return Some((sec_out.0, hint_script));
+                } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                    for i in 0..exec_result.final_stack.len() {
+                        println!("{i:} {:?}", exec_result.final_stack.get(i));
+                    }
+                    panic!()
+                }
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
 
@@ -914,11 +1141,20 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 let ops_script = tap_precompute_Px();
                 let bcs_script = bitcom_precompute_Px(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script!{
-                    { hint_script }
+                    { hint_script.clone() }
                     { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
+                if exec_result.success {
+                    println!("success ");
+                    return Some((sec_out.0, hint_script));
+                } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                    for i in 0..exec_result.final_stack.len() {
+                        println!("{i:} {:?}", exec_result.final_stack.get(i));
+                    }
+                    panic!()
+                }
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
 
@@ -937,11 +1173,20 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 let ops_script = tap_hash_c();
                 let bcs_script = bitcom_hash_c(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script!{
-                    { hint_script }
+                    { hint_script.clone() }
                     { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
+                if exec_result.success {
+                    println!("success ");
+                    return Some((sec_out.0, hint_script));
+                } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                    for i in 0..exec_result.final_stack.len() {
+                        println!("{i:} {:?}", exec_result.final_stack.get(i));
+                    }
+                    panic!()
+                }
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             if !aux_output_per_link.contains_key(&row.link_id) {
@@ -957,11 +1202,20 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 let ops_script = tap_hash_c2();
                 let bcs_script = bitcom_hash_c2(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script!{
-                    { hint_script }
+                    { hint_script.clone() }
                     { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
+                if exec_result.success {
+                    println!("success ");
+                    return Some((sec_out.0, hint_script));
+                } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                    for i in 0..exec_result.final_stack.len() {
+                        println!("{i:} {:?}", exec_result.final_stack.get(i));
+                    }
+                    panic!()
+                }
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             if !aux_output_per_link.contains_key(&row.link_id) {
@@ -985,11 +1239,20 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 let ops_script = tap_dense_dense_mul0(true);
                 let bcs_script = bitcom_dense_dense_mul0(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script!{
-                    { hint_script }
+                    { hint_script.clone() }
                     {bcs_script}
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
+                if exec_result.success {
+                    println!("success ");
+                    return Some((sec_out.0, hint_script));
+                } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                    for i in 0..exec_result.final_stack.len() {
+                        println!("{i:} {:?}", exec_result.final_stack.get(i));
+                    }
+                    panic!()
+                }
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             aux_output_per_link.insert(row.link_id, HintOut::DenseMul0(c));
@@ -1015,11 +1278,20 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 let ops_script = tap_dense_dense_mul1(true);
                 let bcs_script = bitcom_dense_dense_mul1(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script!{
-                    { hint_script }
+                    { hint_script.clone() }
                     { bcs_script }
                     { ops_script }
                 };
                 let exec_result = execute_script(script);
+                if exec_result.success {
+                    println!("success ");
+                    return Some((sec_out.0, hint_script));
+                } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
+                    for i in 0..exec_result.final_stack.len() {
+                        println!("{i:} {:?}", exec_result.final_stack.get(i));
+                    }
+                    panic!()
+                }
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             aux_output_per_link.insert(row.link_id, HintOut::DenseMul1(hout));
@@ -1074,16 +1346,28 @@ pub fn evaluate(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey
     let grothmap = evaluate_groth16_params(sig, link_name_to_id.clone(), p2, p3, p4, q4, c, s, ks.clone());
     aux_out_per_link.extend(grothmap);
 
-    evaluate_msm(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, ks.len(), ks_vks);
-    
+    let re = evaluate_msm(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, ks.len(), ks_vks);
+    if re.is_some() {
+        println!("return outside");
+        return re;
+    }
+
     let re = evaluate_pre_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link);
     if re.is_some() {
         println!("return outside");
         return re;
     }
 
-    let (nt2, nt3) = evaluate_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, q2, q3, q2, q3);
-    evaluate_post_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, nt2, nt3, q2, q3, facc.clone(), tacc);
+    let (nt2, nt3, re) = evaluate_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, q2, q3, q2, q3);
+    if re.is_some() {
+        println!("return outside");
+        return re;
+    }
+    let re = evaluate_post_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, nt2, nt3, q2, q3, facc.clone(), tacc);
+    if re.is_some() {
+        println!("return outside");
+        return re;
+    }
 
     let hint = aux_out_per_link.get("fin");
     if hint.is_none() {
@@ -1107,7 +1391,7 @@ mod test {
 
     use ark_ec::{AffineRepr, CurveGroup};
 
-    use crate::{bn254::{chunk_config::keygen, chunk_msm::try_msm, chunk_utils::read_assertions_from_a_file}, groth16::offchain_checker::compute_c_wi, signatures::winternitz_compact};
+    use crate::{bn254::{chunk_config::keygen, chunk_msm::try_msm, chunk_utils::read_assertions_from_a_file}, groth16::offchain_checker::compute_c_wi, signatures::{winternitz, winternitz_compact, winternitz_hash}};
 
     use super::*;
 
@@ -1212,8 +1496,13 @@ mod test {
 
 
         let pub_scripts_per_link_id = &keygen(master_secret);
-        let mut sig = Sig { msk: Some(master_secret), cache: HashMap::new() };
-        let res = evaluate(&mut sig, pub_scripts_per_link_id, p2, p3, p4, q2, q3, q4, c, s, fixed_acc, vec![pub_commit, pub_commit], vec![vk.gamma_abc_g1[1], vk.gamma_abc_g1[0]]);
+        let mut assertion= read_assertions_from_a_file("assertion.json");
+        let index_to_corrupt = 645;
+        let corrup_scr = winternitz_hash::sign_digits(&format!("{}{:04X}", master_secret, index_to_corrupt), [1u8;40]);
+        assertion.insert(index_to_corrupt, corrup_scr);
+        let mut sig = Sig { msk: None, cache: assertion };
+
+        let res = evaluate(&mut sig, pub_scripts_per_link_id, p2, p3, p4, q2, q3, q4, c, s, fixed_acc, vec![pub_commit, ark_bn254::Fr::ONE], vec![vk.gamma_abc_g1[1], vk.gamma_abc_g1[0]]);
         if res.is_some() {
             let res = res.unwrap();
             let compiled = read_assertions_from_a_file("compile.json");
@@ -1222,7 +1511,7 @@ mod test {
 
             println!("exec script {:?}", res.0);
             let script = script!{
-                    { hint_script }
+                   { hint_script }
                     { compiled_script }
                 };
             let exec_result = execute_script(script);
@@ -1233,8 +1522,7 @@ mod test {
         // println!("corrupt");
         // // mock faulty data
         // let index_to_corrupt = 101;
-        // let corrup_scr = winternitz_compact::sign(&format!("{}{:04X}", master_secret, index_to_corrupt), [1u8;64]);
-        // sig.cache.insert(index_to_corrupt, corrup_scr);
+
         // evaluate(&mut sig, pub_scripts_per_link_id, p2, p3, p4, q2, q3, q4, c, s, fixed_acc);
     }
 }
