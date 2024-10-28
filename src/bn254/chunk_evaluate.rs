@@ -7,13 +7,14 @@ use bitcoin_script::script;
 
 use crate::bn254::chunk_compile::ATE_LOOP_COUNT;
 use crate::bn254::chunk_config::miller_config_gen;
+use crate::bn254::chunk_msm::{bitcom_msm, hint_msm, tap_msm, HintInMSM};
 use crate::bn254::chunk_primitves::emulate_extern_hash_fps;
 use crate::bn254::chunk_taps::{bitcom_add_eval_mul_for_fixed_Qs, bitcom_add_eval_mul_for_fixed_Qs_with_frob, bitcom_dense_dense_mul0, bitcom_dense_dense_mul1, bitcom_double_eval_mul_for_fixed_Qs, bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_initT4, bitcom_point_add_with_frob, bitcom_point_dbl, bitcom_point_ops, bitcom_precompute_Px, bitcom_precompute_Py, bitcom_sparse_dense_mul, bitcom_squaring, hint_hash_c, hint_hash_c2, hint_init_T4, hints_dense_dense_mul0, hints_dense_dense_mul1, hints_frob_fp12, hints_precompute_Px, hints_precompute_Py, tap_add_eval_mul_for_fixed_Qs, tap_add_eval_mul_for_fixed_Qs_with_frob, tap_double_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_hash_c2, tap_point_add_with_frob, tap_point_dbl, tap_point_ops, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, tap_squaring, HashBytes, HintInAdd, HintInDblAdd, HintInDenseMul0, HintInDenseMul1, HintInDouble, HintInFrobFp12, HintInHashC, HintInInitT4, HintInPrecomputePx, HintInPrecomputePy, HintInSparseAdd, HintInSparseDbl, HintInSparseDenseMul, HintInSquaring, HintOutFixedAcc, HintOutFrobFp12, HintOutGrothC, HintOutPubIdentity, HintOutSparseDbl, Link};
 use crate::bn254::chunk_taps;
 use crate::execute_script;
 use crate::signatures::winternitz_compact::WOTSPubKey;
 
-use super::chunk_config::{assign_link_ids, groth16_config_gen, post_miller_config_gen, pre_miller_config_gen};
+use super::chunk_config::{assign_link_ids, groth16_config_gen, msm_config_gen, post_miller_config_gen, pre_miller_config_gen};
 use super::chunk_primitves::emulate_fq_to_nibbles;
 use super::chunk_taps::{tup_to_scr, HintOut, Sig};
 use super::{chunk_taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4}};
@@ -713,7 +714,7 @@ fn evaluate_public_params(sig: &mut Sig, link_name_to_id: HashMap<String, (u32, 
     id_to_witness
 }
 
-fn evaluate_groth16_params(sig: &mut Sig, link_name_to_id: HashMap<String, (u32, bool)>, p2: G1Affine, p3: G1Affine, p4: G1Affine, q4: G2Affine, c: Fq12, s: Fq12) -> HashMap<String, HintOut> {
+fn evaluate_groth16_params(sig: &mut Sig, link_name_to_id: HashMap<String, (u32, bool)>, p2: G1Affine, p3: G1Affine, p4: G1Affine, q4: G2Affine, c: Fq12, s: Fq12, ks: Vec<ark_bn254::Fr>) -> HashMap<String, HintOut> {
     let cv = vec![c.c0.c0.c0,c.c0.c0.c1, c.c0.c1.c0, c.c0.c1.c1, c.c0.c2.c0,c.c0.c2.c1, c.c1.c0.c0,c.c1.c0.c1, c.c1.c1.c0, c.c1.c1.c1, c.c1.c2.c0,c.c1.c2.c1];
     let chash = emulate_extern_hash_fps(cv.clone(), false);
     let chash2 = emulate_extern_hash_fps(cv.clone(), true);
@@ -766,6 +767,8 @@ fn evaluate_groth16_params(sig: &mut Sig, link_name_to_id: HashMap<String, (u32,
         HintOut::FieldElem(q4.y.c0),
         HintOut::FieldElem(q4.x.c1),
         HintOut::FieldElem(q4.x.c0),
+        HintOut::ScalarElem(ks[0]),
+        HintOut::ScalarElem(ks[1])
     ];
     assert_eq!(gparams.len(), gouts.len());
 
@@ -788,6 +791,49 @@ fn evaluate_groth16_params(sig: &mut Sig, link_name_to_id: HashMap<String, (u32,
         }
     }
     id_to_witness
+}
+
+fn evaluate_msm(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, link_name_to_id: HashMap<String, (u32, bool)>, aux_output_per_link: &mut HashMap<String, HintOut>, pub_ins: usize, qs: Vec<ark_bn254::G1Affine>) {
+    let tables = msm_config_gen(String::from("k0,k1"));
+    let mut msm_tap_index = 0;
+    for row in tables {
+        let sec_in: Vec<Link> = row.dependencies.split(",").into_iter().map(|s| link_name_to_id.get(s).unwrap().clone()).collect();
+        let hints: Vec<HintOut> = row.dependencies.split(",").into_iter().map(|s| aux_output_per_link.get(s).unwrap().clone()).collect();
+        let sec_out = link_name_to_id.get(&row.link_id).unwrap().clone();
+        if row.category == "MSM" {
+            assert!(hints.len() == pub_ins || hints.len() == pub_ins + 1);
+            let mut scalars = vec![];
+            for i in 0..pub_ins {
+                let x = match hints[i] {
+                    HintOut::ScalarElem(r) => r,
+                    _ => panic!("failed to match"),
+                };
+                scalars.push(x);
+            }
+            let mut acc = ark_bn254::G1Affine::identity();
+            for i in pub_ins..hints.len() {
+                let x = match &hints[i] {
+                    HintOut::MSM(r) => r,
+                    _ => panic!("failed to match"),
+                };
+                acc = x.t;
+            }
+            let (hint_res, hint_script) = hint_msm(sig, sec_out, sec_in.clone(), HintInMSM {t: acc, scalars}, msm_tap_index, qs.clone());
+            let ops_script = tap_msm(8, msm_tap_index, qs.clone());
+            let bcs_script = bitcom_msm(pub_scripts_per_link_id, sec_out, sec_in.clone());
+            let script = script!{
+                { hint_script }
+                { bcs_script }
+                { ops_script }
+            };
+            let exec_result = execute_script(script);
+            assert!(!exec_result.success);
+            assert!(exec_result.final_stack.len() == 1);
+
+            aux_output_per_link.insert(row.link_id, HintOut::MSM(hint_res));
+        }
+        msm_tap_index += 1;
+    }
 }
 
 fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, link_name_to_id: HashMap<String, (u32, bool)>, aux_output_per_link: &mut HashMap<String, HintOut>) {
@@ -965,18 +1011,18 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
     }
 }
 
-pub fn evaluate(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, p2: G1Affine, p3: G1Affine, p4: G1Affine,q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine, q4: G2Affine, c: Fq12, s: Fq12, fixed_acc: ark_bn254::Fq12) {
+pub fn evaluate(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>, p2: G1Affine, p3: G1Affine, p4: G1Affine,q2: ark_bn254::G2Affine, q3: ark_bn254::G2Affine, q4: G2Affine, c: Fq12, s: Fq12, fixed_acc: ark_bn254::Fq12, ks: Vec<ark_bn254::Fr>, ks_vks: Vec<ark_bn254::G1Affine>) {
     let (link_name_to_id, facc, tacc) = assign_link_ids();
     let mut aux_out_per_link: HashMap<String, HintOut> = HashMap::new();
     let pubmap = evaluate_public_params(sig, link_name_to_id.clone(), q2, q3, fixed_acc);
     aux_out_per_link.extend(pubmap);
-    let grothmap = evaluate_groth16_params(sig, link_name_to_id.clone(), p2, p3, p4, q4, c, s);
+    let grothmap = evaluate_groth16_params(sig, link_name_to_id.clone(), p2, p3, p4, q4, c, s, ks.clone());
     aux_out_per_link.extend(grothmap);
 
     evaluate_pre_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link);
     let (nt2, nt3) = evaluate_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, q2, q3, q2, q3);
-    evaluate_post_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id, &mut aux_out_per_link, nt2, nt3, q2, q3, facc.clone(), tacc);
-    
+    evaluate_post_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, nt2, nt3, q2, q3, facc.clone(), tacc);
+    evaluate_msm(sig, pub_scripts_per_link_id, link_name_to_id, &mut aux_out_per_link, ks.len(), ks_vks);
     let hint = aux_out_per_link.get("fin");
     if hint.is_none() {
         println!("debug hintmap {:?}", aux_out_per_link);
@@ -1086,22 +1132,25 @@ mod test {
             -vk.beta_g2,
             proof.b,
         );
+        // p1, q1: MSM
+        // p3, q3: fixed, precomputed
+        // 
 
         println!();
         println!();
 
         let f = Bn254::multi_miller_loop_affine([p1,p2,p3,p4], [q1,q2,q3,q4]).0;
-        let p1q1 = Bn254::multi_miller_loop_affine([p1], [q1]).0;
+        let p3q3 = Bn254::multi_miller_loop_affine([p3], [q3]).0;
 
         let (c, s) = compute_c_wi(f);
 
-        let fixed_acc = p1q1;
+        let fixed_acc = p3q3;
 
         let master_secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
         let pub_scripts_per_link_id = &keygen(master_secret);
         let mut sig = Sig { msk: Some(master_secret), cache: HashMap::new() };
-        evaluate(&mut sig, pub_scripts_per_link_id, p2, p3, p4, q2, q3, q4, c, s, fixed_acc);
+        evaluate(&mut sig, pub_scripts_per_link_id, p1, p2, p4, q1, q2, q4, c, s, fixed_acc, vec![], vec![]);
 
         // println!("corrupt");
         // // mock faulty data

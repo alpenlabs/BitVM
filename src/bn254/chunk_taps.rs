@@ -20,6 +20,7 @@ use crate::{
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use num_traits::One;
 
+use super::chunk_msm::HintOutMSM;
 use super::chunk_primitves::{emulate_extern_hash_fps, hash_fp12_192};
 use super::utils::{fq12_push_not_montgomery, Hint};
 
@@ -60,6 +61,7 @@ pub(crate) enum HintOut {
     FixedAcc(HintOutFixedAcc),
 
     FieldElem(ark_bn254::Fq),
+    ScalarElem(ark_bn254::Fr),
     GrothC(HintOutGrothC), // c, s, cinv
 
     HashC(HintOutHashC),
@@ -67,6 +69,8 @@ pub(crate) enum HintOut {
 
     FrobFp12(HintOutFrobFp12),
     Add(HintOutAdd),
+
+    MSM(HintOutMSM),
 }
 
 #[derive(Debug, Clone)]

@@ -6,6 +6,7 @@ use crate::bn254::utils::fq_push_not_montgomery;
 use crate::signatures::winternitz_compact::{WOTSPubKey};
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
+use bitcoin::opcodes::all::OP_VERIFY;
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
@@ -17,7 +18,7 @@ use super::chunk_taps::{Link, Sig};
 use super::fq2::Fq2;
 use super::utils::{Hint};
 
-fn tap_msm(window: usize, msm_tap_index: usize,qs: Vec<ark_bn254::G1Affine>) -> Script {
+pub(crate) fn tap_msm(window: usize, msm_tap_index: usize,qs: Vec<ark_bn254::G1Affine>) -> Script {
     assert!(qs.len() > 0);
     let (hinted_check_tangent, _) = hinted_check_line_through_point_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
     let (hinted_double_line, _) = hinted_affine_double_line_g1(ark_bn254::Fq::one(), ark_bn254::Fq::one(), ark_bn254::Fq::one());
@@ -143,7 +144,7 @@ fn tap_msm(window: usize, msm_tap_index: usize,qs: Vec<ark_bn254::G1Affine>) -> 
         OP_ENDIF
         {hash_fp2()} // [nt]
         {Fq::fromaltstack()}
-        {Fq::equalverify(1,0)}
+        {Fq::equal(1,0)} OP_NOT OP_VERIFY
     };
 
     let sc = script!{
@@ -199,17 +200,14 @@ fn tap_extract_window_segment_from_scalar(index: usize) -> Script {
 
 #[derive(Debug, Clone)]
 pub(crate) struct HintInMSM {
-    t: ark_bn254::G1Affine,
-    scalars: Vec<ark_bn254::Fr>,
+    pub(crate) t: ark_bn254::G1Affine,
+    pub(crate) scalars: Vec<ark_bn254::Fr>,
     //hash_in: HashBytes, // in = Hash([Hash(T), Hash_le_aux])
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct HintOutMSM {
-    t: ark_bn254::G1Affine,
-    q: ark_bn254::G1Affine,
-    a: ark_bn254::Fq,
-    b: ark_bn254::Fq,
+    pub(crate) t: ark_bn254::G1Affine,
 }
 
 fn hinted_affine_add_line_g1(tx: ark_bn254::Fq, qx: ark_bn254::Fq, c3: ark_bn254::Fq, c4: ark_bn254::Fq) -> (Script, Vec<Hint>) {
@@ -356,7 +354,7 @@ fn get_byte_mul_g1(scalar: ark_bn254::Fr, window: u8, index: usize, base: ark_bn
     return precomputed_q;
 }
 
-fn hint_msm(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInMSM, msm_tap_index: usize, qs: Vec<ark_bn254::G1Affine>,) -> (HintOutMSM, Script) {
+pub(crate) fn hint_msm(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInMSM, msm_tap_index: usize, qs: Vec<ark_bn254::G1Affine>,) -> (HintOutMSM, Script) {
     const window: u8 = 8;
     const num_pubs: usize = 4;
 
@@ -482,7 +480,7 @@ fn hint_msm(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInMSM,
     };
 
 
-    let hint_out = HintOutMSM {t, q, a, b};
+    let hint_out = HintOutMSM {t};
 
     (hint_out, simulate_stack_input)
 }

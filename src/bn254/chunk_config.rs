@@ -73,7 +73,22 @@ pub(crate) fn groth16_config_gen() -> Vec<ScriptItem> {
     for item in r6 {
         r.push(ScriptItem {category:String::from("GrothG2"), link_id: String::from(item), dependencies:String::new(), is_type_field: true})
     }
+    let r7 = vec!["k0", "k1"];
+    for item in r7 {
+        r.push(ScriptItem {category:String::from("GrothPubs"), link_id: String::from(item), dependencies:String::new(), is_type_field: true})
+    }
     r
+}
+
+pub(crate) fn msm_config_gen(pub_ins: String) -> Vec<ScriptItem> {
+
+    let mut items = vec![
+        ScriptItem {category: String::from("MSM"), link_id: String::from("M0"), dependencies: pub_ins.clone(), is_type_field: false}, // k0, k1, k2
+    ];
+    for i in 1..32 {
+        items.push(ScriptItem {category: String::from("MSM"), link_id: String::from(format!("M{}", i)), dependencies: String::from(format!("{:?},M{}", &pub_ins, i-1)), is_type_field: false}) // k0,k1,k2,M
+    }
+    items
 }
 
 pub(crate) fn premiller_config_gen() -> Vec<ScriptItem> {
@@ -485,6 +500,16 @@ fn assign_ids_to_postmiller_params(start_identifier: u32) -> HashMap<String, (u3
     name_to_id
 }
 
+fn assign_ids_to_msm_params(start_identifier: u32)-> HashMap<String, (u32, bool)> {
+    let hardcoded_scalars = String::from("k0,k1");
+    let g_params = msm_config_gen(hardcoded_scalars);
+    let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
+    for i in 0..g_params.len() {
+        name_to_id.insert( g_params[i].link_id.clone(), (start_identifier + i as u32, g_params[i].is_type_field));
+    }
+    name_to_id
+}
+
 pub(crate) fn assign_link_ids() -> (HashMap<String, (u32, bool)>, String, String) {
     let mut all_ids: HashMap<String, (u32, bool)> = HashMap::new();
     let mut total_len = 0;
@@ -498,13 +523,16 @@ pub(crate) fn assign_link_ids() -> (HashMap<String, (u32, bool)>, String, String
     total_len += millp.len();
     let postmillp = assign_ids_to_postmiller_params(total_len as u32);
     total_len += postmillp.len();
+    let msmp = assign_ids_to_msm_params(total_len as u32);
+    total_len += msmp.len();
 
     all_ids.extend(pubp.clone());
     all_ids.extend(grothp.clone());
     all_ids.extend(premillp.clone());
     all_ids.extend(millp.clone());
     all_ids.extend(postmillp.clone());
-    assert_eq!(pubp.len() + grothp.len() + premillp.len() + millp.len() + postmillp.len(), all_ids.len());
+    all_ids.extend(msmp.clone());
+    assert_eq!(total_len, all_ids.len());
     (all_ids, f_blk, t4_blk)
 }
 
