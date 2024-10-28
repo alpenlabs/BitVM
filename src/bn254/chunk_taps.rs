@@ -2521,6 +2521,11 @@ pub(crate) struct HintInHashC {
     hashc: HashBytes,
 }
 
+pub(crate) struct HintInHashP {
+    pub(crate) c: ark_bn254::G1Affine,
+    pub(crate) hashc: HashBytes,
+}
+
 impl HintInHashC {
     pub(crate) fn from_groth(g: HintOutGrothC) -> Self {
         HintInHashC { c:g.c, hashc: g.chash }
@@ -2790,6 +2795,59 @@ pub(crate) fn hints_precompute_Py(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link
     (pdy, simulate_stack_input)
 }
 
+// Hash P
+pub(crate) fn tap_hash_p() -> Script {
+    let hash_scr = script!{
+        { hash_fp2() }
+        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+    };
+    let sc = script!{
+        {hash_scr}
+        OP_TRUE
+    };
+    sc
+}
+
+pub(crate) fn bitcom_hash_p(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: Link, sec_in: Vec<Link>) -> Script {
+    assert_eq!(sec_in.len(), 2);
+    
+    
+    let bitcom_scr = script!{
+
+        {wots_locking_script(sec_in[1], link_ids)} // px
+        {Fq::toaltstack()}
+        {wots_locking_script(sec_in[0], link_ids)} // py
+        {Fq::toaltstack()}
+        {wots_locking_script(sec_out, link_ids)} // hash
+
+        {Fq::fromaltstack()}
+        {Fq::fromaltstack()}
+        {Fq::roll(1)}
+        // Stack:[f_hash_claim, px, py]
+    };
+    bitcom_scr
+}
+
+
+pub(crate) fn hint_hash_p(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in: HintInHashP) ->  ((), Script) {
+    let f = vec![hint_in.c.x, hint_in.c.y];
+    let fhash = emulate_extern_hash_fps(f.clone(), false);
+    
+    let mut tups = vec![(sec_out, fhash)];
+    tups.push((sec_in[0], emulate_fq_to_nibbles(hint_in.c.y)));
+    tups.push((sec_in[1], emulate_fq_to_nibbles(hint_in.c.x)));
+
+    let bc_elems = tup_to_scr(sig, tups);
+
+    let simulate_stack_input = script!{
+        // bit commits raw
+        for bc in bc_elems {
+            {bc}
+        }
+    };
+    ((), simulate_stack_input)
+}
+
 // hash T4
 pub(crate) fn tap_initT4() -> Script {
 
@@ -2809,6 +2867,7 @@ pub(crate) fn tap_initT4() -> Script {
 
     sc
 }
+
 
 pub(crate) fn bitcom_initT4(link_ids: &HashMap<u32, WOTSPubKey>, sec_out: Link, sec_in: Vec<Link>) -> Script {
     assert_eq!(sec_in.len(), 4);
@@ -3029,6 +3088,53 @@ mod test {
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
 
+
+    #[test]
+    fn test_tap_hash_p() {
+        // compile time
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let sec_in = vec![1,2];
+        let sec_out = 0;
+        let hash_c_scr = tap_hash_p();
+
+        let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
+        let pk = winternitz_compact_hash::get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        pub_scripts.insert(sec_out, pk);
+        for i in &sec_in {
+            let pk = winternitz_compact::get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            pub_scripts.insert(*i, pk);
+        }
+
+        let sec_out = (sec_out, false);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+        let bitcom_scr = bitcom_hash_p(&pub_scripts, sec_out, sec_in.clone());
+
+        // runtime
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let f = ark_bn254::G1Affine::rand(&mut prng);
+        let fhash = emulate_extern_hash_fps(vec![f.x, f.y], false);
+        let hint_in = HintInHashP  { c: f, hashc: fhash };
+        let mut sig = Sig { msk: Some(sec_key_for_bitcomms), cache: HashMap::new() };
+        let (_, simulate_stack_input) = hint_hash_p(&mut sig, sec_out, sec_in, hint_in);
+
+        let tap_len = hash_c_scr.len();
+        let script = script!{
+            {simulate_stack_input}
+            {bitcom_scr}
+            {hash_c_scr}
+        };
+
+        let res = execute_script(script);
+        assert!(!res.success && res.final_stack.len() == 1);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+        
+    }
+
+    
+
     #[test]
     fn test_tap_hash_c() {
         // compile time
@@ -3072,6 +3178,7 @@ mod test {
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
         
     }
+
 
     #[test]
     fn test_tap_hash_c2() {

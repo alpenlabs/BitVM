@@ -10,7 +10,7 @@ use crate::bn254::chunk_compile::ATE_LOOP_COUNT;
 use crate::bn254::chunk_config::miller_config_gen;
 use crate::bn254::chunk_msm::{bitcom_msm, hint_msm, tap_msm, HintInMSM};
 use crate::bn254::chunk_primitves::emulate_extern_hash_fps;
-use crate::bn254::chunk_taps::{bitcom_add_eval_mul_for_fixed_Qs, bitcom_add_eval_mul_for_fixed_Qs_with_frob, bitcom_dense_dense_mul0, bitcom_dense_dense_mul1, bitcom_double_eval_mul_for_fixed_Qs, bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_initT4, bitcom_point_add_with_frob, bitcom_point_dbl, bitcom_point_ops, bitcom_precompute_Px, bitcom_precompute_Py, bitcom_sparse_dense_mul, bitcom_squaring, hint_hash_c, hint_hash_c2, hint_init_T4, hints_dense_dense_mul0, hints_dense_dense_mul1, hints_frob_fp12, hints_precompute_Px, hints_precompute_Py, tap_add_eval_mul_for_fixed_Qs, tap_add_eval_mul_for_fixed_Qs_with_frob, tap_double_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_hash_c2, tap_point_add_with_frob, tap_point_dbl, tap_point_ops, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, tap_squaring, HashBytes, HintInAdd, HintInDblAdd, HintInDenseMul0, HintInDenseMul1, HintInDouble, HintInFrobFp12, HintInHashC, HintInInitT4, HintInPrecomputePx, HintInPrecomputePy, HintInSparseAdd, HintInSparseDbl, HintInSparseDenseMul, HintInSquaring, HintOutFixedAcc, HintOutFrobFp12, HintOutGrothC, HintOutPubIdentity, HintOutSparseDbl, Link};
+use crate::bn254::chunk_taps::{bitcom_add_eval_mul_for_fixed_Qs, bitcom_add_eval_mul_for_fixed_Qs_with_frob, bitcom_dense_dense_mul0, bitcom_dense_dense_mul1, bitcom_double_eval_mul_for_fixed_Qs, bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_hash_p, bitcom_initT4, bitcom_point_add_with_frob, bitcom_point_dbl, bitcom_point_ops, bitcom_precompute_Px, bitcom_precompute_Py, bitcom_sparse_dense_mul, bitcom_squaring, hint_hash_c, hint_hash_c2, hint_hash_p, hint_init_T4, hints_dense_dense_mul0, hints_dense_dense_mul1, hints_frob_fp12, hints_precompute_Px, hints_precompute_Py, tap_add_eval_mul_for_fixed_Qs, tap_add_eval_mul_for_fixed_Qs_with_frob, tap_double_eval_mul_for_fixed_Qs, tap_frob_fp12, tap_hash_c2, tap_hash_p, tap_point_add_with_frob, tap_point_dbl, tap_point_ops, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, tap_squaring, HashBytes, HintInAdd, HintInDblAdd, HintInDenseMul0, HintInDenseMul1, HintInDouble, HintInFrobFp12, HintInHashC, HintInHashP, HintInInitT4, HintInPrecomputePx, HintInPrecomputePy, HintInSparseAdd, HintInSparseDbl, HintInSparseDenseMul, HintInSquaring, HintOutFixedAcc, HintOutFrobFp12, HintOutGrothC, HintOutPubIdentity, HintOutSparseDbl, Link};
 use crate::bn254::chunk_taps;
 use crate::execute_script;
 use crate::signatures::winternitz_compact::WOTSPubKey;
@@ -1010,6 +1010,35 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             aux_output_per_link.insert(row.link_id, HintOut::DenseMul1(hout));
+        } else if row.category == "P3Hash" {
+            assert!(hints.len() == 2);
+            let p3y = match hints[0].clone() {
+                HintOut::FieldElem(r) => r,
+                _ => panic!("failed to match"),
+            };
+            let p3x = match hints[1].clone() {
+                HintOut::FieldElem(r) => r,
+                _ => panic!("failed to match"),
+            };
+
+            let h = aux_output_per_link.get(&row.link_id).unwrap();
+            let hout = match h {
+                HintOut::MSM(m) => m,
+                _ => panic!("failed to match"),
+            };
+
+            let ops_script = tap_hash_p();
+            let (_, hint_script) = hint_hash_p(sig, sec_out, sec_in.clone(), HintInHashP{c: G1Affine::new_unchecked(p3x, p3y), hashc: hout.hasht});
+            let bcs_script = bitcom_hash_p(pub_scripts_per_link_id, sec_out, sec_in.clone());
+            let script = script!{
+                { hint_script }
+                { bcs_script }
+                { ops_script }
+            };
+            let exec_result = execute_script(script);
+            assert!(!exec_result.success);
+            assert!(exec_result.final_stack.len() == 1);
+            //ScriptItem {category: String::from("P3Hash"), link_id: String::from("M31"), dependencies: String::from("GP3y,GP3x"), is_type_field: false},
         }
     }
 }
@@ -1022,8 +1051,9 @@ pub fn evaluate(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey
     let grothmap = evaluate_groth16_params(sig, link_name_to_id.clone(), p2, p3, p4, q4, c, s, ks.clone());
     aux_out_per_link.extend(grothmap);
 
-    evaluate_pre_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link);
     evaluate_msm(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, ks.len(), ks_vks);
+    
+    evaluate_pre_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link);
     
     let (nt2, nt3) = evaluate_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, q2, q3, q2, q3);
     evaluate_post_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, nt2, nt3, q2, q3, facc.clone(), tacc);
@@ -1130,33 +1160,32 @@ mod test {
         let (_, msm_g1) = Verifier::prepare_inputs(&vec![pub_commit], &vk);
         
         // G1/G2 points for pairings
-        let (p1, p2, p3, p4) = (msm_g1.into_affine(), proof.c, vk.alpha_g1, proof.a);
-        let (q1, q2, q3, q4) = (
+        let (p3, p2, p1, p4) = (msm_g1.into_affine(), proof.c, vk.alpha_g1, proof.a);
+        let (q3, q2, q1, q4) = (
             vk.gamma_g2.into_group().neg().into_affine(),
             vk.delta_g2.into_group().neg().into_affine(),
             -vk.beta_g2,
             proof.b,
         );
 
-        println!("expected msm {:?}", p1);
-
+        //msm P3
 
         println!();
         println!();
 
         let f = Bn254::multi_miller_loop_affine([p1,p2,p3,p4], [q1,q2,q3,q4]).0;
-        let p3q3 = Bn254::multi_miller_loop_affine([p3], [q3]).0;
+        let p1q1 = Bn254::multi_miller_loop_affine([p1], [q1]).0;
 
         let (c, s) = compute_c_wi(f);
 
-        let fixed_acc = p3q3;
+        let fixed_acc = p1q1;
 
         let master_secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
 
         let pub_scripts_per_link_id = &keygen(master_secret);
         let mut sig = Sig { msk: Some(master_secret), cache: HashMap::new() };
-        evaluate(&mut sig, pub_scripts_per_link_id, p1, p2, p4, q1, q2, q4, c, s, fixed_acc, vec![pub_commit, ark_bn254::Fr::ONE], vec![vk.gamma_abc_g1[1], vk.gamma_abc_g1[0]]);
+        evaluate(&mut sig, pub_scripts_per_link_id, p2, p3, p4, q2, q3, q4, c, s, fixed_acc, vec![pub_commit, ark_bn254::Fr::ONE], vec![vk.gamma_abc_g1[1], vk.gamma_abc_g1[0]]);
 
         // println!("corrupt");
         // // mock faulty data

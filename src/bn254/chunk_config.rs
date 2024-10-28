@@ -124,6 +124,7 @@ pub(crate) fn pre_miller_config_gen() -> Vec<ScriptItem> {
         ScriptItem {category: String::from("HashC"), link_id: String::from("s"), dependencies: String::from("Gs11,Gs10,Gs9,Gs8,Gs7,Gs6,Gs5,Gs4,Gs3,Gs2,Gs1,Gs0"), is_type_field: false},
         ScriptItem {category: String::from("DD1"), link_id: String::from("cinv0"), dependencies: String::from("c2,cinv"), is_type_field: false},
         ScriptItem {category: String::from("DD2"), link_id: String::from("identity"), dependencies: String::from("c2,cinv,cinv0"), is_type_field: false},
+        ScriptItem {category: String::from("P3Hash"), link_id: String::from("M31"), dependencies: String::from("GP3y,GP3x"), is_type_field: false},
     ];
     tables
 }

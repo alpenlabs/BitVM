@@ -18,7 +18,7 @@ use crate::{
 use num_traits::One;
 
 use super::chunk_primitves::hash_fp2;
-use super::chunk_taps::{Link, Sig};
+use super::chunk_taps::{HashBytes, Link, Sig};
 use super::fq2::Fq2;
 use super::utils::{Hint};
 
@@ -224,6 +224,7 @@ pub(crate) struct HintInMSM {
 #[derive(Debug, Clone)]
 pub(crate) struct HintOutMSM {
     pub(crate) t: ark_bn254::G1Affine,
+    pub(crate) hasht: HashBytes,
 }
 
 fn hinted_affine_add_line_g1(tx: ark_bn254::Fq, qx: ark_bn254::Fq, c3: ark_bn254::Fq, c4: ark_bn254::Fq) -> (Script, Vec<Hint>) {
@@ -466,7 +467,8 @@ pub(crate) fn hint_msm(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in:
             (sec_in[sec_in.len()-1], emulate_extern_hash_fps(vec![hint_in.t.x, hint_in.t.y], true)),
         )
     }
-    tup.push((sec_out,  emulate_extern_hash_fps(vec![t.x, t.y], true)));
+    let outhash = emulate_extern_hash_fps(vec![t.x, t.y], true);
+    tup.push((sec_out,  outhash));
     let bc_elems = tup_to_scr(sig, tup);
 
     let simulate_stack_input = script! {
@@ -494,7 +496,7 @@ pub(crate) fn hint_msm(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link>, hint_in:
     };
 
 
-    let hint_out = HintOutMSM {t};
+    let hint_out = HintOutMSM {t, hasht: outhash};
 
     (hint_out, simulate_stack_input)
 }
