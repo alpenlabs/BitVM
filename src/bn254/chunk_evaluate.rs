@@ -1397,7 +1397,7 @@ mod test {
 
     use ark_ec::{AffineRepr, CurveGroup};
 
-    use crate::{bn254::{chunk_compile::{compile, Vkey}, chunk_config::keygen, chunk_msm::try_msm, chunk_utils::{read_map_from_file, read_scripts_from_file, write_map_to_file, write_scripts_to_file, write_scripts_to_separate_files}}, groth16::offchain_checker::compute_c_wi, signatures::{winternitz, winternitz_compact, winternitz_hash}};
+    use crate::{bn254::{chunk_compile::{compile, Vkey}, chunk_config::keygen, chunk_utils::{read_map_from_file, read_scripts_from_file, write_map_to_file, write_scripts_to_file, write_scripts_to_separate_files}}, groth16::offchain_checker::compute_c_wi, signatures::{winternitz, winternitz_compact, winternitz_hash}};
 
     use super::*;
 
@@ -1722,11 +1722,12 @@ mod test {
      
     #[test]
     fn test_challenger_executes_disprove() {
-        let gp_f = "chunker_data/groth_proof.bin";
-        let vk_f = "chunker_data/groth_vk.bin";
-        let assert_f = "chunker_data/assert.json";
+        let chunker_data_path = "chunker_data_x";
+        let gp_f = &format!("{chunker_data_path}/groth_proof.bin");
+        let vk_f = &format!("{chunker_data_path}/groth_vk.bin");
+        let assert_f = &format!("{chunker_data_path}/assert.json");
         let master_secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let pubs_f = "chunker_data/pubkeys.json";
+        let pubs_f = &format!("{chunker_data_path}/pubkeys.json");
 
         let pub_scripts_per_link_id = read_map_from_file(pubs_f).unwrap();
         let proof = GrothProof::read_groth16_proof_from_file(gp_f);
@@ -1737,8 +1738,8 @@ mod test {
         let p3 = p3.into_affine();
 
         // read assertions
-        let index_to_corrupt = 101;
-        let index_is_hash = true; // todo: index_is_hash <- circuit_config_get_type(index_to_corrupt)
+        let index_to_corrupt = 54;
+        let index_is_hash = false; // todo: index_is_hash <- circuit_config_get_type(index_to_corrupt)
 
         let mut assertion= read_scripts_from_file(assert_f);        
         let mut corrup_scr = winternitz::sign_digits(&format!("{}{:04X}", master_secret, index_to_corrupt), [1u8; 64]);
@@ -1754,17 +1755,17 @@ mod test {
             &mut sig, &pub_scripts_per_link_id, proof.p2, p3, proof.p4, vk.q2, vk.q3, proof.q4, proof.c, proof.s, proof.f_fixed, msm_scalar, msm_gs);
         assert!(fault.is_some());
         let fault = fault.unwrap();
-        assert!(fault.0 == index_to_corrupt);
+        let index_to_corrupt = fault.0;
         let hints_to_disprove = fault.1;
 
-        let read = read_scripts_from_file(&format!("chunker_data/tapnode_{index_to_corrupt}.json"));
+        let read = read_scripts_from_file(&format!("{chunker_data_path}/tapnode_{index_to_corrupt}.json"));
         let read_scr = read.get(&index_to_corrupt).unwrap();
         assert_eq!(read_scr.len(), 1);
         let tap_node = read_scr[0].clone();
         println!("Executing Disprove Node {:?}", index_to_corrupt);
 
         let script = script!{
-                { hints_to_disprove }
+                { hints_to_disprove.clone() }
                 {tap_node}
             };
         let exec_result = execute_script(script);
@@ -1774,6 +1775,11 @@ mod test {
             for i in 0..exec_result.final_stack.len() {
                 println!("{i:} {:?}", exec_result.final_stack.get(i));
             }
+        } else {
+            let mut disprove_map: HashMap<u32, Vec<Script>> = HashMap::new();
+            let disprove_f = &format!("{chunker_data_path}/disprove_{index_to_corrupt}.json");
+            disprove_map.insert(index_to_corrupt, vec![hints_to_disprove]);
+            write_scripts_to_file(disprove_map, disprove_f);
         }
 
     }
