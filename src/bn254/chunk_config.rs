@@ -512,6 +512,16 @@ fn assign_ids_to_msm_params(start_identifier: u32)-> HashMap<String, (u32, bool)
     name_to_id
 }
 
+pub(crate) fn get_type_for_link_id(index: u32) -> Option<bool> {
+    let (lid, _, _) = assign_link_ids();
+   let res= lid.iter().find(|(_,v)| v.0 == index);
+   if res.is_none() {
+        None
+   } else {
+        Some(res.unwrap().1.1)
+   }
+}
+
 pub(crate) fn assign_link_ids() -> (HashMap<String, (u32, bool)>, String, String) {
     let mut all_ids: HashMap<String, (u32, bool)> = HashMap::new();
     let mut total_len = 0;

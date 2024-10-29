@@ -1397,7 +1397,7 @@ mod test {
 
     use ark_ec::{AffineRepr, CurveGroup};
 
-    use crate::{bn254::{chunk_compile::{compile, Vkey}, chunk_config::keygen, chunk_utils::{read_map_from_file, read_scripts_from_file, write_map_to_file, write_scripts_to_file, write_scripts_to_separate_files}}, groth16::offchain_checker::compute_c_wi, signatures::{winternitz, winternitz_compact, winternitz_hash}};
+    use crate::{bn254::{chunk_compile::{compile, Vkey}, chunk_config::{get_type_for_link_id, keygen}, chunk_utils::{read_map_from_file, read_scripts_from_file, write_map_to_file, write_scripts_to_file, write_scripts_to_separate_files}}, groth16::offchain_checker::compute_c_wi, signatures::{winternitz, winternitz_compact, winternitz_compact_hash, winternitz_hash}};
 
     use super::*;
 
@@ -1718,11 +1718,10 @@ mod test {
         }
     }
     
-
      
     #[test]
     fn test_challenger_executes_disprove() {
-        let chunker_data_path = "chunker_data_x";
+        let chunker_data_path = "chunker_data";
         let gp_f = &format!("{chunker_data_path}/groth_proof.bin");
         let vk_f = &format!("{chunker_data_path}/groth_vk.bin");
         let assert_f = &format!("{chunker_data_path}/assert.json");
@@ -1738,16 +1737,17 @@ mod test {
         let p3 = p3.into_affine();
 
         // read assertions
-        let index_to_corrupt = 54;
-        let index_is_hash = false; // todo: index_is_hash <- circuit_config_get_type(index_to_corrupt)
+        let index_to_corrupt = 98;
+        let index_is_field = get_type_for_link_id(index_to_corrupt).unwrap(); 
+        println!("load with faulty assertion ({}, {})", index_to_corrupt, index_is_field);
 
         let mut assertion= read_scripts_from_file(assert_f);        
-        let mut corrup_scr = winternitz::sign_digits(&format!("{}{:04X}", master_secret, index_to_corrupt), [1u8; 64]);
-        if index_is_hash {
-            corrup_scr = winternitz_hash::sign_digits(&format!("{}{:04X}", master_secret, index_to_corrupt), [1u8; 40]);
+        let mut corrup_scr = winternitz_hash::sign_digits(&format!("{}{:04X}", master_secret, index_to_corrupt), [1u8; 40]);
+        if index_is_field {
+            corrup_scr = winternitz::sign_digits(&format!("{}{:04X}", master_secret, index_to_corrupt), [1u8; 64]);
         }
         assertion.insert(index_to_corrupt, corrup_scr);
-        println!("load with faulty assertion");
+        
         let mut sig = Sig { msk: None, cache: assertion };
 
 
@@ -1783,6 +1783,17 @@ mod test {
         }
 
     }
-
-
 }
+
+// 32 byte
+// compact 9196 <- disprove
+// not 4707 <- assert
+
+// 20 byte
+// compact 5908 <- disprove
+// not 3027 <- assert
+
+// 32-byte commit: 50 x 4707
+// 20-byte commit: 598 x 3027
+// total locking script: 50 x 4707 + 598 x 3027  = 20,45,496 bytes
+// unlocking script size: 639408
