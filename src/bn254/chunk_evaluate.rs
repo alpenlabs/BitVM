@@ -1067,6 +1067,8 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
         let hints: Vec<HintOut> = row.dependencies.split(",").into_iter().map(|s| aux_output_per_link.get(s).unwrap().clone()).collect();
         let sec_out = link_name_to_id.get(&row.link_id).unwrap().clone();
         println!("row name {:?} ID {:?}", row.category, sec_out);
+        println!(" {} ID {:?} deps {:?}", row.category, sec_out, sec_in);
+        
         if row.category == "T4Init" {
             assert!(hints.len() == 4);
             let mut xs = vec![];
@@ -1113,9 +1115,11 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                     { bcs_script }
                     { ops_script }
                 };
+                println!("compiled len {:?}", script.len() - hint_script.len());
+                let len = script.len();
                 let exec_result = execute_script(script);
                 if exec_result.success {
-                    println!("success ");
+                    println!("success {}", len);
                     return Some((sec_out.0, hint_script));
                 } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                     for i in 0..exec_result.final_stack.len() {
@@ -1137,7 +1141,7 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 };
                 xs.push(x);
             }
-            let (pyd,hint_script) = hints_precompute_Px(sig, sec_out, sec_in.clone(), HintInPrecomputePx::from_points(xs));
+            let (pxd,hint_script) = hints_precompute_Px(sig, sec_out, sec_in.clone(), HintInPrecomputePx::from_points(xs));
                 let ops_script = tap_precompute_Px();
                 let bcs_script = bitcom_precompute_Px(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script!{
@@ -1158,7 +1162,7 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
 
-            aux_output_per_link.insert(row.link_id, HintOut::FieldElem(pyd));
+            aux_output_per_link.insert(row.link_id, HintOut::FieldElem(pxd));
         } else if row.category == "HashC" {
             assert!(hints.len() == 12);
             let mut xs = vec![];
@@ -1346,6 +1350,8 @@ pub fn evaluate(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey
     let grothmap = evaluate_groth16_params(sig, link_name_to_id.clone(), p2, p3, p4, q4, c, s, ks.clone());
     aux_out_per_link.extend(grothmap);
 
+
+
     let re = evaluate_msm(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, ks.len(), ks_vks);
     if re.is_some() {
         println!("return outside");
@@ -1369,6 +1375,7 @@ pub fn evaluate(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey
         return re;
     }
 
+
     let hint = aux_out_per_link.get("fin");
     if hint.is_none() {
         println!("debug hintmap {:?}", aux_out_per_link);
@@ -1391,7 +1398,7 @@ mod test {
 
     use ark_ec::{AffineRepr, CurveGroup};
 
-    use crate::{bn254::{chunk_config::keygen, chunk_msm::try_msm, chunk_utils::read_assertions_from_a_file}, groth16::offchain_checker::compute_c_wi, signatures::{winternitz, winternitz_compact, winternitz_hash}};
+    use crate::{bn254::{chunk_compile::{compile, Vkey}, chunk_config::keygen, chunk_msm::try_msm, chunk_utils::{dump_assertions_to_a_file, read_assertions_from_a_file}}, groth16::offchain_checker::compute_c_wi, signatures::{winternitz, winternitz_compact, winternitz_hash}};
 
     use super::*;
 
@@ -1496,33 +1503,63 @@ mod test {
 
 
         let pub_scripts_per_link_id = &keygen(master_secret);
-        let mut assertion= read_assertions_from_a_file("assertion.json");
-        let index_to_corrupt = 645;
-        let corrup_scr = winternitz_hash::sign_digits(&format!("{}{:04X}", master_secret, index_to_corrupt), [1u8;40]);
-        assertion.insert(index_to_corrupt, corrup_scr);
-        let mut sig = Sig { msk: None, cache: assertion };
 
+        // let mut sig = Sig { msk: Some(master_secret), cache: HashMap::new() };
+
+        // let res = evaluate(&mut sig, pub_scripts_per_link_id, p2, p3, p4, q2, q3, q4, c, s, fixed_acc, vec![pub_commit, ark_bn254::Fr::ONE], vec![vk.gamma_abc_g1[1], vk.gamma_abc_g1[0]]);
+        // if res.is_some() {
+        //     let res = res.unwrap();
+        //     let compiled = read_assertions_from_a_file("compile.json");
+        //     let compiled_script = compiled.get(&res.0).unwrap()[0].clone();
+        //     let hint_script = res.1;
+
+        //     println!("exec script {:?}", res.0);
+        //     let script = script!{
+        //            { hint_script }
+        //             { compiled_script }
+        //         };
+        //     let exec_result = execute_script(script);
+        //     println!("check execution {}", exec_result.success);
+        // } else {
+        //     dump_assertions_to_a_file(sig.cache.clone(), "assertion.json");
+        // }
+
+    //     let link_ids = keygen(master_secret);
+        let vkc = Vkey { q2, q3, p3vk: vec![vk.gamma_abc_g1[1], vk.gamma_abc_g1[0]]};
+        let bcs = compile(vkc, &pub_scripts_per_link_id);
+
+    //     let mut scrs_new = HashMap::new();
+    //     for (k, v) in bcs {
+    //         scrs_new.insert(k, vec![v]);
+    //     }
+    //    dump_assertions_to_a_file(scrs_new, "compile.json");
+
+        let mut assertion= read_assertions_from_a_file("assertion.json");
+        let index_to_corrupt = 54;
+        let corrup_scr = winternitz::sign_digits(&format!("{}{:04X}", master_secret, index_to_corrupt), [1u8;64]);
+        assertion.insert(index_to_corrupt, corrup_scr);
+
+        let mut sig = Sig { msk: None, cache: assertion };
         let res = evaluate(&mut sig, pub_scripts_per_link_id, p2, p3, p4, q2, q3, q4, c, s, fixed_acc, vec![pub_commit, ark_bn254::Fr::ONE], vec![vk.gamma_abc_g1[1], vk.gamma_abc_g1[0]]);
         if res.is_some() {
             let res = res.unwrap();
+            
             let compiled = read_assertions_from_a_file("compile.json");
-            let compiled_script = compiled.get(&res.0).unwrap()[0].clone();
+            let compiled_script = bcs.get(&res.0).unwrap().clone();// compiled.get(&res.0).unwrap()[0].clone();
             let hint_script = res.1;
 
             println!("exec script {:?}", res.0);
+            println!("compiled script len {:?}", compiled_script.len());
             let script = script!{
                    { hint_script }
-                    { compiled_script }
+                    {compiled_script}
                 };
+                println!("total script len {:?}", script.len());
             let exec_result = execute_script(script);
             println!("check execution {}", exec_result.success);
+            for i in 0..exec_result.final_stack.len() {
+                println!("{i:} {:?}", exec_result.final_stack.get(i));
+            }
         }
-
-
-        // println!("corrupt");
-        // // mock faulty data
-        // let index_to_corrupt = 101;
-
-        // evaluate(&mut sig, pub_scripts_per_link_id, p2, p3, p4, q2, q3, q4, c, s, fixed_acc);
     }
 }

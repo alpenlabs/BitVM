@@ -2703,6 +2703,7 @@ pub(crate) fn bitcom_precompute_Px(link_ids: &HashMap<u32, WOTSPubKey>, sec_out:
 pub(crate) fn tap_precompute_Py() -> Script {
     let (y_eval_scr, _) =  new_hinted_y_from_eval_point(ark_bn254::Fq::ONE);
 
+    // Stack: [hints, pyd_calc, pyd_claim, py_claim]
     let ops_scr = script!{
         {y_eval_scr}
         {Fq::equal(1, 0)} OP_NOT OP_VERIFY
@@ -2719,11 +2720,11 @@ pub(crate) fn bitcom_precompute_Py(link_ids: &HashMap<u32, WOTSPubKey>, sec_out:
     
     
     let bitcomms_script = script!{
-        {wots_locking_script(sec_in[0], link_ids)}  // py
+        {wots_locking_script(sec_in[0], link_ids)}  // py_claim
         {Fq::toaltstack()}
-        {wots_locking_script(sec_out, link_ids)}  // pyd
+        {wots_locking_script(sec_out, link_ids)}  // pyd_claim
         {Fq::fromaltstack()} // py
-        // Stack: [hints, pyd, py]
+        // Stack: [hints, pyd_calc, pyd_claim, py_claim]
     };
     bitcomms_script
 }
@@ -2796,6 +2797,7 @@ pub(crate) fn hints_precompute_Py(sig: &mut Sig, sec_out: Link, sec_in: Vec<Link
         for hint in hints { 
             { hint.push() }
         }
+        {fq_push_not_montgomery(pdy)} // calc pdy
         // bit commits raw
         for bc in bc_elems {
             {bc}
@@ -3331,11 +3333,11 @@ pub_scripts.insert(*i, pk);
 
         let precompute_p = tap_precompute_Py();
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-let pk = get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
-pub_scripts.insert(sec_out, pk);
+        let pk = get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
             let pk = get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
-pub_scripts.insert(*i, pk);
+            pub_scripts.insert(*i, pk);
         }
 
         let sec_out = (sec_out, true);
@@ -3362,7 +3364,7 @@ pub_scripts.insert(*i, pk);
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
-        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+        println!("success {}, script {} stack {}",res.success, tap_len, res.stats.max_nb_stack_items);
         
     }
 

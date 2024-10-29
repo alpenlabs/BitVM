@@ -191,8 +191,10 @@ fn compile_pre_miller_circuit(link_ids: &HashMap<u32, WOTSPubKey>, id_map: HashM
     let mut scripts = HashMap::new();
     for row in tables {
         let sec_in = row.dependencies.split(",").into_iter().map(|s| id_map.get(s).unwrap().clone()).collect();
-        println!("row ID {:?}", row.link_id);
+        println!("row ID {:?}", row.link_id);        
         let sec_out = id_map.get(&row.link_id).unwrap().clone();
+        println!(" {} ID {:?} deps {:?}", row.category, sec_out, sec_in);
+
         if row.category == "T4Init" {
             let sc1 = tap_initT4();
             let sc2 = bitcom_initT4(link_ids, sec_out,sec_in);
@@ -480,13 +482,13 @@ pub fn generate_assertion_spending_key_lengths(apk: &AssertPublicKeys) -> Vec<us
     spks
 }
 
-struct Vkey {
-    q2: G2Affine, 
-    q3: G2Affine,
-    p3vk: Vec<ark_bn254::G1Affine>,
+pub(crate) struct Vkey {
+    pub(crate) q2: G2Affine, 
+    pub(crate) q3: G2Affine,
+    pub(crate) p3vk: Vec<ark_bn254::G1Affine>,
 }
 
-fn compile(vk: Vkey, link_ids: &HashMap<u32, WOTSPubKey>) -> HashMap<u32, Script> {
+pub(crate) fn compile(vk: Vkey, link_ids: &HashMap<u32, WOTSPubKey>) -> HashMap<u32, Script> {
     let (q2, q3) = (vk.q2, vk.q3);
     let (id_map, facc, tacc) = assign_link_ids();
     let mut scrs: HashMap<u32, Script> = HashMap::new();
@@ -507,7 +509,7 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::bn254::{chunk_config::keygen, chunk_utils::dump_assertions_to_a_file};
+    use crate::bn254::{chunk_config::keygen, chunk_utils::{dump_assertions_to_a_file, read_assertions_from_a_file}};
 
     use super::*;
 
@@ -535,6 +537,17 @@ mod test {
         //     println!("DELIM");
         //     println!("{:?}", pubs);
         // }
+    }
+
+    #[test]
+    fn print_links() {
+ 
+        let compiled = read_assertions_from_a_file("compile.json");
+        let id = 101;
+        let compiled_script = compiled.get(&id).unwrap();
+        for c in compiled_script {
+            println!("cs len {:?}", c.len());
+        }
     }
 
 
