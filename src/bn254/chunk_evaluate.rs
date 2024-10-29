@@ -77,7 +77,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     };
                     let exec_result = execute_script(script);
                     if exec_result.success {
-                        println!("success ");
+                        
                         return (nt2, nt3, Some((sec_out.0, hint_script)));
                     } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                         for i in 0..exec_result.final_stack.len() {
@@ -125,7 +125,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     };
                     let exec_result = execute_script(script);
                     if exec_result.success {
-                        println!("success ");
+                        
                         return (nt2, nt3, Some((sec_out.0, hint_script)));
                     } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                         for i in 0..exec_result.final_stack.len() {
@@ -172,7 +172,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     };
                     let exec_result = execute_script(script);
                     if exec_result.success {
-                        println!("success ");
+                        
                         return (nt2, nt3, Some((sec_out.0, hint_script)));
                     } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                         for i in 0..exec_result.final_stack.len() {
@@ -209,7 +209,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     };
                     let exec_result = execute_script(script);
                     if exec_result.success {
-                        println!("success ");
+                        
                         return (nt2, nt3, Some((sec_out.0, hint_script)));
                     } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                         for i in 0..exec_result.final_stack.len() {
@@ -244,7 +244,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     };
                     let exec_result = execute_script(script);
                     if exec_result.success {
-                        println!("success ");
+                        
                         return (nt2, nt3, Some((sec_out.0, hint_script)));
                     } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                         for i in 0..exec_result.final_stack.len() {
@@ -277,7 +277,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     };
                     let exec_result = execute_script(script);
                     if exec_result.success {
-                        println!("success ");
+                        
                         return (nt2, nt3, Some((sec_out.0, hint_script)));
                     } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                         for i in 0..exec_result.final_stack.len() {
@@ -308,7 +308,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     };
                     let exec_result = execute_script(script);
                     if exec_result.success {
-                        println!("success ");
+                        
                         return (nt2, nt3, Some((sec_out.0, hint_script)));
                     } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                         for i in 0..exec_result.final_stack.len() {
@@ -340,7 +340,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     };
                     let exec_result = execute_script(script);
                     if exec_result.success {
-                        println!("success ");
+                        
                         return (nt2, nt3, Some((sec_out.0, hint_script)));
                     } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                         for i in 0..exec_result.final_stack.len() {
@@ -372,7 +372,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     };
                     let exec_result = execute_script(script);
                     if exec_result.success {
-                        println!("success ");
+                        
                         return (nt2, nt3, Some((sec_out.0, hint_script)));
                     } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                         for i in 0..exec_result.final_stack.len() {
@@ -405,7 +405,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     };
                     let exec_result = execute_script(script);
                     if exec_result.success {
-                        println!("success ");
+                        
                         return (nt2, nt3, Some((sec_out.0, hint_script)));
                     } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                         for i in 0..exec_result.final_stack.len() {
@@ -440,7 +440,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     };
                     let exec_result = execute_script(script);
                     if exec_result.success {
-                        println!("success ");
+                        
                         return (nt2, nt3, Some((sec_out.0, hint_script)));
                     } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                         for i in 0..exec_result.final_stack.len() {
@@ -473,7 +473,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     };
                     let exec_result = execute_script(script);
                     if exec_result.success {
-                        println!("success ");
+                        
                         return (nt2, nt3, Some((sec_out.0, hint_script)));
                     } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                         for i in 0..exec_result.final_stack.len() {
@@ -504,7 +504,7 @@ fn evaluate_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32,
                     };
                     let exec_result = execute_script(script);
                     if exec_result.success {
-                        println!("success ");
+                        
                         return (nt2, nt3, Some((sec_out.0, hint_script)));
                     } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                         for i in 0..exec_result.final_stack.len() {
@@ -559,7 +559,7 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 };
                 let exec_result = execute_script(script);
                 if exec_result.success {
-                    println!("success ");
+                    
                     return Some((sec_out.0, hint_script));
                 } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                     for i in 0..exec_result.final_stack.len() {
@@ -597,7 +597,7 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 };
                 let exec_result = execute_script(script);
                 if exec_result.success {
-                    println!("success ");
+                    
                     return Some((sec_out.0, hint_script));
                 } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                     for i in 0..exec_result.final_stack.len() {
@@ -635,7 +635,7 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 };
                 let exec_result = execute_script(script);
                 if exec_result.success {
-                    println!("success ");
+                    
                     return Some((sec_out.0, hint_script));
                 } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                     for i in 0..exec_result.final_stack.len() {
@@ -666,7 +666,7 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 };
                 let exec_result = execute_script(script);
                 if exec_result.success {
-                    println!("success ");
+                    
                     return Some((sec_out.0, hint_script));
                 } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                     for i in 0..exec_result.final_stack.len() {
@@ -697,7 +697,7 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 };
                 let exec_result = execute_script(script);
                 if exec_result.success {
-                    println!("success ");
+                    
                     return Some((sec_out.0, hint_script));
                 } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                     for i in 0..exec_result.final_stack.len() {
@@ -742,7 +742,7 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                     };
                     let exec_result = execute_script(script);
                     if exec_result.success {
-                        println!("success ");
+                        
                         return Some((sec_out.0, hint_script));
                     } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                         for i in 0..exec_result.final_stack.len() {
@@ -770,7 +770,7 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                     };
                     let exec_result = execute_script(script);
                     if exec_result.success {
-                        println!("success ");
+                        
                         return Some((sec_out.0, hint_script));
                     } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                         for i in 0..exec_result.final_stack.len() {
@@ -804,7 +804,7 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                 };
                 let exec_result = execute_script(script);
                 if exec_result.success {
-                    println!("success ");
+                    
                     return Some((sec_out.0, hint_script));
                 } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                     for i in 0..exec_result.final_stack.len() {
@@ -840,7 +840,7 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                     };
                     let exec_result = execute_script(script);
                     if exec_result.success {
-                        println!("success ");
+                        
                         return Some((sec_out.0, hint_script));
                     } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                         for i in 0..exec_result.final_stack.len() {
@@ -864,7 +864,7 @@ fn evaluate_post_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap
                     };
                     let exec_result = execute_script(script);
                     if exec_result.success {
-                        println!("success ");
+                        
                         return Some((sec_out.0, hint_script));
                     } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                         for i in 0..exec_result.final_stack.len() {
@@ -1040,7 +1040,7 @@ fn evaluate_msm(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey
             };
             let exec_result = execute_script(script);
             if exec_result.success {
-                println!("success ");
+                
                 return Some((sec_out.0, hint_script));
             } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                 for i in 0..exec_result.final_stack.len() {
@@ -1089,7 +1089,7 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 };
                 let exec_result = execute_script(script);
                 if exec_result.success {
-                    println!("success ");
+                    
                     return Some((sec_out.0, hint_script));
                 } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                     for i in 0..exec_result.final_stack.len() {
@@ -1115,7 +1115,6 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                     { bcs_script }
                     { ops_script }
                 };
-                println!("compiled len {:?}", script.len() - hint_script.len());
                 let len = script.len();
                 let exec_result = execute_script(script);
                 if exec_result.success {
@@ -1151,7 +1150,7 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 };
                 let exec_result = execute_script(script);
                 if exec_result.success {
-                    println!("success ");
+                    
                     return Some((sec_out.0, hint_script));
                 } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                     for i in 0..exec_result.final_stack.len() {
@@ -1183,7 +1182,7 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 };
                 let exec_result = execute_script(script);
                 if exec_result.success {
-                    println!("success ");
+                    
                     return Some((sec_out.0, hint_script));
                 } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                     for i in 0..exec_result.final_stack.len() {
@@ -1212,7 +1211,7 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 };
                 let exec_result = execute_script(script);
                 if exec_result.success {
-                    println!("success ");
+                    
                     return Some((sec_out.0, hint_script));
                 } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                     for i in 0..exec_result.final_stack.len() {
@@ -1249,7 +1248,7 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 };
                 let exec_result = execute_script(script);
                 if exec_result.success {
-                    println!("success ");
+                    
                     return Some((sec_out.0, hint_script));
                 } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                     for i in 0..exec_result.final_stack.len() {
@@ -1288,7 +1287,7 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
                 };
                 let exec_result = execute_script(script);
                 if exec_result.success {
-                    println!("success ");
+                    
                     return Some((sec_out.0, hint_script));
                 } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                     for i in 0..exec_result.final_stack.len() {
@@ -1326,7 +1325,7 @@ fn evaluate_pre_miller_circuit(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<
             };
             let exec_result = execute_script(script);
             if exec_result.success {
-                println!("success ");
+                
                 return Some((sec_out.0, hint_script));
             } else if !exec_result.success && exec_result.final_stack.len() > 1 { 
                 for i in 0..exec_result.final_stack.len() {
@@ -1354,24 +1353,24 @@ pub fn evaluate(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey
 
     let re = evaluate_msm(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, ks.len(), ks_vks);
     if re.is_some() {
-        println!("return outside");
+        println!("Disprove evaluate_msm");
         return re;
     }
 
     let re = evaluate_pre_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link);
     if re.is_some() {
-        println!("return outside");
+        println!("Disprove evaluate_pre_miller_circuit");
         return re;
     }
 
     let (nt2, nt3, re) = evaluate_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, q2, q3, q2, q3);
     if re.is_some() {
-        println!("return outside");
+        println!("Disprove evaluate_miller_circuit");
         return re;
     }
     let re = evaluate_post_miller_circuit(sig, pub_scripts_per_link_id, link_name_to_id.clone(), &mut aux_out_per_link, nt2, nt3, q2, q3, facc.clone(), tacc);
     if re.is_some() {
-        println!("return outside");
+        println!("Disprove evaluate_post_miller_circuit");
         return re;
     }
 
@@ -1394,16 +1393,136 @@ pub fn evaluate(sig: &mut Sig, pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey
 
 #[cfg(test)]
 mod test {
-    use std::ops::Neg;
+    use std::{io, ops::Neg};
 
     use ark_ec::{AffineRepr, CurveGroup};
 
-    use crate::{bn254::{chunk_compile::{compile, Vkey}, chunk_config::keygen, chunk_msm::try_msm, chunk_utils::{dump_assertions_to_a_file, read_assertions_from_a_file}}, groth16::offchain_checker::compute_c_wi, signatures::{winternitz, winternitz_compact, winternitz_hash}};
+    use crate::{bn254::{chunk_compile::{compile, Vkey}, chunk_config::keygen, chunk_msm::try_msm, chunk_utils::{read_map_from_file, read_scripts_from_file, write_map_to_file, write_scripts_to_file, write_scripts_to_separate_files}}, groth16::offchain_checker::compute_c_wi, signatures::{winternitz, winternitz_compact, winternitz_hash}};
 
     use super::*;
 
-    #[test]
-    fn test_groth16_verifier() {
+
+    use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, Write};
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub(crate) struct GrothProof {
+        c: ark_bn254::Fq12,
+        s: ark_bn254::Fq12,
+        f_fixed: ark_bn254::Fq12, // mill(p1,q1)
+        p2: ark_bn254::G1Affine, // vk->q2
+        p4: ark_bn254::G1Affine, 
+        q4: ark_bn254::G2Affine,
+        scalars: Vec<ark_bn254::Fr>, // msm(scalar, vk_gamma) -> p3; vk->q3
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub(crate) struct GrothVK {
+        vk_pubs: Vec<ark_bn254::G1Affine>,
+        q2: ark_bn254::G2Affine,
+        q3: ark_bn254::G2Affine,
+    }
+
+    #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+    struct GrothProofBytes {
+        c: Vec<u8>,
+        s: Vec<u8>,
+        f_fixed: Vec<u8>,
+        p2: Vec<u8>,
+        p4: Vec<u8>,
+        q4: Vec<u8>,
+        scalars: Vec<Vec<u8>>
+    }
+
+    #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+    pub(crate) struct GrothVKBytes {
+        q2: Vec<u8>,
+        q3: Vec<u8>,
+        vk_pubs: Vec<Vec<u8>>,
+    }
+
+    impl GrothProof {
+        fn write_groth16_proof_to_file(&self, filename: &str) {
+            let mut cbytes = Vec::new();
+            let mut sbytes = Vec::new();
+            let mut fbytes = Vec::new();
+            let mut p2bytes = Vec::new();
+            let mut p4bytes = Vec::new();
+            let mut q4bytes = Vec::new();
+            let mut scalarbytes_arr = Vec::new();
+            self.c.serialize_uncompressed(&mut cbytes).unwrap();
+            self.s.serialize_uncompressed(&mut sbytes).unwrap();
+            self.f_fixed.serialize_uncompressed(&mut fbytes).unwrap();
+            self.p2.serialize_uncompressed(&mut p2bytes).unwrap();
+            self.p4.serialize_uncompressed(&mut p4bytes).unwrap();
+            self.q4.serialize_uncompressed(&mut q4bytes).unwrap();
+            for scalar in self.scalars.clone() {
+                let mut scalbytes = Vec::new();
+                scalar.serialize_uncompressed(&mut scalbytes).unwrap();
+                scalarbytes_arr.push(scalbytes);
+            }
+            let gbytes = GrothProofBytes {
+                c: cbytes,
+                s: sbytes,
+                f_fixed: fbytes,
+                p2: p2bytes,
+                p4: p4bytes,
+                q4: q4bytes,
+                scalars: scalarbytes_arr,
+            };
+            gbytes.write_to_file(filename).unwrap();
+        }
+    
+        fn read_groth16_proof_from_file(filename: &str) -> Self {
+            let gpb = GrothProofBytes::read_from_file(filename).unwrap();
+            let s = Self {
+                c: ark_bn254::Fq12::deserialize_uncompressed_unchecked(gpb.c.as_slice()).unwrap(),
+                s: ark_bn254::Fq12::deserialize_uncompressed_unchecked(gpb.s.as_slice()).unwrap(),
+                f_fixed: ark_bn254::Fq12::deserialize_uncompressed_unchecked(gpb.f_fixed.as_slice()).unwrap(),
+                p2: ark_bn254::G1Affine::deserialize_uncompressed_unchecked(gpb.p2.as_slice()).unwrap(),
+                p4: ark_bn254::G1Affine::deserialize_uncompressed_unchecked(gpb.p4.as_slice()).unwrap(),
+                q4: ark_bn254::G2Affine::deserialize_uncompressed_unchecked(gpb.q4.as_slice()).unwrap(),
+                scalars: gpb.scalars.iter().map(|x| ark_bn254::Fr::deserialize_uncompressed_unchecked(x.as_slice()).unwrap()).collect(),
+            };
+            s
+        }
+    
+    }
+
+    impl GrothVK {
+        fn write_vk_to_file(&self, filename: &str) {
+            let mut q2bytes = Vec::new();
+            let mut q3bytes = Vec::new();
+            let mut vkpubs_arr = Vec::new();
+            self.q2.serialize_uncompressed(&mut q2bytes).unwrap();
+            self.q3.serialize_uncompressed(&mut q3bytes).unwrap();
+            for vkp in self.vk_pubs.clone() {
+                let mut scalbytes = Vec::new();
+                vkp.serialize_uncompressed(&mut scalbytes).unwrap();
+                vkpubs_arr.push(scalbytes);
+            }
+            let gbytes = GrothVKBytes {
+                q2: q2bytes,
+                q3: q3bytes,
+                vk_pubs: vkpubs_arr
+            };
+            gbytes.write_to_file(filename).unwrap();
+        }
+    
+        fn read_vk_from_file(filename: &str) -> Self {
+            let gpb = GrothVKBytes::read_from_file(filename).unwrap();
+            let s = Self {
+                q2: ark_bn254::G2Affine::deserialize_uncompressed_unchecked(gpb.q2.as_slice()).unwrap(),
+                q3: ark_bn254::G2Affine::deserialize_uncompressed_unchecked(gpb.q3.as_slice()).unwrap(),
+                vk_pubs: gpb.vk_pubs.iter().map(|x| ark_bn254::G1Affine::deserialize_uncompressed_unchecked(x.as_slice()).unwrap()).collect(),
+            };
+            s
+        }
+    
+        
+    }
+
+    
+    fn generate_mock_proof() -> (GrothProof, GrothVK) {
         use crate::groth16::verifier::Verifier;
         use ark_bn254::Bn254;
         use ark_crypto_primitives::snark::{CircuitSpecificSetupSNARK, SNARK};
@@ -1486,80 +1605,178 @@ mod test {
             -vk.beta_g2,
             proof.b,
         );
-
-        //msm P3
-
-        println!();
-        println!();
-
         let f = Bn254::multi_miller_loop_affine([p1,p2,p3,p4], [q1,q2,q3,q4]).0;
         let p1q1 = Bn254::multi_miller_loop_affine([p1], [q1]).0;
 
         let (c, s) = compute_c_wi(f);
 
-        let fixed_acc = p1q1;
+        (GrothProof { c, s, f_fixed: p1q1, p2, p4, q4, scalars: vec![pub_commit] }, GrothVK {q2, q3, vk_pubs: vk.gamma_abc_g1})
+    }
 
+
+    impl GrothVKBytes {
+        fn write_to_file(&self, path: &str) -> io::Result<()> {
+            let proof_encoded = serde_json::to_vec(self)?;
+            let mut file = std::fs::File::create(path)?;
+            file.write_all(&proof_encoded)?;
+            Ok(())
+        }
+
+        fn read_from_file(path: &str) -> io::Result<Self> {
+            let mut file = std::fs::File::open(path)?;
+            let mut buffer = Vec::new();
+            file.read_to_end(&mut buffer)?;
+            let proof = serde_json::from_slice(&buffer)?;
+            Ok(proof)
+        }
+    }
+
+    impl GrothProofBytes {
+        fn write_to_file(&self, path: &str) -> io::Result<()> {
+            let proof_encoded = serde_json::to_vec(self)?;
+            let mut file = std::fs::File::create(path)?;
+            file.write_all(&proof_encoded)?;
+            Ok(())
+        }
+
+        fn read_from_file(path: &str) -> io::Result<Self> {
+            let mut file = std::fs::File::open(path)?;
+            let mut buffer = Vec::new();
+            file.read_to_end(&mut buffer)?;
+            let proof = serde_json::from_slice(&buffer)?;
+            Ok(proof)
+        }
+    }
+
+
+    #[test]
+    fn test_gen_groth() {
+        let gp_f = "chunker_data/groth_proof.bin";
+        let vk_f = "chunker_data/groth_vk.bin";
+        let (mock_proof, mock_vk) = generate_mock_proof();
+        mock_proof.write_groth16_proof_to_file(gp_f);
+        mock_vk.write_vk_to_file(vk_f);
+        let read_mock_proof = GrothProof::read_groth16_proof_from_file(gp_f);
+        let read_vk = GrothVK::read_vk_from_file(vk_f);
+        assert_eq!(read_mock_proof, mock_proof);
+        assert_eq!(read_vk, mock_vk);
+    }
+
+    #[test]
+    fn test_operator_generates_keys() {
+        let pubs_f = "chunker_data/pubkeys.json";
         let master_secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let pubs = keygen(master_secret);
+        write_map_to_file(&pubs, pubs_f).unwrap();
+        let read_pubs = read_map_from_file(pubs_f).unwrap();
+        assert_eq!(read_pubs, pubs);
+    }
 
+    #[test]
+    fn test_compile_to_taptree() {
+        let vk_f = "chunker_data/groth_vk.bin";
+        let pubs_f = "chunker_data/pubkeys.json";
+        let pubkeys = read_map_from_file(pubs_f).unwrap();
+        let vk = GrothVK::read_vk_from_file(vk_f);
+        let save_to_file = true;
+
+        let node_scripts_per_link = compile(Vkey { q2: vk.q2, q3: vk.q3, p3vk: vk.vk_pubs }, &pubkeys);
+
+        if save_to_file {
+            let mut script_cache = HashMap::new();
+            for (k, v) in node_scripts_per_link {
+                script_cache.insert(k, vec![v]);
+            }
+            write_scripts_to_separate_files(script_cache, "tapnode");
+        }
+    }
+
+    #[test]
+    fn test_operator_generates_assertion() {
+        let gp_f = "chunker_data/groth_proof.bin";
+        let vk_f = "chunker_data/groth_vk.bin";
+        let assert_f = "chunker_data/assert.json";
+        let master_secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let dump_assertions_to_file = true;
 
         let pub_scripts_per_link_id = &keygen(master_secret);
+        let mut sig = Sig { msk: Some(master_secret), cache: HashMap::new() };
 
-        // let mut sig = Sig { msk: Some(master_secret), cache: HashMap::new() };
 
-        // let res = evaluate(&mut sig, pub_scripts_per_link_id, p2, p3, p4, q2, q3, q4, c, s, fixed_acc, vec![pub_commit, ark_bn254::Fr::ONE], vec![vk.gamma_abc_g1[1], vk.gamma_abc_g1[0]]);
-        // if res.is_some() {
-        //     let res = res.unwrap();
-        //     let compiled = read_assertions_from_a_file("compile.json");
-        //     let compiled_script = compiled.get(&res.0).unwrap()[0].clone();
-        //     let hint_script = res.1;
+        let proof = GrothProof::read_groth16_proof_from_file(gp_f);
+        let vk = GrothVK::read_vk_from_file(vk_f);
+        let msm_scalar = vec![proof.scalars[0], ark_bn254::Fr::ONE];
+        let msm_gs = vec![vk.vk_pubs[1], vk.vk_pubs[0]];
+        let p3 = msm_gs[1] * msm_scalar[1] + msm_gs[0] * msm_scalar[0]; // move to initial proof
+        let p3 = p3.into_affine();
 
-        //     println!("exec script {:?}", res.0);
-        //     let script = script!{
-        //            { hint_script }
-        //             { compiled_script }
-        //         };
-        //     let exec_result = execute_script(script);
-        //     println!("check execution {}", exec_result.success);
-        // } else {
-        //     dump_assertions_to_a_file(sig.cache.clone(), "assertion.json");
-        // }
+        let fault = evaluate(
+            &mut sig, pub_scripts_per_link_id, proof.p2, p3, proof.p4, vk.q2, vk.q3, proof.q4, proof.c, proof.s, proof.f_fixed, msm_scalar, msm_gs);
+        assert!(fault.is_none());
+        if dump_assertions_to_file {
+            write_scripts_to_file(sig.cache, assert_f);
+        }
+    }
+    
 
-    //     let link_ids = keygen(master_secret);
-        let vkc = Vkey { q2, q3, p3vk: vec![vk.gamma_abc_g1[1], vk.gamma_abc_g1[0]]};
-        let bcs = compile(vkc, &pub_scripts_per_link_id);
+     
+    #[test]
+    fn test_challenger_executes_disprove() {
+        let gp_f = "chunker_data/groth_proof.bin";
+        let vk_f = "chunker_data/groth_vk.bin";
+        let assert_f = "chunker_data/assert.json";
+        let master_secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let pubs_f = "chunker_data/pubkeys.json";
 
-    //     let mut scrs_new = HashMap::new();
-    //     for (k, v) in bcs {
-    //         scrs_new.insert(k, vec![v]);
-    //     }
-    //    dump_assertions_to_a_file(scrs_new, "compile.json");
+        let pub_scripts_per_link_id = read_map_from_file(pubs_f).unwrap();
+        let proof = GrothProof::read_groth16_proof_from_file(gp_f);
+        let vk = GrothVK::read_vk_from_file(vk_f);
+        let msm_scalar = vec![proof.scalars[0], ark_bn254::Fr::ONE]; 
+        let msm_gs = vec![vk.vk_pubs[1], vk.vk_pubs[0]];
+        let p3 = msm_gs[1] * msm_scalar[1] + msm_gs[0] * msm_scalar[0]; // move to initial proof
+        let p3 = p3.into_affine();
 
-        let mut assertion= read_assertions_from_a_file("assertion.json");
-        let index_to_corrupt = 54;
-        let corrup_scr = winternitz::sign_digits(&format!("{}{:04X}", master_secret, index_to_corrupt), [1u8;64]);
+        // read assertions
+        let index_to_corrupt = 101;
+        let index_is_hash = true; // todo: index_is_hash <- circuit_config_get_type(index_to_corrupt)
+
+        let mut assertion= read_scripts_from_file(assert_f);        
+        let mut corrup_scr = winternitz::sign_digits(&format!("{}{:04X}", master_secret, index_to_corrupt), [1u8; 64]);
+        if index_is_hash {
+            corrup_scr = winternitz_hash::sign_digits(&format!("{}{:04X}", master_secret, index_to_corrupt), [1u8; 40]);
+        }
         assertion.insert(index_to_corrupt, corrup_scr);
-
+        println!("load with faulty assertion");
         let mut sig = Sig { msk: None, cache: assertion };
-        let res = evaluate(&mut sig, pub_scripts_per_link_id, p2, p3, p4, q2, q3, q4, c, s, fixed_acc, vec![pub_commit, ark_bn254::Fr::ONE], vec![vk.gamma_abc_g1[1], vk.gamma_abc_g1[0]]);
-        if res.is_some() {
-            let res = res.unwrap();
-            
-            let compiled = read_assertions_from_a_file("compile.json");
-            let compiled_script = bcs.get(&res.0).unwrap().clone();// compiled.get(&res.0).unwrap()[0].clone();
-            let hint_script = res.1;
 
-            println!("exec script {:?}", res.0);
-            println!("compiled script len {:?}", compiled_script.len());
-            let script = script!{
-                   { hint_script }
-                    {compiled_script}
-                };
-                println!("total script len {:?}", script.len());
-            let exec_result = execute_script(script);
-            println!("check execution {}", exec_result.success);
+
+        let fault = evaluate(
+            &mut sig, &pub_scripts_per_link_id, proof.p2, p3, proof.p4, vk.q2, vk.q3, proof.q4, proof.c, proof.s, proof.f_fixed, msm_scalar, msm_gs);
+        assert!(fault.is_some());
+        let fault = fault.unwrap();
+        assert!(fault.0 == index_to_corrupt);
+        let hints_to_disprove = fault.1;
+
+        let read = read_scripts_from_file(&format!("chunker_data/tapnode_{index_to_corrupt}.json"));
+        let read_scr = read.get(&index_to_corrupt).unwrap();
+        assert_eq!(read_scr.len(), 1);
+        let tap_node = read_scr[0].clone();
+        println!("Executing Disprove Node {:?}", index_to_corrupt);
+
+        let script = script!{
+                { hints_to_disprove }
+                {tap_node}
+            };
+        let exec_result = execute_script(script);
+        println!("Exec Result Pass: {}", exec_result.success);
+        if !exec_result.success {
+            println!("Exec Result Failed :");
             for i in 0..exec_result.final_stack.len() {
                 println!("{i:} {:?}", exec_result.final_stack.get(i));
             }
         }
+
     }
+
+
 }

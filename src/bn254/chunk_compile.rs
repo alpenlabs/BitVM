@@ -10,6 +10,7 @@ use crate::bn254::{ chunk_taps};
 use crate::signatures::winternitz_compact::{WOTSPubKey};
 use crate::signatures::wots::{wots160, wots256};
 use super::chunk_config::{assign_link_ids, groth16_config_gen, msm_config_gen, post_miller_config_gen, pre_miller_config_gen, premiller_config_gen, public_params_config_gen};
+use super::chunk_utils::write_scripts_to_separate_files;
 use super::{chunk_taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4}};
 
 use crate::{
@@ -503,13 +504,14 @@ pub(crate) fn compile(vk: Vkey, link_ids: &HashMap<u32, WOTSPubKey>) -> HashMap<
     scrs
 }
 
+
 #[cfg(test)]
 mod test {
     use ark_ff::UniformRand;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::bn254::{chunk_config::keygen, chunk_utils::{dump_assertions_to_a_file, read_assertions_from_a_file}};
+    use crate::bn254::{chunk_config::keygen, chunk_utils::{read_scripts_from_file, write_scripts_to_file, write_scripts_to_separate_files}};
 
     use super::*;
 
@@ -525,24 +527,12 @@ mod test {
         let link_ids = keygen(sec_key);
         let vk = Vkey { q2, q3, p3vk: vec![vka, vkb]};
         let bcs = compile(vk, &link_ids);
-
-        let mut scrs_new = HashMap::new();
-        for (k, v) in bcs {
-            scrs_new.insert(k, vec![v]);
-        }
-       // dump_assertions_to_a_file(scrs_new, "compile.json");
-       // let scrs= compile(sec_key, );
-      //  let _bcs_to_presign: Vec<bitcoin::ScriptBuf> = scrs.iter().map(|f| f.1.clone().compile()).collect();
-        // for pubs in pubss {
-        //     println!("DELIM");
-        //     println!("{:?}", pubs);
-        // }
     }
 
     #[test]
     fn print_links() {
  
-        let compiled = read_assertions_from_a_file("compile.json");
+        let compiled = read_scripts_from_file("compile.json");
         let id = 101;
         let compiled_script = compiled.get(&id).unwrap();
         for c in compiled_script {
