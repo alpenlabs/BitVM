@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 use super::config::miller_config_gen;
 use super::config::{
-    assign_link_ids, groth16_config_gen, msm_config_gen, post_miller_config_gen,
-    pre_miller_config_gen, premiller_config_gen, public_params_config_gen,
+    assign_link_ids, msm_config_gen, post_miller_config_gen,
+    pre_miller_config_gen,
 };
 use super::msm::{bitcom_msm, tap_msm};
 use super::taps;
@@ -13,14 +13,13 @@ use super::taps::{
     bitcom_add_eval_mul_for_fixed_Qs_with_frob, bitcom_dense_dense_mul0, bitcom_dense_dense_mul1,
     bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_hash_p, bitcom_initT4,
     bitcom_point_add_with_frob, bitcom_precompute_Px, bitcom_precompute_Py,
-    bitcom_sparse_dense_mul, tap_add_eval_mul_for_fixed_Qs,
+    bitcom_sparse_dense_mul,
     tap_add_eval_mul_for_fixed_Qs_with_frob, tap_frob_fp12, tap_hash_c2, tap_hash_p,
     tap_point_add_with_frob, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, Link,
 };
 use super::taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4};
-use super::utils::write_scripts_to_separate_files;
-use crate::signatures::winternitz_compact::WOTSPubKey;
-use crate::signatures::wots::{wots160, wots256};
+use super::wots::WOTSPubKey;
+
 
 use crate::treepp::*;
 
@@ -523,80 +522,6 @@ fn compile_msm_circuit(
         msm_tap_index += 1;
     }
     scripts
-}
-
-pub struct AssertPublicKeys {
-    pub p160: HashMap<u32, wots160::PublicKey>,
-    pub p256: HashMap<u32, wots256::PublicKey>,
-}
-
-pub fn generate_verifier_public_keys(msk: &str) -> AssertPublicKeys {
-    let (links, _, _) = assign_link_ids();
-    let mut p160 = HashMap::new();
-    let mut p256 = HashMap::new();
-
-    for i in 0..links.len() as u32 {
-        if i < 32 {
-            let public_key = wots256::generate_public_key(&format!("{msk}{i:04X}"));
-            p256.insert(i, public_key);
-        } else {
-            let public_key = wots160::generate_public_key(&format!("{msk}{i:04X}"));
-            p160.insert(i, public_key);
-        }
-    }
-    AssertPublicKeys { p160, p256 }
-}
-
-pub fn generate_disprover_script_public_keys(apk: &AssertPublicKeys) -> Vec<Script> {
-    let mut spks = Vec::new();
-    for (_, &public_key) in &apk.p256 {
-        spks.push(wots256::compact::checksig_verify(public_key));
-    }
-    for (_, &public_key) in &apk.p160 {
-        spks.push(wots160::compact::checksig_verify(public_key));
-    }
-    spks
-}
-
-pub fn generate_assertion_script_public_keys(apk: &AssertPublicKeys) -> Vec<Script> {
-    let mut spks = Vec::new();
-    for (_, &public_key) in &apk.p256 {
-        spks.push(wots256::checksig_verify(public_key));
-    }
-    for (_, &public_key) in &apk.p160 {
-        spks.push(wots160::checksig_verify(public_key));
-    }
-    spks
-}
-
-pub fn generate_assertion_spending_key_lengths(apk: &AssertPublicKeys) -> Vec<usize> {
-    let mut spks = Vec::new();
-    for (_, &public_key) in &apk.p256 {
-        spks.push(
-            wots256::sign(
-                "00",
-                &vec![
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                ],
-            )
-            .len(),
-        );
-    }
-    for (_, &public_key) in &apk.p160 {
-        spks.push(
-            wots160::sign(
-                "00",
-                &vec![
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                ],
-            )
-            .len(),
-        );
-    }
-    spks
 }
 
 pub(crate) struct Vkey {

@@ -4,7 +4,6 @@ use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
 };
-use bitcoin::opcodes::all::{OP_2DROP, OP_FROMALTSTACK, OP_TOALTSTACK};
 use bitcoin::ScriptBuf;
 use std::cmp::min;
 use std::fs::File;

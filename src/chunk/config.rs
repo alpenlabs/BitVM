@@ -2,10 +2,8 @@ use std::collections::HashMap;
 
 use ark_ec::bn::BnConfig;
 
-use crate::signatures::{
-    winternitz_compact::{self, WOTSPubKey},
-    winternitz_compact_hash,
-};
+
+use super::wots::{wots_compact_get_pub_key, wots_compact_hash_get_pub_key, WOTSPubKey};
 
 pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 
@@ -829,9 +827,9 @@ pub fn keygen(msk: &str) -> HashMap<u32, WOTSPubKey> {
         let link_id = link.0;
         let mut pub_key = vec![];
         if link.1 {
-            pub_key = winternitz_compact::get_pub_key(&format!("{}{:04X}", msk, link.0));
+            pub_key = wots_compact_get_pub_key(&format!("{}{:04X}", msk, link.0));
         } else {
-            pub_key = winternitz_compact_hash::get_pub_key(&format!("{}{:04X}", msk, link.0));
+            pub_key = wots_compact_hash_get_pub_key(&format!("{}{:04X}", msk, link.0));
         }
         //let s = checksig_verify_fq(pub_key);
         scripts.insert(link_id as u32, pub_key);

@@ -27,7 +27,6 @@ use crate::chunk::taps::{
     HintOutGrothC, HintOutPubIdentity, HintOutSparseDbl, Link,
 };
 use crate::execute_script;
-use crate::signatures::winternitz_compact::WOTSPubKey;
 
 use super::config::{
     assign_link_ids, groth16_config_gen, msm_config_gen, post_miller_config_gen,
@@ -36,6 +35,7 @@ use super::config::{
 use super::primitves::emulate_fq_to_nibbles;
 use super::taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4};
 use super::taps::{tup_to_scr, HintOut, Sig};
+use super::wots::WOTSPubKey;
 use crate::treepp::*;
 
 fn evaluate_miller_circuit(
@@ -1830,10 +1830,9 @@ mod test {
             utils::{
                 read_map_from_file, read_scripts_from_file, write_map_to_file,
                 write_scripts_to_file, write_scripts_to_separate_files,
-            },
+            }, wots::{wots_hash_sign_digits, wots_sign_digits},
         },
         groth16::offchain_checker::compute_c_wi,
-        signatures::{winternitz, winternitz_compact, winternitz_compact_hash, winternitz_hash},
     };
 
     use super::*;
@@ -2236,12 +2235,12 @@ mod test {
         );
 
         let mut assertion = read_scripts_from_file(assert_f);
-        let mut corrup_scr = winternitz_hash::sign_digits(
+        let mut corrup_scr = wots_hash_sign_digits(
             &format!("{}{:04X}", master_secret, index_to_corrupt),
             [1u8; 40],
         );
         if index_is_field {
-            corrup_scr = winternitz::sign_digits(
+            corrup_scr = wots_sign_digits(
                 &format!("{}{:04X}", master_secret, index_to_corrupt),
                 [1u8; 64],
             );

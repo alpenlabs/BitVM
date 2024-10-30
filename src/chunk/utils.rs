@@ -1,7 +1,5 @@
 use crate::treepp::*;
 use bitcoin::ScriptBuf;
-use serde::Deserialize;
-use serde::Serialize;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
