@@ -10,7 +10,7 @@ use std::cmp::min;
 use std::fs::File;
 use std::io::{self, Read};
 
-use super::utils::fr_push_not_montgomery;
+use crate::bn254::utils::fr_push_not_montgomery;
 
 fn split_digit(window: u32, index: u32) -> Script {
     script! {

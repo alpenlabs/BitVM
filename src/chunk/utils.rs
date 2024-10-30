@@ -76,9 +76,9 @@ mod test {
     use bitcoin_script::script;
 
     use crate::{
-        bn254::{
-            chunk_config::keygen,
-            chunk_taps::{bitcom_precompute_Py, tap_precompute_Py},
+        chunk::{
+            config::keygen,
+            taps::{bitcom_precompute_Py, tap_precompute_Py},
         },
         groth16::offchain_checker::compute_c_wi,
     };

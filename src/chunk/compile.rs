@@ -2,16 +2,14 @@ use ark_bn254::g2::G2Affine;
 use ark_ec::bn::BnConfig;
 use std::collections::HashMap;
 
-use super::chunk_config::{
+use super::config::miller_config_gen;
+use super::config::{
     assign_link_ids, groth16_config_gen, msm_config_gen, post_miller_config_gen,
     pre_miller_config_gen, premiller_config_gen, public_params_config_gen,
 };
-use super::chunk_taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4};
-use super::chunk_utils::write_scripts_to_separate_files;
-use crate::bn254::chunk_config::miller_config_gen;
-use crate::bn254::chunk_msm::{bitcom_msm, tap_msm};
-use crate::bn254::chunk_taps;
-use crate::bn254::chunk_taps::{
+use super::msm::{bitcom_msm, tap_msm};
+use super::taps;
+use super::taps::{
     bitcom_add_eval_mul_for_fixed_Qs_with_frob, bitcom_dense_dense_mul0, bitcom_dense_dense_mul1,
     bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_hash_p, bitcom_initT4,
     bitcom_point_add_with_frob, bitcom_precompute_Px, bitcom_precompute_Py,
@@ -19,6 +17,8 @@ use crate::bn254::chunk_taps::{
     tap_add_eval_mul_for_fixed_Qs_with_frob, tap_frob_fp12, tap_hash_c2, tap_hash_p,
     tap_point_add_with_frob, tap_precompute_Px, tap_precompute_Py, tap_sparse_dense_mul, Link,
 };
+use super::taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4};
+use super::utils::write_scripts_to_separate_files;
 use crate::signatures::winternitz_compact::WOTSPubKey;
 use crate::signatures::wots::{wots160, wots256};
 
@@ -86,8 +86,8 @@ fn compile_miller_circuit(
             );
             let blk_name = block.category.clone();
             if blk_name == "Sqr" {
-                let sc1 = chunk_taps::tap_squaring();
-                let sc2 = chunk_taps::bitcom_squaring(link_ids, sec_out, deps_indices);
+                let sc1 = taps::tap_squaring();
+                let sc2 = taps::bitcom_squaring(link_ids, sec_out, deps_indices);
                 scripts.insert(
                     sec_out.0,
                     script! {
@@ -96,8 +96,8 @@ fn compile_miller_circuit(
                     },
                 );
             } else if blk_name == "DblAdd" {
-                let sc1 = chunk_taps::tap_point_ops(*bit);
-                let sc2 = chunk_taps::bitcom_point_ops(link_ids, sec_out, deps_indices, *bit);
+                let sc1 = taps::tap_point_ops(*bit);
+                let sc2 = taps::bitcom_point_ops(link_ids, sec_out, deps_indices, *bit);
                 scripts.insert(
                     sec_out.0,
                     script! {
@@ -106,8 +106,8 @@ fn compile_miller_circuit(
                     },
                 );
             } else if blk_name == "Dbl" {
-                let sc1 = chunk_taps::tap_point_dbl();
-                let sc2 = chunk_taps::bitcom_point_dbl(link_ids, sec_out, deps_indices);
+                let sc1 = taps::tap_point_dbl();
+                let sc2 = taps::bitcom_point_dbl(link_ids, sec_out, deps_indices);
                 scripts.insert(
                     sec_out.0,
                     script! {
@@ -116,8 +116,8 @@ fn compile_miller_circuit(
                     },
                 );
             } else if blk_name == "SD1" {
-                let sc1 = chunk_taps::tap_sparse_dense_mul(true);
-                let sc2 = chunk_taps::bitcom_sparse_dense_mul(link_ids, sec_out, deps_indices);
+                let sc1 = taps::tap_sparse_dense_mul(true);
+                let sc2 = taps::bitcom_sparse_dense_mul(link_ids, sec_out, deps_indices);
                 scripts.insert(
                     sec_out.0,
                     script! {
@@ -126,12 +126,9 @@ fn compile_miller_circuit(
                     },
                 );
             } else if blk_name == "SS1" {
-                let (sc1, a, b) = chunk_taps::tap_double_eval_mul_for_fixed_Qs(nt2, nt3);
-                let sc2 = chunk_taps::bitcom_double_eval_mul_for_fixed_Qs(
-                    link_ids,
-                    sec_out,
-                    deps_indices,
-                );
+                let (sc1, a, b) = taps::tap_double_eval_mul_for_fixed_Qs(nt2, nt3);
+                let sc2 =
+                    taps::bitcom_double_eval_mul_for_fixed_Qs(link_ids, sec_out, deps_indices);
                 scripts.insert(
                     sec_out.0,
                     script! {
@@ -142,8 +139,8 @@ fn compile_miller_circuit(
                 nt2 = a;
                 nt3 = b;
             } else if blk_name == "DD1" {
-                let sc1 = chunk_taps::tap_dense_dense_mul0(false);
-                let sc2 = chunk_taps::bitcom_dense_dense_mul0(link_ids, sec_out, deps_indices);
+                let sc1 = taps::tap_dense_dense_mul0(false);
+                let sc2 = taps::bitcom_dense_dense_mul0(link_ids, sec_out, deps_indices);
                 scripts.insert(
                     sec_out.0,
                     script! {
@@ -152,8 +149,8 @@ fn compile_miller_circuit(
                     },
                 );
             } else if blk_name == "DD2" {
-                let sc1 = chunk_taps::tap_dense_dense_mul1(false);
-                let sc2 = chunk_taps::bitcom_dense_dense_mul1(link_ids, sec_out, deps_indices);
+                let sc1 = taps::tap_dense_dense_mul1(false);
+                let sc2 = taps::bitcom_dense_dense_mul1(link_ids, sec_out, deps_indices);
                 scripts.insert(
                     sec_out.0,
                     script! {
@@ -162,8 +159,8 @@ fn compile_miller_circuit(
                     },
                 );
             } else if blk_name == "DD3" {
-                let sc1 = chunk_taps::tap_dense_dense_mul0(false);
-                let sc2 = chunk_taps::bitcom_dense_dense_mul0(link_ids, sec_out, deps_indices);
+                let sc1 = taps::tap_dense_dense_mul0(false);
+                let sc2 = taps::bitcom_dense_dense_mul0(link_ids, sec_out, deps_indices);
                 scripts.insert(
                     sec_out.0,
                     script! {
@@ -172,8 +169,8 @@ fn compile_miller_circuit(
                     },
                 );
             } else if blk_name == "DD4" {
-                let sc1 = chunk_taps::tap_dense_dense_mul1(false);
-                let sc2 = chunk_taps::bitcom_dense_dense_mul1(link_ids, sec_out, deps_indices);
+                let sc1 = taps::tap_dense_dense_mul1(false);
+                let sc2 = taps::bitcom_dense_dense_mul1(link_ids, sec_out, deps_indices);
                 scripts.insert(
                     sec_out.0,
                     script! {
@@ -182,8 +179,8 @@ fn compile_miller_circuit(
                     },
                 );
             } else if blk_name == "SD2" {
-                let sc1 = chunk_taps::tap_sparse_dense_mul(false);
-                let sc2 = chunk_taps::bitcom_sparse_dense_mul(link_ids, sec_out, deps_indices);
+                let sc1 = taps::tap_sparse_dense_mul(false);
+                let sc2 = taps::bitcom_sparse_dense_mul(link_ids, sec_out, deps_indices);
                 scripts.insert(
                     sec_out.0,
                     script! {
@@ -192,9 +189,8 @@ fn compile_miller_circuit(
                     },
                 );
             } else if blk_name == "SS2" {
-                let (sc1, a, b) = chunk_taps::tap_add_eval_mul_for_fixed_Qs(nt2, nt3, q2, q3, *bit);
-                let sc2 =
-                    chunk_taps::bitcom_add_eval_mul_for_fixed_Qs(link_ids, sec_out, deps_indices);
+                let (sc1, a, b) = taps::tap_add_eval_mul_for_fixed_Qs(nt2, nt3, q2, q3, *bit);
+                let sc2 = taps::bitcom_add_eval_mul_for_fixed_Qs(link_ids, sec_out, deps_indices);
                 scripts.insert(
                     sec_out.0,
                     script! {
@@ -205,8 +201,8 @@ fn compile_miller_circuit(
                 nt2 = a;
                 nt3 = b;
             } else if blk_name == "DD5" {
-                let sc1 = chunk_taps::tap_dense_dense_mul0(false);
-                let sc2 = chunk_taps::bitcom_dense_dense_mul0(link_ids, sec_out, deps_indices);
+                let sc1 = taps::tap_dense_dense_mul0(false);
+                let sc2 = taps::bitcom_dense_dense_mul0(link_ids, sec_out, deps_indices);
                 scripts.insert(
                     sec_out.0,
                     script! {
@@ -215,8 +211,8 @@ fn compile_miller_circuit(
                     },
                 );
             } else if blk_name == "DD6" {
-                let sc1 = chunk_taps::tap_dense_dense_mul1(false);
-                let sc2 = chunk_taps::bitcom_dense_dense_mul1(link_ids, sec_out, deps_indices);
+                let sc1 = taps::tap_dense_dense_mul1(false);
+                let sc2 = taps::bitcom_dense_dense_mul1(link_ids, sec_out, deps_indices);
                 scripts.insert(
                     sec_out.0,
                     script! {
@@ -630,12 +626,7 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::bn254::{
-        chunk_config::keygen,
-        chunk_utils::{
-            read_scripts_from_file, write_scripts_to_file, write_scripts_to_separate_files,
-        },
-    };
+    use crate::chunk::{config::keygen, utils::read_scripts_from_file};
 
     use super::*;
 

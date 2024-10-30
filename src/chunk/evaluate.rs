@@ -5,12 +5,12 @@ use bitcoin::opcodes::OP_TRUE;
 use bitcoin_script::script;
 use std::collections::HashMap;
 
-use crate::bn254::chunk_compile::ATE_LOOP_COUNT;
-use crate::bn254::chunk_config::miller_config_gen;
-use crate::bn254::chunk_msm::{bitcom_msm, hint_msm, tap_msm, HintInMSM};
-use crate::bn254::chunk_primitves::emulate_extern_hash_fps;
-use crate::bn254::chunk_taps;
-use crate::bn254::chunk_taps::{
+use crate::chunk::compile::ATE_LOOP_COUNT;
+use crate::chunk::config::miller_config_gen;
+use crate::chunk::msm::{bitcom_msm, hint_msm, tap_msm, HintInMSM};
+use crate::chunk::primitves::emulate_extern_hash_fps;
+use crate::chunk::taps;
+use crate::chunk::taps::{
     bitcom_add_eval_mul_for_fixed_Qs, bitcom_add_eval_mul_for_fixed_Qs_with_frob,
     bitcom_dense_dense_mul0, bitcom_dense_dense_mul1, bitcom_double_eval_mul_for_fixed_Qs,
     bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_hash_p, bitcom_initT4,
@@ -29,13 +29,13 @@ use crate::bn254::chunk_taps::{
 use crate::execute_script;
 use crate::signatures::winternitz_compact::WOTSPubKey;
 
-use super::chunk_config::{
+use super::config::{
     assign_link_ids, groth16_config_gen, msm_config_gen, post_miller_config_gen,
     pre_miller_config_gen,
 };
-use super::chunk_primitves::emulate_fq_to_nibbles;
-use super::chunk_taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4};
-use super::chunk_taps::{tup_to_scr, HintOut, Sig};
+use super::primitves::emulate_fq_to_nibbles;
+use super::taps::{tap_dense_dense_mul0, tap_dense_dense_mul1, tap_hash_c, tap_initT4};
+use super::taps::{tup_to_scr, HintOut, Sig};
 use crate::treepp::*;
 
 fn evaluate_miller_circuit(
@@ -101,13 +101,13 @@ fn evaluate_miller_circuit(
             if blk_name == "Sqr" {
                 assert_eq!(hints.len(), 1);
                 let (hintout, hint_script) = match hints[0].clone() {
-                    HintOut::DenseMul1(r) => chunk_taps::hint_squaring(
+                    HintOut::DenseMul1(r) => taps::hint_squaring(
                         sig,
                         sec_out,
                         sec_in.clone(),
                         HintInSquaring::from_dmul1(r),
                     ),
-                    HintOut::GrothC(r) => chunk_taps::hint_squaring(
+                    HintOut::GrothC(r) => taps::hint_squaring(
                         sig,
                         sec_out,
                         sec_in.clone(),
@@ -153,15 +153,15 @@ fn evaluate_miller_circuit(
                 let (hintout, hint_script) = match hints[0].clone() {
                     HintOut::InitT4(r) => {
                         let hint_in = HintInDblAdd::from_initT4(r, p, q);
-                        chunk_taps::hint_point_ops(sig, sec_out, sec_in.clone(), hint_in, *bit)
+                        taps::hint_point_ops(sig, sec_out, sec_in.clone(), hint_in, *bit)
                     }
                     HintOut::DblAdd(r) => {
                         let hint_in = HintInDblAdd::from_doubleadd(r, p, q);
-                        chunk_taps::hint_point_ops(sig, sec_out, sec_in.clone(), hint_in, *bit)
+                        taps::hint_point_ops(sig, sec_out, sec_in.clone(), hint_in, *bit)
                     }
                     HintOut::Double(r) => {
                         let hint_in = HintInDblAdd::from_double(r, p, q);
-                        chunk_taps::hint_point_ops(sig, sec_out, sec_in.clone(), hint_in, *bit)
+                        taps::hint_point_ops(sig, sec_out, sec_in.clone(), hint_in, *bit)
                     }
                     _ => panic!("failed to match"),
                 };
@@ -200,15 +200,15 @@ fn evaluate_miller_circuit(
                 let (hintout, hint_script) = match hints[0].clone() {
                     HintOut::InitT4(r) => {
                         let hint_in = HintInDouble::from_initT4(r, p.x, p.y);
-                        chunk_taps::hint_point_dbl(sig, sec_out, sec_in.clone(), hint_in)
+                        taps::hint_point_dbl(sig, sec_out, sec_in.clone(), hint_in)
                     }
                     HintOut::DblAdd(r) => {
                         let hint_in = HintInDouble::from_doubleadd(r, p.x, p.y);
-                        chunk_taps::hint_point_dbl(sig, sec_out, sec_in.clone(), hint_in)
+                        taps::hint_point_dbl(sig, sec_out, sec_in.clone(), hint_in)
                     }
                     HintOut::Double(r) => {
                         let hint_in = HintInDouble::from_double(r, p.x, p.y);
-                        chunk_taps::hint_point_dbl(sig, sec_out, sec_in.clone(), hint_in)
+                        taps::hint_point_dbl(sig, sec_out, sec_in.clone(), hint_in)
                     }
                     _ => panic!("failed to match"),
                 };
@@ -240,23 +240,11 @@ fn evaluate_miller_circuit(
                 let (sd_hint, hint_script) = match hints[1].clone() {
                     HintOut::DblAdd(f) => {
                         let hint_in = HintInSparseDenseMul::from_double_add_top(f, dense);
-                        chunk_taps::hint_sparse_dense_mul(
-                            sig,
-                            sec_out,
-                            sec_in.clone(),
-                            hint_in,
-                            true,
-                        )
+                        taps::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), hint_in, true)
                     }
                     HintOut::Double(f) => {
                         let hint_in = HintInSparseDenseMul::from_double(f, dense);
-                        chunk_taps::hint_sparse_dense_mul(
-                            sig,
-                            sec_out,
-                            sec_in.clone(),
-                            hint_in,
-                            true,
-                        )
+                        taps::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), hint_in, true)
                     }
                     _ => panic!(),
                 };
@@ -295,12 +283,8 @@ fn evaluate_miller_circuit(
                 let p2 = G1Affine::new_unchecked(ps[3], ps[2]);
                 let hint_in: HintInSparseDbl =
                     HintInSparseDbl::from_groth_and_aux(p2, p3, nt2, nt3);
-                let (hint_out, hint_script) = chunk_taps::hint_double_eval_mul_for_fixed_Qs(
-                    sig,
-                    sec_out,
-                    sec_in.clone(),
-                    hint_in,
-                );
+                let (hint_out, hint_script) =
+                    taps::hint_double_eval_mul_for_fixed_Qs(sig, sec_out, sec_in.clone(), hint_in);
                 let (ops_script, _, _) = tap_double_eval_mul_for_fixed_Qs(nt2, nt3);
                 let bcs_script = bitcom_double_eval_mul_for_fixed_Qs(
                     pub_scripts_per_link_id,
@@ -477,13 +461,7 @@ fn evaluate_miller_circuit(
                 let (sd_hint, hint_script) = match hints[1].clone() {
                     HintOut::DblAdd(f) => {
                         let hint_in = HintInSparseDenseMul::from_doubl_add_bottom(f, dense);
-                        chunk_taps::hint_sparse_dense_mul(
-                            sig,
-                            sec_out,
-                            sec_in.clone(),
-                            hint_in,
-                            false,
-                        )
+                        taps::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), hint_in, false)
                     }
                     _ => panic!(),
                 };
@@ -522,7 +500,7 @@ fn evaluate_miller_circuit(
                 let p2 = G1Affine::new_unchecked(ps[3], ps[2]);
                 let hint_in: HintInSparseAdd =
                     HintInSparseAdd::from_groth_and_aux(p2, p3, q2, q3, nt2, nt3);
-                let (hint_out, hint_script) = chunk_taps::hint_add_eval_mul_for_fixed_Qs(
+                let (hint_out, hint_script) = taps::hint_add_eval_mul_for_fixed_Qs(
                     sig,
                     sec_out,
                     sec_in.clone(),
@@ -907,23 +885,11 @@ fn evaluate_post_miller_circuit(
                 let (hintout, hint_script) = match hints_out[0].clone() {
                     HintOut::DblAdd(r) => {
                         let hint_in = HintInAdd::from_doubleadd(r, p.x, p.y, q);
-                        chunk_taps::hint_point_add_with_frob(
-                            sig,
-                            sec_out,
-                            sec_in.clone(),
-                            hint_in,
-                            1,
-                        )
+                        taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), hint_in, 1)
                     }
                     HintOut::Double(r) => {
                         let hint_in = HintInAdd::from_double(r, p.x, p.y, q);
-                        chunk_taps::hint_point_add_with_frob(
-                            sig,
-                            sec_out,
-                            sec_in.clone(),
-                            hint_in,
-                            1,
-                        )
+                        taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), hint_in, 1)
                     }
                     _ => panic!("failed to match"),
                 };
@@ -951,13 +917,7 @@ fn evaluate_post_miller_circuit(
                 let (hintout, hint_script) = match hints_out[0].clone() {
                     HintOut::Add(r) => {
                         let hint_in = HintInAdd::from_add(r, p.x, p.y, q);
-                        chunk_taps::hint_point_add_with_frob(
-                            sig,
-                            sec_out,
-                            sec_in.clone(),
-                            hint_in,
-                            -1,
-                        )
+                        taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), hint_in, -1)
                     }
                     _ => panic!("failed to match"),
                 };
@@ -991,7 +951,7 @@ fn evaluate_post_miller_circuit(
             let (sd_hint, hint_script) = match hints_out[1].clone() {
                 HintOut::Add(f) => {
                     let hint_in = HintInSparseDenseMul::from_add(f, dense);
-                    chunk_taps::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), hint_in, false)
+                    taps::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), hint_in, false)
                 }
                 _ => panic!(),
             };
@@ -1031,7 +991,7 @@ fn evaluate_post_miller_circuit(
             let hint_in: HintInSparseAdd =
                 HintInSparseAdd::from_groth_and_aux(p2, p3, q2, q3, nt2, nt3);
             if row.category == "SS1" {
-                let (hint_out, hint_script) = chunk_taps::hint_add_eval_mul_for_fixed_Qs_with_frob(
+                let (hint_out, hint_script) = taps::hint_add_eval_mul_for_fixed_Qs_with_frob(
                     sig,
                     sec_out,
                     sec_in.clone(),
@@ -1065,7 +1025,7 @@ fn evaluate_post_miller_circuit(
                 nt3 = hint_out.t3;
                 aux_output_per_link.insert(row.link_id.clone(), HintOut::SparseAdd(hint_out));
             } else if row.category == "SS2" {
-                let (hint_out, hint_script) = chunk_taps::hint_add_eval_mul_for_fixed_Qs_with_frob(
+                let (hint_out, hint_script) = taps::hint_add_eval_mul_for_fixed_Qs_with_frob(
                     sig,
                     sec_out,
                     sec_in.clone(),
@@ -1864,10 +1824,10 @@ mod test {
     use ark_ec::{AffineRepr, CurveGroup};
 
     use crate::{
-        bn254::{
-            chunk_compile::{compile, Vkey},
-            chunk_config::{get_type_for_link_id, keygen},
-            chunk_utils::{
+        chunk::{
+            compile::{compile, Vkey},
+            config::{get_type_for_link_id, keygen},
+            utils::{
                 read_map_from_file, read_scripts_from_file, write_map_to_file,
                 write_scripts_to_file, write_scripts_to_separate_files,
             },

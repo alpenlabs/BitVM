@@ -1,15 +1,16 @@
-use crate::bn254::chunk_primitves::{
+use crate::bn254::fq6::Fq6;
+use crate::bn254::utils::{
+    fq12_push_not_montgomery, fq2_push_not_montgomery, fq_push_not_montgomery,
+    new_hinted_affine_add_line, new_hinted_affine_double_line, new_hinted_check_line_through_point,
+    new_hinted_ell_by_constant_affine, new_hinted_x_from_eval_point, new_hinted_y_from_eval_point,
+    Hint,
+};
+use crate::bn254::{fq12::Fq12, fq2::Fq2};
+use crate::chunk::primitves::{
     emulate_extern_hash_nibbles, emulate_fq_to_nibbles, emulate_nibbles_to_limbs, hash_fp12,
     hash_fp12_with_hints, hash_fp2, hash_fp4, hash_fp6, pack_nibbles_to_limbs,
     read_script_from_file, unpack_limbs_to_nibbles,
 };
-use crate::bn254::fq6::Fq6;
-use crate::bn254::utils::{
-    fq2_push_not_montgomery, fq_push_not_montgomery, new_hinted_affine_add_line,
-    new_hinted_affine_double_line, new_hinted_check_line_through_point,
-    new_hinted_ell_by_constant_affine, new_hinted_x_from_eval_point, new_hinted_y_from_eval_point,
-};
-use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::signatures::winternitz_compact::{self, WOTSPubKey};
 use crate::signatures::{winternitz, winternitz_compact_hash, winternitz_hash};
 use crate::{
@@ -28,9 +29,8 @@ use std::collections::HashMap;
 use std::ops::Neg;
 use std::str::FromStr;
 
-use super::chunk_msm::HintOutMSM;
-use super::chunk_primitves::{emulate_extern_hash_fps, hash_fp12_192};
-use super::utils::{fq12_push_not_montgomery, Hint};
+use super::msm::HintOutMSM;
+use super::primitves::{emulate_extern_hash_fps, hash_fp12_192};
 
 pub(crate) type HashBytes = [u8; 64];
 
@@ -3735,12 +3735,12 @@ mod test {
     use std::collections::HashMap;
 
     use super::*;
-    use crate::bn254::chunk_primitves::{
-        emulate_extern_hash_fps, emulate_extern_hash_nibbles, emulate_fq_to_nibbles,
-        emulate_nibbles_to_limbs,
-    };
     use crate::bn254::utils::{
         fq12_push_not_montgomery, fq2_push_not_montgomery, fq6_push_not_montgomery,
+    };
+    use crate::chunk::primitves::{
+        emulate_extern_hash_fps, emulate_extern_hash_nibbles, emulate_fq_to_nibbles,
+        emulate_nibbles_to_limbs,
     };
     use crate::signatures::winternitz_compact_hash;
     use ark_ff::Field;

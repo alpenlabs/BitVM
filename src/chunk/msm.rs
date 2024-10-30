@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use crate::bn254::chunk_primitves::{
+use crate::bn254::utils::fq_push_not_montgomery;
+use crate::chunk::primitves::{
     emulate_extern_hash_fps, emulate_fr_to_nibbles, unpack_limbs_to_nibbles,
 };
-use crate::bn254::chunk_taps::{tup_to_scr, wots_locking_script};
-use crate::bn254::utils::fq_push_not_montgomery;
+use crate::chunk::taps::{tup_to_scr, wots_locking_script};
 use crate::signatures::winternitz_compact::{self, WOTSPubKey};
 use crate::signatures::winternitz_compact_hash;
 use crate::{
@@ -19,10 +19,10 @@ use num_traits::One;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
-use super::chunk_primitves::hash_fp2;
-use super::chunk_taps::{HashBytes, Link, Sig};
-use super::fq2::Fq2;
-use super::utils::Hint;
+use super::primitves::hash_fp2;
+use super::taps::{HashBytes, Link, Sig};
+use crate::bn254::fq2::Fq2;
+use crate::bn254::utils::Hint;
 
 pub(crate) fn tap_msm(window: usize, msm_tap_index: usize, qs: Vec<ark_bn254::G1Affine>) -> Script {
     assert!(qs.len() > 0);

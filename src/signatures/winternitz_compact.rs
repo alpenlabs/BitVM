@@ -19,7 +19,7 @@
 // BEAT OUR IMPLEMENTATION AND WIN A CODE GOLF BOUNTY!
 //
 
-use crate::{bn254::chunk_primitves::pack_nibbles_to_limbs, treepp::*};
+use crate::{chunk::primitves::pack_nibbles_to_limbs, treepp::*};
 use bitcoin::{hashes::{hash160, Hash}, opcodes::all::OP_ROLL};
 use hex::decode as hex_decode;
 
