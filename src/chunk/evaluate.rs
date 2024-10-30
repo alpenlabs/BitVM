@@ -2149,11 +2149,12 @@ mod test {
         let vk = GrothVK::read_vk_from_file(vk_f);
         let save_to_file = true;
 
+        let p3vk = vec![vk.vk_pubs[1], vk.vk_pubs[0]];
         let node_scripts_per_link = compile(
             Vkey {
                 q2: vk.q2,
                 q3: vk.q3,
-                p3vk: vk.vk_pubs,
+                p3vk,
             },
             &pubkeys,
         );
@@ -2226,7 +2227,7 @@ mod test {
         let p3 = msm_gs[1] * msm_scalar[1] + msm_gs[0] * msm_scalar[0]; // move to initial proof
         let p3 = p3.into_affine();
 
-        for index_to_corrupt in 606..617 {
+        for index_to_corrupt in 617..648 {
             //let index_to_corrupt = 64;
             let index_is_field = get_type_for_link_id(index_to_corrupt).unwrap();
             println!(
