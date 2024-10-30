@@ -2226,78 +2226,81 @@ mod test {
         let p3 = msm_gs[1] * msm_scalar[1] + msm_gs[0] * msm_scalar[0]; // move to initial proof
         let p3 = p3.into_affine();
 
-        // read assertions
-        let index_to_corrupt = 63;
-        let index_is_field = get_type_for_link_id(index_to_corrupt).unwrap();
-        println!(
-            "load with faulty assertion ({}, {})",
-            index_to_corrupt, index_is_field
-        );
-
-        let mut assertion = read_scripts_from_file(assert_f);
-        let mut corrup_scr = wots_hash_sign_digits(
-            &format!("{}{:04X}", master_secret, index_to_corrupt),
-            [1u8; 40],
-        );
-        if index_is_field {
-            corrup_scr = wots_sign_digits(
-                &format!("{}{:04X}", master_secret, index_to_corrupt),
-                [1u8; 64],
+        for index_to_corrupt in 606..617 {
+            //let index_to_corrupt = 64;
+            let index_is_field = get_type_for_link_id(index_to_corrupt).unwrap();
+            println!(
+                "load with faulty assertion ({}, {})",
+                index_to_corrupt, index_is_field
             );
-        }
-        assertion.insert(index_to_corrupt, corrup_scr);
-
-        let mut sig = Sig {
-            msk: None,
-            cache: assertion,
-        };
-
-        let fault = evaluate(
-            &mut sig,
-            &pub_scripts_per_link_id,
-            proof.p2,
-            p3,
-            proof.p4,
-            vk.q2,
-            vk.q3,
-            proof.q4,
-            proof.c,
-            proof.s,
-            proof.f_fixed,
-            msm_scalar,
-            msm_gs,
-        );
-        assert!(fault.is_some());
-        let fault = fault.unwrap();
-        let index_to_corrupt = fault.0;
-        let hints_to_disprove = fault.1;
-
-        let read = read_scripts_from_file(&format!(
-            "{chunker_data_path}/tapnode_{index_to_corrupt}.json"
-        ));
-        let read_scr = read.get(&index_to_corrupt).unwrap();
-        assert_eq!(read_scr.len(), 1);
-        let tap_node = read_scr[0].clone();
-        println!("Executing Disprove Node {:?}", index_to_corrupt);
-
-        let script = script! {
-            { hints_to_disprove.clone() }
-            {tap_node}
-        };
-        let exec_result = execute_script(script);
-        println!("Exec Result Pass: {}", exec_result.success);
-        if !exec_result.success {
-            println!("Exec Result Failed :");
-            for i in 0..exec_result.final_stack.len() {
-                println!("{i:} {:?}", exec_result.final_stack.get(i));
+    
+            let mut assertion = read_scripts_from_file(assert_f);
+            let mut corrup_scr = wots_hash_sign_digits(
+                &format!("{}{:04X}", master_secret, index_to_corrupt),
+                [1u8; 40],
+            );
+            if index_is_field {
+                corrup_scr = wots_sign_digits(
+                    &format!("{}{:04X}", master_secret, index_to_corrupt),
+                    [1u8; 64],
+                );
             }
-        } else {
-            let mut disprove_map: HashMap<u32, Vec<Script>> = HashMap::new();
-            let disprove_f = &format!("{chunker_data_path}/disprove_{index_to_corrupt}.json");
-            disprove_map.insert(index_to_corrupt, vec![hints_to_disprove]);
-            write_scripts_to_file(disprove_map, disprove_f);
+            assertion.insert(index_to_corrupt, corrup_scr);
+    
+            let mut sig = Sig {
+                msk: None,
+                cache: assertion,
+            };
+    
+            let fault = evaluate(
+                &mut sig,
+                &pub_scripts_per_link_id,
+                proof.p2,
+                p3,
+                proof.p4,
+                vk.q2,
+                vk.q3,
+                proof.q4,
+                proof.c,
+                proof.s,
+                proof.f_fixed,
+                msm_scalar.clone(),
+                msm_gs.clone(),
+            );
+            assert!(fault.is_some());
+            let fault = fault.unwrap();
+            let index_to_corrupt = fault.0;
+            let hints_to_disprove = fault.1;
+    
+            let read = read_scripts_from_file(&format!(
+                "{chunker_data_path}/tapnode_{index_to_corrupt}.json"
+            ));
+            let read_scr = read.get(&index_to_corrupt).unwrap();
+            assert_eq!(read_scr.len(), 1);
+            let tap_node = read_scr[0].clone();
+            println!("Executing Disprove Node {:?}", index_to_corrupt);
+    
+            let script = script! {
+                { hints_to_disprove.clone() }
+                {tap_node}
+            };
+            let exec_result = execute_script(script);
+            println!("Exec Result Pass: {}", exec_result.success);
+            if !exec_result.success {
+                println!("Exec Result Failed :");
+                for i in 0..exec_result.final_stack.len() {
+                    println!("{i:} {:?}", exec_result.final_stack.get(i));
+                }
+                panic!()
+            } else {
+                let mut disprove_map: HashMap<u32, Vec<Script>> = HashMap::new();
+                let disprove_f = &format!("{chunker_data_path}/disprove_{index_to_corrupt}.json");
+                disprove_map.insert(index_to_corrupt, vec![hints_to_disprove]);
+                write_scripts_to_file(disprove_map, disprove_f);
+            }
         }
-    }
+        // read assertions
+     }
 }
 
 // 32 byte

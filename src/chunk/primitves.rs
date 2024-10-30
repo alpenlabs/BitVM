@@ -321,6 +321,8 @@ pub fn pack_nibbles_to_limbs() -> Script {
     }
 }
 
+
+
 pub fn read_script_from_file(file_path: &str) -> Script {
     fn read_file_to_bytes(file_path: &str) -> io::Result<Vec<u8>> {
         let mut file = File::open(file_path)?;
@@ -689,5 +691,102 @@ pub fn hash_fp12_with_hints() -> Script {
         {hash_64b_75k.clone()}
         {pack_nibbles_to_limbs()}
 
+    }
+}
+
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use ark_ff::UniformRand;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
+
+    use crate::{bigint::U254, bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::primitves::unpack_limbs_to_nibbles, execute_script};
+
+
+    pub fn fq_from_nibbles() -> Script {
+        fn split_digit(window: u32, index: u32) -> Script {
+            script! {
+                // {v}
+                0                           // {v} {A}
+                OP_SWAP
+                for i in 0..index {
+                    OP_TUCK                 // {v} {A} {v}
+                    { 1 << (window - i - 1) }   // {v} {A} {v} {1000}
+                    OP_GREATERTHANOREQUAL   // {v} {A} {1/0}
+                    OP_TUCK                 // {v} {1/0} {A} {1/0}
+                    OP_ADD                  // {v} {1/0} {A+1/0}
+                    if i < index - 1 { { NMUL(2) } }
+                    OP_ROT OP_ROT
+                    OP_IF
+                        { 1 << (window - i - 1) }
+                        OP_SUB
+                    OP_ENDIF
+                }
+                OP_SWAP
+            }
+        }
+        
+        const WINDOW: u32 = 4;
+        const LIMB_SIZE: u32 = 29;
+        const N_BITS: u32 = U254::N_BITS;
+        const N_DIGITS: u32 = (N_BITS + WINDOW - 1) / WINDOW;
+
+        script! {
+            for i in 1..64 { { i } OP_ROLL }
+            for i in (1..=N_DIGITS).rev() {
+                if (i * WINDOW) % LIMB_SIZE == 0 {
+                    OP_TOALTSTACK
+                } else if (i * WINDOW) % LIMB_SIZE > 0 &&
+                            (i * WINDOW) % LIMB_SIZE < WINDOW {
+                    OP_SWAP
+                    { split_digit(WINDOW, (i * WINDOW) % LIMB_SIZE) }
+                    OP_ROT
+                    { NMUL(1 << ((i * WINDOW) % LIMB_SIZE)) }
+                    OP_ADD
+                    OP_TOALTSTACK
+                } else if i != N_DIGITS {
+                    { NMUL(1 << WINDOW) }
+                    OP_ADD
+                }
+            }
+            for _ in 1..U254::N_LIMBS { OP_FROMALTSTACK }
+            for i in 1..U254::N_LIMBS { { i } OP_ROLL }
+        }
+    }
+
+
+    #[test]
+    fn test_fq_from_nibbles() { // pack_nibbles_to_fq
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let p = ark_bn254::Fq::rand(&mut prng);
+
+
+        let script = script!(
+            {fq_push_not_montgomery(p)}
+            {Fq::copy(0)}
+            {unpack_limbs_to_nibbles()}
+            {fq_from_nibbles()}
+            {Fq::equalverify(1, 0)}
+        );
+        let exec_result = execute_script(script);
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:} {:?}", exec_result.final_stack.get(i));
+        }
+       
+       let hash32b = [1u8;64];
+       let script = script!{
+            for i in hash32b {
+                {i}
+            }
+            {pack_nibbles_to_limbs()}
+            {fq_from_nibbles()}
+       };
+       let exec_result = execute_script(script);
+       for i in 0..exec_result.final_stack.len() {
+           println!("{i:} {:?}", exec_result.final_stack.get(i));
+       }
     }
 }

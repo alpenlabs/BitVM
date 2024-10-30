@@ -133,3 +133,46 @@ pub fn generate_assertion_spending_key_lengths(apk: &AssertPublicKeys) -> Vec<us
     }
     spks
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{execute_script, signatures::{self, wots::wots256}};
+
+    
+    #[test]
+    fn test_winternitz() {
+        const MY_SECKEY: &str = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        const MESSAGE: [u8; 64 as usize] = [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
+            1, 2, 3, 4,
+        ];
+
+        let public_key = signatures::winternitz::generate_public_key(MY_SECKEY);
+    
+        let wots_pub_key = wots256::generate_public_key(MY_SECKEY);
+
+        let signed_digits = signatures::winternitz::sign_digits(MY_SECKEY, MESSAGE);
+        let wots_signed_digits = wots256::sign(MY_SECKEY, &MESSAGE);
+
+        let script = script!{
+            {signed_digits}
+        };
+        let exec_result = execute_script(script);
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:} {:?}", exec_result.final_stack.get(i));
+        }
+
+
+        let script = script!{
+            {wots_signed_digits}
+        };
+        let exec_result = execute_script(script);
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:} {:?}", exec_result.final_stack.get(i));
+        }
+
+    }
+}
