@@ -1,7 +1,7 @@
 
 #[cfg(test)]
 mod test {
-    use bitvm::{chunk::{config::keygen, wots::{generate_assertion_script_public_keys, generate_assertion_spending_key_lengths, generate_verifier_public_keys}}, signatures::winternitz_compact::checksig_verify_fq};
+    use bitvm::{chunk::{config::keygen, wots::{generate_assertion_script_public_keys, generate_assertion_spending_key_lengths, generate_verifier_public_keys}}, signatures::winternitz_compact::checksig_verify_with_pubkey};
 
 
 
@@ -14,7 +14,7 @@ mod test {
          
         for pub_key_index in pub_key_indices {
             if let Some(pub_key) = pub_keys_per_index.get(&pub_key_index) {
-                let locking_script = checksig_verify_fq(pub_key.clone());
+                let locking_script = checksig_verify_with_pubkey(pub_key.clone());
                 println!("lsindex {} ls {} bytes", pub_key_index, locking_script.len());
             }
         }

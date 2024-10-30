@@ -19,8 +19,8 @@
 // BEAT OUR IMPLEMENTATION AND WIN A CODE GOLF BOUNTY!
 //
 
-use crate::{chunk::primitves::pack_nibbles_to_limbs, signatures::winternitz_compact, treepp::*};
-use bitcoin::{hashes::{hash160, Hash}, opcodes::all::{OP_FROMALTSTACK, OP_TOALTSTACK}};
+use crate::treepp::*;
+use bitcoin::hashes::{hash160, Hash};
 use hex::decode as hex_decode;
 
 ///
@@ -35,9 +35,6 @@ const N0: u32 = (N_BITS + LOG_D - 1) / LOG_D;
 const N1: usize = log(D * N0, D + 1) as usize;
 /// Total number of digits to be signed
 const N: u32 = N0 + N1 as u32;
-///
-const LIMB_SIZE: u32 = 29;
-const N_LIMBS: u32 = 9;
 
 const fn log(n: u32, base: u32) -> u32 {
     _ = n - 1; // compile time assertion: self >= 1
@@ -273,48 +270,7 @@ pub fn get_pub_key(secret_key: &str) -> WOTSPubKey {
 /// Note that the script inputs are malleable.
 ///
 /// Optimized by @SergioDemianLerner, @tomkosm
-pub fn checksig_verify_fq(pub_key: WOTSPubKey) -> Script {
-    
-    pub fn NMUL(n: u32) -> Script {
-        let n_bits = u32::BITS - n.leading_zeros();
-        let bits = (0..n_bits).map(|i| 1 & (n >> i)).collect::<Vec<_>>();
-        script! {
-            if n_bits == 0 { OP_DROP 0 }
-            else {
-                for i in 0..bits.len()-1 {
-                    if bits[i] == 1 { OP_DUP }
-                    { crate::pseudo::OP_2MUL() }
-                }
-                for _ in 1..bits.iter().sum() { OP_ADD }
-            }
-        }
-    }
-
-
-    fn split_digit(window: u32, index: u32) -> Script {
-        script! {
-            // {v}
-            0                           // {v} {A}
-            OP_SWAP
-            for i in 0..index {
-                OP_TUCK                 // {v} {A} {v}
-                { 1 << (window - i - 1) }   // {v} {A} {v} {1000}
-                OP_GREATERTHANOREQUAL   // {v} {A} {1/0}
-                OP_TUCK                 // {v} {1/0} {A} {1/0}
-                OP_ADD                  // {v} {1/0} {A+1/0}
-                if i < index - 1 { { NMUL(2) } }
-                OP_ROT OP_ROT
-                OP_IF
-                    { 1 << (window - i - 1) }
-                    OP_SUB
-                OP_ENDIF
-            }
-            OP_SWAP
-        }
-    }
-
-
-
+pub fn checksig_verify_with_pubkey(pub_key: WOTSPubKey) -> Script {
     script! {
         //
         // Verify the hash chain for each digit
@@ -387,23 +343,12 @@ pub fn checksig_verify_fq(pub_key: WOTSPubKey) -> Script {
         // 3. Ensure both checksums are equal
         OP_EQUALVERIFY
 
-        for _ in 0..(64-N0) {
-            {0}
-        }
-        // field element reconstruction
-        for i in 1..64 {
-            {i} OP_ROLL
-        }
-
-        {pack_nibbles_to_limbs()}
-
     }
 }
 
 
 #[cfg(test)]
 mod test {
-    use bitcoin::opcodes::OP_TRUE;
 
     use super::*;
 
@@ -421,7 +366,7 @@ mod test {
         let pubkey = get_pub_key(MY_SECKEY);
         let script = script! {
             { sign(MY_SECKEY, MESSAGE) }
-            { checksig_verify_fq(pubkey) }
+            { checksig_verify_with_pubkey(pubkey) }
         };
 
         println!(

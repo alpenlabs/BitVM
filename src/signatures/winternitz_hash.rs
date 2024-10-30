@@ -35,8 +35,6 @@ const N: u32 = N0 + N1 as u32;
 const N2: usize = 20;
 /// The public key type
 pub type PublicKey = [[u8; N2]; N as usize];
-const LIMB_SIZE: u32 = 29;
-const N_LIMBS: u32 = 9;
 //
 // Helper functions
 //

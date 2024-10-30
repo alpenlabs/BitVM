@@ -11,7 +11,7 @@ use crate::chunk::primitves::{
     hash_fp12_with_hints, hash_fp2, hash_fp4, hash_fp6, pack_nibbles_to_limbs,
     read_script_from_file, unpack_limbs_to_nibbles,
 };
-use crate::chunk::wots::{wots_compact_checksig_verify_fq, wots_compact_hash_checksig_verify_fq};
+use crate::chunk::wots::{wots_compact_checksig_verify_with_pubkey, wots_compact_hash_checksig_verify_with_pubkey};
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
@@ -139,11 +139,11 @@ pub(crate) fn hint_squaring(
 pub(crate) fn wots_locking_script(link: Link, link_ids: &HashMap<u32, WOTSPubKey>) -> Script {
     if link.1 {
         script! {
-            {wots_compact_checksig_verify_fq(link_ids.get(&link.0).unwrap().clone())}
+            {wots_compact_checksig_verify_with_pubkey(link_ids.get(&link.0).unwrap().clone())}
         }
     } else {
         script! {
-            {wots_compact_hash_checksig_verify_fq(link_ids.get(&link.0).unwrap().clone())}
+            {wots_compact_hash_checksig_verify_with_pubkey(link_ids.get(&link.0).unwrap().clone())}
         }
     }
 }
@@ -4751,3 +4751,4 @@ mod test {
     //     println!("ahash {:?}", ahash);
     // }
 }
+

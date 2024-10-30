@@ -19,8 +19,8 @@
 // BEAT OUR IMPLEMENTATION AND WIN A CODE GOLF BOUNTY!
 //
 
-use crate::{chunk::primitves::pack_nibbles_to_limbs, treepp::*};
-use bitcoin::{hashes::{hash160, Hash}, opcodes::all::OP_ROLL};
+use crate::treepp::*;
+use bitcoin::hashes::{hash160, Hash};
 use hex::decode as hex_decode;
 
 ///
@@ -35,9 +35,7 @@ const N0: u32 = (N_BITS + LOG_D - 1) / LOG_D;
 const N1: usize = log(D * N0, D + 1) as usize;
 /// Total number of digits to be signed
 const N: u32 = N0 + N1 as u32;
-///
-const LIMB_SIZE: u32 = 29;
-const N_LIMBS: u32 = 9;
+
 
 const fn log(n: u32, base: u32) -> u32 {
     _ = n - 1; // compile time assertion: self >= 1
@@ -273,7 +271,7 @@ pub fn get_pub_key(secret_key: &str) -> WOTSPubKey {
 /// Note that the script inputs are malleable.
 ///
 /// Optimized by @SergioDemianLerner, @tomkosm
-pub fn checksig_verify_fq(pub_key: WOTSPubKey) -> Script {
+pub fn checksig_verify_with_pubkey(pub_key: WOTSPubKey) -> Script {
 
     script! {
         //
@@ -346,12 +344,6 @@ pub fn checksig_verify_fq(pub_key: WOTSPubKey) -> Script {
 
         // 3. Ensure both checksums are equal
         OP_EQUALVERIFY
-
-        // field element reconstruction
-        for i in 1..64 {
-            {i} OP_ROLL
-        }
-        {pack_nibbles_to_limbs()}
 
     }
 }

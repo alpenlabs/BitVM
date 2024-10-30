@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+use bitcoin_script::script;
+
+use crate::chunk::primitves::pack_nibbles_to_limbs;
 use crate::treepp::Script;
 
 use crate::signatures::{winternitz, winternitz_compact, winternitz_compact_hash, winternitz_hash};
@@ -23,12 +26,33 @@ pub(crate) fn wots_compact_hash_get_pub_key(secret_key: &str) -> WOTSPubKey {
     winternitz_compact_hash::get_pub_key(secret_key)
 }
 
-pub(crate) fn wots_compact_hash_checksig_verify_fq(pub_key: WOTSPubKey) -> Script {
-    winternitz_compact_hash::checksig_verify_fq(pub_key)
+pub(crate) fn wots_compact_hash_checksig_verify_with_pubkey(pub_key: WOTSPubKey) -> Script {
+    let sc_nib = winternitz_compact_hash::checksig_verify_with_pubkey(pub_key);
+    const N0: usize = 40;
+    script!{
+        {sc_nib}
+        for _ in 0..(64-N0) {
+            {0}
+        }
+        // field element reconstruction
+        for i in 1..64 {
+            {i} OP_ROLL
+        }
+
+        {pack_nibbles_to_limbs()}
+    }
 }
 
-pub(crate) fn wots_compact_checksig_verify_fq(pub_key: WOTSPubKey) -> Script {
-    winternitz_compact::checksig_verify_fq(pub_key)
+pub(crate) fn wots_compact_checksig_verify_with_pubkey(pub_key: WOTSPubKey) -> Script {
+    let sc_nib = winternitz_compact::checksig_verify_with_pubkey(pub_key);
+    script!{
+        {sc_nib}
+        // field element reconstruction
+        for i in 1..64 {
+            {i} OP_ROLL
+        }
+        {pack_nibbles_to_limbs()}
+    }
 }
 
 pub type WOTSPubKey = winternitz_compact::WOTSPubKey;
