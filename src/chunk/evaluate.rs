@@ -2227,7 +2227,7 @@ mod test {
         let p3 = p3.into_affine();
 
         // read assertions
-        let index_to_corrupt = 602;
+        let index_to_corrupt = 63;
         let index_is_field = get_type_for_link_id(index_to_corrupt).unwrap();
         println!(
             "load with faulty assertion ({}, {})",

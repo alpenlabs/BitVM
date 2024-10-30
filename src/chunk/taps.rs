@@ -2753,8 +2753,8 @@ pub(crate) fn tap_dense_dense_mul0(check_is_identity: bool) -> Script {
         { Fq::fromaltstack()} // Hash_f
         { Fq::fromaltstack()} // Hash_g
 
-        {Fq::equalverify(0, 3)}
-        {Fq::equalverify(0, 2)}
+        {Fq::equalverify(1, 4)}
+        {Fq::equalverify(1, 3)}
         {Fq::equal(0, 1)} OP_NOT OP_VERIFY
     };
 
@@ -2929,8 +2929,8 @@ pub(crate) fn tap_dense_dense_mul1(check_is_identity: bool) -> Script {
         { Fq::fromaltstack()} // Hash_f
         { Fq::fromaltstack()} // Hash_g
 
-        {Fq::equalverify(0, 3)}
-        {Fq::equalverify(0, 2)}
+        {Fq::equalverify(1, 4)}
+        {Fq::equalverify(1, 3)}
         {Fq::equal(0, 1)} OP_NOT OP_VERIFY
     };
 
