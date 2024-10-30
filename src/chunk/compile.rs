@@ -388,8 +388,9 @@ fn compile_post_miller_circuit(
                         {sc1}
                 },
             );
-        } else if row.category == "DD1" {
-            let sc1 = tap_dense_dense_mul0(false);
+        } else if row.category == "DD1"{
+            let check_identity_in_last_elem = row.link_id == "fin";
+            let sc1 = tap_dense_dense_mul0(check_identity_in_last_elem);
             let sc2 = bitcom_dense_dense_mul0(link_ids, sec_out, sec_in);
             scripts.insert(
                 sec_out.0,
@@ -399,7 +400,8 @@ fn compile_post_miller_circuit(
                 },
             );
         } else if row.category == "DD2" {
-            let sc1 = tap_dense_dense_mul1(false);
+            let check_identity_in_last_elem = row.link_id == "fin";
+            let sc1 = tap_dense_dense_mul1(check_identity_in_last_elem);
             let sc2 = bitcom_dense_dense_mul1(link_ids, sec_out, sec_in);
             scripts.insert(
                 sec_out.0,
@@ -409,7 +411,7 @@ fn compile_post_miller_circuit(
                 },
             );
         } else if row.category == "DD3" {
-            let sc1 = tap_dense_dense_mul0(true);
+            let sc1 = tap_dense_dense_mul0(false);
             let sc2 = bitcom_dense_dense_mul0(link_ids, sec_out, sec_in);
             scripts.insert(
                 sec_out.0,
@@ -419,7 +421,7 @@ fn compile_post_miller_circuit(
                 },
             );
         } else if row.category == "DD4" {
-            let sc1 = tap_dense_dense_mul1(true);
+            let sc1 = tap_dense_dense_mul1(false);
             let sc2 = bitcom_dense_dense_mul1(link_ids, sec_out, sec_in);
             scripts.insert(
                 sec_out.0,
