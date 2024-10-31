@@ -95,6 +95,19 @@ macro_rules! impl_wots {
                     }
                 }
 
+                pub fn sign2(secret: &str, msg_bytes: &[u8]) -> Vec<Script> {
+                    let msg_digits = msg_bytes_to_digits(msg_bytes);
+                    let mut digits = checksum_to_digits(checksum(msg_digits)).to_vec();
+                    digits.append(&mut msg_digits.to_vec());
+                    let mut scs: Vec<Script> = Vec::new();
+                    for i in 0..N_DIGITS {
+                        scs.push(sign_digit(secret, i, digits[(N_DIGITS - 1 - i) as usize]));
+                        scs.push(script!{{digits[(N_DIGITS - 1 - i) as usize]}});
+                    }
+                    scs
+     
+                }
+
                 pub fn checksig_verify(public_key: PublicKey) -> Script {
                     script! {
                         for i in 0..N_DIGITS {
@@ -144,6 +157,17 @@ macro_rules! impl_wots {
                                 { sign_digit(secret, i, digits[(N_DIGITS - 1 - i) as usize])}
                             }
                         }
+                    }
+
+                    pub fn sign2(secret: &str, msg_bytes: &[u8]) -> Vec<Script> {
+                        let msg_digits = msg_bytes_to_digits(msg_bytes);
+                        let mut digits = checksum_to_digits(checksum(msg_digits)).to_vec();
+                        digits.append(&mut msg_digits.to_vec());
+                        let mut scs: Vec<Script> = Vec::new();
+                        for i in 0..N_DIGITS {
+                            scs.push(sign_digit(secret, i, digits[(N_DIGITS - 1 - i) as usize]));
+                        }
+                        scs
                     }
 
                     pub fn checksig_verify(public_key: PublicKey) -> Script {
@@ -278,6 +302,7 @@ mod tests {
         assert!(res.success);
     }
 
+    
     #[test]
     fn test_wots160() {
         let secret = "a01b23c45d67e89f";

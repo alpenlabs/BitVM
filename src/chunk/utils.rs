@@ -6,6 +6,32 @@ use std::fs::File;
 use std::io::BufReader;
 use std::io::Write;
 
+use super::wots::WOTSPubKey;
+
+
+pub(crate) fn write_pubkey_to_file(
+    map: &HashMap<u32, WOTSPubKey>,
+    filename: &str,
+) -> Result<(), Box<dyn Error>> {
+    // Serialize the map to a JSON string
+    let mut serializable_map: HashMap<u32, Vec<Vec<u8>>> = HashMap::new();
+    for (k, v) in map {
+        let vs = v.serialize();
+        serializable_map.insert(*k, vs);
+    }
+    write_map_to_file(&serializable_map, filename)
+}
+
+pub(crate) fn read_pubkey_from_file(filename: &str) -> Result<HashMap<u32, WOTSPubKey>, Box<dyn Error>> {
+    let serialized_map = read_map_from_file(filename)?;
+    let mut map = HashMap::new();
+    for (k, v) in serialized_map {
+        let vs = WOTSPubKey::deserialize(v).unwrap();
+        map.insert(k, vs);
+    }
+    Ok(map)
+}
+
 pub(crate) fn write_map_to_file(
     map: &HashMap<u32, Vec<Vec<u8>>>,
     filename: &str,

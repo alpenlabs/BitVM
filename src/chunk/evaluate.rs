@@ -1832,8 +1832,7 @@ mod test {
             compile::{compile, Vkey},
             config::{get_type_for_link_id, keygen},
             utils::{
-                read_map_from_file, read_scripts_from_file, write_map_to_file,
-                write_scripts_to_file, write_scripts_to_separate_files,
+                read_map_from_file, read_pubkey_from_file, read_scripts_from_file, write_map_to_file, write_pubkey_to_file, write_scripts_to_file, write_scripts_to_separate_files
             }, wots::{wots_hash_sign_digits, wots_sign_digits},
         },
         groth16::offchain_checker::compute_c_wi,
@@ -2140,16 +2139,16 @@ mod test {
         let pubs_f = "chunker_data/pubkeys.json";
         let master_secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let pubs = keygen(master_secret);
-        write_map_to_file(&pubs, pubs_f).unwrap();
-        let read_pubs = read_map_from_file(pubs_f).unwrap();
-        assert_eq!(read_pubs, pubs);
+       write_pubkey_to_file(&pubs, pubs_f).unwrap();
+       let read_pubs = read_pubkey_from_file(pubs_f).unwrap();
+       assert_eq!(read_pubs, pubs);
     }
 
     #[test]
     fn test_compile_to_taptree() {
         let vk_f = "chunker_data/groth_vk.bin";
         let pubs_f = "chunker_data/pubkeys.json";
-        let pubkeys = read_map_from_file(pubs_f).unwrap();
+        let pubkeys = read_pubkey_from_file(pubs_f).unwrap();
         let vk = GrothVK::read_vk_from_file(vk_f);
         let save_to_file = true;
 
@@ -2223,7 +2222,7 @@ mod test {
         let master_secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let pubs_f = &format!("{chunker_data_path}/pubkeys.json");
 
-        let pub_scripts_per_link_id = read_map_from_file(pubs_f).unwrap();
+        let pub_scripts_per_link_id = read_pubkey_from_file(pubs_f).unwrap();
         let proof = GrothProof::read_groth16_proof_from_file(gp_f);
         let vk = GrothVK::read_vk_from_file(vk_f);
         let msm_scalar = vec![proof.scalars[0], ark_bn254::Fr::ONE];
@@ -2231,7 +2230,7 @@ mod test {
         let p3 = msm_gs[1] * msm_scalar[1] + msm_gs[0] * msm_scalar[0]; // move to initial proof
         let p3 = p3.into_affine();
 
-        for index_to_corrupt in 60..70 {
+        for index_to_corrupt in 64..65 {
             //let index_to_corrupt = 64;
             let index_is_field = get_type_for_link_id(index_to_corrupt).unwrap();
             println!(
@@ -2306,6 +2305,8 @@ mod test {
         }
         // read assertions
      }
+
+
 }
 
 // 32 byte

@@ -2,63 +2,149 @@ use std::collections::HashMap;
 
 use bitcoin_script::script;
 
-use crate::chunk::primitves::pack_nibbles_to_limbs;
+use crate::chunk::primitves::{fq_from_nibbles, pack_nibbles_to_limbs};
 use crate::treepp::Script;
 
-use crate::signatures::{winternitz, winternitz_compact, winternitz_compact_hash, winternitz_hash};
+// use crate::signatures::{winternitz, winternitz_compact, winternitz_compact_hash, winternitz_hash};
 use crate::signatures::wots::{wots160, wots256};
 
 use super::config::assign_link_ids;
 
 pub(crate) fn wots_hash_sign_digits(secret_key: &str, message_digits: [u8; 40]) -> Vec<bitcoin_script::Script> {
-    winternitz_hash::sign_digits(secret_key, message_digits)
+    //winternitz_hash::sign_digits(secret_key, message_digits)
+    //wots160::sign2(secret_key, &message_digits)
+    vec![wots160::sign(secret_key, &message_digits)]
 }
 
 pub(crate) fn wots_sign_digits(secret_key: &str, message_digits: [u8; 64]) -> Vec<bitcoin_script::Script> {
-    winternitz::sign_digits(secret_key, message_digits)
+    //winternitz::sign_digits(secret_key, message_digits)
+    //wots256::sign2(secret_key, &message_digits)
+    vec![wots256::sign(secret_key, &message_digits)]
 }
 
 pub(crate) fn wots_compact_get_pub_key(secret_key: &str) -> WOTSPubKey {
-    winternitz_compact::get_pub_key(secret_key)
+    //winternitz_compact::get_pub_key(secret_key)
+    WOTSPubKey::P256(wots256::generate_public_key(secret_key))
 }
 
 pub(crate) fn wots_compact_hash_get_pub_key(secret_key: &str) -> WOTSPubKey {
-    winternitz_compact_hash::get_pub_key(secret_key)
+    //winternitz_compact_hash::get_pub_key(secret_key)
+    WOTSPubKey::P160(wots160::generate_public_key(secret_key))
 }
 
-pub(crate) fn wots_compact_hash_checksig_verify_with_pubkey(pub_key: WOTSPubKey) -> Script {
-    let sc_nib = winternitz_compact_hash::checksig_verify_with_pubkey(pub_key);
-    const N0: usize = 40;
-    script!{
-        {sc_nib}
-        for _ in 0..(64-N0) {
-            {0}
+pub(crate) fn wots_compact_hash_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> Script {
+    if let WOTSPubKey::P160(pb) = pub_key {
+        let sc_nib = wots160::compact::checksig_verify(*pb);
+        const N0: usize = 40;
+        return script!{
+            {sc_nib}
+            for _ in 0..(64-N0) {
+                {0}
+            }
+            // field element reconstruction
+            for i in 1..64 {
+                {i} OP_ROLL
+            }
+    
+            {fq_from_nibbles()}
         }
-        // field element reconstruction
-        for i in 1..64 {
-            {i} OP_ROLL
-        }
+    }
+    panic!()
+}
 
-        {pack_nibbles_to_limbs()}
+pub(crate) fn wots_compact_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> Script {
+    if let WOTSPubKey::P256(pb) = pub_key {
+        let sc_nib = wots256::compact::checksig_verify(*pb);
+        return script!{
+            {sc_nib}
+            // field element reconstruction
+            for i in 1..64 {
+                {i} OP_ROLL
+            }
+            {fq_from_nibbles()}
+        }
+    }
+    panic!()
+}
+
+fn wots_hash_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> Script {
+    if let WOTSPubKey::P160(pb) = pub_key {
+        let sc_nib = wots160::compact::checksig_verify(*pb);
+        const N0: usize = 40;
+        return script!{
+            {sc_nib}
+            for _ in 0..(64-N0) {
+                {0}
+            }
+            // field element reconstruction
+            for i in 1..64 {
+                {i} OP_ROLL
+            }
+    
+            {fq_from_nibbles()}
+        }
+    }
+    panic!()
+}
+
+fn wots_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> Script {
+    if let WOTSPubKey::P256(pb) = pub_key {
+        let sc_nib = wots256::compact::checksig_verify(*pb);
+        return script!{
+            {sc_nib}
+            // field element reconstruction
+            for i in 1..64 {
+                {i} OP_ROLL
+            }
+            {fq_from_nibbles()}
+        }
+    }
+    panic!()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WOTSPubKey {
+    P160(wots160::PublicKey),
+    P256(wots256::PublicKey)
+}
+
+impl WOTSPubKey {
+    pub(crate) fn serialize(&self) -> Vec<Vec<u8>> {
+        match self {
+            WOTSPubKey::P160(p) => {
+                let mut v = Vec::new();
+                for i in p {
+                    v.push(i.to_vec());
+                }
+                v
+            },
+            WOTSPubKey::P256(p) => {
+                let mut v = Vec::new();
+                for i in p {
+                    v.push(i.to_vec());
+                }
+                v
+            }
+        }
+    }
+
+    pub(crate) fn deserialize(ser: Vec<Vec<u8>>) -> Option<Self> {
+        if ser.len() == 67 {
+            let mut ps: [[u8;20]; 67] = [[0u8;20];67];
+            for pi in 0..ser.len() {
+                let en:[u8;20] = ser[pi].clone().try_into().unwrap();
+                ps[pi] = en;
+            }
+        } else if ser.len() == 43 {
+            let mut ps: [[u8;20]; 43] = [[0u8;20];43];
+            for pi in 0..ser.len() {
+                let en:[u8;20] = ser[pi].clone().try_into().unwrap();
+                ps[pi] = en;
+            }
+        }
+        None
     }
 }
-
-pub(crate) fn wots_compact_checksig_verify_with_pubkey(pub_key: WOTSPubKey) -> Script {
-    let sc_nib = winternitz_compact::checksig_verify_with_pubkey(pub_key);
-    script!{
-        {sc_nib}
-        // field element reconstruction
-        for i in 1..64 {
-            {i} OP_ROLL
-        }
-        {pack_nibbles_to_limbs()}
-    }
-}
-
-pub type WOTSPubKey = winternitz_compact::WOTSPubKey;
-
-
-
 
 pub struct AssertPublicKeys {
     pub p160: HashMap<u32, wots160::PublicKey>,
@@ -136,12 +222,60 @@ pub fn generate_assertion_spending_key_lengths(apk: &AssertPublicKeys) -> Vec<us
 
 #[cfg(test)]
 mod test {
+
     use super::*;
-    use crate::{execute_script, signatures::{self, wots::wots256}};
+    use crate::{execute_script, signatures::{self, wots::{wots256, wots32}}};
+
+    #[test]
+    fn test_wots256() {
+        let secret = "a01b23c45d67e89f";
+        let public_key = wots256::generate_public_key(&secret);
+
+        const MESSAGE: [u8; 64] = [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
+            1, 2, 3, 4,
+        ];
+        let msg_bytes = MESSAGE.to_vec();
+
+        let script = script! {
+            { wots256::compact::sign(&secret, &msg_bytes) }
+            { wots256::compact::checksig_verify(public_key) }
+
+            for i in (0..8).rev() {
+                { i } OP_ROLL OP_TOALTSTACK
+            }
+
+            { wots256::sign(&secret, &msg_bytes) }
+            { wots256::checksig_verify(public_key) }
+
+            for _ in 0..8 {
+                OP_FROMALTSTACK OP_EQUALVERIFY
+            }
+
+            OP_TRUE
+        };
+
+        println!(
+            "wots32: sig={}, csv={}",
+            wots256::sign(&secret, &msg_bytes).len(),
+            wots256::checksig_verify(public_key).len()
+        );
+
+        println!(
+            "wots32:compact: sig={}, csv={}",
+            wots256::compact::sign(&secret, &msg_bytes).len(),
+            wots256::compact::checksig_verify(public_key).len()
+        );
+
+        let res = execute_script(script);
+        assert!(res.success);
+    }
 
     
     #[test]
-    fn test_winternitz() {
+    fn test_winternitz_old() {
         const MY_SECKEY: &str = "b138982ce17ac813d505b5b40b665d404e9528e7";
         const MESSAGE: [u8; 64 as usize] = [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
@@ -149,6 +283,7 @@ mod test {
             1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
             1, 2, 3, 4,
         ];
+
 
         let public_key = signatures::winternitz::generate_public_key(MY_SECKEY);
     

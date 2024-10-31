@@ -139,11 +139,11 @@ pub(crate) fn hint_squaring(
 pub(crate) fn wots_locking_script(link: Link, link_ids: &HashMap<u32, WOTSPubKey>) -> Script {
     if link.1 {
         script! {
-            {wots_compact_checksig_verify_with_pubkey(link_ids.get(&link.0).unwrap().clone())}
+            {wots_compact_checksig_verify_with_pubkey(link_ids.get(&link.0).unwrap())}
         }
     } else {
         script! {
-            {wots_compact_hash_checksig_verify_with_pubkey(link_ids.get(&link.0).unwrap().clone())}
+            {wots_compact_hash_checksig_verify_with_pubkey(link_ids.get(&link.0).unwrap())}
         }
     }
 }

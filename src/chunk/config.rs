@@ -831,14 +831,12 @@ pub fn keygen(msk: &str) -> HashMap<u32, WOTSPubKey> {
     let mut scripts = HashMap::new();
     for (_, link) in links {
         let link_id = link.0;
-        let mut pub_key = vec![];
         if link.1 {
-            pub_key = wots_compact_get_pub_key(&format!("{}{:04X}", msk, link.0));
+            scripts.insert(link_id as u32,wots_compact_get_pub_key(&format!("{}{:04X}", msk, link.0)));
         } else {
-            pub_key = wots_compact_hash_get_pub_key(&format!("{}{:04X}", msk, link.0));
+            scripts.insert(link_id as u32,wots_compact_hash_get_pub_key(&format!("{}{:04X}", msk, link.0)));
         }
         //let s = checksig_verify_fq(pub_key);
-        scripts.insert(link_id as u32, pub_key);
     }
     scripts
 }
