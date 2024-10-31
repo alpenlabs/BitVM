@@ -107,11 +107,11 @@ fn evaluate_miller_circuit(
                         sec_in.clone(),
                         HintInSquaring::from_dmul1(r),
                     ),
-                    HintOut::GrothC(r) => taps::hint_squaring(
+                    HintOut::HashC(r) => taps::hint_squaring(
                         sig,
                         sec_out,
                         sec_in.clone(),
-                        HintInSquaring::from_grothc(r),
+                        HintInSquaring::from_hashc(r),
                     ),
                     _ => panic!("failed to match"),
                 };
@@ -395,6 +395,12 @@ fn evaluate_miller_circuit(
                         sec_in.clone(),
                         HintInDenseMul0::from_dense_c(c, r),
                     ),
+                    HintOut::HashC(r) => hints_dense_dense_mul0(
+                        sig,
+                        sec_out,
+                        sec_in.clone(),
+                        HintInDenseMul0::from_hash_c(c, r),
+                    ),
                     _ => panic!("failed to match"),
                 };
                 let ops_script = tap_dense_dense_mul0(false);
@@ -429,6 +435,12 @@ fn evaluate_miller_circuit(
                         sec_out,
                         sec_in.clone(),
                         HintInDenseMul1::from_dense_c(c, r),
+                    ),
+                    HintOut::HashC(r) => hints_dense_dense_mul1(
+                        sig,
+                        sec_out,
+                        sec_in.clone(),
+                        HintInDenseMul1::from_hash_c(c, r),
                     ),
                     _ => panic!("failed to match"),
                 };
@@ -647,8 +659,9 @@ fn evaluate_post_miller_circuit(
             .collect();
         if row.category.starts_with("Frob") {
             assert_eq!(hints_out.len(), 1);
-            let cinv = match hints_out[0].clone() {
-                HintOut::GrothC(f) => f,
+            let hint_in = match hints_out[0].clone() {
+                HintOut::GrothC(f) => HintInFrobFp12::from_groth_c(f),
+                HintOut::HashC(f) => HintInFrobFp12::from_hash_c(f),
                 _ => panic!(),
             };
             let mut power = 1;
@@ -657,7 +670,6 @@ fn evaluate_post_miller_circuit(
             } else if row.category == "Frob3" {
                 power = 3;
             }
-            let hint_in = HintInFrobFp12::from_groth_c(cinv);
             let (h, hint_script) = hints_frob_fp12(sig, sec_out, sec_in.clone(), hint_in, power);
             let ops_script = tap_frob_fp12(power);
             let bcs_script = bitcom_frob_fp12(pub_scripts_per_link_id, sec_out, sec_in.clone());
@@ -694,14 +706,14 @@ fn evaluate_post_miller_circuit(
                     ),
                     false,
                 ),
-                HintOut::GrothC(d) => {
+                HintOut::HashC(d) => {
                     // s
                     (
                         hints_dense_dense_mul0(
                             sig,
                             sec_out,
                             sec_in.clone(),
-                            HintInDenseMul0::from_dense_c(c, d),
+                            HintInDenseMul0::from_hash_c(c, d),
                         ),
                         false,
                     )
@@ -753,12 +765,12 @@ fn evaluate_post_miller_circuit(
                     ),
                     false,
                 ),
-                HintOut::GrothC(d) => (
+                HintOut::HashC(d) => (
                     hints_dense_dense_mul1(
                         sig,
                         sec_out,
                         sec_in.clone(),
-                        HintInDenseMul1::from_dense_c(c, d),
+                        HintInDenseMul1::from_hash_c(c, d),
                     ),
                     false,
                 ),
@@ -1065,105 +1077,6 @@ fn evaluate_post_miller_circuit(
     None
 }
 
-fn evaluate_public_params(
-    sig: &mut Sig,
-    link_name_to_id: HashMap<String, (u32, bool)>,
-    q2: ark_bn254::G2Affine,
-    q3: ark_bn254::G2Affine,
-    fixed_acc: ark_bn254::Fq12,
-) -> HashMap<String, HintOut> {
-    let f = ark_bn254::Fq12::ONE;
-    let idhash = emulate_extern_hash_fps(
-        vec![
-            f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-            f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-        ],
-        true,
-    );
-    let fixedacc_hash = emulate_extern_hash_fps(
-        vec![
-            fixed_acc.c0.c0.c0,
-            fixed_acc.c0.c0.c1,
-            fixed_acc.c0.c1.c0,
-            fixed_acc.c0.c1.c1,
-            fixed_acc.c0.c2.c0,
-            fixed_acc.c0.c2.c1,
-            fixed_acc.c1.c0.c0,
-            fixed_acc.c1.c0.c1,
-            fixed_acc.c1.c1.c0,
-            fixed_acc.c1.c1.c1,
-            fixed_acc.c1.c2.c0,
-            fixed_acc.c1.c2.c1,
-        ],
-        false,
-    );
-
-    let id = HintOutPubIdentity {
-        idhash,
-        v: ark_bn254::Fq12::ONE,
-    };
-    let fixed_acc = HintOutFixedAcc {
-        f: fixed_acc,
-        fhash: fixedacc_hash,
-    };
-
-    let mut id_to_witness: HashMap<String, HintOut> = HashMap::new();
-    id_to_witness.insert("identity".to_string(), HintOut::PubIdentity(id));
-    id_to_witness.insert("Q3y1".to_string(), HintOut::FieldElem(q3.y.c1));
-    id_to_witness.insert("Q3y0".to_string(), HintOut::FieldElem(q3.y.c0));
-    id_to_witness.insert("Q3x1".to_string(), HintOut::FieldElem(q3.x.c1));
-    id_to_witness.insert("Q3x0".to_string(), HintOut::FieldElem(q3.x.c0));
-    id_to_witness.insert("Q2y1".to_string(), HintOut::FieldElem(q2.y.c1));
-    id_to_witness.insert("Q2y0".to_string(), HintOut::FieldElem(q2.y.c0));
-    id_to_witness.insert("Q2x1".to_string(), HintOut::FieldElem(q2.x.c1));
-    id_to_witness.insert("Q2x0".to_string(), HintOut::FieldElem(q2.x.c0));
-    id_to_witness.insert("f_fixed".to_string(), HintOut::FixedAcc(fixed_acc));
-
-    let tup = vec![
-        (link_name_to_id.get("identity").unwrap().clone(), idhash),
-        (
-            link_name_to_id.get("Q3y1").unwrap().clone(),
-            emulate_fq_to_nibbles(q3.y.c1),
-        ),
-        (
-            link_name_to_id.get("Q3y0").unwrap().clone(),
-            emulate_fq_to_nibbles(q3.y.c0),
-        ),
-        (
-            link_name_to_id.get("Q3x1").unwrap().clone(),
-            emulate_fq_to_nibbles(q3.x.c1),
-        ),
-        (
-            link_name_to_id.get("Q3x0").unwrap().clone(),
-            emulate_fq_to_nibbles(q3.x.c0),
-        ),
-        (
-            link_name_to_id.get("Q2y1").unwrap().clone(),
-            emulate_fq_to_nibbles(q2.y.c1),
-        ),
-        (
-            link_name_to_id.get("Q2y0").unwrap().clone(),
-            emulate_fq_to_nibbles(q2.y.c0),
-        ),
-        (
-            link_name_to_id.get("Q2x1").unwrap().clone(),
-            emulate_fq_to_nibbles(q2.x.c1),
-        ),
-        (
-            link_name_to_id.get("Q2x0").unwrap().clone(),
-            emulate_fq_to_nibbles(q2.x.c0),
-        ),
-        (
-            link_name_to_id.get("f_fixed").unwrap().clone(),
-            fixedacc_hash,
-        ),
-    ];
-
-    tup_to_scr(sig, tup);
-
-    id_to_witness
-}
-
 fn evaluate_groth16_params(
     sig: &mut Sig,
     link_name_to_id: HashMap<String, (u32, bool)>,
@@ -1174,19 +1087,17 @@ fn evaluate_groth16_params(
     c: Fq12,
     s: Fq12,
     ks: Vec<ark_bn254::Fr>,
+    fixed_acc: ark_bn254::Fq12,
 ) -> HashMap<String, HintOut> {
     let cv = vec![
         c.c0.c0.c0, c.c0.c0.c1, c.c0.c1.c0, c.c0.c1.c1, c.c0.c2.c0, c.c0.c2.c1, c.c1.c0.c0,
         c.c1.c0.c1, c.c1.c1.c0, c.c1.c1.c1, c.c1.c2.c0, c.c1.c2.c1,
     ];
-    let chash = emulate_extern_hash_fps(cv.clone(), false);
-    let chash2 = emulate_extern_hash_fps(cv.clone(), true);
 
     let sv = vec![
         s.c0.c0.c0, s.c0.c0.c1, s.c0.c1.c0, s.c0.c1.c1, s.c0.c2.c0, s.c0.c2.c1, s.c1.c0.c0,
         s.c1.c0.c1, s.c1.c1.c0, s.c1.c1.c1, s.c1.c2.c0, s.c1.c2.c1,
     ];
-    let shash = emulate_extern_hash_fps(sv.clone(), false);
 
     let cvinv = c.inverse().unwrap();
     let cvinvhash = emulate_extern_hash_fps(
@@ -1206,23 +1117,29 @@ fn evaluate_groth16_params(
         ],
         false,
     );
-    let cvinvhash2 = emulate_extern_hash_fps(
+
+
+    let fixedacc_hash = emulate_extern_hash_fps(
         vec![
-            cvinv.c0.c0.c0,
-            cvinv.c0.c0.c1,
-            cvinv.c0.c1.c0,
-            cvinv.c0.c1.c1,
-            cvinv.c0.c2.c0,
-            cvinv.c0.c2.c1,
-            cvinv.c1.c0.c0,
-            cvinv.c1.c0.c1,
-            cvinv.c1.c1.c0,
-            cvinv.c1.c1.c1,
-            cvinv.c1.c2.c0,
-            cvinv.c1.c2.c1,
+            fixed_acc.c0.c0.c0,
+            fixed_acc.c0.c0.c1,
+            fixed_acc.c0.c1.c0,
+            fixed_acc.c0.c1.c1,
+            fixed_acc.c0.c2.c0,
+            fixed_acc.c0.c2.c1,
+            fixed_acc.c1.c0.c0,
+            fixed_acc.c1.c0.c1,
+            fixed_acc.c1.c1.c0,
+            fixed_acc.c1.c1.c1,
+            fixed_acc.c1.c2.c0,
+            fixed_acc.c1.c2.c1,
         ],
-        true,
+        false,
     );
+    let fixed_acc = HintOutFixedAcc {
+        f: fixed_acc,
+        fhash: fixedacc_hash,
+    };
 
     let gparams = groth16_config_gen();
     let gouts = vec![
@@ -1244,8 +1161,6 @@ fn evaluate_groth16_params(
         HintOut::FieldElem(cv[2]),
         HintOut::FieldElem(cv[1]),
         HintOut::FieldElem(cv[0]),
-        HintOut::GrothC(HintOutGrothC { c, chash }),
-        HintOut::GrothC(HintOutGrothC { c, chash: chash2 }),
         HintOut::FieldElem(sv[11]),
         HintOut::FieldElem(sv[10]),
         HintOut::FieldElem(sv[9]),
@@ -1258,14 +1173,9 @@ fn evaluate_groth16_params(
         HintOut::FieldElem(sv[2]),
         HintOut::FieldElem(sv[1]),
         HintOut::FieldElem(sv[0]),
-        HintOut::GrothC(HintOutGrothC { c: s, chash: shash }),
         HintOut::GrothC(HintOutGrothC {
             c: cvinv,
             chash: cvinvhash,
-        }),
-        HintOut::GrothC(HintOutGrothC {
-            c: cvinv,
-            chash: cvinvhash2,
         }),
         HintOut::FieldElem(q4.y.c1),
         HintOut::FieldElem(q4.y.c0),
@@ -1273,6 +1183,7 @@ fn evaluate_groth16_params(
         HintOut::FieldElem(q4.x.c0),
         HintOut::ScalarElem(ks[0]),
         HintOut::ScalarElem(ks[1]),
+        HintOut::FixedAcc(fixed_acc),
     ];
     assert_eq!(gparams.len(), gouts.len());
 
@@ -1543,20 +1454,19 @@ fn evaluate_pre_miller_circuit(
             }
             assert!(!exec_result.success);
             assert!(exec_result.final_stack.len() == 1);
-            if !aux_output_per_link.contains_key(&row.link_id) {
-                aux_output_per_link.insert(row.link_id, HintOut::HashC(hout));
-            }
+            aux_output_per_link.insert(row.link_id, HintOut::HashC(hout));
         } else if row.category == "HashC2" {
             assert!(hints.len() == 1);
-            let prev_hash = match hints[0].clone() {
-                HintOut::GrothC(r) => r,
+            let hint_in_hashc2 = match hints[0].clone() {
+                HintOut::HashC(r) => HintInHashC::from_hashc(r), // c->c2
+                HintOut::GrothC(r) => HintInHashC::from_grothc(r), // cinv -> cinv2
                 _ => panic!("failed to match"),
             };
             let (hout, hint_script) = hint_hash_c2(
                 sig,
                 sec_out,
                 sec_in.clone(),
-                HintInHashC::from_groth(prev_hash),
+                hint_in_hashc2,
             );
             let ops_script = tap_hash_c2();
             let bcs_script = bitcom_hash_c2(pub_scripts_per_link_id, sec_out, sec_in.clone());
@@ -1592,12 +1502,6 @@ fn evaluate_pre_miller_circuit(
                     sec_in.clone(),
                     HintInDenseMul0::from_groth_hc(c, d),
                 ),
-                HintOut::GrothC(c) => hints_dense_dense_mul0(
-                    sig,
-                    sec_out,
-                    sec_in.clone(),
-                    HintInDenseMul0::from_grothc(c, d),
-                ),
                 _ => panic!("failed to match"),
             };
             let ops_script = tap_dense_dense_mul0(true);
@@ -1626,22 +1530,16 @@ fn evaluate_pre_miller_circuit(
                 HintOut::GrothC(r) => r,
                 _ => panic!("failed to match"),
             };
-            let c0 = match hints[1].clone() {
-                HintOut::GrothC(r) => r,
-                _ => panic!("failed to match"),
-            };
+            // let c0 = match hints[2].clone() {
+            //     HintOut::GrothC(r) => r,
+            //     _ => panic!("failed to match"),
+            // };
             let (hout, hint_script) = match hints[0].clone() {
                 HintOut::HashC(a) => hints_dense_dense_mul1(
                     sig,
                     sec_out,
                     sec_in.clone(),
                     HintInDenseMul1::from_groth_hc(a, b),
-                ),
-                HintOut::GrothC(a) => hints_dense_dense_mul1(
-                    sig,
-                    sec_out,
-                    sec_in.clone(),
-                    HintInDenseMul1::from_grothc(a, b),
                 ),
                 _ => panic!("failed to match"),
             };
@@ -1736,8 +1634,7 @@ pub fn evaluate(
 ) -> Option<(u32, bitcoin_script::Script)> {
     let (link_name_to_id, facc, tacc) = assign_link_ids();
     let mut aux_out_per_link: HashMap<String, HintOut> = HashMap::new();
-    let pubmap = evaluate_public_params(sig, link_name_to_id.clone(), q2, q3, fixed_acc);
-    aux_out_per_link.extend(pubmap);
+
     let grothmap = evaluate_groth16_params(
         sig,
         link_name_to_id.clone(),
@@ -1748,6 +1645,7 @@ pub fn evaluate(
         c,
         s,
         ks.clone(),
+        fixed_acc,
     );
     aux_out_per_link.extend(grothmap);
 
@@ -2230,8 +2128,8 @@ mod test {
         let p3 = msm_gs[1] * msm_scalar[1] + msm_gs[0] * msm_scalar[0]; // move to initial proof
         let p3 = p3.into_affine();
 
-        for index_to_corrupt in 51..121 {
-            if index_to_corrupt == 59 {
+        for index_to_corrupt in 609..641 {
+            if index_to_corrupt == 51 {
                 continue;
             }
             //let index_to_corrupt = 64;

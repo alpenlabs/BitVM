@@ -36,10 +36,10 @@ pub(crate) struct HintInSquaring {
 }
 
 impl HintInSquaring {
-    pub(crate) fn from_grothc(g: HintOutGrothC) -> Self {
+    pub(crate) fn from_hashc(g: HintOutHashC) -> Self {
         HintInSquaring {
             a: g.c,
-            ahash: g.chash,
+            ahash: g.hash_out,
         }
     }
     pub(crate) fn from_dmul1(g: HintOutDenseMul1) -> Self {
@@ -67,7 +67,6 @@ pub(crate) enum HintOut {
     DenseMul0(HintOutDenseMul0),
     DenseMul1(HintOutDenseMul1),
 
-    PubIdentity(HintOutPubIdentity),
     FixedAcc(HintOutFixedAcc),
 
     FieldElem(ark_bn254::Fq),
@@ -2749,7 +2748,7 @@ pub(crate) fn tap_dense_dense_mul0(check_is_identity: bool) -> Script {
         { Fq::fromaltstack()} // Hash_f
         { Fq::fromaltstack()} // Hash_c
         // Alt: [od, d, s], [c0, d, s]
-
+        // Stack: [gc, fc, hc, gk, fk, hk]
         { Fq::fromaltstack()} // Hash_c
         { Fq::fromaltstack()} // Hash_f
         { Fq::fromaltstack()} // Hash_g
@@ -2817,6 +2816,9 @@ impl HintInDenseMul0 {
         Self { a: c.f, b: d.f }
     }
     pub(crate) fn from_dense_c(c: HintOutDenseMul1, d: HintOutGrothC) -> Self {
+        Self { a: c.c, b: d.c }
+    }
+    pub(crate) fn from_hash_c(c: HintOutDenseMul1, d: HintOutHashC) -> Self {
         Self { a: c.c, b: d.c }
     }
     pub(crate) fn from_dense_fixed_acc(c: HintOutDenseMul1, d: HintOutFixedAcc) -> Self {
@@ -2929,7 +2931,7 @@ pub(crate) fn tap_dense_dense_mul1(check_is_identity: bool) -> Script {
         { Fq::fromaltstack()} // Hash_c
         { Fq::fromaltstack()} // Hash_f
         { Fq::fromaltstack()} // Hash_g
-
+        // [gc, fc, hc,  gk, fk, hk]
         {Fq::equalverify(1, 4)}
         {Fq::equalverify(1, 3)}
         {Fq::equal(0, 1)} OP_NOT OP_VERIFY
@@ -3001,6 +3003,9 @@ impl HintInDenseMul1 {
     }
     pub(crate) fn from_dense_frob(c: HintOutDenseMul1, d: HintOutFrobFp12) -> Self {
         Self { a: c.c, b: d.f }
+    }
+    pub(crate) fn from_hash_c(c: HintOutDenseMul1, d: HintOutHashC) -> Self {
+        Self { a: c.c, b: d.c }
     }
 }
 
@@ -3120,7 +3125,13 @@ pub(crate) struct HintInHashP {
 }
 
 impl HintInHashC {
-    pub(crate) fn from_groth(g: HintOutGrothC) -> Self {
+    pub(crate) fn from_hashc(g: HintOutHashC) -> Self {
+        HintInHashC {
+            c: g.c,
+            hashc: g.hash_out,
+        }
+    }
+    pub(crate) fn from_grothc(g: HintOutGrothC) -> Self {
         HintInHashC {
             c: g.c,
             hashc: g.chash,
@@ -3676,6 +3687,9 @@ pub(crate) struct HintInFrobFp12 {
 
 impl HintInFrobFp12 {
     pub(crate) fn from_groth_c(g: HintOutGrothC) -> Self {
+        Self { f: g.c }
+    }
+    pub(crate) fn from_hash_c(g: HintOutHashC) -> Self {
         Self { f: g.c }
     }
 }
