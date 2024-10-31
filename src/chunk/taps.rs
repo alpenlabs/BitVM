@@ -3477,18 +3477,18 @@ pub(crate) fn tap_hash_p() -> Script {
 
 pub(crate) fn bitcom_hash_p(
     link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
+    _sec_out: Link,
     sec_in: Vec<Link>,
 ) -> Script {
-    assert_eq!(sec_in.len(), 2);
+    assert_eq!(sec_in.len(), 3);
 
     let bitcom_scr = script! {
 
-        {wots_locking_script(sec_in[1], link_ids)} // px
+        {wots_locking_script(sec_in[2], link_ids)} // px
         {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)} // py
+        {wots_locking_script(sec_in[1], link_ids)} // py
         {Fq::toaltstack()}
-        {wots_locking_script(sec_out, link_ids)} // hash
+        {wots_locking_script(sec_in[0], link_ids)} // hash
 
         {Fq::fromaltstack()}
         {Fq::fromaltstack()}
@@ -3500,16 +3500,16 @@ pub(crate) fn bitcom_hash_p(
 
 pub(crate) fn hint_hash_p(
     sig: &mut Sig,
-    sec_out: Link,
+    _sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInHashP,
 ) -> ((), Script) {
     let f = vec![hint_in.c.x, hint_in.c.y];
     let fhash = emulate_extern_hash_fps(f.clone(), false);
 
-    let mut tups = vec![(sec_out, fhash)];
-    tups.push((sec_in[0], emulate_fq_to_nibbles(hint_in.c.y)));
-    tups.push((sec_in[1], emulate_fq_to_nibbles(hint_in.c.x)));
+    let mut tups = vec![(sec_in[0], fhash)];
+    tups.push((sec_in[1], emulate_fq_to_nibbles(hint_in.c.y)));
+    tups.push((sec_in[2], emulate_fq_to_nibbles(hint_in.c.x)));
 
     let bc_elems = tup_to_scr(sig, tups);
 
@@ -3810,9 +3810,13 @@ mod test {
             pub_scripts.insert(*i, pk);
         }
 
-        let sec_out = (sec_out, false);
-        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
-        let bitcom_scr = bitcom_hash_p(&pub_scripts, sec_out, sec_in.clone());
+        // let sec_out = (sec_out, false);
+        let mut sec_in_arr = vec![(sec_out, false)];
+        for sci in sec_in {
+            sec_in_arr.push((sci, true));
+        }
+        //let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+        let bitcom_scr = bitcom_hash_p(&pub_scripts, (sec_out, false), sec_in_arr.clone());
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -3823,7 +3827,7 @@ mod test {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input) = hint_hash_p(&mut sig, sec_out, sec_in, hint_in);
+        let (_, simulate_stack_input) = hint_hash_p(&mut sig, (sec_out, false), sec_in_arr, hint_in);
 
         let tap_len = hash_c_scr.len();
         let script = script! {
@@ -3833,10 +3837,11 @@ mod test {
         };
 
         let res = execute_script(script);
-        assert!(!res.success && res.final_stack.len() == 1);
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
+        assert!(!res.success && res.final_stack.len() == 1);
+
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
 

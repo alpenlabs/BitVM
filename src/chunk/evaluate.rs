@@ -1666,21 +1666,26 @@ fn evaluate_pre_miller_circuit(
             assert!(exec_result.final_stack.len() == 1);
             aux_output_per_link.insert(row.link_id, HintOut::DenseMul1(hout));
         } else if row.category == "P3Hash" {
-            assert!(hints.len() == 2);
-            let p3y = match hints[0].clone() {
+            assert!(hints.len() == 3);
+            let hout = match hints[0].clone() {
+                HintOut::MSM(r) => r,
+                _ => panic!("failed to match"),
+            };
+            let p3y = match hints[1].clone() {
                 HintOut::FieldElem(r) => r,
                 _ => panic!("failed to match"),
             };
-            let p3x = match hints[1].clone() {
+            let p3x = match hints[2].clone() {
                 HintOut::FieldElem(r) => r,
                 _ => panic!("failed to match"),
             };
 
-            let h = aux_output_per_link.get(&row.link_id).unwrap();
-            let hout = match h {
-                HintOut::MSM(m) => m,
-                _ => panic!("failed to match"),
-            };
+
+            // let h = aux_output_per_link.get(&row.link_id).unwrap();
+            // let hout = match h {
+            //     HintOut::MSM(m) => m,
+            //     _ => panic!("failed to match"),
+            // };
 
             let ops_script = tap_hash_p();
             let (_, hint_script) = hint_hash_p(
@@ -1709,7 +1714,6 @@ fn evaluate_pre_miller_circuit(
             }
             assert!(!exec_result.success);
             assert!(exec_result.final_stack.len() == 1);
-            //ScriptItem {category: String::from("P3Hash"), link_id: String::from("M31"), dependencies: String::from("GP3y,GP3x"), is_type_field: false},
         }
     }
     None
@@ -2227,7 +2231,7 @@ mod test {
         let p3 = msm_gs[1] * msm_scalar[1] + msm_gs[0] * msm_scalar[0]; // move to initial proof
         let p3 = p3.into_affine();
 
-        for index_to_corrupt in 617..648 {
+        for index_to_corrupt in 60..70 {
             //let index_to_corrupt = 64;
             let index_is_field = get_type_for_link_id(index_to_corrupt).unwrap();
             println!(

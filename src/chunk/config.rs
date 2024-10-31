@@ -180,6 +180,12 @@ pub(crate) fn premiller_config_gen() -> Vec<ScriptItem> {
             is_type_field: false,
         })
     }
+    r.push(ScriptItem {
+        category: String::from("PreMiller"),
+        link_id: String::from("GP3H"),
+        dependencies: String::new(),
+        is_type_field: false,
+    });
     r
 }
 
@@ -265,8 +271,8 @@ pub(crate) fn pre_miller_config_gen() -> Vec<ScriptItem> {
         },
         ScriptItem {
             category: String::from("P3Hash"),
-            link_id: String::from("M31"),
-            dependencies: String::from("GP3y,GP3x"),
+            link_id: String::from("GP3H"),
+            dependencies: String::from("M31,GP3y,GP3x"),
             is_type_field: false,
         },
     ];
