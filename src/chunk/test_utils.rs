@@ -9,6 +9,47 @@ use std::io::Write;
 use super::wots::WOTSPubKey;
 
 
+pub(crate) fn serialize_pubkey(pubkey: WOTSPubKey) -> Vec<Vec<u8>> {
+    match pubkey {
+        WOTSPubKey::P160(p) => {
+            let mut v = Vec::new();
+            for i in p {
+                v.push(i.to_vec());
+            }
+            v
+        },
+        WOTSPubKey::P256(p) => {
+            let mut v = Vec::new();
+            for i in p {
+                v.push(i.to_vec());
+            }
+            v
+        }
+    }
+}
+
+// hardcoded values shouldn't be used, 
+// but will make do for now, until wots::PublicKey support SerDe trait
+// besides this entire module is for testing purpose only
+pub(crate) fn deserialize_pubkey(ser: Vec<Vec<u8>>) -> Option<WOTSPubKey> {
+    if ser.len() == 67 {
+        let mut ps: [[u8;20]; 67] = [[0u8;20];67];
+        for pi in 0..ser.len() {
+            let en:[u8;20] = ser[pi].clone().try_into().unwrap();
+            ps[pi] = en;
+        }
+        return Some(WOTSPubKey::P256(ps));
+    } else if ser.len() == 43 {
+        let mut ps: [[u8;20]; 43] = [[0u8;20];43];
+        for pi in 0..ser.len() {
+            let en:[u8;20] = ser[pi].clone().try_into().unwrap();
+            ps[pi] = en;
+        }
+        return Some(WOTSPubKey::P160(ps));
+    } 
+    None
+}
+
 pub(crate) fn write_pubkey_to_file(
     map: &HashMap<u32, WOTSPubKey>,
     filename: &str,
@@ -16,7 +57,7 @@ pub(crate) fn write_pubkey_to_file(
     // Serialize the map to a JSON string
     let mut serializable_map: HashMap<u32, Vec<Vec<u8>>> = HashMap::new();
     for (k, v) in map {
-        let vs = v.serialize();
+        let vs = serialize_pubkey(v.clone());
         serializable_map.insert(*k, vs);
     }
     write_map_to_file(&serializable_map, filename)
@@ -26,7 +67,7 @@ pub(crate) fn read_pubkey_from_file(filename: &str) -> Result<HashMap<u32, WOTSP
     let serialized_map = read_map_from_file(filename)?;
     let mut map = HashMap::new();
     for (k, v) in serialized_map {
-        let vs = WOTSPubKey::deserialize(v).unwrap();
+        let vs = deserialize_pubkey(v).unwrap();
         map.insert(k, vs);
     }
     Ok(map)

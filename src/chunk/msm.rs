@@ -5,7 +5,7 @@ use crate::chunk::primitves::{
     emulate_extern_hash_fps, emulate_fr_to_nibbles, unpack_limbs_to_nibbles,
 };
 use crate::chunk::taps::{tup_to_scr, wots_locking_script};
-use crate::chunk::wots::{wots_compact_get_pub_key, wots_compact_hash_get_pub_key};
+use crate::chunk::wots::{wots_p256_get_pub_key, wots_p160_get_pub_key};
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
@@ -590,15 +590,15 @@ pub fn try_msm(qs: Vec<ark_bn254::G1Affine>, scalars: Vec<ark_bn254::Fr>) {
         }
         sec_out = sec_in.last().unwrap() + 1;
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_compact_hash_get_pub_key(&format!("{}{:04X}", msk, sec_out));
+        let pk = wots_p160_get_pub_key(&format!("{}{:04X}", msk, sec_out));
         pub_scripts.insert(sec_out, pk);
         for j in 0..sec_in.len() {
             let i = &sec_in[j];
             if j == pub_ins as usize {
-                let pk = wots_compact_hash_get_pub_key(&format!("{}{:04X}", msk, i));
+                let pk = wots_p160_get_pub_key(&format!("{}{:04X}", msk, i));
                 pub_scripts.insert(*i, pk);
             } else {
-                let pk = wots_compact_get_pub_key(&format!("{}{:04X}", msk, i));
+                let pk = wots_p256_get_pub_key(&format!("{}{:04X}", msk, i));
                 pub_scripts.insert(*i, pk);
             }
         }

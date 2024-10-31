@@ -4,5 +4,6 @@ pub mod evaluate;
 mod msm;
 pub mod primitves;
 mod taps;
-mod utils;
+#[cfg(test)]
+mod test_utils;
 pub mod wots;

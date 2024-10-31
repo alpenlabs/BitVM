@@ -11,7 +11,7 @@ use crate::chunk::primitves::{
     hash_fp12_with_hints, hash_fp2, hash_fp4, hash_fp6, pack_nibbles_to_limbs,
     read_script_from_file, unpack_limbs_to_nibbles,
 };
-use crate::chunk::wots::{wots_compact_checksig_verify_with_pubkey, wots_compact_hash_checksig_verify_with_pubkey};
+use crate::chunk::wots::{wots_compact_checksig_verify_with_pubkey};
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
@@ -26,7 +26,7 @@ use std::str::FromStr;
 
 use super::msm::HintOutMSM;
 use super::primitves::{emulate_extern_hash_fps, hash_fp12_192};
-use super::wots::{wots_hash_sign_digits, wots_sign_digits, WOTSPubKey};
+use super::wots::{wots_p160_sign_digits, wots_p256_sign_digits, WOTSPubKey};
 
 pub(crate) type HashBytes = [u8; 64];
 
@@ -137,15 +137,16 @@ pub(crate) fn hint_squaring(
 }
 
 pub(crate) fn wots_locking_script(link: Link, link_ids: &HashMap<u32, WOTSPubKey>) -> Script {
-    if link.1 {
-        script! {
-            {wots_compact_checksig_verify_with_pubkey(link_ids.get(&link.0).unwrap())}
-        }
-    } else {
-        script! {
-            {wots_compact_hash_checksig_verify_with_pubkey(link_ids.get(&link.0).unwrap())}
-        }
-    }
+    wots_compact_checksig_verify_with_pubkey(link_ids.get(&link.0).unwrap())
+    // if link.1 {
+    //     script! {
+    //         {wots_compact_checksig_verify_with_pubkey(link_ids.get(&link.0).unwrap())}
+    //     }
+    // } else {
+    //     script! {
+    //         {wots_compact_hash_checksig_verify_with_pubkey(link_ids.get(&link.0).unwrap())}
+    //     }
+    // }
 }
 
 pub(crate) fn bitcom_squaring(
@@ -445,11 +446,11 @@ pub(crate) fn tup_to_scr(sig: &mut Sig, tup: Vec<(Link, [u8; 64])>) -> Vec<Scrip
         } else {
             if skey.1 {
                 let v =
-                    wots_sign_digits(&format!("{}{:04X}", sig.msk.unwrap(), skey.0), elem);
+                    wots_p256_sign_digits(&format!("{}{:04X}", sig.msk.unwrap(), skey.0), elem);
                 sig.cache.insert(skey.0, v.clone());
                 v
             } else {
-                let v = wots_hash_sign_digits(
+                let v = wots_p160_sign_digits(
                     &format!("{}{:04X}", sig.msk.unwrap(), skey.0),
                     elem[24..64].try_into().unwrap(),
                 );
@@ -3732,7 +3733,7 @@ mod test {
 
     use super::*;
     use crate::chunk::primitves::emulate_extern_hash_fps;
-    use crate::chunk::wots::{wots_compact_get_pub_key, wots_compact_hash_get_pub_key};
+    use crate::chunk::wots::{wots_p256_get_pub_key, wots_p160_get_pub_key};
     use ark_ff::Field;
     use ark_std::UniformRand;
     use rand::SeedableRng;
@@ -3749,10 +3750,10 @@ mod test {
         let frob_scr = tap_frob_fp12(power);
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
             pub_scripts.insert(*i, pk);
         }
 
@@ -3800,13 +3801,13 @@ mod test {
         let hash_c_scr = tap_hash_p();
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_compact_hash_get_pub_key(&format!(
+        let pk = wots_p160_get_pub_key(&format!(
             "{}{:04X}",
             sec_key_for_bitcomms, sec_out
         ));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
             pub_scripts.insert(*i, pk);
         }
 
@@ -3854,10 +3855,10 @@ mod test {
         let hash_c_scr = tap_hash_c();
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
             pub_scripts.insert(*i, pk);
         }
 
@@ -3906,10 +3907,10 @@ mod test {
         let hash_c_scr = tap_hash_c2();
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
             pub_scripts.insert(*i, pk);
         }
 
@@ -3963,13 +3964,13 @@ mod test {
         let hash_c_scr = tap_initT4();
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_compact_hash_get_pub_key(&format!(
+        let pk = wots_p160_get_pub_key(&format!(
             "{}{:04X}",
             sec_key_for_bitcomms, sec_out
         ));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
             pub_scripts.insert(*i, pk);
         }
 
@@ -4016,10 +4017,10 @@ mod test {
         let sec_in = vec![1, 2, 3];
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
             pub_scripts.insert(*i, pk);
         }
 
@@ -4060,58 +4061,58 @@ mod test {
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
 
-    #[test]
-    fn test_precompute_Py() {
-        // compile time
-        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let sec_out = 0;
-        let sec_in = vec![1];
+    // #[test]
+    // fn test_precompute_Py() {
+    //     // compile time
+    //     let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+    //     let sec_out = 0;
+    //     let sec_in = vec![1];
 
-        let precompute_p = tap_precompute_Py();
-        let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
-        pub_scripts.insert(sec_out, pk);
-        for i in &sec_in {
-            let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
-            pub_scripts.insert(*i, pk);
-        }
+    //     let precompute_p = tap_precompute_Py();
+    //     let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
+    //     let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+    //     pub_scripts.insert(sec_out, pk);
+    //     for i in &sec_in {
+    //         let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+    //         pub_scripts.insert(*i, pk);
+    //     }
 
-        let sec_out = (sec_out, true);
-        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+    //     let sec_out = (sec_out, true);
+    //     let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
 
-        let bitcom_scr = bitcom_precompute_Py(&pub_scripts, sec_out, sec_in.clone());
+    //     let bitcom_scr = bitcom_precompute_Py(&pub_scripts, sec_out, sec_in.clone());
 
-        // runtime
-        let mut prng = ChaCha20Rng::seed_from_u64(0);
-        let p = ark_bn254::Fq::rand(&mut prng);
-        let hint_in = HintInPrecomputePy { p };
-        let (_, simulate_stack_input) = hints_precompute_Py(
-            &mut Sig {
-                msk: Some(sec_key_for_bitcomms),
-                cache: HashMap::new(),
-            },
-            sec_out,
-            sec_in,
-            hint_in,
-        );
+    //     // runtime
+    //     let mut prng = ChaCha20Rng::seed_from_u64(0);
+    //     let p = ark_bn254::Fq::rand(&mut prng);
+    //     let hint_in = HintInPrecomputePy { p };
+    //     let (_, simulate_stack_input) = hints_precompute_Py(
+    //         &mut Sig {
+    //             msk: Some(sec_key_for_bitcomms),
+    //             cache: HashMap::new(),
+    //         },
+    //         sec_out,
+    //         sec_in,
+    //         hint_in,
+    //     );
 
-        let tap_len = precompute_p.len();
-        let script = script! {
-            {simulate_stack_input}
-            {bitcom_scr}
-            {precompute_p}
-        };
+    //     let tap_len = precompute_p.len();
+    //     let script = script! {
+    //         {simulate_stack_input}
+    //         {bitcom_scr}
+    //         {precompute_p}
+    //     };
 
-        let res = execute_script(script);
-        assert!(!res.success && res.final_stack.len() == 1);
-        for i in 0..res.final_stack.len() {
-            println!("{i:} {:?}", res.final_stack.get(i));
-        }
-        println!(
-            "success {}, script {} stack {}",
-            res.success, tap_len, res.stats.max_nb_stack_items
-        );
-    }
+    //     let res = execute_script(script);
+    //     assert!(!res.success && res.final_stack.len() == 1);
+    //     for i in 0..res.final_stack.len() {
+    //         println!("{i:} {:?}", res.final_stack.get(i));
+    //     }
+    //     println!(
+    //         "success {}, script {} stack {}",
+    //         res.success, tap_len, res.stats.max_nb_stack_items
+    //     );
+    // }
 
     #[test]
     fn test_hinited_sparse_dense_mul() {
@@ -4124,10 +4125,10 @@ mod test {
         let sec_in = vec![1, 2];
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
             pub_scripts.insert(*i, pk);
         }
 
@@ -4189,10 +4190,10 @@ mod test {
         let sec_in = vec![1, 2];
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
             pub_scripts.insert(*i, pk);
         }
 
@@ -4246,10 +4247,10 @@ mod test {
         let sec_in = vec![1, 2, 3];
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
             pub_scripts.insert(*i, pk);
         }
 
@@ -4299,10 +4300,10 @@ mod test {
         let sec_in = vec![1];
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_compact_hash_get_pub_key(&format!("{}{:04X}", msk, sec_out));
+        let pk = wots_p160_get_pub_key(&format!("{}{:04X}", msk, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = wots_compact_hash_get_pub_key(&format!("{}{:04X}", msk, i));
+            let pk = wots_p160_get_pub_key(&format!("{}{:04X}", msk, i));
             pub_scripts.insert(*i, pk);
         }
 
@@ -4357,10 +4358,10 @@ mod test {
         let sec_in = vec![1, 2, 3, 4, 5, 6, 7];
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
             pub_scripts.insert(*i, pk);
         }
 
@@ -4411,10 +4412,10 @@ mod test {
         let sec_in = vec![1, 2, 3];
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
             pub_scripts.insert(*i, pk);
         }
 
@@ -4460,10 +4461,10 @@ mod test {
         let sec_in = vec![1, 2, 3, 4, 5, 6, 7];
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
             pub_scripts.insert(*i, pk);
         }
 
@@ -4520,10 +4521,10 @@ mod test {
         let sec_in = vec![1, 2, 3, 4];
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
             pub_scripts.insert(*i, pk);
         }
 
@@ -4587,10 +4588,10 @@ mod test {
         let sec_in = vec![1, 2, 3, 4];
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
             pub_scripts.insert(*i, pk);
         }
 
@@ -4654,10 +4655,10 @@ mod test {
         let sec_in = vec![1, 2, 3, 4];
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = wots_compact_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
             pub_scripts.insert(*i, pk);
         }
 

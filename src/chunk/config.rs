@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use ark_ec::bn::BnConfig;
 
 
-use super::wots::{wots_compact_get_pub_key, wots_compact_hash_get_pub_key, WOTSPubKey};
+use super::wots::{wots_p256_get_pub_key, wots_p160_get_pub_key, WOTSPubKey};
 
 pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 
@@ -832,9 +832,9 @@ pub fn keygen(msk: &str) -> HashMap<u32, WOTSPubKey> {
     for (_, link) in links {
         let link_id = link.0;
         if link.1 {
-            scripts.insert(link_id as u32,wots_compact_get_pub_key(&format!("{}{:04X}", msk, link.0)));
+            scripts.insert(link_id as u32,wots_p256_get_pub_key(&format!("{}{:04X}", msk, link.0)));
         } else {
-            scripts.insert(link_id as u32,wots_compact_hash_get_pub_key(&format!("{}{:04X}", msk, link.0)));
+            scripts.insert(link_id as u32,wots_p160_get_pub_key(&format!("{}{:04X}", msk, link.0)));
         }
         //let s = checksig_verify_fq(pub_key);
     }

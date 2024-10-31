@@ -1831,9 +1831,9 @@ mod test {
         chunk::{
             compile::{compile, Vkey},
             config::{get_type_for_link_id, keygen},
-            utils::{
+            test_utils::{
                 read_map_from_file, read_pubkey_from_file, read_scripts_from_file, write_map_to_file, write_pubkey_to_file, write_scripts_to_file, write_scripts_to_separate_files
-            }, wots::{wots_hash_sign_digits, wots_sign_digits},
+            }, wots::{wots_p160_sign_digits, wots_p256_sign_digits},
         },
         groth16::offchain_checker::compute_c_wi,
     };
@@ -2230,7 +2230,10 @@ mod test {
         let p3 = msm_gs[1] * msm_scalar[1] + msm_gs[0] * msm_scalar[0]; // move to initial proof
         let p3 = p3.into_affine();
 
-        for index_to_corrupt in 64..65 {
+        for index_to_corrupt in 51..121 {
+            if index_to_corrupt == 59 {
+                continue;
+            }
             //let index_to_corrupt = 64;
             let index_is_field = get_type_for_link_id(index_to_corrupt).unwrap();
             println!(
@@ -2239,12 +2242,12 @@ mod test {
             );
     
             let mut assertion = read_scripts_from_file(assert_f);
-            let mut corrup_scr = wots_hash_sign_digits(
+            let mut corrup_scr = wots_p160_sign_digits(
                 &format!("{}{:04X}", master_secret, index_to_corrupt),
                 [1u8; 40],
             );
             if index_is_field {
-                corrup_scr = wots_sign_digits(
+                corrup_scr = wots_p256_sign_digits(
                     &format!("{}{:04X}", master_secret, index_to_corrupt),
                     [1u8; 64],
                 );

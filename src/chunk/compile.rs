@@ -553,7 +553,7 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::chunk::{config::keygen, utils::read_scripts_from_file};
+    use crate::chunk::{config::keygen, test_utils::read_scripts_from_file};
 
     use super::*;
 
