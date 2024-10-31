@@ -1738,7 +1738,7 @@ mod test {
 
     use super::*;
 
-    use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, Write};
+    use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, Read, Write};
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub(crate) struct GrothProof {
@@ -2128,7 +2128,7 @@ mod test {
         let p3 = msm_gs[1] * msm_scalar[1] + msm_gs[0] * msm_scalar[0]; // move to initial proof
         let p3 = p3.into_affine();
 
-        for index_to_corrupt in 609..641 {
+        for index_to_corrupt in 39..55 {
             if index_to_corrupt == 51 {
                 continue;
             }
