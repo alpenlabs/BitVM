@@ -3784,7 +3784,7 @@ mod test {
         };
 
         let res = execute_script(script);
-        assert!(!res.success);
+        assert!(!res.success && res.final_stack.len() == 1);
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
@@ -3890,7 +3890,7 @@ mod test {
         };
 
         let res = execute_script(script);
-        assert!(!res.success);
+        assert!(!res.success && res.final_stack.len() == 1);
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
@@ -3950,7 +3950,7 @@ mod test {
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
-        assert!(!res.success);
+        assert!(!res.success && res.final_stack.len() == 1);
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
 
@@ -4000,7 +4000,7 @@ mod test {
         };
 
         let res = execute_script(script);
-        assert!(!res.success);
+        assert!(!res.success && res.final_stack.len() == 1);
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
@@ -4053,7 +4053,7 @@ mod test {
         };
 
         let res = execute_script(script);
-        assert!(!res.success);
+        assert!(!res.success && res.final_stack.len() == 1);
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
@@ -4103,7 +4103,7 @@ mod test {
         };
 
         let res = execute_script(script);
-        assert!(!res.success);
+        assert!(!res.success && res.final_stack.len() == 1);
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
@@ -4172,7 +4172,7 @@ mod test {
         for i in 0..exec_result.final_stack.len() {
             println!("{i:3} {:?}", exec_result.final_stack.get(i));
         }
-        assert!(!exec_result.success);
+        assert!(!exec_result.success && exec_result.final_stack.len() == 1);
         println!(
             "stack len {:?} script len {:?}",
             exec_result.stats.max_nb_stack_items, tap_len
@@ -4229,7 +4229,7 @@ mod test {
 
         let exec_result = execute_script(script);
         println!("stack len {:?}", exec_result.final_stack.len());
-        assert!(!exec_result.success);
+        assert!(!exec_result.success && exec_result.final_stack.len() == 1);
         println!(
             "stack len {:?} script len {:?}",
             exec_result.stats.max_nb_stack_items, tap_len
@@ -4283,7 +4283,7 @@ mod test {
         };
 
         let exec_result = execute_script(script);
-        assert!(!exec_result.success);
+        assert!(!exec_result.success && exec_result.final_stack.len() == 1);
         println!(
             "stack len {:?} script len {:?}",
             exec_result.stats.max_nb_stack_items, tap_len
@@ -4340,7 +4340,7 @@ mod test {
         for i in 0..exec_result.final_stack.len() {
             println!("{i:} {:?}", exec_result.final_stack.get(i));
         }
-        assert!(!exec_result.success);
+        assert!(!exec_result.success && exec_result.final_stack.len() == 1);
         println!(
             "stack len {:?} script len {:?}",
             exec_result.stats.max_nb_stack_items, tap_len
@@ -4395,7 +4395,7 @@ mod test {
         };
 
         let res = execute_script(script);
-        assert!(!res.success);
+        assert!(!res.success && res.final_stack.len() == 1);
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
@@ -4446,7 +4446,7 @@ mod test {
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
-        assert!(!res.success);
+        assert!(!res.success && res.final_stack.len() == 1);
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
 
@@ -4499,7 +4499,7 @@ mod test {
         };
 
         let res = execute_script(script);
-        assert!(!res.success);
+        assert!(!res.success && res.final_stack.len() == 1);
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
@@ -4560,7 +4560,7 @@ mod test {
 
         let exec_result = execute_script(script);
 
-        assert!(!exec_result.success);
+        assert!(!exec_result.success && exec_result.final_stack.len() == 1);
         for i in 0..exec_result.final_stack.len() {
             println!("{i:} {:?}", exec_result.final_stack.get(i));
         }
@@ -4627,7 +4627,7 @@ mod test {
         };
 
         let exec_result = execute_script(script);
-        assert!(!exec_result.success);
+        assert!(!exec_result.success && exec_result.final_stack.len() == 1);
         for i in 0..exec_result.final_stack.len() {
             println!("{i:} {:?}", exec_result.final_stack.get(i));
         }
@@ -4701,7 +4701,7 @@ mod test {
         for i in 0..exec_result.final_stack.len() {
             println!("{i:} {:?}", exec_result.final_stack.get(i));
         }
-        assert!(!exec_result.success);
+        assert!(!exec_result.success && exec_result.final_stack.len() == 1);
         println!(
             "stack len {:?} script len {:?}",
             exec_result.stats.max_nb_stack_items, tap_len

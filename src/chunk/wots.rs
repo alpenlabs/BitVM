@@ -12,14 +12,12 @@ use super::config::assign_link_ids;
 
 pub(crate) fn wots_hash_sign_digits(secret_key: &str, message_digits: [u8; 40]) -> Vec<bitcoin_script::Script> {
     //winternitz_hash::sign_digits(secret_key, message_digits)
-    //wots160::sign2(secret_key, &message_digits)
-    vec![wots160::sign(secret_key, &message_digits)]
+    wots160::sign2(secret_key, message_digits)
 }
 
 pub(crate) fn wots_sign_digits(secret_key: &str, message_digits: [u8; 64]) -> Vec<bitcoin_script::Script> {
     //winternitz::sign_digits(secret_key, message_digits)
-    //wots256::sign2(secret_key, &message_digits)
-    vec![wots256::sign(secret_key, &message_digits)]
+    wots256::sign2(secret_key, message_digits)
 }
 
 pub(crate) fn wots_compact_get_pub_key(secret_key: &str) -> WOTSPubKey {
@@ -69,7 +67,7 @@ pub(crate) fn wots_compact_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> 
 
 fn wots_hash_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> Script {
     if let WOTSPubKey::P160(pb) = pub_key {
-        let sc_nib = wots160::compact::checksig_verify(*pb);
+        let sc_nib = wots160::checksig_verify(*pb);
         const N0: usize = 40;
         return script!{
             {sc_nib}
@@ -89,7 +87,7 @@ fn wots_hash_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> Script {
 
 fn wots_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> Script {
     if let WOTSPubKey::P256(pb) = pub_key {
-        let sc_nib = wots256::compact::checksig_verify(*pb);
+        let sc_nib = wots256::checksig_verify(*pb);
         return script!{
             {sc_nib}
             // field element reconstruction
@@ -223,91 +221,59 @@ pub fn generate_assertion_spending_key_lengths(apk: &AssertPublicKeys) -> Vec<us
 #[cfg(test)]
 mod test {
 
+    use ark_ff::{Field, UniformRand};
+    use bitcoin::opcodes::{all::OP_ROLL, OP_TRUE};
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
+
     use super::*;
-    use crate::{execute_script, signatures::{self, wots::{wots256, wots32}}};
+    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::primitves::{emulate_extern_hash_fps, emulate_extern_hash_nibbles, emulate_fq_to_nibbles, unpack_limbs_to_nibbles}, execute_script, signatures::{self, wots::{wots256, wots32}}};
+
 
     #[test]
-    fn test_wots256() {
-        let secret = "a01b23c45d67e89f";
-        let public_key = wots256::generate_public_key(&secret);
+    fn test_wots_fq() {
+            // runtime
+            let mut prng = ChaCha20Rng::seed_from_u64(0);
+            let f = ark_bn254::Fq::rand(&mut prng);
+            let secret = "a01b23c45d67e89f";
+            let public_key = wots256::generate_public_key(&secret);
 
-        const MESSAGE: [u8; 64] = [
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
-            1, 2, 3, 4,
-        ];
-        let msg_bytes = MESSAGE.to_vec();
+            let fnib = emulate_fq_to_nibbles(f);
 
-        let script = script! {
-            { wots256::compact::sign(&secret, &msg_bytes) }
-            { wots256::compact::checksig_verify(public_key) }
-
-            for i in (0..8).rev() {
-                { i } OP_ROLL OP_TOALTSTACK
+            let sigs = {wots_sign_digits(&secret, fnib)};
+            let mut compact_sig = script! {};
+            for i in 0..sigs.len() {
+                if i % 2 == 0 {
+                    compact_sig = compact_sig.push_script(sigs[i].clone().compile());
+                }
             }
-
-            { wots256::sign(&secret, &msg_bytes) }
-            { wots256::checksig_verify(public_key) }
-
-            for _ in 0..8 {
-                OP_FROMALTSTACK OP_EQUALVERIFY
+            let script = script!{
+                {compact_sig}
+                {wots_compact_checksig_verify_with_pubkey(&WOTSPubKey::P256(public_key))}
+                {fq_push_not_montgomery(f)}
+                {Fq::equalverify(1,0)}
+                OP_TRUE
+            };
+            let res = execute_script(script);
+            for i in 0..res.final_stack.len() {
+                println!("{i:} {:?}", res.final_stack.get(i));
             }
+            assert!(res.success);
 
-            OP_TRUE
-        };
-
-        println!(
-            "wots32: sig={}, csv={}",
-            wots256::sign(&secret, &msg_bytes).len(),
-            wots256::checksig_verify(public_key).len()
-        );
-
-        println!(
-            "wots32:compact: sig={}, csv={}",
-            wots256::compact::sign(&secret, &msg_bytes).len(),
-            wots256::compact::checksig_verify(public_key).len()
-        );
-
-        let res = execute_script(script);
-        assert!(res.success);
+            let script = script!{
+                for sig in sigs {
+                    {sig}
+                }
+                {wots_checksig_verify_with_pubkey(&WOTSPubKey::P256(public_key))}
+                {fq_push_not_montgomery(f)}
+                {Fq::equalverify(1,0)}
+                OP_TRUE
+            };
+            let res = execute_script(script);
+            for i in 0..res.final_stack.len() {
+                println!("{i:} {:?}", res.final_stack.get(i));
+            }
+            assert!(res.success);
     }
 
-    
-    #[test]
-    fn test_winternitz_old() {
-        const MY_SECKEY: &str = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        const MESSAGE: [u8; 64 as usize] = [
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
-            1, 2, 3, 4,
-        ];
-
-
-        let public_key = signatures::winternitz::generate_public_key(MY_SECKEY);
-    
-        let wots_pub_key = wots256::generate_public_key(MY_SECKEY);
-
-        let signed_digits = signatures::winternitz::sign_digits(MY_SECKEY, MESSAGE);
-        let wots_signed_digits = wots256::sign(MY_SECKEY, &MESSAGE);
-
-        let script = script!{
-            {signed_digits}
-        };
-        let exec_result = execute_script(script);
-        for i in 0..exec_result.final_stack.len() {
-            println!("{i:} {:?}", exec_result.final_stack.get(i));
-        }
-
-
-        let script = script!{
-            {wots_signed_digits}
-        };
-        let exec_result = execute_script(script);
-        for i in 0..exec_result.final_stack.len() {
-            println!("{i:} {:?}", exec_result.final_stack.get(i));
-        }
-
-    }
 }

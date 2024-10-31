@@ -777,12 +777,14 @@ mod test {
         //     println!("{i:} {:?}", exec_result.final_stack.get(i));
         // }
        
-       let nib32 = [15u8;64];
+       let mut nib32 = [0u8;64];
+       nib32[0] = 5;
        let script = script!{
             for i in nib32 {
                 {i}
             }
             {fq_from_nibbles()}
+            {unpack_limbs_to_nibbles()}
        };
        let exec_result = execute_script(script);
        for i in 0..exec_result.final_stack.len() {
