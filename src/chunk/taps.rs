@@ -2398,9 +2398,13 @@ pub(crate) struct HintInHashC {
     pub(crate) hashc: HashBytes,
 }
 
-pub(crate) struct HintInHashP {
-    pub(crate) c: ark_bn254::G1Affine,
-    pub(crate) hashc: HashBytes,
+pub(crate) struct HintInHashP { // r (gp3) = t(msm) + q(vk0)
+    pub(crate) rx: ark_bn254::Fq,
+    pub(crate) ry: ark_bn254::Fq,
+    pub(crate) tx: ark_bn254::Fq,
+    pub(crate) qx: ark_bn254::Fq,
+    pub(crate) ty: ark_bn254::Fq,
+    pub(crate) qy: ark_bn254::Fq,
 }
 
 impl HintInHashC {
@@ -2753,65 +2757,6 @@ pub(crate) fn hints_precompute_Py(
     (pdy, simulate_stack_input)
 }
 
-// Hash P
-pub(crate) fn tap_hash_p() -> Script {
-    let hash_scr = script! {
-        { hash_fp2() }
-        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
-    };
-    let sc = script! {
-        {hash_scr}
-        OP_TRUE
-    };
-    sc
-}
-
-pub(crate) fn bitcom_hash_p(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    _sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 3);
-
-    let bitcom_scr = script! {
-
-        {wots_locking_script(sec_in[2], link_ids)} // px
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[1], link_ids)} // py
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)} // hash
-
-        {Fq::fromaltstack()}
-        {Fq::fromaltstack()}
-        {Fq::roll(1)}
-        // Stack:[f_hash_claim, px, py]
-    };
-    bitcom_scr
-}
-
-pub(crate) fn hint_hash_p(
-    sig: &mut Sig,
-    _sec_out: Link,
-    sec_in: Vec<Link>,
-    hint_in: HintInHashP,
-) -> ((), Script) {
-    let f = vec![hint_in.c.x, hint_in.c.y];
-    let fhash = emulate_extern_hash_fps(f.clone(), false);
-
-    let mut tups = vec![(sec_in[0], fhash)];
-    tups.push((sec_in[1], emulate_fq_to_nibbles(hint_in.c.y)));
-    tups.push((sec_in[2], emulate_fq_to_nibbles(hint_in.c.x)));
-
-    let bc_elems = tup_to_scr(sig, tups);
-
-    let simulate_stack_input = script! {
-        // bit commits raw
-        for bc in bc_elems {
-            {bc}
-        }
-    };
-    ((), simulate_stack_input)
-}
 
 // hash T4
 pub(crate) fn tap_initT4() -> Script {

@@ -1,25 +1,24 @@
 use ark_bn254::g2::G2Affine;
 use ark_bn254::{Fq12, G1Affine};
 use ark_ff::Field;
-use bitcoin::opcodes::OP_TRUE;
 use bitcoin_script::script;
 use std::collections::HashMap;
 
 use crate::chunk::compile::ATE_LOOP_COUNT;
 use crate::chunk::config::miller_config_gen;
-use crate::chunk::msm::{bitcom_msm, hint_msm, tap_msm, HintInMSM};
+use crate::chunk::msm::{bitcom_hash_p, bitcom_msm, hint_hash_p, hint_msm, tap_hash_p, tap_msm, HintInMSM};
 use crate::chunk::primitves::emulate_extern_hash_fps;
 use crate::chunk::{taps, taps_mul};
 use crate::chunk::taps::{
     bitcom_add_eval_mul_for_fixed_Qs, bitcom_add_eval_mul_for_fixed_Qs_with_frob,
     bitcom_double_eval_mul_for_fixed_Qs,
-    bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_hash_p, bitcom_initT4,
+    bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2,  bitcom_initT4,
     bitcom_point_add_with_frob, bitcom_point_dbl, bitcom_point_ops, bitcom_precompute_Px,
     bitcom_precompute_Py,   hint_hash_c, hint_hash_c2,
-    hint_hash_p, hint_init_T4,  hints_frob_fp12,
+     hint_init_T4,  hints_frob_fp12,
     hints_precompute_Px, hints_precompute_Py, tap_add_eval_mul_for_fixed_Qs,
     tap_add_eval_mul_for_fixed_Qs_with_frob, tap_double_eval_mul_for_fixed_Qs, tap_frob_fp12,
-    tap_hash_c2, tap_hash_p, tap_point_add_with_frob, tap_point_dbl, tap_point_ops,
+    tap_hash_c2,  tap_point_add_with_frob, tap_point_dbl, tap_point_ops,
     tap_precompute_Px, tap_precompute_Py,  HintInAdd,
     HintInDblAdd,  HintInDouble, HintInFrobFp12, HintInHashC,
     HintInHashP, HintInInitT4, HintInPrecomputePx, HintInPrecomputePy, HintInSparseAdd,
@@ -1124,7 +1123,7 @@ fn evaluate_post_miller_circuit(
 }
 
 fn evaluate_groth16_params(
-    sig: &mut Sig,
+    sig: &mut Sig, // TODO: add sig values here ?
     link_name_to_id: HashMap<String, (u32, bool)>,
     p2: G1Affine,
     p3: G1Affine,
@@ -1205,6 +1204,7 @@ fn evaluate_groth16_params(
         HintOut::FieldElem(q4.x.c0),
         HintOut::ScalarElem(ks[0]),
         HintOut::ScalarElem(ks[1]),
+        HintOut::ScalarElem(ks[2]),
     ];
     assert_eq!(gparams.len(), gouts.len());
 
@@ -1237,7 +1237,7 @@ fn evaluate_msm(
     pub_ins: usize,
     qs: Vec<ark_bn254::G1Affine>,
 ) -> Option<(u32, bitcoin_script::Script)> {
-    let tables = msm_config_gen(String::from("k0,k1"));
+    let tables = msm_config_gen(String::from("k0,k1,k2"));
     let mut msm_tap_index = 0;
     for row in tables {
         println!(
@@ -1319,6 +1319,7 @@ fn evaluate_pre_miller_circuit(
     pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>,
     link_name_to_id: HashMap<String, (u32, bool)>,
     aux_output_per_link: &mut HashMap<String, HintOut>,
+    vky0: ark_bn254::G1Affine
 ) -> Option<(u32, bitcoin_script::Script)> {
     let tables = pre_miller_config_gen();
 
@@ -1586,8 +1587,8 @@ fn evaluate_pre_miller_circuit(
             aux_output_per_link.insert(row.link_id, HintOut::DenseMul1(hout));
         } else if row.category == "P3Hash" {
             assert!(hints.len() == 3);
-            let hout = match hints[0].clone() {
-                HintOut::MSM(r) => r,
+            let t = match hints[0].clone() {
+                HintOut::MSM(r) => r.t,
                 _ => panic!("failed to match"),
             };
             let p3y = match hints[1].clone() {
@@ -1599,21 +1600,18 @@ fn evaluate_pre_miller_circuit(
                 _ => panic!("failed to match"),
             };
 
-
-            // let h = aux_output_per_link.get(&row.link_id).unwrap();
-            // let hout = match h {
-            //     HintOut::MSM(m) => m,
-            //     _ => panic!("failed to match"),
-            // };
-
-            let ops_script = tap_hash_p();
+            let ops_script = tap_hash_p(vky0);
             let (_, hint_script) = hint_hash_p(
                 sig,
                 sec_out,
                 sec_in.clone(),
                 HintInHashP {
-                    c: G1Affine::new_unchecked(p3x, p3y),
-                    hashc: hout.hasht,
+                    qx: vky0.x,
+                    qy: vky0.y,
+                    tx: t.x,
+                    ty: t.y,
+                    rx: p3x,
+                    ry: p3y,
                 },
             );
             let bcs_script = bitcom_hash_p(pub_scripts_per_link_id, sec_out, sec_in.clone());
@@ -1652,6 +1650,7 @@ pub fn evaluate(
     fixed_acc: ark_bn254::Fq12,
     ks: Vec<ark_bn254::Fr>,
     ks_vks: Vec<ark_bn254::G1Affine>,
+    vky0: ark_bn254::G1Affine,
 ) -> Option<(u32, bitcoin_script::Script)> {
     let (link_name_to_id, facc, tacc) = assign_link_ids();
     let mut aux_out_per_link: HashMap<String, HintOut> = HashMap::new();
@@ -1687,6 +1686,7 @@ pub fn evaluate(
         pub_scripts_per_link_id,
         link_name_to_id.clone(),
         &mut aux_out_per_link,
+        vky0,
     );
     if re.is_some() {
         println!("Disprove evaluate_pre_miller_circuit");

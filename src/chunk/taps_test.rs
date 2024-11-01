@@ -3,6 +3,7 @@
 mod test {
     use std::collections::HashMap;
 
+    use crate::chunk::msm::{bitcom_hash_p, hint_hash_p, tap_hash_p};
     use crate::chunk::taps::*;
     use crate::chunk::primitves::emulate_extern_hash_fps;
     use crate::chunk::taps_mul::{bitcom_dense_dense_mul0, bitcom_dense_dense_mul0_by_constant, bitcom_dense_dense_mul1, bitcom_dense_dense_mul1_by_constant, bitcom_sparse_dense_mul, bitcom_squaring, hint_sparse_dense_mul, hint_squaring, hints_dense_dense_mul0, hints_dense_dense_mul0_by_constant, hints_dense_dense_mul1, hints_dense_dense_mul1_by_constant, tap_dense_dense_mul0, tap_dense_dense_mul0_by_constant, tap_dense_dense_mul1, tap_dense_dense_mul1_by_constant, tap_sparse_dense_mul, tap_squaring, HintInDenseMul0, HintInDenseMul1, HintInSparseDenseMul, HintInSquaring};
@@ -62,60 +63,6 @@ mod test {
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
-        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
-    }
-
-    #[test]
-    fn test_tap_hash_p() {
-        // compile time
-        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let sec_in = vec![1, 2];
-        let sec_out = 0;
-        let hash_c_scr = tap_hash_p();
-
-        let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_p160_get_pub_key(&format!(
-            "{}{:04X}",
-            sec_key_for_bitcomms, sec_out
-        ));
-        pub_scripts.insert(sec_out, pk);
-        for i in &sec_in {
-            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
-            pub_scripts.insert(*i, pk);
-        }
-
-        // let sec_out = (sec_out, false);
-        let mut sec_in_arr = vec![(sec_out, false)];
-        for sci in sec_in {
-            sec_in_arr.push((sci, true));
-        }
-        //let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
-        let bitcom_scr = bitcom_hash_p(&pub_scripts, (sec_out, false), sec_in_arr.clone());
-
-        // runtime
-        let mut prng = ChaCha20Rng::seed_from_u64(0);
-        let f = ark_bn254::G1Affine::rand(&mut prng);
-        let fhash = emulate_extern_hash_fps(vec![f.x, f.y], false);
-        let hint_in = HintInHashP { c: f, hashc: fhash };
-        let mut sig = Sig {
-            msk: Some(sec_key_for_bitcomms),
-            cache: HashMap::new(),
-        };
-        let (_, simulate_stack_input) = hint_hash_p(&mut sig, (sec_out, false), sec_in_arr, hint_in);
-
-        let tap_len = hash_c_scr.len();
-        let script = script! {
-            {simulate_stack_input}
-            {bitcom_scr}
-            {hash_c_scr}
-        };
-
-        let res = execute_script(script);
-        for i in 0..res.final_stack.len() {
-            println!("{i:} {:?}", res.final_stack.get(i));
-        }
-        assert!(!res.success && res.final_stack.len() == 1);
-
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
 

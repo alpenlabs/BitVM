@@ -11,10 +11,10 @@ use super::msm::{bitcom_msm, tap_msm};
 use super::taps::{self, HashBytes};
 use super::taps::{
     bitcom_add_eval_mul_for_fixed_Qs_with_frob,
-    bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_hash_p, bitcom_initT4,
+    bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_initT4,
     bitcom_point_add_with_frob, bitcom_precompute_Px, bitcom_precompute_Py,
    
-    tap_add_eval_mul_for_fixed_Qs_with_frob, tap_frob_fp12, tap_hash_c2, tap_hash_p,
+    tap_add_eval_mul_for_fixed_Qs_with_frob, tap_frob_fp12, tap_hash_c2,
     tap_point_add_with_frob, tap_precompute_Px, tap_precompute_Py, Link,
 };
 use super::taps_mul::{bitcom_dense_dense_mul0, bitcom_dense_dense_mul1,bitcom_squaring,  bitcom_sparse_dense_mul, tap_sparse_dense_mul, tap_dense_dense_mul0, tap_dense_dense_mul1,tap_squaring};
@@ -22,6 +22,7 @@ use super::taps::{tap_hash_c, tap_initT4};
 use super::wots::WOTSPubKey;
 
 
+use crate::chunk::msm::{bitcom_hash_p, tap_hash_p};
 use crate::chunk::taps::{bitcom_add_eval_mul_for_fixed_Qs, bitcom_point_dbl, bitcom_point_ops, tap_add_eval_mul_for_fixed_Qs, tap_double_eval_mul_for_fixed_Qs, tap_point_dbl, tap_point_ops};
 use crate::chunk::taps_mul::{bitcom_dense_dense_mul0_by_constant, bitcom_dense_dense_mul1_by_constant, tap_dense_dense_mul0_by_constant, tap_dense_dense_mul1_by_constant};
 use crate::treepp::*;
@@ -235,6 +236,7 @@ fn compile_miller_circuit(
 fn compile_pre_miller_circuit(
     link_ids: &HashMap<u32, WOTSPubKey>,
     id_map: HashMap<String, (u32, bool)>,
+    vky0: ark_bn254::G1Affine,
 ) -> HashMap<u32, Script> {
     let tables = pre_miller_config_gen();
 
@@ -321,7 +323,7 @@ fn compile_pre_miller_circuit(
                 },
             );
         } else if row.category == "P3Hash" {
-            let sc1 = tap_hash_p();
+            let sc1 = tap_hash_p(vky0);
             let sc2 = bitcom_hash_p(link_ids, sec_out, sec_in);
             scripts.insert(
                 sec_out.0,
@@ -516,7 +518,7 @@ fn compile_msm_circuit(
     id_map: HashMap<String, (u32, bool)>,
     qs: Vec<ark_bn254::G1Affine>,
 ) -> HashMap<u32, Script> {
-    let rows = msm_config_gen(String::from("k0,k1"));
+    let rows = msm_config_gen(String::from("k0,k1,k2"));
 
     let mut msm_tap_index = 0;
     let mut scripts = HashMap::new();
@@ -553,6 +555,7 @@ pub(crate) struct Vkey {
     pub(crate) q3: G2Affine,
     pub(crate) p3vk: Vec<ark_bn254::G1Affine>,
     pub(crate) p1q1: ark_bn254::Fq12,
+    pub(crate) vky0: ark_bn254::G1Affine,
 }
 
 pub(crate) fn compile(vk: Vkey, link_ids: &HashMap<u32, WOTSPubKey>) -> HashMap<u32, Script> {
@@ -561,7 +564,7 @@ pub(crate) fn compile(vk: Vkey, link_ids: &HashMap<u32, WOTSPubKey>) -> HashMap<
     let mut scrs: HashMap<u32, Script> = HashMap::new();
     let scr = compile_msm_circuit(&link_ids, id_map.clone(), vk.p3vk);
     scrs.extend(scr);
-    let scr = compile_pre_miller_circuit(&link_ids, id_map.clone());
+    let scr = compile_pre_miller_circuit(&link_ids, id_map.clone(), vk.vky0);
     scrs.extend(scr);
     let (scr, t2, t3) = compile_miller_circuit(&link_ids, id_map.clone(), q2, q3);
     scrs.extend(scr);
@@ -587,6 +590,7 @@ mod test {
         let q3 = ark_bn254::G2Affine::rand(&mut prng);
         let vka = ark_bn254::G1Affine::rand(&mut prng);
         let vkb = ark_bn254::G1Affine::rand(&mut prng);
+        let vky0 = ark_bn254::G1Affine::rand(&mut prng);
         let p1q1 = ark_bn254::Fq12::rand(&mut prng);
         let sec_key = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
@@ -596,6 +600,7 @@ mod test {
             q3,
             p3vk: vec![vka, vkb],
             p1q1,
+            vky0
         };
         let bcs = compile(vk, &link_ids);
     }

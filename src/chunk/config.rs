@@ -66,7 +66,7 @@ pub(crate) fn groth16_config_gen() -> Vec<ScriptItem> {
             is_type_field: true,
         })
     }
-    let r7 = vec!["k0", "k1"];
+    let r7 = vec!["k0", "k1", "k2"];
     for item in r7 {
         r.push(ScriptItem {
             category: String::from("GrothPubs"),
@@ -676,7 +676,7 @@ fn assign_ids_to_postmiller_params(start_identifier: u32) -> HashMap<String, (u3
 }
 
 fn assign_ids_to_msm_params(start_identifier: u32) -> HashMap<String, (u32, bool)> {
-    let hardcoded_scalars = String::from("k0,k1");
+    let hardcoded_scalars = String::from("k0,k1,k2");
     let g_params = msm_config_gen(hardcoded_scalars);
     let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
     for i in 0..g_params.len() {

@@ -158,7 +158,6 @@ mod test {
     }
 
     fn generate_mock_proof() -> (GrothProof, GrothVK) {
-        use crate::groth16::verifier::Verifier;
         use ark_bn254::Bn254;
         use ark_crypto_primitives::snark::{CircuitSpecificSetupSNARK, SNARK};
         use ark_ec::pairing::Pairing;
@@ -203,6 +202,18 @@ mod test {
 
                     Ok(a * b)
                 })?;
+                let d = cs.new_input_variable(|| {
+                    let a = self.a.ok_or(SynthesisError::AssignmentMissing)?;
+                    let b = self.b.ok_or(SynthesisError::AssignmentMissing)?;
+
+                    Ok(a + b)
+                })?;
+                let e = cs.new_input_variable(|| {
+                    let a = self.a.ok_or(SynthesisError::AssignmentMissing)?;
+                    let b = self.b.ok_or(SynthesisError::AssignmentMissing)?;
+
+                    Ok(a - b)
+                })?;
 
                 for _ in 0..(self.num_variables - 3) {
                     let _ = cs
@@ -231,12 +242,14 @@ mod test {
         let (pk, vk) = Groth16::<E>::setup(circuit, &mut rng).unwrap();
 
         let pub_commit = circuit.a.unwrap() * circuit.b.unwrap();
+        let pub_commit1 = circuit.a.unwrap() + circuit.b.unwrap();
+        let pub_commit2 = circuit.a.unwrap() - circuit.b.unwrap();
 
         let proof = Groth16::<E>::prove(&pk, circuit, &mut rng).unwrap();
 
-        let (_, msm_g1) = Verifier::prepare_inputs(&vec![pub_commit], &vk);
 
         // G1/G2 points for pairings
+        let msm_g1 =  vk.gamma_abc_g1[0] * ark_bn254::Fr::ONE + vk.gamma_abc_g1[1] * pub_commit + vk.gamma_abc_g1[2] * pub_commit1 + vk.gamma_abc_g1[3] * pub_commit2;
         let (p3, p2, p1, p4) = (msm_g1.into_affine(), proof.c, vk.alpha_g1, proof.a);
         let (q3, q2, q1, q4) = (
             vk.gamma_g2.into_group().neg().into_affine(),
@@ -256,7 +269,7 @@ mod test {
                 p2,
                 p4,
                 q4,
-                scalars: vec![pub_commit],
+                scalars: vec![pub_commit, pub_commit1, pub_commit2],
             },
             GrothVK {
                 q2,
@@ -332,13 +345,15 @@ mod test {
         let vk = GrothVK::read_vk_from_file(vk_f);
         let save_to_file = true;
         let p1q1 =  vk.f_fixed;
-        let p3vk = vec![vk.vk_pubs[1], vk.vk_pubs[0]];
+        let p3vk = vec![vk.vk_pubs[3], vk.vk_pubs[2], vk.vk_pubs[1]];
+        let vky0 = vk.vk_pubs[0];
         let node_scripts_per_link = compile(
             Vkey {
                 q2: vk.q2,
                 q3: vk.q3,
                 p3vk,
                 p1q1,
+                vky0,
             },
             &pubkeys,
         );
@@ -368,9 +383,10 @@ mod test {
 
         let proof = GrothProof::read_groth16_proof_from_file(gp_f);
         let vk = GrothVK::read_vk_from_file(vk_f);
-        let msm_scalar = vec![proof.scalars[0], ark_bn254::Fr::ONE];
-        let msm_gs = vec![vk.vk_pubs[1], vk.vk_pubs[0]];
-        let p3 = msm_gs[1] * msm_scalar[1] + msm_gs[0] * msm_scalar[0]; // move to initial proof
+        let msm_scalar = vec![proof.scalars[2],proof.scalars[1],proof.scalars[0]];
+        let msm_gs = vec![vk.vk_pubs[3],vk.vk_pubs[2],vk.vk_pubs[1]]; // vk.vk_pubs[0]
+        let p3 =  vk.vk_pubs[0] * ark_bn254::Fr::ONE + vk.vk_pubs[1] * proof.scalars[0] + vk.vk_pubs[2] * proof.scalars[1] + vk.vk_pubs[3] * proof.scalars[2];
+
         let p3 = p3.into_affine();
 
         let fault = evaluate(
@@ -387,6 +403,7 @@ mod test {
             vk.f_fixed,
             msm_scalar,
             msm_gs,
+            vk.vk_pubs[0],
         );
         assert!(fault.is_none());
         if dump_assertions_to_file {
@@ -406,12 +423,13 @@ mod test {
         let pub_scripts_per_link_id = read_pubkey_from_file(pubs_f).unwrap();
         let proof = GrothProof::read_groth16_proof_from_file(gp_f);
         let vk = GrothVK::read_vk_from_file(vk_f);
-        let msm_scalar = vec![proof.scalars[0], ark_bn254::Fr::ONE];
-        let msm_gs = vec![vk.vk_pubs[1], vk.vk_pubs[0]];
-        let p3 = msm_gs[1] * msm_scalar[1] + msm_gs[0] * msm_scalar[0]; // move to initial proof
+        let msm_scalar = vec![proof.scalars[2],proof.scalars[1],proof.scalars[0]];
+        let msm_gs = vec![vk.vk_pubs[3], vk.vk_pubs[2], vk.vk_pubs[1]];
+
+        let p3 =  vk.vk_pubs[0] * ark_bn254::Fr::ONE + vk.vk_pubs[1] * proof.scalars[0] + vk.vk_pubs[2] * proof.scalars[1] + vk.vk_pubs[3] * proof.scalars[2];
         let p3 = p3.into_affine();
 
-        for index_to_corrupt in 39..55 { // m0 -> 584
+        for index_to_corrupt in 585..616 { // m0 -> 584
             if index_to_corrupt == 50 {
                 continue;
             }
@@ -454,6 +472,7 @@ mod test {
                 vk.f_fixed,
                 msm_scalar.clone(),
                 msm_gs.clone(),
+                vk.vk_pubs[0],
             );
             assert!(fault.is_some());
             let fault = fault.unwrap();

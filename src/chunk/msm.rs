@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::bn254::utils::fq_push_not_montgomery;
 use crate::chunk::primitves::{
-    emulate_extern_hash_fps, emulate_fr_to_nibbles, unpack_limbs_to_nibbles,
+    emulate_extern_hash_fps, emulate_fq_to_nibbles, emulate_fr_to_nibbles, unpack_limbs_to_nibbles
 };
 use crate::chunk::taps::{tup_to_scr, wots_locking_script};
 use crate::chunk::wots::{wots_p256_get_pub_key, wots_p160_get_pub_key};
@@ -16,7 +16,7 @@ use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
 use num_traits::One;
 
 use super::primitves::hash_fp2;
-use super::taps::{HashBytes, Link, Sig};
+use super::taps::{HashBytes, HintInHashP, Link, Sig};
 use super::wots::WOTSPubKey;
 use crate::bn254::fq2::Fq2;
 use crate::bn254::utils::Hint;
@@ -411,7 +411,7 @@ pub(crate) fn hint_msm(
     qs: Vec<ark_bn254::G1Affine>,
 ) -> (HintOutMSM, Script) {
     const window: u8 = 8;
-    const num_pubs: usize = 4;
+    const num_pubs: usize = 3;
 
     // hint_in
     let mut t = hint_in.t.clone();
@@ -642,6 +642,143 @@ pub fn try_msm(qs: Vec<ark_bn254::G1Affine>, scalars: Vec<ark_bn254::Fr>) {
     }
 }
 
+
+// Hash P
+//vk0: G1Affine
+pub(crate) fn tap_hash_p(q: G1Affine) -> Script {
+    let (hinted_add_line, _) = hinted_affine_add_line_g1(
+        ark_bn254::Fq::one(),
+        ark_bn254::Fq::one(),
+        ark_bn254::Fq::one(),
+        ark_bn254::Fq::one(),
+    );
+    let (hinted_line_pt, _) = hinted_check_line_through_point_g1(
+        ark_bn254::Fq::one(),
+        ark_bn254::Fq::one(),
+        ark_bn254::Fq::one(),
+    );
+
+    let ops_script = script!{
+        //[hinttqa, alpha, bias, tx, ty]
+        { Fq2::copy(2)}
+        //[hinttqa, alpha, bias, tx, ty, alpha, bias]
+        { Fq2::copy(2)}
+        //[hinttqa, alpha, bias, tx, ty, alpha, bias,tx, ty] 
+        { hinted_line_pt.clone() }
+        //[hinttqa, alpha, bias, tx, ty
+
+        { Fq2::copy(2)}
+        //[hinttqa, alpha, bias, tx, ty, alpha, bias]
+        {fq_push_not_montgomery(q.x)}
+        {fq_push_not_montgomery(q.y)}
+        //[hinttqa, alpha, bias, tx, ty, alpha, bias, qx, qy]
+        { hinted_line_pt.clone() }
+
+        //[hinttqa, alpha, bias, tx, ty
+        {Fq2::copy(0)}
+        {Fq2::toaltstack()}
+        {Fq::drop()} {Fq::toaltstack()}
+        {Fq::roll(1)} {Fq::fromaltstack()}
+
+        // //[hinttqa, alpha, bias, tx]
+        {fq_push_not_montgomery(q.x)}
+        { hinted_add_line.clone() }
+
+        // Altstack:[gpx, gpy, th]
+        //[ntx, nty, tx, ty]
+
+        {Fq2::fromaltstack()}
+        { hash_fp2() }
+        {Fq::fromaltstack()}
+        {Fq::equalverify(1, 0)}
+        {Fq2::fromaltstack()} {Fq::roll(1)}
+        // // [ntx, nty, gpx, gpy]
+        {Fq2::equal()}  OP_NOT OP_VERIFY
+
+    };
+
+    let sc = script! {
+        {ops_script}
+        OP_TRUE
+    };
+    sc
+}
+
+pub(crate) fn bitcom_hash_p(
+    link_ids: &HashMap<u32, WOTSPubKey>,
+    _sec_out: Link,
+    sec_in: Vec<Link>,
+) -> Script {
+    assert_eq!(sec_in.len(), 3);
+
+    let bitcom_scr = script! {
+
+        {wots_locking_script(sec_in[2], link_ids)} // gp3x // R
+        {Fq::toaltstack()}
+        {wots_locking_script(sec_in[1], link_ids)} // gp3y
+        {Fq::toaltstack()}
+        {wots_locking_script(sec_in[0], link_ids)} // msm_P_hash // T
+        {Fq::toaltstack()}
+        // P + vkY0 ?= gp3
+
+        // Altstack:[gpx, gpy, th]
+    };
+    bitcom_scr
+}
+
+pub(crate) fn hint_hash_p(
+    sig: &mut Sig,
+    _sec_out: Link,
+    sec_in: Vec<Link>,
+    hint_in: HintInHashP,
+) -> ((), Script) {
+    // r (gp3) = t(msm) + q(vk0)
+    let (tx, qx, ty, qy) = (hint_in.tx, hint_in.qx, hint_in.ty, hint_in.qy);
+    
+    let (rx, ry) = (hint_in.rx, hint_in.ry);
+    let thash = emulate_extern_hash_fps(vec![hint_in.tx, hint_in.ty], false);
+
+    let mut tups = vec![(sec_in[0], thash)];
+    tups.push((sec_in[1], emulate_fq_to_nibbles(ry)));
+    tups.push((sec_in[2], emulate_fq_to_nibbles(rx)));
+
+    let bc_elems = tup_to_scr(sig, tups);
+
+    let alpha_chord = (ty - qy) / (tx - qx);
+    let bias_minus_chord = alpha_chord * tx - ty;
+    assert_eq!(alpha_chord * tx - ty, bias_minus_chord);
+
+    let (_, hints_check_chord_t) = hinted_check_line_through_point_g1(tx, alpha_chord, bias_minus_chord);
+    let (_, hints_check_chord_q) = hinted_check_line_through_point_g1(qx, alpha_chord, bias_minus_chord);
+    let (_, hints_add_line) = hinted_affine_add_line_g1(tx, qx, alpha_chord, bias_minus_chord);
+
+
+    let simulate_stack_input = script! {
+        // bit commits raw
+        for hint in hints_check_chord_t {
+            {hint.push()}
+        }
+        for hint in hints_check_chord_q {
+            {hint.push()}
+        }
+        for hint in hints_add_line {
+            {hint.push()}
+        }
+
+        {fq_push_not_montgomery(alpha_chord)}
+        {fq_push_not_montgomery(bias_minus_chord)}
+
+        {fq_push_not_montgomery(tx)}
+        {fq_push_not_montgomery(ty)}
+
+        for bc in bc_elems {
+            {bc}
+        }
+    };
+    ((), simulate_stack_input)
+}
+
+
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
@@ -833,4 +970,66 @@ mod test {
             exec_result.stats.max_nb_stack_items
         );
     }
+
+
+
+    #[test]
+    fn test_tap_hash_p() {
+        // compile time
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let sec_in = vec![1, 2, 3];
+        let sec_out = 0;
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let q = ark_bn254::G1Affine::rand(&mut prng);
+
+
+        let hash_c_scr = tap_hash_p(q);
+
+        let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
+        for j in 0..sec_in.len() {
+            let i = &sec_in[j];
+            if j == 0 {
+                let pk = wots_p160_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+                pub_scripts.insert(*i, pk);
+            } else {
+                let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+                pub_scripts.insert(*i, pk);
+            }
+        }
+
+        // let sec_out = (sec_out, false);
+
+        let sec_in_arr = vec![(sec_in[0],false), (sec_in[1], true), (sec_in[2], true)];
+        let bitcom_scr = bitcom_hash_p(&pub_scripts, (sec_out, false), sec_in_arr.clone());
+
+        // runtime
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let t = ark_bn254::G1Affine::rand(&mut prng);
+
+        let r = (t + q).into_affine();
+
+        let hint_in = HintInHashP { tx:t.x, qx: q.x, ty: t.y, qy:  q.y, rx: r.x, ry: r.y };
+        let mut sig = Sig {
+            msk: Some(sec_key_for_bitcomms),
+            cache: HashMap::new(),
+        };
+        let (_, simulate_stack_input) = hint_hash_p(&mut sig, (sec_out, false), sec_in_arr, hint_in);
+
+        let tap_len = hash_c_scr.len();
+        let script = script! {
+            {simulate_stack_input}
+            {bitcom_scr}
+            {hash_c_scr}
+        };
+
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        assert!(!res.success && res.final_stack.len() == 1);
+
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+    }
+
+
 }
