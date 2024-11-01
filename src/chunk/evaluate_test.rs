@@ -347,7 +347,19 @@ mod test {
         let p1q1 =  vk.f_fixed;
         let p3vk = vec![vk.vk_pubs[3], vk.vk_pubs[2], vk.vk_pubs[1]];
         let vky0 = vk.vk_pubs[0];
-        let node_scripts_per_link = compile(
+        let ops_scripts_per_link = compile(
+            Vkey {
+                q2: vk.q2,
+                q3: vk.q3,
+                p3vk: p3vk.clone(),
+                p1q1,
+                vky0,
+            },
+            &HashMap::new(), // no pubkeys needed to get ops_script
+            false
+        );
+        
+        let bitcom_scripts_per_link = compile(
             Vkey {
                 q2: vk.q2,
                 q3: vk.q3,
@@ -356,11 +368,24 @@ mod test {
                 vky0,
             },
             &pubkeys,
+            true
         );
+
+        let mut tap_scripts_per_link: Vec<(u32, Script)> = vec![];
+        assert_eq!(ops_scripts_per_link.len(), bitcom_scripts_per_link.len());
+        for i in 0..bitcom_scripts_per_link.len() {
+            let sc = script!{
+                {bitcom_scripts_per_link[i].1.clone()}
+                {ops_scripts_per_link[i].1.clone()}
+            };
+            let index = ops_scripts_per_link[i].0;
+            assert_eq!(index, bitcom_scripts_per_link[i].0);
+            tap_scripts_per_link.push((index, sc));
+        }
 
         if save_to_file {
             let mut script_cache = HashMap::new();
-            for (k, v) in node_scripts_per_link {
+            for (k, v) in tap_scripts_per_link {
                 script_cache.insert(k, vec![v]);
             }
             write_scripts_to_separate_files(script_cache, "tapnode");

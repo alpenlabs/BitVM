@@ -35,7 +35,7 @@ use super::config::{
 };
 use super::primitves::emulate_fq_to_nibbles;
 use super::taps::{tap_hash_c, tap_initT4};
-use super::taps::{tup_to_scr, HintOut, Sig};
+use super::taps::{HintOut, Sig};
 use super::wots::WOTSPubKey;
 use crate::treepp::*;
 
