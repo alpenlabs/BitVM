@@ -8,7 +8,7 @@ use super::config::{
     pre_miller_config_gen,
 };
 use super::msm::{bitcom_msm, tap_msm};
-use super::taps;
+use super::taps::{self, HashBytes};
 use super::taps::{
     bitcom_add_eval_mul_for_fixed_Qs_with_frob,
     bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_hash_p, bitcom_initT4,
@@ -23,6 +23,7 @@ use super::wots::WOTSPubKey;
 
 
 use crate::chunk::taps::{bitcom_add_eval_mul_for_fixed_Qs, bitcom_point_dbl, bitcom_point_ops, tap_add_eval_mul_for_fixed_Qs, tap_double_eval_mul_for_fixed_Qs, tap_point_dbl, tap_point_ops};
+use crate::chunk::taps_mul::{bitcom_dense_dense_mul0_by_constant, bitcom_dense_dense_mul1_by_constant, tap_dense_dense_mul0_by_constant, tap_dense_dense_mul1_by_constant};
 use crate::treepp::*;
 
 // pub const ATE_LOOP_COUNT: &'static [i8] = &[
@@ -345,6 +346,7 @@ fn compile_post_miller_circuit(
     q3: ark_bn254::G2Affine,
     facc: String,
     tacc: String,
+    p1q1: ark_bn254::Fq12,
 ) -> HashMap<u32, Script> {
     let tables = post_miller_config_gen(facc, tacc);
 
@@ -391,8 +393,7 @@ fn compile_post_miller_circuit(
                 },
             );
         } else if row.category == "DD1"{
-            let check_identity_in_last_elem = row.link_id == "fin";
-            let sc1 = tap_dense_dense_mul0(check_identity_in_last_elem);
+            let sc1 = tap_dense_dense_mul0(false);
             let sc2 = bitcom_dense_dense_mul0(link_ids, sec_out, sec_in);
             scripts.insert(
                 sec_out.0,
@@ -402,8 +403,7 @@ fn compile_post_miller_circuit(
                 },
             );
         } else if row.category == "DD2" {
-            let check_identity_in_last_elem = row.link_id == "fin";
-            let sc1 = tap_dense_dense_mul1(check_identity_in_last_elem);
+            let sc1 = tap_dense_dense_mul1(false);
             let sc2 = bitcom_dense_dense_mul1(link_ids, sec_out, sec_in);
             scripts.insert(
                 sec_out.0,
@@ -486,6 +486,26 @@ fn compile_post_miller_circuit(
             );
             nt2 = a;
             nt3 = b;
+        } else if row.category == "DK1"{
+            let sc1 = tap_dense_dense_mul0_by_constant(true, p1q1);
+            let sc2 = bitcom_dense_dense_mul0_by_constant(link_ids, sec_out, sec_in);
+            scripts.insert(
+                sec_out.0,
+                script! {
+                        {sc2}
+                        {sc1}
+                },
+            );
+        } else if row.category == "DK2" {
+            let sc1 = tap_dense_dense_mul1_by_constant(true, p1q1);
+            let sc2 = bitcom_dense_dense_mul1_by_constant(link_ids, sec_out, sec_in);
+            scripts.insert(
+                sec_out.0,
+                script! {
+                        {sc2}
+                        {sc1}
+                },
+            );
         }
     }
     return scripts;
@@ -532,6 +552,7 @@ pub(crate) struct Vkey {
     pub(crate) q2: G2Affine,
     pub(crate) q3: G2Affine,
     pub(crate) p3vk: Vec<ark_bn254::G1Affine>,
+    pub(crate) p1q1: ark_bn254::Fq12,
 }
 
 pub(crate) fn compile(vk: Vkey, link_ids: &HashMap<u32, WOTSPubKey>) -> HashMap<u32, Script> {
@@ -544,7 +565,7 @@ pub(crate) fn compile(vk: Vkey, link_ids: &HashMap<u32, WOTSPubKey>) -> HashMap<
     scrs.extend(scr);
     let (scr, t2, t3) = compile_miller_circuit(&link_ids, id_map.clone(), q2, q3);
     scrs.extend(scr);
-    let scr = compile_post_miller_circuit(&link_ids, id_map, t2, t3, q2, q3, facc, tacc);
+    let scr = compile_post_miller_circuit(&link_ids, id_map, t2, t3, q2, q3, facc, tacc, vk.p1q1);
     scrs.extend(scr);
     scrs
 }
@@ -566,6 +587,7 @@ mod test {
         let q3 = ark_bn254::G2Affine::rand(&mut prng);
         let vka = ark_bn254::G1Affine::rand(&mut prng);
         let vkb = ark_bn254::G1Affine::rand(&mut prng);
+        let p1q1 = ark_bn254::Fq12::rand(&mut prng);
         let sec_key = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
         let link_ids = keygen(sec_key);
@@ -573,6 +595,7 @@ mod test {
             q2,
             q3,
             p3vk: vec![vka, vkb],
+            p1q1,
         };
         let bcs = compile(vk, &link_ids);
     }

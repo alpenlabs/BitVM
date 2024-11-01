@@ -75,17 +75,6 @@ pub(crate) fn groth16_config_gen() -> Vec<ScriptItem> {
             is_type_field: true,
         })
     }
-    let r8 = vec![
-        String::from("f_fixed"), // hash of output of miller loop for fixed P,Q
-    ];
-    for item in r8 {
-        r.push(ScriptItem {
-            category: String::from("PubHashFixedAcc"),
-            link_id: String::from(item),
-            dependencies: String::new(),
-            is_type_field: false,
-        })
-    }
     r
 }
 
@@ -329,15 +318,15 @@ pub(crate) fn post_miller_config_gen(f_acc: String, t4_acc: String) -> Vec<Scrip
             is_type_field: false,
         },
         ScriptItem {
-            category: String::from("DD1"),
+            category: String::from("DK1"),
             link_id: String::from("U21"),
-            dependencies: String::from("U20,f_fixed"),
+            dependencies: String::from("U20"),
             is_type_field: false,
         },
         ScriptItem {
-            category: String::from("DD2"),
+            category: String::from("DK2"),
             link_id: String::from("fin"),
-            dependencies: String::from("U20,f_fixed,U21"),
+            dependencies: String::from("U20,U21"),
             is_type_field: false,
         },
         //// SS1;S4;P3,P2;

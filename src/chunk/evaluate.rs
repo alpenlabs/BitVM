@@ -20,14 +20,14 @@ use crate::chunk::taps::{
     hints_precompute_Px, hints_precompute_Py, tap_add_eval_mul_for_fixed_Qs,
     tap_add_eval_mul_for_fixed_Qs_with_frob, tap_double_eval_mul_for_fixed_Qs, tap_frob_fp12,
     tap_hash_c2, tap_hash_p, tap_point_add_with_frob, tap_point_dbl, tap_point_ops,
-    tap_precompute_Px, tap_precompute_Py,  HashBytes, HintInAdd,
+    tap_precompute_Px, tap_precompute_Py,  HintInAdd,
     HintInDblAdd,  HintInDouble, HintInFrobFp12, HintInHashC,
     HintInHashP, HintInInitT4, HintInPrecomputePx, HintInPrecomputePy, HintInSparseAdd,
-    HintInSparseDbl,   HintOutFixedAcc, HintOutFrobFp12,
-    HintOutGrothC, HintOutPubIdentity, HintOutSparseDbl, Link,
+    HintInSparseDbl,   
+    HintOutGrothC,  Link,
 };
 
-use crate::chunk::taps_mul::{bitcom_dense_dense_mul0, bitcom_dense_dense_mul1, bitcom_sparse_dense_mul, bitcom_squaring, tap_squaring,hints_dense_dense_mul0, hints_dense_dense_mul1, tap_dense_dense_mul0, tap_dense_dense_mul1, tap_sparse_dense_mul, HintInDenseMul0, HintInDenseMul1, HintInSparseDenseMul,HintInSquaring,};
+use crate::chunk::taps_mul::{bitcom_dense_dense_mul0, bitcom_dense_dense_mul0_by_constant, bitcom_dense_dense_mul1, bitcom_dense_dense_mul1_by_constant, bitcom_sparse_dense_mul, bitcom_squaring, hints_dense_dense_mul0, hints_dense_dense_mul0_by_constant, hints_dense_dense_mul1, hints_dense_dense_mul1_by_constant, tap_dense_dense_mul0, tap_dense_dense_mul0_by_constant, tap_dense_dense_mul1, tap_dense_dense_mul1_by_constant, tap_sparse_dense_mul, tap_squaring, HintInDenseMul0, HintInDenseMul1, HintInSparseDenseMul, HintInSquaring};
 use crate::execute_script;
 
 use super::config::{
@@ -639,6 +639,7 @@ fn evaluate_post_miller_circuit(
     q3: ark_bn254::G2Affine,
     facc: String,
     tacc: String,
+    fixed_acc: ark_bn254::Fq12,
 ) -> Option<(u32, Script)> {
     let tables = post_miller_config_gen(facc, tacc);
 
@@ -651,7 +652,7 @@ fn evaluate_post_miller_circuit(
             .into_iter()
             .map(|s| link_name_to_id.get(s).unwrap().clone())
             .collect();
-        println!("row ID {:?}", row.link_id);
+        println!("row ID {:?} and deps {:?}", row.link_id, row.dependencies);
         let sec_out = link_name_to_id.get(&row.link_id).unwrap().clone();
         let hints_out: Vec<HintOut> = row
             .dependencies
@@ -720,15 +721,6 @@ fn evaluate_post_miller_circuit(
                         false,
                     )
                 }
-                HintOut::FixedAcc(r) => (
-                    hints_dense_dense_mul0(
-                        sig,
-                        sec_out,
-                        sec_in.clone(),
-                        HintInDenseMul0::from_dense_fixed_acc(c, r),
-                    ),
-                    true,
-                ),
                 _ => panic!("failed to match"),
             };
             let ops_script = tap_dense_dense_mul0(check_is_id);
@@ -775,15 +767,6 @@ fn evaluate_post_miller_circuit(
                         HintInDenseMul1::from_hash_c(c, d),
                     ),
                     false,
-                ),
-                HintOut::FixedAcc(r) => (
-                    hints_dense_dense_mul1(
-                        sig,
-                        sec_out,
-                        sec_in.clone(),
-                        HintInDenseMul1::from_dense_fixed_acc(c, r),
-                    ),
-                    true,
                 ),
                 _ => panic!("failed to match"),
             };
@@ -1072,8 +1055,69 @@ fn evaluate_post_miller_circuit(
                 nt2 = hint_out.t2;
                 nt3 = hint_out.t3;
                 aux_output_per_link.insert(row.link_id.clone(), HintOut::SparseAdd(hint_out));
+            } 
+        
+        } else if row.category == "DK1" {
+            assert!(hints_out.len() == 1);
+            let a = match hints_out[0].clone() {
+                HintOut::DenseMul1(r) => r,
+                _ => panic!("failed to match"),
+            };
+
+            let (hint_out, hint_script) = hints_dense_dense_mul0_by_constant(sig, sec_out, sec_in.clone(), HintInDenseMul0 { a: a.c, b: fixed_acc });
+            let ops_script = tap_dense_dense_mul0_by_constant(true, fixed_acc);
+            let bcs_script =
+                bitcom_dense_dense_mul0_by_constant(pub_scripts_per_link_id, sec_out, sec_in.clone());
+            let script = script! {
+                { hint_script.clone() }
+                { bcs_script }
+                { ops_script }
+            };
+            let exec_result = execute_script(script);
+            if exec_result.success {
+                return Some((sec_out.0, hint_script));
+            } else if !exec_result.success && exec_result.final_stack.len() > 1 {
+                for i in 0..exec_result.final_stack.len() {
+                    println!("{i:} {:?}", exec_result.final_stack.get(i));
+                }
+                panic!()
             }
-        }
+            assert!(!exec_result.success);
+            assert!(exec_result.final_stack.len() == 1);
+            aux_output_per_link.insert(row.link_id.clone(), HintOut::DenseMul0(hint_out));
+        } else if row.category == "DK2" {
+            assert!(hints_out.len() == 2);
+            let a = match hints_out[0].clone() {
+                HintOut::DenseMul1(r) => r,
+                _ => panic!("failed to match"),
+            };
+            let (hint_out, hint_script) = hints_dense_dense_mul1_by_constant(sig, sec_out, sec_in.clone(), HintInDenseMul1 { a: a.c, b: fixed_acc });
+            let ops_script = tap_dense_dense_mul1_by_constant(true, fixed_acc);
+            let bcs_script =
+                bitcom_dense_dense_mul1_by_constant(pub_scripts_per_link_id, sec_out, sec_in.clone());
+            let script = script! {
+                { hint_script.clone() }
+                { bcs_script }
+                { ops_script }
+            };
+            let exec_result = execute_script(script);
+            if exec_result.success {
+                return Some((sec_out.0, hint_script));
+            } else if !exec_result.success && exec_result.final_stack.len() > 1 {
+                for i in 0..exec_result.final_stack.len() {
+                    println!("{i:} {:?}", exec_result.final_stack.get(i));
+                }
+                panic!()
+            }
+            assert!(!exec_result.success);
+            assert!(exec_result.final_stack.len() == 1);
+            aux_output_per_link.insert(row.link_id.clone(), HintOut::DenseMul1(hint_out));
+        } else {
+            panic!();
+        } 
+    
+    
+    
     }
 
     None
@@ -1089,7 +1133,6 @@ fn evaluate_groth16_params(
     c: Fq12,
     s: Fq12,
     ks: Vec<ark_bn254::Fr>,
-    fixed_acc: ark_bn254::Fq12,
 ) -> HashMap<String, HintOut> {
     let cv = vec![
         c.c0.c0.c0, c.c0.c0.c1, c.c0.c1.c0, c.c0.c1.c1, c.c0.c2.c0, c.c0.c2.c1, c.c1.c0.c0,
@@ -1119,29 +1162,6 @@ fn evaluate_groth16_params(
         ],
         false,
     );
-
-
-    let fixedacc_hash = emulate_extern_hash_fps(
-        vec![
-            fixed_acc.c0.c0.c0,
-            fixed_acc.c0.c0.c1,
-            fixed_acc.c0.c1.c0,
-            fixed_acc.c0.c1.c1,
-            fixed_acc.c0.c2.c0,
-            fixed_acc.c0.c2.c1,
-            fixed_acc.c1.c0.c0,
-            fixed_acc.c1.c0.c1,
-            fixed_acc.c1.c1.c0,
-            fixed_acc.c1.c1.c1,
-            fixed_acc.c1.c2.c0,
-            fixed_acc.c1.c2.c1,
-        ],
-        false,
-    );
-    let fixed_acc = HintOutFixedAcc {
-        f: fixed_acc,
-        fhash: fixedacc_hash,
-    };
 
     let gparams = groth16_config_gen();
     let gouts = vec![
@@ -1185,7 +1205,6 @@ fn evaluate_groth16_params(
         HintOut::FieldElem(q4.x.c0),
         HintOut::ScalarElem(ks[0]),
         HintOut::ScalarElem(ks[1]),
-        HintOut::FixedAcc(fixed_acc),
     ];
     assert_eq!(gparams.len(), gouts.len());
 
@@ -1647,7 +1666,6 @@ pub fn evaluate(
         c,
         s,
         ks.clone(),
-        fixed_acc,
     );
     aux_out_per_link.extend(grothmap);
 
@@ -1700,6 +1718,7 @@ pub fn evaluate(
         q3,
         facc.clone(),
         tacc,
+        fixed_acc,
     );
     if re.is_some() {
         println!("Disprove evaluate_post_miller_circuit");

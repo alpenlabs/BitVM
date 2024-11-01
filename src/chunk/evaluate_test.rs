@@ -12,7 +12,7 @@ mod test {
             compile::{compile, Vkey},
             config::{get_type_for_link_id, keygen},
             test_utils::{
-                read_map_from_file, read_pubkey_from_file, read_scripts_from_file, write_map_to_file, write_pubkey_to_file, write_scripts_to_file, write_scripts_to_separate_files
+                read_pubkey_from_file, read_scripts_from_file, write_map_to_file, write_pubkey_to_file, write_scripts_to_file, write_scripts_to_separate_files
             }, wots::{wots_p160_sign_digits, wots_p256_sign_digits},
         },
         groth16::offchain_checker::compute_c_wi,
@@ -26,7 +26,6 @@ mod test {
     pub(crate) struct GrothProof {
         c: ark_bn254::Fq12,
         s: ark_bn254::Fq12,
-        f_fixed: ark_bn254::Fq12, // mill(p1,q1)
         p2: ark_bn254::G1Affine,  // vk->q2
         p4: ark_bn254::G1Affine,
         q4: ark_bn254::G2Affine,
@@ -38,13 +37,13 @@ mod test {
         vk_pubs: Vec<ark_bn254::G1Affine>,
         q2: ark_bn254::G2Affine,
         q3: ark_bn254::G2Affine,
+        f_fixed: ark_bn254::Fq12, // mill(p1,q1)
     }
 
     #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
     struct GrothProofBytes {
         c: Vec<u8>,
         s: Vec<u8>,
-        f_fixed: Vec<u8>,
         p2: Vec<u8>,
         p4: Vec<u8>,
         q4: Vec<u8>,
@@ -56,20 +55,19 @@ mod test {
         q2: Vec<u8>,
         q3: Vec<u8>,
         vk_pubs: Vec<Vec<u8>>,
+        f_fixed: Vec<u8>,
     }
 
     impl GrothProof {
         fn write_groth16_proof_to_file(&self, filename: &str) {
             let mut cbytes = Vec::new();
             let mut sbytes = Vec::new();
-            let mut fbytes = Vec::new();
             let mut p2bytes = Vec::new();
             let mut p4bytes = Vec::new();
             let mut q4bytes = Vec::new();
             let mut scalarbytes_arr = Vec::new();
             self.c.serialize_uncompressed(&mut cbytes).unwrap();
             self.s.serialize_uncompressed(&mut sbytes).unwrap();
-            self.f_fixed.serialize_uncompressed(&mut fbytes).unwrap();
             self.p2.serialize_uncompressed(&mut p2bytes).unwrap();
             self.p4.serialize_uncompressed(&mut p4bytes).unwrap();
             self.q4.serialize_uncompressed(&mut q4bytes).unwrap();
@@ -81,7 +79,6 @@ mod test {
             let gbytes = GrothProofBytes {
                 c: cbytes,
                 s: sbytes,
-                f_fixed: fbytes,
                 p2: p2bytes,
                 p4: p4bytes,
                 q4: q4bytes,
@@ -95,10 +92,6 @@ mod test {
             let s = Self {
                 c: ark_bn254::Fq12::deserialize_uncompressed_unchecked(gpb.c.as_slice()).unwrap(),
                 s: ark_bn254::Fq12::deserialize_uncompressed_unchecked(gpb.s.as_slice()).unwrap(),
-                f_fixed: ark_bn254::Fq12::deserialize_uncompressed_unchecked(
-                    gpb.f_fixed.as_slice(),
-                )
-                .unwrap(),
                 p2: ark_bn254::G1Affine::deserialize_uncompressed_unchecked(gpb.p2.as_slice())
                     .unwrap(),
                 p4: ark_bn254::G1Affine::deserialize_uncompressed_unchecked(gpb.p4.as_slice())
@@ -121,9 +114,11 @@ mod test {
         fn write_vk_to_file(&self, filename: &str) {
             let mut q2bytes = Vec::new();
             let mut q3bytes = Vec::new();
+            let mut fbytes = Vec::new();
             let mut vkpubs_arr = Vec::new();
             self.q2.serialize_uncompressed(&mut q2bytes).unwrap();
             self.q3.serialize_uncompressed(&mut q3bytes).unwrap();
+            self.f_fixed.serialize_uncompressed(&mut fbytes).unwrap();
             for vkp in self.vk_pubs.clone() {
                 let mut scalbytes = Vec::new();
                 vkp.serialize_uncompressed(&mut scalbytes).unwrap();
@@ -133,6 +128,7 @@ mod test {
                 q2: q2bytes,
                 q3: q3bytes,
                 vk_pubs: vkpubs_arr,
+                f_fixed: fbytes,
             };
             gbytes.write_to_file(filename).unwrap();
         }
@@ -144,6 +140,10 @@ mod test {
                     .unwrap(),
                 q3: ark_bn254::G2Affine::deserialize_uncompressed_unchecked(gpb.q3.as_slice())
                     .unwrap(),
+                f_fixed: ark_bn254::Fq12::deserialize_uncompressed_unchecked(
+                    gpb.f_fixed.as_slice(),
+                )
+                .unwrap(),
                 vk_pubs: gpb
                     .vk_pubs
                     .iter()
@@ -253,7 +253,6 @@ mod test {
             GrothProof {
                 c,
                 s,
-                f_fixed: p1q1,
                 p2,
                 p4,
                 q4,
@@ -263,6 +262,7 @@ mod test {
                 q2,
                 q3,
                 vk_pubs: vk.gamma_abc_g1,
+                f_fixed: p1q1,
             },
         )
     }
@@ -331,13 +331,14 @@ mod test {
         let pubkeys = read_pubkey_from_file(pubs_f).unwrap();
         let vk = GrothVK::read_vk_from_file(vk_f);
         let save_to_file = true;
-
+        let p1q1 =  vk.f_fixed;
         let p3vk = vec![vk.vk_pubs[1], vk.vk_pubs[0]];
         let node_scripts_per_link = compile(
             Vkey {
                 q2: vk.q2,
                 q3: vk.q3,
                 p3vk,
+                p1q1,
             },
             &pubkeys,
         );
@@ -383,7 +384,7 @@ mod test {
             proof.q4,
             proof.c,
             proof.s,
-            proof.f_fixed,
+            vk.f_fixed,
             msm_scalar,
             msm_gs,
         );
@@ -410,8 +411,8 @@ mod test {
         let p3 = msm_gs[1] * msm_scalar[1] + msm_gs[0] * msm_scalar[0]; // move to initial proof
         let p3 = p3.into_affine();
 
-        for index_to_corrupt in 39..55 {
-            if index_to_corrupt == 51 {
+        for index_to_corrupt in 39..55 { // m0 -> 584
+            if index_to_corrupt == 50 {
                 continue;
             }
             //let index_to_corrupt = 64;
@@ -450,7 +451,7 @@ mod test {
                 proof.q4,
                 proof.c,
                 proof.s,
-                proof.f_fixed,
+                vk.f_fixed,
                 msm_scalar.clone(),
                 msm_gs.clone(),
             );
@@ -488,7 +489,6 @@ mod test {
         }
         // read assertions
      }
-
 
 }
 

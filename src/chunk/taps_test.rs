@@ -5,7 +5,7 @@ mod test {
 
     use crate::chunk::taps::*;
     use crate::chunk::primitves::emulate_extern_hash_fps;
-    use crate::chunk::taps_mul::{bitcom_dense_dense_mul0, bitcom_dense_dense_mul1, bitcom_sparse_dense_mul, bitcom_squaring, hint_sparse_dense_mul, hint_squaring, hints_dense_dense_mul0, hints_dense_dense_mul1, tap_dense_dense_mul0, tap_dense_dense_mul1, tap_sparse_dense_mul, tap_squaring, HintInDenseMul0, HintInDenseMul1, HintInSparseDenseMul, HintInSquaring};
+    use crate::chunk::taps_mul::{bitcom_dense_dense_mul0, bitcom_dense_dense_mul0_by_constant, bitcom_dense_dense_mul1, bitcom_dense_dense_mul1_by_constant, bitcom_sparse_dense_mul, bitcom_squaring, hint_sparse_dense_mul, hint_squaring, hints_dense_dense_mul0, hints_dense_dense_mul0_by_constant, hints_dense_dense_mul1, hints_dense_dense_mul1_by_constant, tap_dense_dense_mul0, tap_dense_dense_mul0_by_constant, tap_dense_dense_mul1, tap_dense_dense_mul1_by_constant, tap_sparse_dense_mul, tap_squaring, HintInDenseMul0, HintInDenseMul1, HintInSparseDenseMul, HintInSquaring};
     use crate::chunk::wots::{wots_p160_get_pub_key, wots_p256_get_pub_key, WOTSPubKey};
     use ark_ff::Field;
     use ark_std::UniformRand;
@@ -563,6 +563,133 @@ mod test {
             exec_result.stats.max_nb_stack_items, tap_len
         );
     }
+
+
+    #[test]
+    fn test_hinited_dense_dense_mul0_by_constant() {
+        // compile time
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let g = ark_bn254::Fq12::rand(&mut prng); // check_is_identity true
+        // let ghash = emulate_extern_hash_fps(vec![g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
+        //     g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1], false);
+
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let dense_dense_mul_script = tap_dense_dense_mul0_by_constant(true, g);
+
+        let sec_out = 0;
+        let sec_in = vec![1];
+
+        let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
+        let pk = wots_p160_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        pub_scripts.insert(sec_out, pk);
+        for i in &sec_in {
+            let pk = wots_p160_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            pub_scripts.insert(*i, pk);
+        }
+
+        let sec_out = (sec_out, false);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, false)).collect();
+
+        let bitcom_scr = bitcom_dense_dense_mul0_by_constant(&pub_scripts, sec_out, sec_in.clone());
+
+        // runtime
+
+        let f = g.inverse().unwrap(); //ark_bn254::Fq12::rand(&mut prng);
+
+        let h = f * g;
+
+        let hint_in = HintInDenseMul0 { a: f, b: g };
+
+        let (_, simulate_stack_input) = hints_dense_dense_mul0_by_constant(
+            &mut Sig {
+                msk: Some(sec_key_for_bitcomms),
+                cache: HashMap::new(),
+            },
+            sec_out,
+            sec_in,
+            hint_in,
+        );
+
+        let tap_len = dense_dense_mul_script.len();
+
+        let script = script! {
+            { simulate_stack_input }
+            { bitcom_scr }
+            { dense_dense_mul_script }
+        };
+
+        let exec_result = execute_script(script);
+        println!("stack len {:?}", exec_result.final_stack.len());
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:} {:?}", exec_result.final_stack.get(i));
+        }
+        assert!(!exec_result.success);
+        assert!(exec_result.final_stack.len() == 1);
+        println!(
+            "stack len {:?} script len {:?}",
+            exec_result.stats.max_nb_stack_items, tap_len
+        );
+    }
+
+
+
+    #[test]
+    fn test_hinited_dense_dense_mul1_by_constant() {
+        // compile time
+        let mut prng = ChaCha20Rng::seed_from_u64(17);
+        let g = ark_bn254::Fq12::rand(&mut prng);
+        // let ghash = emulate_extern_hash_fps(vec![g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
+        //     g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1], false);
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let dense_dense_mul_script = tap_dense_dense_mul1_by_constant(false, g);
+
+        let sec_out = 0;
+        let sec_in = vec![1, 2];
+
+        let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
+        let pk = wots_p160_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        pub_scripts.insert(sec_out, pk);
+        for i in &sec_in {
+            let pk = wots_p160_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            pub_scripts.insert(*i, pk);
+        }
+
+        let sec_out = (sec_out, false);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, false)).collect();
+
+        let bitcom_script = bitcom_dense_dense_mul1_by_constant(&pub_scripts, sec_out, sec_in.clone());
+
+        // runtime
+        let f = ark_bn254::Fq12::rand(&mut prng);
+
+        let hint_in = HintInDenseMul1 { a: f, b: g };
+
+        let (_, simulate_stack_input) = hints_dense_dense_mul1_by_constant(
+            &mut Sig {
+                msk: Some(sec_key_for_bitcomms),
+                cache: HashMap::new(),
+            },
+            sec_out,
+            sec_in,
+            hint_in,
+        );
+
+        let tap_len = dense_dense_mul_script.len();
+
+        let script = script! {
+            { simulate_stack_input }
+            { bitcom_script }
+            { dense_dense_mul_script }
+        };
+
+        let exec_result = execute_script(script);
+        assert!(!exec_result.success && exec_result.final_stack.len() == 1);
+        println!(
+            "stack len {:?} script len {:?}",
+            exec_result.stats.max_nb_stack_items, tap_len
+        );
+    }
+
 
     #[test]
     fn test_tap_fq12_hinted_square() {
