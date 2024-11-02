@@ -18,7 +18,7 @@ pub(crate) struct ScriptItem {
     pub(crate) category: String, // script category
     pub(crate) link_id: String,  // link identifier
     pub(crate) dependencies: String,
-    pub(crate) elem_type: bool, // output type
+    pub(crate) is_type_field: bool, // output type
 }
 
 pub(crate) fn groth16_config_gen() -> Vec<ScriptItem> {
@@ -29,7 +29,7 @@ pub(crate) fn groth16_config_gen() -> Vec<ScriptItem> {
             category: String::from("GrothG1"),
             link_id: String::from(item),
             dependencies: String::new(),
-            elem_type: true,
+            is_type_field: true,
         })
     }
     let r2 = vec![
@@ -40,7 +40,7 @@ pub(crate) fn groth16_config_gen() -> Vec<ScriptItem> {
             category: String::from("GrothAuxC"),
             link_id: String::from(item),
             dependencies: String::new(),
-            elem_type: true,
+            is_type_field: true,
         })
     }
     let r4 = vec![
@@ -51,7 +51,7 @@ pub(crate) fn groth16_config_gen() -> Vec<ScriptItem> {
             category: String::from("GrothAuxS"),
             link_id: String::from(item),
             dependencies: String::new(),
-            elem_type: true,
+            is_type_field: true,
         })
     }
     let r5 = vec!["cinv"]; 
@@ -60,7 +60,7 @@ pub(crate) fn groth16_config_gen() -> Vec<ScriptItem> {
             category: String::from("GrothAuxHash"),
             link_id: String::from(item),
             dependencies: String::new(),
-            elem_type: false,
+            is_type_field: false,
         })
     }
     let r6 = vec!["Q4y1", "Q4y0", "Q4x1", "Q4x0"];
@@ -69,7 +69,7 @@ pub(crate) fn groth16_config_gen() -> Vec<ScriptItem> {
             category: String::from("GrothG2"),
             link_id: String::from(item),
             dependencies: String::new(),
-            elem_type: true,
+            is_type_field: true,
         })
     }
     let r7 = vec!["k0", "k1", "k2"];
@@ -78,7 +78,7 @@ pub(crate) fn groth16_config_gen() -> Vec<ScriptItem> {
             category: String::from("GrothPubs"),
             link_id: String::from(item),
             dependencies: String::new(),
-            elem_type: true,
+            is_type_field: true,
         })
     }
     r
@@ -90,7 +90,7 @@ pub(crate) fn msm_config_gen(pub_ins: String) -> Vec<ScriptItem> {
             category: String::from("MSM"),
             link_id: String::from("M0"),
             dependencies: pub_ins.clone(),
-            elem_type: false,
+            is_type_field: false,
         }, // k0, k1, k2
     ];
     for i in 1..32 {
@@ -98,7 +98,7 @@ pub(crate) fn msm_config_gen(pub_ins: String) -> Vec<ScriptItem> {
             category: String::from("MSM"),
             link_id: String::from(format!("M{}", i)),
             dependencies: String::from(format!("{pub_ins},M{}", i - 1)),
-            elem_type: false,
+            is_type_field: false,
         }) // k0,k1,k2,M
     }
     items
@@ -111,85 +111,85 @@ pub(crate) fn pre_miller_config_gen() -> Vec<ScriptItem> {
             category: String::from("T4Init"),
             link_id: String::from("T4"),
             dependencies: String::from("Q4y1,Q4y0,Q4x1,Q4x0"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("PrePy"),
             link_id: String::from("P4y"),
             dependencies: String::from("GP4y"),
-            elem_type: true,
+            is_type_field: true,
         },
         ScriptItem {
             category: String::from("PrePx"),
             link_id: String::from("P4x"),
             dependencies: String::from("GP4y,GP4x,P4y"),
-            elem_type: true,
+            is_type_field: true,
         },
         ScriptItem {
             category: String::from("PrePy"),
             link_id: String::from("P3y"),
             dependencies: String::from("GP3y"),
-            elem_type: true,
+            is_type_field: true,
         },
         ScriptItem {
             category: String::from("PrePx"),
             link_id: String::from("P3x"),
             dependencies: String::from("GP3y,GP3x,P3y"),
-            elem_type: true,
+            is_type_field: true,
         },
         ScriptItem {
             category: String::from("PrePy"),
             link_id: String::from("P2y"),
             dependencies: String::from("GP2y"),
-            elem_type: true,
+            is_type_field: true,
         },
         ScriptItem {
             category: String::from("PrePx"),
             link_id: String::from("P2x"),
             dependencies: String::from("GP2y,GP2x,P2y"),
-            elem_type: true,
+            is_type_field: true,
         },
         ScriptItem {
             category: String::from("HashC"),
             link_id: String::from("c"),
             dependencies: String::from("Gc11,Gc10,Gc9,Gc8,Gc7,Gc6,Gc5,Gc4,Gc3,Gc2,Gc1,Gc0"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("HashC2"),
             link_id: String::from("c2"),
             dependencies: String::from("c"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("HashC2"),
             link_id: String::from("cinv2"),
             dependencies: String::from("cinv"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("HashC"),
             link_id: String::from("s"),
             dependencies: String::from("Gs11,Gs10,Gs9,Gs8,Gs7,Gs6,Gs5,Gs4,Gs3,Gs2,Gs1,Gs0"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("DD1"),
             link_id: String::from("cinv0"),
             dependencies: String::from("c2,cinv"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("DD2"),
             link_id: String::from("ccinvone"),
             dependencies: String::from("c2,cinv,cinv0"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("P3Hash"),
             link_id: String::from("GP3H"),
             dependencies: String::from("M31,GP3y,GP3x"),
-            elem_type: false,
+            is_type_field: false,
         },
     ];
     tables
@@ -201,139 +201,139 @@ pub(crate) fn post_miller_config_gen(f_acc: String, t4_acc: String) -> Vec<Scrip
             category: String::from("Frob1"),
             link_id: String::from("U0"),
             dependencies: String::from("cinv"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("Frob2"),
             link_id: String::from("U1"),
             dependencies: String::from("c"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("Frob3"),
             link_id: String::from("U2"),
             dependencies: String::from("cinv"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("DD1"),
             link_id: String::from("U3"),
             dependencies: String::from(format!("{f_acc},s")),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("DD2"),
             link_id: String::from("U4"),
             dependencies: String::from(format!("{f_acc},s,U3")),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("DD1"),
             link_id: String::from("U5"),
             dependencies: String::from("U4,U0"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("DD2"),
             link_id: String::from("U6"),
             dependencies: String::from("U4,U0,U5"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("DD1"),
             link_id: String::from("U7"),
             dependencies: String::from("U6,U1"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("DD2"),
             link_id: String::from("U8"),
             dependencies: String::from("U6,U1,U7"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("DD1"),
             link_id: String::from("U9"),
             dependencies: String::from("U8,U2"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("DD2"),
             link_id: String::from("U10"),
             dependencies: String::from("U8,U2,U9"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("Add1"),
             link_id: String::from("U11"),
             dependencies: String::from(format!("{t4_acc},Q4y1,Q4y0,Q4x1,Q4x0,P4y,P4x")),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("SD"),
             link_id: String::from("U12"),
             dependencies: String::from("U10,U11"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("SS1"),
             link_id: String::from("U13"),
             dependencies: String::from("P3y,P3x,P2y,P2x"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("DD3"),
             link_id: String::from("U14"),
             dependencies: String::from("U12,U13"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("DD4"),
             link_id: String::from("U15"),
             dependencies: String::from("U12,U13,U14"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("Add2"),
             link_id: String::from("U16"),
             dependencies: String::from("U11,Q4y1,Q4y0,Q4x1,Q4x0,P4y,P4x"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("SD"),
             link_id: String::from("U17"),
             dependencies: String::from("U15,U16"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("SS2"),
             link_id: String::from("U18"),
             dependencies: String::from("P3y,P3x,P2y,P2x"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("DD3"),
             link_id: String::from("U19"),
             dependencies: String::from("U17,U18"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("DD4"),
             link_id: String::from("U20"),
             dependencies: String::from("U17,U18,U19"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("DK1"),
             link_id: String::from("U21"),
             dependencies: String::from("U20"),
-            elem_type: false,
+            is_type_field: false,
         },
         ScriptItem {
             category: String::from("DK2"),
             link_id: String::from("fin"),
             dependencies: String::from("U20,U21"),
-            elem_type: false,
+            is_type_field: false,
         },
         //// SS1;S4;P3,P2;
     ];
@@ -431,7 +431,7 @@ pub(crate) fn miller_config_gen() -> Vec<Vec<ScriptItem>> {
                 category: name,
                 link_id: ID_str,
                 dependencies: Deps_updated,
-                elem_type: false,
+                is_type_field: false,
             });
         }
         table
@@ -623,20 +623,20 @@ fn assign_ids_to_params(item: &ScriptItem, name_to_id: &mut HashMap<String, (u32
     if item.category == "GrothPubs" {
         name_to_id.insert(
             item.link_id.clone(),
-            (*cpub_ids as u32, true),
+            (*cpub_ids as u32, item.is_type_field),
         );
         *cpub_ids += 1;
     } else {
-        if item.elem_type  {
+        if item.is_type_field  {
             name_to_id.insert(
                 item.link_id.clone(),
-                (*cp256 as u32, true),
+                (*cp256 as u32, item.is_type_field),
             );
             *cp256 += 1;
         } else  {
             name_to_id.insert(
                 item.link_id.clone(),
-                (*cp160 as u32, false),
+                (*cp160 as u32, item.is_type_field),
             );
             *cp160 += 1;
         }
