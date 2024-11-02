@@ -601,13 +601,13 @@ pub fn generate_assertion_spending_key_lengths(apk: &AssertPublicKeys) -> Vec<us
     spks
 }
 
-pub(crate) struct Vkey {
+pub struct VerificationKey {
     pub(crate) q2: G2Affine,
     pub(crate) q3: G2Affine,
     pub(crate) p3vk: Vec<ark_bn254::G1Affine>,
 }
 
-pub(crate) fn compile(vk: Vkey, link_ids: &HashMap<u32, WOTSPubKey>) -> HashMap<u32, Script> {
+pub fn compile(vk: VerificationKey, link_ids: &HashMap<u32, WOTSPubKey>) -> HashMap<u32, Script> {
     let (q2, q3) = (vk.q2, vk.q3);
     let (id_map, facc, tacc) = assign_link_ids();
     let mut scrs: HashMap<u32, Script> = HashMap::new();
@@ -647,7 +647,7 @@ mod test {
         let sec_key = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
         let link_ids = keygen(sec_key);
-        let vk = Vkey {
+        let vk = VerificationKey {
             q2,
             q3,
             p3vk: vec![vka, vkb],
