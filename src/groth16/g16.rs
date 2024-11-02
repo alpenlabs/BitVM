@@ -36,11 +36,7 @@ pub struct Verifier {
 }
 
 impl Verifier {
-    pub fn new(vk: VerificationKey) -> Self {
-        Self { vk }
-    }
-
-    pub fn compile() -> [Script; N_TAPLEAVES] {
+    pub fn compile(vk: VerificationKey) -> [Script; N_TAPLEAVES] {
         todo!()
     }
 
