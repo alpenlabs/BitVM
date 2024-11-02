@@ -24,7 +24,7 @@ pub type WotsSignatures = (
 pub type ProofAssertions = (
     [[u8; 32]; 3],
     [[u8; 32]; N_VERIFIER_FQs],
-    [[u8; 32]; N_VERIFIER_HASHES],
+    [[u8; 20]; N_VERIFIER_HASHES],
 );
 
 pub struct VerificationKey {
@@ -49,14 +49,13 @@ impl Verifier {
     pub fn generate_tapscripts(
         public_keys: WotsPublicKeys,
         verifier_scripts: [Script; N_TAPLEAVES],
-    ) -> [Script; 602] {
+    ) -> [Script; N_TAPLEAVES] {
         let res = chunk::api::generate_tapscripts(public_keys, verifier_scripts.to_vec());
         res.try_into().unwrap()
     }
 
-    pub fn generate_assertions(proof: Proof, vk: VerificationKey) -> Option<ProofAssertions> {
-        chunk::api::generate_assertions(proof.proof, proof.public_inputs, &vk.ark_vk);
-        None
+    pub fn generate_assertions(vk: VerificationKey, proof: Proof) -> ProofAssertions {
+        chunk::api::generate_assertions(proof.proof, proof.public_inputs, &vk.ark_vk)
     }
 
     /// Validates the groth16 proof assertion signatures and returns a tuple of (tapleaf_index, tapleaf_script, and witness_script) if
@@ -186,7 +185,7 @@ mod test {
         }
         let mut h_arr = vec![];
         for i in 0..N_VERIFIER_HASHES {
-            let p160 = wots160::generate_public_key(&format!("{secret}{:04x}", 1000 + i));
+            let p160 = wots160::generate_public_key(&format!("{secret}{:04x}", N_VERIFIER_FQs + i));
             h_arr.push(p160);
         }
         let wotspubkey: WotsPublicKeys = (
@@ -233,7 +232,7 @@ mod test {
     fn test_fn_generate_assertions() {
         let (proof, pubs, mock_vk) = generate_mock_proof();
         assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
-        Verifier::generate_assertions(Proof { proof, public_inputs: pubs }, VerificationKey { ark_vk: mock_vk });
+        Verifier::generate_assertions(VerificationKey { ark_vk: mock_vk }, Proof { proof, public_inputs: pubs }, );
     }
 
     #[test]

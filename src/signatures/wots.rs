@@ -393,4 +393,39 @@ mod tests {
         }
         //assert!(res.success);
     }
+
+    #[test]
+    fn test_byte_digit_conversion() {
+        fn nib_to_byte_array(digits: &[u8]) -> Vec<u8> {
+            let mut msg_bytes = Vec::with_capacity(digits.len() / 2);
+            
+            for nibble_pair in digits.chunks(2) {
+                let byte = (nibble_pair[1] << 4) | (nibble_pair[0] & 0b00001111);
+                msg_bytes.push(byte);
+            }
+            
+            msg_bytes
+        }
+
+        /// Convert message bytes to digits
+        fn msg_bytes_to_digits(msg_bytes: &[u8]) -> [u8; 64 as usize] {
+            let mut msg_digits = [0u8; 64 as usize];
+            for (digits, byte) in msg_digits.chunks_mut(2).zip(msg_bytes) {
+                digits[0] = byte & 0b00001111;
+                digits[1] = byte >> 4;
+            }
+            msg_digits
+        }
+
+        const MESSAGE: [u8; 64] = [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
+            1, 2, 3, 4,
+        ];
+
+        let byte_array = nib_to_byte_array(&MESSAGE);
+        let nib_array = msg_bytes_to_digits(&byte_array).to_vec();
+        assert!(nib_array == MESSAGE);
+    }
 }

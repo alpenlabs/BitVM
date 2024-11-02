@@ -6,7 +6,7 @@ use crate::chunk::config::{assign_link_ids, keygen, NUM_PUBS, NUM_U160, NUM_U256
 use crate::chunk::evaluate::{evaluate, extract_values_from_hints};
 use crate::chunk::taps::Sig;
 use crate::chunk::wots::WOTSPubKey;
-use crate::groth16::g16::{N_VERIFIER_FQs, WotsPublicKeys, N_VERIFIER_HASHES};
+use crate::groth16::g16::{N_VERIFIER_FQs, ProofAssertions, WotsPublicKeys, N_VERIFIER_HASHES};
 use crate::groth16::offchain_checker::compute_c_wi;
 use crate::signatures::wots::{wots160, wots256};
 use crate::treepp::*;
@@ -144,7 +144,18 @@ fn generate_mock_pub_keys() -> HashMap<u32, WOTSPubKey> {
 
 }
 
-pub fn generate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, scalars: Vec<ark_bn254::Fr>, vk: &ark_groth16::VerifyingKey<Bn254>) {
+fn nib_to_byte_array(digits: &[u8]) -> Vec<u8> {
+    let mut msg_bytes = Vec::with_capacity(digits.len() / 2);
+    
+    for nibble_pair in digits.chunks(2) {
+        let byte = (nibble_pair[1] << 4) | (nibble_pair[0] & 0b00001111);
+        msg_bytes.push(byte);
+    }
+    
+    msg_bytes
+}
+
+pub fn generate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, scalars: Vec<ark_bn254::Fr>, vk: &ark_groth16::VerifyingKey<Bn254>) -> ProofAssertions {
     assert_eq!(scalars.len(), 3);
 
     let sec = "b138982ce17ac813d505b5b40b665d404e9528e7"; // can be any random hex
@@ -189,7 +200,34 @@ pub fn generate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, sca
         vk.gamma_abc_g1[0],
     );
     let assertions = extract_values_from_hints(aux);
-    assert!(fault.is_none());
+    assert!(assertions.len() == NUM_PUBS + NUM_U160 + NUM_U256);
+    let mut batch1 = vec![];
+    for i in 0..NUM_PUBS {
+        let val = assertions.get(&(i as u32)).unwrap();
+        let bal:[u8;32] = nib_to_byte_array(val).try_into().unwrap();
+        batch1.push(bal);
+    }
+    let batch1: [[u8;32]; 3] = batch1.try_into().unwrap();
+
+    let len = batch1.len();
+    let mut batch2 = vec![];
+    for i in 0..NUM_U256 {
+        let val = assertions.get(&((i+len) as u32)).unwrap();
+        let bal:[u8;32] = nib_to_byte_array(val).try_into().unwrap();
+        batch2.push(bal);
+    }
+    let batch2: [[u8;32]; N_VERIFIER_FQs] = batch2.try_into().unwrap();
+
+    let len = batch1.len() + batch2.len();
+    let mut batch3 = vec![];
+    for i in 0..NUM_U256 {
+        let val = assertions.get(&((i+len) as u32)).unwrap();
+        let bal:[u8;20] = nib_to_byte_array(val).try_into().unwrap();
+        batch3.push(bal);
+    }
+    let batch3: [[u8;20]; N_VERIFIER_HASHES] = batch3.try_into().unwrap();
+
+   (batch1, batch2, batch3)
 }
 
 
