@@ -2,12 +2,13 @@ use std::collections::HashMap;
 use std::ops::Neg;
 
 use crate::chunk::compile::{compile, Vkey};
-use crate::chunk::config::keygen;
+use crate::chunk::config::{assign_link_ids, keygen, NUM_PUBS, NUM_U160, NUM_U256};
 use crate::chunk::evaluate::{evaluate, extract_values_from_hints};
 use crate::chunk::taps::Sig;
 use crate::chunk::wots::WOTSPubKey;
-use crate::groth16::g16::{WotsPublicKeys};
+use crate::groth16::g16::{N_VERIFIER_FQs, WotsPublicKeys, N_VERIFIER_HASHES};
 use crate::groth16::offchain_checker::compute_c_wi;
+use crate::signatures::wots::{wots160, wots256};
 use crate::treepp::*;
 use ark_bn254::Bn254;
 use ark_ec::bn::Bn;
@@ -79,6 +80,69 @@ pub fn generate_tapscripts(
     bitcom_scripts_per_link
 }
 
+fn mock_pubkeys() -> WotsPublicKeys {
+    let secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
+
+    let pub0 = wots256::generate_public_key(&format!("{secret}{:04x}", 0));
+    let pub1 = wots256::generate_public_key(&format!("{secret}{:04x}", 1));
+    let pub2 = wots256::generate_public_key(&format!("{secret}{:04x}", 2));
+    let mut fq_arr = vec![];
+    for i in 0..N_VERIFIER_FQs {
+        let p256 = wots256::generate_public_key(&format!("{secret}{:04x}", 3 + i));
+        fq_arr.push(p256);
+    }
+    let mut h_arr = vec![];
+    for i in 0..N_VERIFIER_HASHES {
+        let p160 = wots160::generate_public_key(&format!("{secret}{:04x}", N_VERIFIER_FQs + 3 + i));
+        h_arr.push(p160);
+    }
+    let wotspubkey: WotsPublicKeys = (
+        (pub0, pub1, pub2),
+        fq_arr.try_into().unwrap(),
+        h_arr.try_into().unwrap(),
+    );
+    wotspubkey
+}
+
+fn generate_mock_pub_keys() -> HashMap<u32, WOTSPubKey> {
+
+    let pubkeys = mock_pubkeys();
+    let (p0, p1, p2) = pubkeys.0;
+    let fq_arr = pubkeys.1;
+    let hash_arr = pubkeys.2;
+
+    let mut pubkeys: HashMap<u32, WOTSPubKey> = HashMap::new();
+    pubkeys.insert(0, WOTSPubKey::P256(p0));
+    pubkeys.insert(1, WOTSPubKey::P256(p1));
+    pubkeys.insert(2, WOTSPubKey::P256(p2));
+    let len = pubkeys.len();
+    for i in 0..fq_arr.len() {
+        pubkeys.insert((len + i) as u32, WOTSPubKey::P256(fq_arr[i]));
+    }
+    let len = pubkeys.len();
+    for i in 0..hash_arr.len() {
+        pubkeys.insert((len + i) as u32, WOTSPubKey::P160(hash_arr[i]));
+    }
+    // println!("pklen {:?}", pubkeys.len());
+
+    //     let (ret, _,_)  = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
+    //     for (k, (index, ty)) in ret {
+    //         let r = pubkeys.get(&index).unwrap();
+    //         let mut is_field = false;
+    //         match r {
+    //             WOTSPubKey::P160(_) => is_field = false,
+    //             WOTSPubKey::P256(_) => is_field = true,
+    //         }
+    //         if is_field != ty {
+    //             println!("problem here {}", index)
+    //         } else {
+    //             println!("good")
+    //         }
+    //     }
+
+    pubkeys
+
+}
 
 pub fn generate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, scalars: Vec<ark_bn254::Fr>, vk: &ark_groth16::VerifyingKey<Bn254>) {
     assert_eq!(scalars.len(), 3);
@@ -88,7 +152,7 @@ pub fn generate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, sca
         msk: Some(sec),
         cache: HashMap::new(),
     };
-    let pk = keygen(sec);
+    let pk = generate_mock_pub_keys();
 
 
     let msm_scalar = vec![scalars[2],scalars[1],scalars[0]];
@@ -126,4 +190,16 @@ pub fn generate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, sca
     );
     let assertions = extract_values_from_hints(aux);
     assert!(fault.is_none());
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::generate_mock_pub_keys;
+
+
+    #[test]
+    fn test_it() {
+        generate_mock_pub_keys();
+    }
 }

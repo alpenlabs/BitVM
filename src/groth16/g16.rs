@@ -54,8 +54,9 @@ impl Verifier {
         res.try_into().unwrap()
     }
 
-    pub fn generate_assertions(proof: Proof, vk: VerificationKey) -> ProofAssertions {
+    pub fn generate_assertions(proof: Proof, vk: VerificationKey) -> Option<ProofAssertions> {
         chunk::api::generate_assertions(proof.proof, proof.public_inputs, &vk.ark_vk);
+        None
     }
 
     /// Validates the groth16 proof assertion signatures and returns a tuple of (tapleaf_index, tapleaf_script, and witness_script) if
@@ -230,8 +231,9 @@ mod test {
 
     #[test]
     fn test_fn_generate_assertions() {
-        let (_, _, mock_vk) = generate_mock_proof();
+        let (proof, pubs, mock_vk) = generate_mock_proof();
         assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
+        Verifier::generate_assertions(Proof { proof, public_inputs: pubs }, VerificationKey { ark_vk: mock_vk });
     }
 
     #[test]
