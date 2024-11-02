@@ -19,12 +19,12 @@
 // BEAT OUR IMPLEMENTATION AND WIN A CODE GOLF BOUNTY!
 //
 
-use crate::{bn254::chunk_primitves::pack_nibbles_to_limbs, treepp::*};
-use bitcoin::{hashes::{hash160, Hash}, opcodes::all::OP_ROLL};
+use crate::{bn254::chunk_primitves::pack_nibbles_to_limbs, signatures::winternitz_compact, treepp::*};
+use bitcoin::{hashes::{hash160, Hash}, opcodes::all::{OP_FROMALTSTACK, OP_TOALTSTACK}};
 use hex::decode as hex_decode;
 
 ///
-const N_BITS: u32 = 256;
+const N_BITS: u32 = 160; // 20 bytes
 /// Bits per digit
 const LOG_D: u32 = 4;
 /// Digits are base d+1
@@ -274,6 +274,46 @@ pub fn get_pub_key(secret_key: &str) -> WOTSPubKey {
 ///
 /// Optimized by @SergioDemianLerner, @tomkosm
 pub fn checksig_verify_fq(pub_key: WOTSPubKey) -> Script {
+    
+    pub fn NMUL(n: u32) -> Script {
+        let n_bits = u32::BITS - n.leading_zeros();
+        let bits = (0..n_bits).map(|i| 1 & (n >> i)).collect::<Vec<_>>();
+        script! {
+            if n_bits == 0 { OP_DROP 0 }
+            else {
+                for i in 0..bits.len()-1 {
+                    if bits[i] == 1 { OP_DUP }
+                    { crate::pseudo::OP_2MUL() }
+                }
+                for _ in 1..bits.iter().sum() { OP_ADD }
+            }
+        }
+    }
+
+
+    fn split_digit(window: u32, index: u32) -> Script {
+        script! {
+            // {v}
+            0                           // {v} {A}
+            OP_SWAP
+            for i in 0..index {
+                OP_TUCK                 // {v} {A} {v}
+                { 1 << (window - i - 1) }   // {v} {A} {v} {1000}
+                OP_GREATERTHANOREQUAL   // {v} {A} {1/0}
+                OP_TUCK                 // {v} {1/0} {A} {1/0}
+                OP_ADD                  // {v} {1/0} {A+1/0}
+                if i < index - 1 { { NMUL(2) } }
+                OP_ROT OP_ROT
+                OP_IF
+                    { 1 << (window - i - 1) }
+                    OP_SUB
+                OP_ENDIF
+            }
+            OP_SWAP
+        }
+    }
+
+
 
     script! {
         //
@@ -347,82 +387,23 @@ pub fn checksig_verify_fq(pub_key: WOTSPubKey) -> Script {
         // 3. Ensure both checksums are equal
         OP_EQUALVERIFY
 
+        for _ in 0..(64-N0) {
+            {0}
+        }
         // field element reconstruction
         for i in 1..64 {
             {i} OP_ROLL
         }
+
         {pack_nibbles_to_limbs()}
 
     }
 }
 
-// pub(crate) fn field_reconstruction() -> Script {
-        
-//     pub fn nmul(n: u32) -> Script {
-//         let n_bits = u32::BITS - n.leading_zeros();
-//         let bits = (0..n_bits).map(|i| 1 & (n >> i)).collect::<Vec<_>>();
-//         script! {
-//             if n_bits == 0 { OP_DROP 0 }
-//             else {
-//                 for i in 0..bits.len()-1 {
-//                     if bits[i] == 1 { OP_DUP }
-//                     { crate::pseudo::OP_2MUL() }
-//                 }
-//                 for _ in 1..bits.iter().sum() { OP_ADD }
-//             }
-//         }
-//     }
-
-//     fn split_digit(window: u32, index: u32) -> Script {
-//         script! {
-//             // {v}
-//             0                           // {v} {A}
-//             OP_SWAP
-//             for i in 0..index {
-//                 OP_TUCK                 // {v} {A} {v}
-//                 { 1 << (window - i - 1) }   // {v} {A} {v} {1000}
-//                 OP_GREATERTHANOREQUAL   // {v} {A} {1/0}
-//                 OP_TUCK                 // {v} {1/0} {A} {1/0}
-//                 OP_ADD                  // {v} {1/0} {A+1/0}
-//                 if i < index - 1 { { nmul(2) } }
-//                 OP_ROT OP_ROT
-//                 OP_IF
-//                     { 1 << (window - i - 1) }
-//                     OP_SUB
-//                 OP_ENDIF
-//             }
-//             OP_SWAP
-//         }
-//     }
-
-//     script!{
-//         for i in (1..=N0).rev() {
-//             if (i * LOG_D) % LIMB_SIZE == 0 {
-//                 OP_TOALTSTACK
-//             } else if (i * LOG_D) % LIMB_SIZE > 0 &&
-//                         (i * LOG_D) % LIMB_SIZE < LOG_D {
-//                 OP_SWAP
-//                 { split_digit(LOG_D, (i * LOG_D) % LIMB_SIZE) }
-//                 OP_ROT
-//                 { nmul(1 << ((i * LOG_D) % LIMB_SIZE)) }
-//                 OP_ADD
-//                 OP_TOALTSTACK
-//             } else if i != N0 {
-//                 { nmul(1 << LOG_D) }
-//                 OP_ADD
-//             }
-//         }
-//         for _ in 1..N_LIMBS { OP_FROMALTSTACK }
-//         for i in 1..N_LIMBS { { i } OP_ROLL }
-//     }
-// }
-
 
 #[cfg(test)]
 mod test {
     use bitcoin::opcodes::OP_TRUE;
-
-    use crate::signatures::{winternitz, winternitz_compact};
 
     use super::*;
 
@@ -436,37 +417,19 @@ mod test {
         const MESSAGE: [u8; N0 as usize] = [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
             1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
-            1, 2, 3, 4,
         ];
-        let sig = { winternitz_compact::sign(MY_SECKEY, MESSAGE) };
-        let sig2 = {winternitz::sign_digits(MY_SECKEY, MESSAGE)};
-        let mut filtered_sig2 = script!{};
-        for i in 0..sig2.len() {
-            if i%2 == 0 {
-                filtered_sig2 = filtered_sig2.push_script(sig2[i].clone().compile());
-            }
-        }
-
-        
-        let sc = script! {
-            {filtered_sig2}
+        let pubkey = get_pub_key(MY_SECKEY);
+        let script = script! {
+            { sign(MY_SECKEY, MESSAGE) }
+            { checksig_verify_fq(pubkey) }
         };
 
-
-        // println!("filtered sig {:?}", sig2.compile());
-
-        // println!("sc sig {:?}", sig.compile());
-
-        // println!("fsc sig {:?}", filtered_sig2.compile());
-
-
-        // println!(
-        //     "Winternitz signature size:\n \t{:?} bytes / {:?} bits \n\t{:?} bytes / bit",
-        //     script.len(),
-        //     N0 * 4,
-        //     script.len() as f64 / (N0 * 4) as f64
-        // );
+        println!(
+            "Winternitz signature size:\n \t{:?} bytes / {:?} bits \n\t{:?} bytes / bit",
+            script.len(),
+            N0 * 4,
+            script.len() as f64 / (N0 * 4) as f64
+        );
 
         // let pubkey = get_pub_key(MY_SECKEY);
         // let sc = script! {
@@ -474,7 +437,8 @@ mod test {
         //     { checksig_verify_fq(pubkey) }
         //     OP_TRUE
         // };
-        let res = execute_script(sc);
+
+        let res = execute_script(script);
         for i in 0..res.final_stack.len() {
             println!("{i:3} {:?}", res.final_stack.get(i));
         }

@@ -1,116 +1,163 @@
+use std::collections::HashMap;
+
 use ark_ec::bn::BnConfig;
+
+use crate::signatures::{winternitz_compact::{self, WOTSPubKey}, winternitz_compact_hash};
 
 pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 
 
 #[derive(Debug)]
-pub(crate) struct TableRow {
-    pub(crate) name: String,
-    pub(crate) ID: String,
-    pub(crate) Deps: String,
+pub(crate) struct ScriptItem {
+    pub(crate) category: String, // script category
+    pub(crate) link_id: String,  // link identifier
+    pub(crate) dependencies: String, 
+    pub(crate) is_type_field: bool, // output type
 }
 
 // these values are agreed during compile time
-pub(crate) fn public_params() -> Vec<String> {
-    vec![
-        String::from("identity"), // hash of Fp12::one()
-        String::from("Q3y1"), // vk
+pub(crate) fn public_params_config_gen() -> Vec<ScriptItem> {
+    let mut r = vec![];
+    let r1 = vec![
+        String::from("identity")
+    ]; // hash of Fp12::one()
+    for item in r1 {
+        r.push(ScriptItem {category:String::from("PubHashIden"), link_id: String::from(item), dependencies:String::new(), is_type_field: false})
+    }
+    let r2 = vec![String::from("Q3y1"), // vk
         String::from("Q3y0"),
         String::from("Q3x1"),
         String::from("Q3x0"),
         String::from("Q2y1"), // vk
         String::from("Q2y0"),
         String::from("Q2x1"),
-        String::from("Q2x0"),
-        String::from("f_fixed"), // hash of output of miller loop for fixed P,Q
-    ]
+        String::from("Q2x0")];
+    for item in r2 {
+        r.push(ScriptItem {category:String::from("PubVK"), link_id: String::from(item), dependencies:String::new(), is_type_field: true})
+    }
+    let r3 = vec![
+            String::from("f_fixed"), // hash of output of miller loop for fixed P,Q
+        ];
+    for item in r3 {
+        r.push(ScriptItem {category:String::from("PubHashFixedAcc"), link_id: String::from(item), dependencies:String::new(), is_type_field: false})
+    }
+    r
 }
 
-pub(crate) fn groth16_params() -> Vec<String> {
-    let r = vec![
+pub(crate) fn groth16_config_gen() -> Vec<ScriptItem> {
+    let mut r = vec![];
+    let r1 = vec![
         "GP4y","GP4x",
         "GP3y","GP3x",
-        "GP2y","GP2x",
-        "Gc11","Gc10","Gc9","Gc8","Gc7","Gc6","Gc5","Gc4","Gc3","Gc2","Gc1","Gc0",
-        "c",
-        "c2",
-        "Gs11","Gs10","Gs9","Gs8","Gs7","Gs6","Gs5","Gs4","Gs3","Gs2","Gs1","Gs0",
-        "s",
-        "cinv",
-        "cinv2",
-        "Q4y1","Q4y0","Q4x1","Q4x0",
-        ];
-    r.into_iter().map(|f|f.to_string()).collect()
-}
-
-pub(crate) fn groth16_derivatives() -> Vec<String> {
-    let r = vec![
-        "T4",
-        "P4y","P4x",
-        "P3y","P3x",
-        "P2y","P2x",
-        "cinv0",
-    ];
-    r.into_iter().map(|f|f.to_string()).collect()
-}
-
-pub(crate) fn post_miller_params() -> Vec<String> {
-    let num_params = 22;
-    let mut arr = vec![String::from("U"); num_params];
-    for i in 0..num_params {
-        arr[i] = format!("{}{}", arr[i], i);
+        "GP2y","GP2x"];
+    for item in r1 {
+        r.push(ScriptItem {category:String::from("GrothG1"), link_id: String::from(item), dependencies:String::new(), is_type_field: true})
     }
-    arr
+    let r2 = vec!["Gc11","Gc10","Gc9","Gc8","Gc7","Gc6","Gc5","Gc4","Gc3","Gc2","Gc1","Gc0"];
+    for item in r2 {
+        r.push(ScriptItem {category:String::from("GrothAuxC"), link_id: String::from(item), dependencies:String::new(), is_type_field: true})
+    }
+    let r3 = vec!["c","c2"];
+    for item in r3 {
+        r.push(ScriptItem {category:String::from("GrothAuxHash"), link_id: String::from(item), dependencies:String::new(), is_type_field: false})
+    }
+    let r4 = vec!["Gs11","Gs10","Gs9","Gs8","Gs7","Gs6","Gs5","Gs4","Gs3","Gs2","Gs1","Gs0"];
+    for item in r4 {
+        r.push(ScriptItem {category:String::from("GrothAuxS"), link_id: String::from(item), dependencies:String::new(), is_type_field: true})
+    }
+    let r5 = vec!["s","cinv","cinv2"];
+    for item in r5 {
+        r.push(ScriptItem {category:String::from("GrothAuxHash"), link_id: String::from(item), dependencies:String::new(), is_type_field: false})
+    }
+    let r6 = vec!["Q4y1","Q4y0","Q4x1","Q4x0"];
+    for item in r6 {
+        r.push(ScriptItem {category:String::from("GrothG2"), link_id: String::from(item), dependencies:String::new(), is_type_field: true})
+    }
+    let r7 = vec!["k0", "k1"];
+    for item in r7 {
+        r.push(ScriptItem {category:String::from("GrothPubs"), link_id: String::from(item), dependencies:String::new(), is_type_field: true})
+    }
+    r
 }
 
-pub(crate) fn pre_miller_config_gen() -> Vec<TableRow> {
-    let tables: Vec<TableRow> = vec![
-        TableRow {name: String::from("T4Init"), ID: String::from("T4"), Deps: String::from("Q4y1,Q4y0,Q4x1,Q4x0")},
-        TableRow {name: String::from("PrePy"), ID: String::from("P4y"), Deps: String::from("GP4y")},
-        TableRow {name: String::from("PrePx"), ID: String::from("P4x"), Deps: String::from("GP4y,GP4x,P4y")},
-        TableRow {name: String::from("PrePy"), ID: String::from("P3y"), Deps: String::from("GP3y")},
-        TableRow {name: String::from("PrePx"), ID: String::from("P3x"), Deps: String::from("GP3y,GP3x,P3y")},
-        TableRow {name: String::from("PrePy"), ID: String::from("P2y"), Deps: String::from("GP2y")},
-        TableRow {name: String::from("PrePx"), ID: String::from("P2x"), Deps: String::from("GP2y,GP2x,P2y")},
-        TableRow {name: String::from("HashC"), ID: String::from("c"), Deps: String::from("Gc11,Gc10,Gc9,Gc8,Gc7,Gc6,Gc5,Gc4,Gc3,Gc2,Gc1,Gc0")},
-        TableRow {name: String::from("HashC2"), ID: String::from("c2"), Deps: String::from("c")},
-        TableRow {name: String::from("HashC2"), ID: String::from("cinv2"), Deps: String::from("cinv")},
-        TableRow {name: String::from("HashC"), ID: String::from("s"), Deps: String::from("Gs11,Gs10,Gs9,Gs8,Gs7,Gs6,Gs5,Gs4,Gs3,Gs2,Gs1,Gs0")},
-        TableRow {name: String::from("DD1"), ID: String::from("cinv0"), Deps: String::from("c2,cinv")},
-        TableRow {name: String::from("DD2"), ID: String::from("identity"), Deps: String::from("c2,cinv,cinv0")},
+pub(crate) fn msm_config_gen(pub_ins: String) -> Vec<ScriptItem> {
+
+    let mut items = vec![
+        ScriptItem {category: String::from("MSM"), link_id: String::from("M0"), dependencies: pub_ins.clone(), is_type_field: false}, // k0, k1, k2
+    ];
+    for i in 1..32 {
+        
+        items.push(ScriptItem {category: String::from("MSM"), link_id: String::from(format!("M{}", i)), dependencies: String::from(format!("{pub_ins},M{}", i-1)), is_type_field: false}) // k0,k1,k2,M
+    }
+    items
+}
+
+pub(crate) fn premiller_config_gen() -> Vec<ScriptItem> {
+    let mut r = vec![];
+    let r1 = vec!["T4"];
+    for item in r1 {
+        r.push(ScriptItem {category:String::from("PreMiller"), link_id: String::from(item), dependencies:String::new(), is_type_field: false})
+    }
+    let r2 = vec!["P4y","P4x","P3y","P3x","P2y","P2x"];
+    for item in r2 {
+        r.push(ScriptItem {category:String::from("PreMiller"), link_id: String::from(item), dependencies:String::new(), is_type_field: true})
+    }
+    let r3 = vec!["cinv0"];
+    for item in r3 {
+        r.push(ScriptItem {category:String::from("PreMiller"), link_id: String::from(item), dependencies:String::new(), is_type_field: false})
+    }
+    r
+}
+
+pub(crate) fn pre_miller_config_gen() -> Vec<ScriptItem> {
+    let tables: Vec<ScriptItem> = vec![
+        ScriptItem {category: String::from("T4Init"), link_id: String::from("T4"), dependencies: String::from("Q4y1,Q4y0,Q4x1,Q4x0"), is_type_field: false},
+        ScriptItem {category: String::from("PrePy"), link_id: String::from("P4y"), dependencies: String::from("GP4y"), is_type_field: true},
+        ScriptItem {category: String::from("PrePx"), link_id: String::from("P4x"), dependencies: String::from("GP4y,GP4x,P4y"), is_type_field: true},
+        ScriptItem {category: String::from("PrePy"), link_id: String::from("P3y"), dependencies: String::from("GP3y"), is_type_field: true},
+        ScriptItem {category: String::from("PrePx"), link_id: String::from("P3x"), dependencies: String::from("GP3y,GP3x,P3y"), is_type_field: true},
+        ScriptItem {category: String::from("PrePy"), link_id: String::from("P2y"), dependencies: String::from("GP2y"), is_type_field: true},
+        ScriptItem {category: String::from("PrePx"), link_id: String::from("P2x"), dependencies: String::from("GP2y,GP2x,P2y"), is_type_field: true},
+        ScriptItem {category: String::from("HashC"), link_id: String::from("c"), dependencies: String::from("Gc11,Gc10,Gc9,Gc8,Gc7,Gc6,Gc5,Gc4,Gc3,Gc2,Gc1,Gc0"), is_type_field: false},
+        ScriptItem {category: String::from("HashC2"), link_id: String::from("c2"), dependencies: String::from("c"), is_type_field: false},
+        ScriptItem {category: String::from("HashC2"), link_id: String::from("cinv2"), dependencies: String::from("cinv"), is_type_field: false},
+        ScriptItem {category: String::from("HashC"), link_id: String::from("s"), dependencies: String::from("Gs11,Gs10,Gs9,Gs8,Gs7,Gs6,Gs5,Gs4,Gs3,Gs2,Gs1,Gs0"), is_type_field: false},
+        ScriptItem {category: String::from("DD1"), link_id: String::from("cinv0"), dependencies: String::from("c2,cinv"), is_type_field: false},
+        ScriptItem {category: String::from("DD2"), link_id: String::from("identity"), dependencies: String::from("c2,cinv,cinv0"), is_type_field: false},
+        ScriptItem {category: String::from("P3Hash"), link_id: String::from("M31"), dependencies: String::from("GP3y,GP3x"), is_type_field: false},
     ];
     tables
 }
 
-pub(crate) fn post_miller_config_gen(f_acc: String, t4_acc: String) -> Vec<TableRow> {
-    let tables: Vec<TableRow> = vec![
-        TableRow {name: String::from("Frob1"), ID: String::from("U0"), Deps: String::from("cinv")},
-        TableRow {name: String::from("Frob2"), ID: String::from("U1"), Deps: String::from("c")},
-        TableRow {name: String::from("Frob3"), ID: String::from("U2"), Deps: String::from("cinv")},
+pub(crate) fn post_miller_config_gen(f_acc: String, t4_acc: String) -> Vec<ScriptItem> {
+    let tables: Vec<ScriptItem> = vec![
+        ScriptItem {category: String::from("Frob1"), link_id: String::from("U0"), dependencies: String::from("cinv"), is_type_field: false},
+        ScriptItem {category: String::from("Frob2"), link_id: String::from("U1"), dependencies: String::from("c"), is_type_field: false},
+        ScriptItem {category: String::from("Frob3"), link_id: String::from("U2"), dependencies: String::from("cinv"), is_type_field: false},
 
-        TableRow {name: String::from("DD1"), ID: String::from("U3"), Deps: String::from(format!("{f_acc},s"))},
-        TableRow {name: String::from("DD2"), ID: String::from("U4"), Deps: String::from(format!("{f_acc},s,U3"))},
-        TableRow {name: String::from("DD1"), ID: String::from("U5"), Deps: String::from("U4,U0")},
-        TableRow {name: String::from("DD2"), ID: String::from("U6"), Deps: String::from("U4,U0,U5")},
-        TableRow {name: String::from("DD1"), ID: String::from("U7"), Deps: String::from("U6,U1")},
-        TableRow {name: String::from("DD2"), ID: String::from("U8"), Deps: String::from("U6,U1,U7")},
-        TableRow {name: String::from("DD1"), ID: String::from("U9"), Deps: String::from("U8,U2")},
-        TableRow {name: String::from("DD2"), ID: String::from("U10"), Deps: String::from("U8,U2,U9")},
+        ScriptItem {category: String::from("DD1"), link_id: String::from("U3"), dependencies: String::from(format!("{f_acc},s")), is_type_field: false},
+        ScriptItem {category: String::from("DD2"), link_id: String::from("U4"), dependencies: String::from(format!("{f_acc},s,U3")), is_type_field: false},
+        ScriptItem {category: String::from("DD1"), link_id: String::from("U5"), dependencies: String::from("U4,U0"), is_type_field: false},
+        ScriptItem {category: String::from("DD2"), link_id: String::from("U6"), dependencies: String::from("U4,U0,U5"), is_type_field: false},
+        ScriptItem {category: String::from("DD1"), link_id: String::from("U7"), dependencies: String::from("U6,U1"), is_type_field: false},
+        ScriptItem {category: String::from("DD2"), link_id: String::from("U8"), dependencies: String::from("U6,U1,U7"), is_type_field: false},
+        ScriptItem {category: String::from("DD1"), link_id: String::from("U9"), dependencies: String::from("U8,U2"), is_type_field: false},
+        ScriptItem {category: String::from("DD2"), link_id: String::from("U10"), dependencies: String::from("U8,U2,U9"), is_type_field: false},
 
-        TableRow {name: String::from("Add1"), ID: String::from("U11"), Deps: String::from(format!("{t4_acc},Q4y1,Q4y0,Q4x1,Q4x0,P4y,P4x"))},
-        TableRow {name: String::from("SD"), ID: String::from("U12"), Deps: String::from("U10,U11")},
-        TableRow {name: String::from("SS1"), ID: String::from("U13"), Deps: String::from("P3y,P3x,P2y,P2x")},
-        TableRow {name: String::from("DD3"), ID: String::from("U14"), Deps: String::from("U12,U13")},
-        TableRow {name: String::from("DD4"), ID: String::from("U15"), Deps: String::from("U12,U13,U14")},
+        ScriptItem {category: String::from("Add1"), link_id: String::from("U11"), dependencies: String::from(format!("{t4_acc},Q4y1,Q4y0,Q4x1,Q4x0,P4y,P4x")), is_type_field: false},
+        ScriptItem {category: String::from("SD"), link_id: String::from("U12"), dependencies: String::from("U10,U11"), is_type_field: false},
+        ScriptItem {category: String::from("SS1"), link_id: String::from("U13"), dependencies: String::from("P3y,P3x,P2y,P2x"), is_type_field: false},
+        ScriptItem {category: String::from("DD3"), link_id: String::from("U14"), dependencies: String::from("U12,U13"), is_type_field: false},
+        ScriptItem {category: String::from("DD4"), link_id: String::from("U15"), dependencies: String::from("U12,U13,U14"), is_type_field: false},
 
-        TableRow {name: String::from("Add2"), ID: String::from("U16"), Deps: String::from("U11,Q4y1,Q4y0,Q4x1,Q4x0,P4y,P4x")},
-        TableRow {name: String::from("SD"), ID: String::from("U17"), Deps: String::from("U15,U16")},
-        TableRow {name: String::from("SS2"), ID: String::from("U18"), Deps: String::from("P3y,P3x,P2y,P2x")},
-        TableRow {name: String::from("DD3"), ID: String::from("U19"), Deps: String::from("U17,U18")},
-        TableRow {name: String::from("DD4"), ID: String::from("U20"), Deps: String::from("U17,U18,U19")},
+        ScriptItem {category: String::from("Add2"), link_id: String::from("U16"), dependencies: String::from("U11,Q4y1,Q4y0,Q4x1,Q4x0,P4y,P4x"), is_type_field: false},
+        ScriptItem {category: String::from("SD"), link_id: String::from("U17"), dependencies: String::from("U15,U16"), is_type_field: false},
+        ScriptItem {category: String::from("SS2"), link_id: String::from("U18"), dependencies: String::from("P3y,P3x,P2y,P2x"), is_type_field: false},
+        ScriptItem {category: String::from("DD3"), link_id: String::from("U19"), dependencies: String::from("U17,U18"), is_type_field: false},
+        ScriptItem {category: String::from("DD4"), link_id: String::from("U20"), dependencies: String::from("U17,U18,U19"), is_type_field: false},
 
-        TableRow {name: String::from("DD1"), ID: String::from("U21"), Deps: String::from("U20,f_fixed")},
-        TableRow {name: String::from("DD2"), ID: String::from("identity"), Deps: String::from("U20,f_fixed,U21")},
+        ScriptItem {category: String::from("DD1"), link_id: String::from("U21"), dependencies: String::from("U20,f_fixed"), is_type_field: false},
+        ScriptItem {category: String::from("DD2"), link_id: String::from("fin"), dependencies: String::from("U20,f_fixed,U21"), is_type_field: false},
     //// SS1;S4;P3,P2;
     ];
     tables
@@ -129,17 +176,15 @@ pub(crate) fn post_miller_config_gen(f_acc: String, t4_acc: String) -> Vec<Table
 // SS2;S10;P3,P2;
 // DD5;S11;S9,S10;
 // DD6;S12;S9,S10,S11;
-pub(crate) fn miller_config_gen()->Vec<Vec<TableRow>> {
+pub(crate) fn miller_config_gen()->Vec<Vec<ScriptItem>> {
 
 
     #[derive(Clone)]
-    struct TableRowTemplate {
+    struct ScriptRowTemplate {
         name: &'static str,
         ID_expr: &'static str,
         Deps_expr: &'static str,
     }
-
-
 
     fn evaluate_expression(expr: &str, start_id: i32) -> i32 {
         let expr_replaced = expr.replace("Sx", &start_id.to_string());
@@ -170,12 +215,12 @@ pub(crate) fn miller_config_gen()->Vec<Vec<TableRow>> {
     }
 
     fn generate_table(
-        structure: &[TableRowTemplate],
+        structure: &[ScriptRowTemplate],
         start_id: i32,
         f_value: &str,
         T4_value: &str,
         replace_c: bool,
-    ) -> Vec<TableRow> {
+    ) -> Vec<ScriptItem> {
         let mut table = Vec::new();
         for row in structure {
             let name = row.name.to_string();
@@ -207,16 +252,17 @@ pub(crate) fn miller_config_gen()->Vec<Vec<TableRow>> {
             }
             Deps_updated = Deps_updated.trim_end_matches(',').to_string();
             // Add the row to the table
-            table.push(TableRow {
-                name,
-                ID: ID_str,
-                Deps: Deps_updated,
+            table.push(ScriptItem {
+                category: name,
+                link_id: ID_str,
+                dependencies: Deps_updated,
+                is_type_field: false,
             });
         }
         table
     }
 
-    fn run()-> Vec<Vec<TableRow>> {
+    fn run()-> Vec<Vec<ScriptItem>> {
         // Array specifying the type of table to generate
 
         // Initialize the ID counter
@@ -228,32 +274,32 @@ pub(crate) fn miller_config_gen()->Vec<Vec<TableRow>> {
 
         // Define the half and full table structures
         let half_table_structure = vec![
-            TableRowTemplate {
+            ScriptRowTemplate {
                 name: "Sqr",
                 ID_expr: "Sx",
                 Deps_expr: "f_value;",
             },
-            TableRowTemplate {
+            ScriptRowTemplate {
                 name: "Dbl",
                 ID_expr: "Sx+1",
                 Deps_expr: "T4_value,P4y,P4x;",
             },
-            TableRowTemplate {
+            ScriptRowTemplate {
                 name: "SD1",
                 ID_expr: "Sx+2",
                 Deps_expr: "Sx,Sx+1;",
             },
-            TableRowTemplate {
+            ScriptRowTemplate {
                 name: "SS1",
                 ID_expr: "Sx+3",
                 Deps_expr: "P3y,P3x,P2y,P2x;",
             },
-            TableRowTemplate {
+            ScriptRowTemplate {
                 name: "DD1",
                 ID_expr: "Sx+4",
                 Deps_expr: "Sx+2,Sx+3;",
             },
-            TableRowTemplate {
+            ScriptRowTemplate {
                 name: "DD2",
                 ID_expr: "Sx+5",
                 Deps_expr: "Sx+2,Sx+3,Sx+4;",
@@ -262,62 +308,62 @@ pub(crate) fn miller_config_gen()->Vec<Vec<TableRow>> {
 
         let full_table_structure = {
             let v = vec![
-                TableRowTemplate {
+                ScriptRowTemplate {
                     name: "Sqr",
                     ID_expr: "Sx",
                     Deps_expr: "f_value;",
                 },
-                TableRowTemplate {
+                ScriptRowTemplate {
                     name: "DblAdd",
                     ID_expr: "Sx+1",
                     Deps_expr: "T4_value,Q4y1,Q4y0,Q4x1,Q4x0,P4y,P4x;",
                 },
-                TableRowTemplate {
+                ScriptRowTemplate {
                     name: "SD1",
                     ID_expr: "Sx+2",
                     Deps_expr: "Sx,Sx+1;",
                 },
-                TableRowTemplate {
+                ScriptRowTemplate {
                     name: "SS1",
                     ID_expr: "Sx+3",
                     Deps_expr: "P3y,P3x,P2y,P2x;",
                 },
-                TableRowTemplate {
+                ScriptRowTemplate {
                     name: "DD1",
                     ID_expr: "Sx+4",
                     Deps_expr: "Sx+2,Sx+3;",
                 },
-                TableRowTemplate {
+                ScriptRowTemplate {
                     name: "DD2",
                     ID_expr: "Sx+5",
                     Deps_expr: "Sx+2,Sx+3,Sx+4;",
                 },
-                TableRowTemplate {
+                ScriptRowTemplate {
                     name: "DD3",
                     ID_expr: "Sx+6",
                     Deps_expr: "Sx+5,c;",
                 },
-                TableRowTemplate {
+                ScriptRowTemplate {
                     name: "DD4",
                     ID_expr: "Sx+7",
                     Deps_expr: "Sx+5,c,Sx+6;",
                 },
-                TableRowTemplate {
+                ScriptRowTemplate {
                     name: "SD2",
                     ID_expr: "Sx+8",
                     Deps_expr: "Sx+7,Sx+1;",
                 },
-                TableRowTemplate {
+                ScriptRowTemplate {
                     name: "SS2",
                     ID_expr: "Sx+9",
                     Deps_expr: "P3y,P3x,P2y,P2x;",
                 },
-                TableRowTemplate {
+                ScriptRowTemplate {
                     name: "DD5",
                     ID_expr: "Sx+10",
                     Deps_expr: "Sx+8,Sx+9;",
                 },
-                TableRowTemplate {
+                ScriptRowTemplate {
                     name: "DD6",
                     ID_expr: "Sx+11",
                     Deps_expr: "Sx+8,Sx+9,Sx+10;",
@@ -398,3 +444,124 @@ pub(crate) fn miller_config_gen()->Vec<Vec<TableRow>> {
     run()
 }
 
+
+fn assign_ids_to_public_params(start_identifier: u32) -> HashMap<String, (u32, bool)> {
+    let pub_params = public_params_config_gen();
+    let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
+    for i in 0..pub_params.len() {
+        name_to_id.insert( pub_params[i].link_id.clone(), (start_identifier + i as u32, pub_params[i].is_type_field));
+    }
+    name_to_id
+}
+
+
+fn assign_ids_to_groth16_params(start_identifier: u32) -> HashMap<String, (u32, bool)> {
+    let g_params = groth16_config_gen();
+    let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
+    for i in 0..g_params.len() {
+        name_to_id.insert( g_params[i].link_id.clone(), (start_identifier + i as u32, g_params[i].is_type_field));
+    }
+    name_to_id
+}
+
+fn assign_ids_to_premiller_params(start_identifier: u32) -> HashMap<String, (u32, bool)> {
+    let g_params = premiller_config_gen();
+    let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
+    for i in 0..g_params.len() {
+        name_to_id.insert( g_params[i].link_id.clone(), (start_identifier + i as u32, g_params[i].is_type_field));
+    }
+    name_to_id
+}
+
+fn assign_ids_to_miller_blocks(start_identifier: u32)-> (HashMap<String, (u32, bool)>, String, String) {
+    let g_params = miller_config_gen();
+    let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
+    let mut counter = 0;
+    let mut last_f_block_id = String::new();
+    let mut last_t4_block_id = String::new();
+    for t in g_params {
+        for r in t {
+            name_to_id.insert(r.link_id.clone(), (start_identifier + counter as u32, r.is_type_field));
+            counter += 1;
+            if r.category.starts_with("DD") {
+                last_f_block_id = r.link_id;
+            } else if r.category.starts_with("Dbl") {
+                last_t4_block_id = r.link_id;
+            }
+        }
+    }
+    (name_to_id, last_f_block_id, last_t4_block_id)
+}
+
+fn assign_ids_to_postmiller_params(start_identifier: u32) -> HashMap<String, (u32, bool)> {
+    let g_params = post_miller_config_gen(String::new(), String::new());
+    let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
+    for i in 0..g_params.len() {
+        name_to_id.insert( g_params[i].link_id.clone(), (start_identifier + i as u32, g_params[i].is_type_field));
+    }
+    name_to_id
+}
+
+fn assign_ids_to_msm_params(start_identifier: u32)-> HashMap<String, (u32, bool)> {
+    let hardcoded_scalars = String::from("k0,k1");
+    let g_params = msm_config_gen(hardcoded_scalars);
+    let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
+    for i in 0..g_params.len() {
+        name_to_id.insert( g_params[i].link_id.clone(), (start_identifier + i as u32, g_params[i].is_type_field));
+    }
+    name_to_id
+}
+
+pub(crate) fn get_type_for_link_id(index: u32) -> Option<bool> {
+    let (lid, _, _) = assign_link_ids();
+   let res= lid.iter().find(|(_,v)| v.0 == index);
+   if res.is_none() {
+        None
+   } else {
+        Some(res.unwrap().1.1)
+   }
+}
+
+pub(crate) fn assign_link_ids() -> (HashMap<String, (u32, bool)>, String, String) {
+    let mut all_ids: HashMap<String, (u32, bool)> = HashMap::new();
+    let mut total_len = 0;
+    let pubp = assign_ids_to_public_params(0);
+    total_len += pubp.len();
+    let grothp = assign_ids_to_groth16_params(total_len as u32);
+    total_len += grothp.len();
+    let premillp = assign_ids_to_premiller_params(total_len as u32);
+    total_len += premillp.len();
+    let (millp, f_blk, t4_blk) = assign_ids_to_miller_blocks(total_len as u32);
+    total_len += millp.len();
+    let postmillp = assign_ids_to_postmiller_params(total_len as u32);
+    total_len += postmillp.len();
+    let msmp = assign_ids_to_msm_params(total_len as u32);
+    total_len += msmp.len();
+
+    all_ids.extend(pubp.clone());
+    all_ids.extend(grothp.clone());
+    all_ids.extend(premillp.clone());
+    all_ids.extend(millp.clone());
+    all_ids.extend(postmillp.clone());
+    all_ids.extend(msmp.clone());
+    assert_eq!(total_len, all_ids.len());
+    (all_ids, f_blk, t4_blk)
+}
+
+pub fn keygen(msk: &str) -> HashMap<u32, WOTSPubKey> {
+    // given master secret key and number of links, generate pub keys
+    let (links, _,_) = assign_link_ids();
+    let mut scripts = HashMap::new();
+    for (_, link) in links {
+        let link_id = link.0;
+        let mut pub_key = vec![];
+        if link.1 {
+            pub_key = winternitz_compact::get_pub_key(&format!("{}{:04X}", msk, link.0));
+        } else {
+            pub_key = winternitz_compact_hash::get_pub_key(&format!("{}{:04X}", msk, link.0));
+        }
+        //let s = checksig_verify_fq(pub_key);
+        scripts.insert(link_id as u32, pub_key);
+    }
+    scripts
+}

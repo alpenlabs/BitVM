@@ -17,6 +17,7 @@ pub mod chunk_msm;
 pub mod chunk_primitves;
 pub mod chunk_superblock;
 pub mod chunk_taps;
+pub mod chunk_utils;
 pub mod fp254impl;
 pub mod msm;
 pub mod utils;

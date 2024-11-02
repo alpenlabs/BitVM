@@ -468,9 +468,13 @@ pub fn new_hinted_y_from_eval_point(py: ark_bn254::Fq) -> (Script, Vec<Hint>) {
 
     let (hinted_script1, hint1) = Fq::hinted_mul(1, py_inv, 0, py);
     let script_lines = vec! [
-        // Stack: [hints, pyd, py] 
+        // Stack: [hints, pyd_calc, pyd_claim, py_claim]
+        {Fq::copy(2)},
+        {Fq::roll(1)},
+        // Stack: [hints, pyd_calc, pyd_claim, pyd_calc, py_claim]
         hinted_script1,
-        {Fq::push_one_not_montgomery()}
+        {Fq::push_one_not_montgomery()},
+        {Fq::equalverify(1,0)}
     ];
     let mut script = script!{};
     for script_line in script_lines {
@@ -1690,6 +1694,7 @@ mod test {
             for tmp in hints { 
                 { tmp.push() }
             }
+            { Fq::push_u32_le_not_montgomery(&BigUint::from(p.y.inverse().unwrap()).to_u32_digits()) }
             { Fq::push_u32_le_not_montgomery(&BigUint::from(p.y.inverse().unwrap()).to_u32_digits()) }
             { Fq::push_u32_le_not_montgomery(&BigUint::from(p.y).to_u32_digits()) }
             { ell_by_constant_affine_script.clone() }

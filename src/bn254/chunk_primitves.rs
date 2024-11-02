@@ -1,5 +1,6 @@
 use crate::bn254::utils::fq_push_not_montgomery;
 use crate::pseudo::NMUL;
+use bitcoin::opcodes::all::{OP_2DROP, OP_FROMALTSTACK, OP_TOALTSTACK};
 use bitcoin::ScriptBuf;
 use std::cmp::min;
 use std::fs::File;
@@ -336,7 +337,22 @@ pub fn read_script_from_file(file_path: &str) -> Script {
     let scb = ScriptBuf::from_bytes(all_script_bytes);
     let sc = script!();
     let sc = sc.push_script(scb);
-    sc
+    let truncated_script = script!{
+       {sc}
+       for _ in 0..40 {
+        OP_TOALTSTACK
+       }
+       for _ in 0..(64-40)/2 {
+        OP_2DROP
+       }
+       for _ in 0..(64-40) {
+        {0}
+       }
+       for _ in 0..40 {
+        OP_FROMALTSTACK
+       }
+    };
+    truncated_script
 }
 
 // [a0, a1, a2, a3, a4, a5]
