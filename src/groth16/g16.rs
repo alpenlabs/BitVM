@@ -10,18 +10,18 @@ pub const N_VERIFIER_HASHES: usize = 598;
 pub const N_TAPLEAVES: usize = 602;
 
 pub type WotsPublicKeys = (
-    (wots32::PublicKey, wots256::PublicKey, wots256::PublicKey),
+    (wots256::PublicKey, wots256::PublicKey, wots256::PublicKey),
     [wots256::PublicKey; N_VERIFIER_FQs],
     [wots160::PublicKey; N_VERIFIER_HASHES],
 );
 
 pub type WotsSignatures = (
-    (wots32::Signature, wots256::Signature, wots256::Signature),
+    (wots256::Signature, wots256::Signature, wots256::Signature),
     [wots256::Signature; N_VERIFIER_FQs],
     [wots160::Signature; N_VERIFIER_HASHES],
 );
 
-pub type ProofPublicInputs = (u32, [u8; 32], [u8; 32]);
+pub type ProofPublicInputs = ([u8; 32], [u8; 32], [u8; 32]);
 
 pub type Groth16ProofAssertions = (
     ProofPublicInputs,
@@ -164,7 +164,7 @@ mod test {
     fn mock_pubkeys() -> WotsPublicKeys {
         let secret = "a01b23c45d67e89f";
 
-        let pub0 = wots32::generate_public_key(&format!("{secret}pub0"));
+        let pub0 = wots256::generate_public_key(&format!("{secret}pub0"));
         let pub1 = wots256::generate_public_key(&format!("{secret}pub1"));
         let pub2 = wots256::generate_public_key(&format!("{secret}pub2"));
         let mut fq_arr = vec![];
