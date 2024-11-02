@@ -12,6 +12,8 @@ use std::io::{self, Read};
 
 use crate::bn254::utils::fr_push_not_montgomery;
 
+use super::taps::{HashBytes, Sig};
+
 fn split_digit(window: u32, index: u32) -> Script {
     script! {
         // {v}
@@ -748,16 +750,46 @@ pub fn hash_fp12_with_hints() -> Script {
     }
 }
 
+pub(crate) fn sig_to_msg(sig: &Sig, skey: (u32, bool)) -> HashBytes {
+    let mut scr = script! {};
+    let bcelem = sig.cache.get(&skey.0).unwrap().clone();
+    for i in 0..bcelem.len() {
+        if i % 2 == 1 {
+            scr = scr.push_script(bcelem[i].clone().compile());
+        }
+    }
+    let exec_result = execute_script(scr);
+    let mut arr = [0u8; 64];
+    let mut len = 40;
+    if skey.1 {
+        len = 64;
+    }
+    assert!(exec_result.final_stack.len() == 64 + 3 || exec_result.final_stack.len() == 40 + 3);
+    for i in 0..len {
+        let v = exec_result.final_stack.get(i);
+        if v.len() == 0 {
+            arr[i] = 0;
+        } else {
+            arr[i] = v[0].clone();
+        }
+        
+    }
+    arr.reverse();
+    arr
+}
+
 
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
     use super::*;
     use ark_ff::UniformRand;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{bigint::U254, bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::primitves::unpack_limbs_to_nibbles, execute_script};
+    use crate::{bigint::U254, bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::{primitves::unpack_limbs_to_nibbles, wots::{wots_p160_sign_digits, wots_p256_sign_digits}}, execute_script};
 
     #[test]
     fn test_fq_from_nibbles() { // pack_nibbles_to_fq
@@ -790,5 +822,23 @@ mod test {
        for i in 0..exec_result.final_stack.len() {
            println!("{i:} {:?}", exec_result.final_stack.get(i));
        }
+    }
+
+
+    #[test]
+    fn test_sig_to_msg() {
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let p = ark_bn254::Fq::rand(&mut prng);
+        let p = emulate_fq_to_nibbles(p);
+        let secret = "a01b23c45d67e89f";
+
+        let sigs = wots_p160_sign_digits(secret, p[24..64].try_into().unwrap());
+        let mut sigmap: HashMap<u32, Vec<Script>> = HashMap::new();
+        sigmap.insert(0, sigs);
+        let sig = Sig {msk: None, cache:sigmap};
+        let res = sig_to_msg(&sig, (0, false));
+        println!("p {:?}", p);
+        println!("res {:?}", res);
+    
     }
 }

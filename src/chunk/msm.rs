@@ -245,6 +245,12 @@ pub(crate) struct HintOutMSM {
     pub(crate) hasht: HashBytes,
 }
 
+impl HintOutMSM {
+    pub(crate) fn out(&self) -> HashBytes {
+        self.hasht
+    }
+}
+
 fn hinted_affine_add_line_g1(
     tx: ark_bn254::Fq,
     qx: ark_bn254::Fq,

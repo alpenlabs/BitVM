@@ -5,11 +5,7 @@ use crate::bn254::utils::{
     Hint,
 };
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
-use crate::chunk::primitves::{
-    emulate_extern_hash_nibbles, emulate_fq_to_nibbles, emulate_nibbles_to_limbs, hash_fp12,
-    hash_fp2, hash_fp4, pack_nibbles_to_limbs,
-    read_script_from_file, unpack_limbs_to_nibbles,
-};
+use crate::chunk::primitves::*;
 use crate::chunk::wots::{wots_compact_checksig_verify_with_pubkey};
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
@@ -30,7 +26,6 @@ use super::hint_models::*;
 pub(crate) type HashBytes = [u8; 64];
 
 pub type Link = (u32, bool);
-
 
 #[derive(Debug, Clone)]
 pub struct Sig {
@@ -1416,6 +1411,7 @@ pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
         t2: G2Affine::new_unchecked(x2, y2),
         t3: G2Affine::new_unchecked(x3, y3),
         f: b,
+        fhash: b_hash,
     };
 
     (hint_out, simulate_stack_input)
@@ -1640,6 +1636,7 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
         t2: G2Affine::new_unchecked(x2, y2),
         t3: G2Affine::new_unchecked(x3, y3),
         f: b,
+        fhash: b_hash,
     };
 
     (hint_out, simulate_stack_input)
@@ -1910,6 +1907,7 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
         t2: G2Affine::new_unchecked(x2, y2),
         t3: G2Affine::new_unchecked(x3, y3),
         f: b,
+        fhash: b_hash,
     };
 
     (hint_out, simulate_stack_input)

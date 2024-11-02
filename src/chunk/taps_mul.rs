@@ -17,7 +17,7 @@ use num_traits::One;
 use std::collections::HashMap;
 
 use super::primitves::{emulate_extern_hash_fps, hash_fp12_192};
-use super::taps::{HashBytes, Link, Sig};
+use super::taps::{Link, Sig};
 use super::wots::WOTSPubKey;
 use super::hint_models::*;
 // SPARSE DENSE

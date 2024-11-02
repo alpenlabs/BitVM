@@ -1,7 +1,7 @@
-use crate::chunk::primitves::{emulate_extern_hash_nibbles};
+use crate::chunk::primitves::emulate_extern_hash_nibbles;
 use ark_bn254::{G1Affine, G2Affine};
 use super::msm::HintOutMSM;
-use super::primitves::{emulate_extern_hash_fps};
+use super::primitves::emulate_extern_hash_fps;
 use super::taps::HashBytes;
 
 #[derive(Debug, Clone)]
@@ -15,12 +15,9 @@ pub(crate) enum HintOut {
     DenseMul0(HintOutDenseMul0),
     DenseMul1(HintOutDenseMul1),
 
-    FixedAcc(HintOutFixedAcc),
-
     FieldElem(ark_bn254::Fq),
     ScalarElem(ark_bn254::Fr),
     GrothC(HintOutGrothC), // c, s, cinv
-
     HashC(HintOutHashC),
     InitT4(HintOutInitT4),
 
@@ -30,13 +27,14 @@ pub(crate) enum HintOut {
     MSM(HintOutMSM),
 }
 
+
+
 pub(crate) struct HintInDouble {
     pub(crate) t: ark_bn254::G2Affine,
     pub(crate) p: ark_bn254::G1Affine,
     pub(crate) hash_le_aux: HashBytes,
     //hash_in: HashBytes, // in = Hash([Hash(T), Hash_le_aux])
 }
-
 
 impl HintInDouble {
     pub(crate) fn from_initT4(it: HintOutInitT4, gpx: ark_bn254::Fq, gpy: ark_bn254::Fq) -> Self {
@@ -81,6 +79,12 @@ pub(crate) struct HintOutDouble {
     pub(crate) dbl_le: (ark_bn254::Fq2, ark_bn254::Fq2),
     pub(crate) hash_add_le_aux: HashBytes,
     pub(crate) hash_out: HashBytes,
+}
+
+impl HintOutDouble {
+    pub(crate) fn out(&self) -> HashBytes {
+        self.hash_out
+    }
 }
 
 
@@ -163,6 +167,11 @@ pub(crate) struct HintOutAdd {
     pub(crate) hash_out: HashBytes,
 }
 
+impl HintOutAdd {
+   pub(crate) fn out(&self) -> HashBytes {
+        self.hash_out
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct HintInDblAdd {
@@ -233,6 +242,12 @@ impl HintInDblAdd {
     }
 }
 
+impl HintOutDblAdd {
+   pub(crate) fn out(&self) -> HashBytes {
+        self.hash_out
+    }
+}
+
 pub(crate) struct HintInSparseDbl {
     pub(crate) t2: ark_bn254::G2Affine,
     pub(crate) t3: G2Affine,
@@ -261,8 +276,14 @@ pub(crate) struct HintOutSparseDbl {
     pub(crate) t2: ark_bn254::G2Affine,
     pub(crate) t3: G2Affine,
     pub(crate) f: ark_bn254::Fq12,
+    pub(crate) fhash: HashBytes,
 }
 
+impl HintOutSparseDbl {
+   pub(crate) fn out(&self) -> HashBytes {
+        self.fhash
+    }
+}
 pub(crate) struct HintInSparseAdd {
     pub(crate) t2: ark_bn254::G2Affine,
     pub(crate) t3: G2Affine,
@@ -292,30 +313,41 @@ impl HintInSparseAdd {
     }
 }
 #[derive(Debug, Clone)]
+
 pub(crate) struct HintOutSparseAdd {
     pub(crate) t2: ark_bn254::G2Affine,
     pub(crate) t3: G2Affine,
     pub(crate) f: ark_bn254::Fq12,
+    pub(crate) fhash: HashBytes,
+}
+
+impl HintOutSparseAdd {
+   pub(crate) fn out(&self) -> HashBytes {
+        self.fhash
+    }
 }
 
 
 // Public Params
-#[derive(Debug, Clone)]
-pub(crate) struct HintOutPubIdentity {
-    pub(crate) idhash: HashBytes,
-    pub(crate) v: ark_bn254::Fq12,
-}
 
-#[derive(Debug, Clone)]
-pub(crate) struct HintOutFixedAcc {
-    pub(crate) f: ark_bn254::Fq12,
-    pub(crate) fhash: HashBytes,
-}
+
+// #[derive(Debug, Clone)]
+// pub(crate) struct HintOutFixedAcc {
+//     pub(crate) f: ark_bn254::Fq12,
+//     pub(crate) fhash: HashBytes,
+// }
 
 #[derive(Debug, Clone)]
 pub(crate) struct HintOutGrothC {
     pub(crate) c: ark_bn254::Fq12,
     pub(crate) chash: HashBytes,
+}
+
+
+impl HintOutGrothC {
+   pub(crate) fn out(&self) -> HashBytes {
+        self.chash
+    }
 }
 
 // PREMILLER
@@ -374,6 +406,11 @@ pub(crate) struct HintOutHashC {
     pub(crate) hash_out: HashBytes,
 }
 
+impl HintOutHashC {
+   pub(crate) fn out(&self) -> HashBytes {
+        self.hash_out
+    }
+}
 
 pub(crate) struct HintInPrecomputePy {
     pub(crate) p: ark_bn254::Fq,
@@ -424,6 +461,12 @@ pub(crate) struct HintOutInitT4 {
     pub(crate) hash_le_aux: HashBytes,
 }
 
+impl HintOutInitT4 {
+   pub(crate) fn out(&self) -> HashBytes {
+        self.t4hash
+    }
+}
+
 pub(crate) struct HintInFrobFp12 {
     pub(crate) f: ark_bn254::Fq12,
 }
@@ -442,6 +485,13 @@ pub(crate) struct HintOutFrobFp12 {
     pub(crate) fhash: HashBytes,
 }
 
+impl HintOutFrobFp12 {
+   pub(crate) fn out(&self) -> HashBytes {
+        self.fhash
+    }
+}
+
+
 pub(crate) struct HintInSparseDenseMul {
     pub(crate) a: ark_bn254::Fq12,
     pub(crate) le0: ark_bn254::Fq2,
@@ -455,6 +505,12 @@ pub(crate) struct HintInSparseDenseMul {
 pub(crate) struct HintOutSparseDenseMul {
     pub(crate) f: ark_bn254::Fq12,
     pub(crate) hash_out: HashBytes,
+}
+
+impl HintOutSparseDenseMul {
+   pub(crate) fn out(&self) -> HashBytes {
+        self.hash_out
+    }
 }
 
 impl HintInSparseDenseMul {
@@ -537,9 +593,9 @@ impl HintInDenseMul0 {
     pub(crate) fn from_hash_c(c: HintOutDenseMul1, d: HintOutHashC) -> Self {
         Self { a: c.c, b: d.c }
     }
-    pub(crate) fn from_dense_fixed_acc(c: HintOutDenseMul1, d: HintOutFixedAcc) -> Self {
-        Self { a: c.c, b: d.f }
-    }
+    // pub(crate) fn from_dense_fixed_acc(c: HintOutDenseMul1, d: HintOutFixedAcc) -> Self {
+    //     Self { a: c.c, b: d.f }
+    // }
     pub(crate) fn from_dense_frob(c: HintOutDenseMul1, d: HintOutFrobFp12) -> Self {
         Self { a: c.c, b: d.f }
     }
@@ -551,7 +607,11 @@ pub(crate) struct HintOutDenseMul0 {
     pub(crate) hash_out: HashBytes,
 }
 
-
+impl HintOutDenseMul0 {
+   pub(crate) fn out(&self) -> HashBytes {
+        self.hash_out
+    }
+}
 pub(crate) struct HintInDenseMul1 {
     pub(crate) a: ark_bn254::Fq12,
     pub(crate) b: ark_bn254::Fq12,
@@ -574,9 +634,9 @@ impl HintInDenseMul1 {
     pub(crate) fn from_dense_c(c: HintOutDenseMul1, d: HintOutGrothC) -> Self {
         Self { a: c.c, b: d.c }
     }
-    pub(crate) fn from_dense_fixed_acc(c: HintOutDenseMul1, d: HintOutFixedAcc) -> Self {
-        Self { a: c.c, b: d.f }
-    }
+    // pub(crate) fn from_dense_fixed_acc(c: HintOutDenseMul1, d: HintOutFixedAcc) -> Self {
+    //     Self { a: c.c, b: d.f }
+    // }
     pub(crate) fn from_dense_frob(c: HintOutDenseMul1, d: HintOutFrobFp12) -> Self {
         Self { a: c.c, b: d.f }
     }
@@ -591,6 +651,12 @@ pub(crate) struct HintOutDenseMul1 {
     pub(crate) hash_out: HashBytes,
 }
 
+
+impl HintOutDenseMul1 {
+   pub(crate) fn out(&self) -> HashBytes {
+        self.hash_out
+    }
+}
 
 pub(crate) struct HintInSquaring {
     pub(crate) a: ark_bn254::Fq12,
@@ -616,4 +682,10 @@ impl HintInSquaring {
 pub(crate) struct HintOutSquaring {
     pub(crate) b: ark_bn254::Fq12,
     pub(crate) bhash: HashBytes,
+}
+
+impl HintOutSquaring {
+   pub(crate) fn out(&self) -> HashBytes {
+        self.bhash
+    }
 }
