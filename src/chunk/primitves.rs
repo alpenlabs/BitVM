@@ -1,17 +1,18 @@
+use crate::bigint::U254;
 use crate::bn254::utils::fq_push_not_montgomery;
 use crate::pseudo::NMUL;
-use bitcoin::opcodes::all::{OP_2DROP, OP_FROMALTSTACK, OP_TOALTSTACK};
-use bitcoin::ScriptBuf;
-use std::cmp::min;
-use std::fs::File;
-use std::io::{self, Read};
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
 };
+use bitcoin::ScriptBuf;
+use std::cmp::min;
+use std::fs::File;
+use std::io::{self, Read};
 
-use super::utils::fr_push_not_montgomery;
+use crate::bn254::utils::fr_push_not_montgomery;
 
+use super::taps::{HashBytes, Sig};
 
 fn split_digit(window: u32, index: u32) -> Script {
     script! {
@@ -36,8 +37,7 @@ fn split_digit(window: u32, index: u32) -> Script {
 }
 
 pub fn unpack_limbs_to_nibbles() -> Script {
-
-    script!{
+    script! {
         {8}
         OP_ROLL
         {split_digit(24, 4)}
@@ -55,7 +55,7 @@ pub fn unpack_limbs_to_nibbles() -> Script {
         {split_digit(13, 4)}
         {split_digit(9, 4)}
         {split_digit(5, 4)}
-  
+
         {NMUL(8)}
         {8-2 + 6+8} //
         OP_ROLL
@@ -143,7 +143,7 @@ pub fn unpack_limbs_to_nibbles() -> Script {
 
 pub fn pack_nibbles_to_limbs() -> Script {
     let n_limbs = 9;
-    script!{
+    script! {
         {58} OP_ROLL
         {59} OP_ROLL
         {60} OP_ROLL
@@ -322,8 +322,62 @@ pub fn pack_nibbles_to_limbs() -> Script {
             {i} OP_ROLL
         }
     }
-
 }
+
+
+
+pub fn fq_from_nibbles() -> Script {
+    fn split_digit(window: u32, index: u32) -> Script {
+        script! {
+            // {v}
+            0                           // {v} {A}
+            OP_SWAP
+            for i in 0..index {
+                OP_TUCK                 // {v} {A} {v}
+                { 1 << (window - i - 1) }   // {v} {A} {v} {1000}
+                OP_GREATERTHANOREQUAL   // {v} {A} {1/0}
+                OP_TUCK                 // {v} {1/0} {A} {1/0}
+                OP_ADD                  // {v} {1/0} {A+1/0}
+                if i < index - 1 { { NMUL(2) } }
+                OP_ROT OP_ROT
+                OP_IF
+                    { 1 << (window - i - 1) }
+                    OP_SUB
+                OP_ENDIF
+            }
+            OP_SWAP
+        }
+    }
+    
+    const WINDOW: u32 = 4;
+    const LIMB_SIZE: u32 = 29;
+    const N_BITS: u32 = U254::N_BITS;
+    const N_DIGITS: u32 = (N_BITS + WINDOW - 1) / WINDOW;
+
+    script! {
+        for i in 1..64 { { i } OP_ROLL }
+        for i in (1..=N_DIGITS).rev() {
+            if (i * WINDOW) % LIMB_SIZE == 0 {
+                OP_TOALTSTACK
+            } else if (i * WINDOW) % LIMB_SIZE > 0 &&
+                        (i * WINDOW) % LIMB_SIZE < WINDOW {
+                OP_SWAP
+                { split_digit(WINDOW, (i * WINDOW) % LIMB_SIZE) }
+                OP_ROT
+                { NMUL(1 << ((i * WINDOW) % LIMB_SIZE)) }
+                OP_ADD
+                OP_TOALTSTACK
+            } else if i != N_DIGITS {
+                { NMUL(1 << WINDOW) }
+                OP_ADD
+            }
+        }
+        for _ in 1..U254::N_LIMBS { OP_FROMALTSTACK }
+        for i in 1..U254::N_LIMBS { { i } OP_ROLL }
+    }
+}
+
+
 
 pub fn read_script_from_file(file_path: &str) -> Script {
     fn read_file_to_bytes(file_path: &str) -> io::Result<Vec<u8>> {
@@ -337,7 +391,7 @@ pub fn read_script_from_file(file_path: &str) -> Script {
     let scb = ScriptBuf::from_bytes(all_script_bytes);
     let sc = script!();
     let sc = sc.push_script(scb);
-    let truncated_script = script!{
+    let truncated_script = script! {
        {sc}
        for _ in 0..40 {
         OP_TOALTSTACK
@@ -364,19 +418,19 @@ pub fn read_script_from_file(file_path: &str) -> Script {
 
 pub(crate) fn hash_fp2() -> Script {
     let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
-    script!{
+    script! {
         { Fq::toaltstack() }
         { unpack_limbs_to_nibbles() }
         { Fq::fromaltstack()}
         { unpack_limbs_to_nibbles() }
         { hash_64b_75k }
         { pack_nibbles_to_limbs() }
-    }   
+    }
 }
 
 pub(crate) fn hash_fp4() -> Script {
     let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
-    script!{
+    script! {
         { Fq::toaltstack() }
         { Fq::toaltstack() }
         { Fq::toaltstack() }
@@ -390,13 +444,13 @@ pub(crate) fn hash_fp4() -> Script {
         { unpack_limbs_to_nibbles() }
         { hash_128b_168k }
         { pack_nibbles_to_limbs() }
-    }   
+    }
 }
 
 // msg to nibbles
 pub(crate) fn emulate_extern_hash_fps(msgs: Vec<ark_bn254::Fq>, mode: bool) -> [u8; 64] {
     assert!(msgs.len() == 4 || msgs.len() == 2 || msgs.len() == 12 || msgs.len() == 6);
-    let scr = script!{
+    let scr = script! {
         for i in 0..msgs.len() {
             {fq_push_not_montgomery(msgs[i])}
         }
@@ -428,9 +482,9 @@ pub(crate) fn emulate_extern_hash_fps(msgs: Vec<ark_bn254::Fq>, mode: bool) -> [
     arr
 }
 
-pub(crate) fn emulate_extern_hash_nibbles(msgs: Vec<[u8;64]>) -> [u8; 64] {
+pub(crate) fn emulate_extern_hash_nibbles(msgs: Vec<[u8; 64]>) -> [u8; 64] {
     assert!(msgs.len() == 4 || msgs.len() == 2 || msgs.len() == 12);
-    let scr = script!{
+    let scr = script! {
         for i in 0..msgs.len() {
             for j in 0..msgs[i].len() {
                 {msgs[i][j]}
@@ -459,10 +513,8 @@ pub(crate) fn emulate_extern_hash_nibbles(msgs: Vec<[u8;64]>) -> [u8; 64] {
     arr
 }
 
-
-
-pub(crate) fn emulate_fq_to_nibbles(msg: ark_bn254::Fq) -> [u8;64] {
-    let scr = script!{
+pub(crate) fn emulate_fq_to_nibbles(msg: ark_bn254::Fq) -> [u8; 64] {
+    let scr = script! {
         {fq_push_not_montgomery(msg)}
         {unpack_limbs_to_nibbles()}
     };
@@ -479,8 +531,8 @@ pub(crate) fn emulate_fq_to_nibbles(msg: ark_bn254::Fq) -> [u8;64] {
     arr
 }
 
-pub(crate) fn emulate_fr_to_nibbles(msg: ark_bn254::Fr) -> [u8;64] {
-    let scr = script!{
+pub(crate) fn emulate_fr_to_nibbles(msg: ark_bn254::Fr) -> [u8; 64] {
+    let scr = script! {
         {fr_push_not_montgomery(msg)}
         {unpack_limbs_to_nibbles()}
     };
@@ -497,8 +549,8 @@ pub(crate) fn emulate_fr_to_nibbles(msg: ark_bn254::Fr) -> [u8;64] {
     arr
 }
 
-pub(crate) fn emulate_nibbles_to_limbs(msg: [u8;64]) -> [u32;9] {
-    let scr = script!{
+pub(crate) fn emulate_nibbles_to_limbs(msg: [u8; 64]) -> [u32; 9] {
+    let scr = script! {
         for i in 0..msg.len() {
             {msg[i]}
         }
@@ -508,7 +560,7 @@ pub(crate) fn emulate_nibbles_to_limbs(msg: [u8;64]) -> [u32;9] {
     let mut arr = [0u32; 9];
     for i in 0..exec_result.final_stack.len() {
         let v = exec_result.final_stack.get(i);
-        let mut w: [u8;4] = [0u8;4];
+        let mut w: [u8; 4] = [0u8; 4];
         for j in 0..min(v.len(), 4) {
             w[j] = v[j];
         }
@@ -518,11 +570,10 @@ pub(crate) fn emulate_nibbles_to_limbs(msg: [u8;64]) -> [u32;9] {
 }
 
 pub(crate) fn hash_fp12() -> Script {
-
     let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
     let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
 
-    script!{
+    script! {
         for _ in 0..=10 {
             {Fq::toaltstack()}
         }
@@ -560,7 +611,7 @@ pub(crate) fn hash_fp12() -> Script {
         {unpack_limbs_to_nibbles()}
         {hash_64b_75k.clone()}
         { pack_nibbles_to_limbs() }
-        
+
 
         { Fq::fromaltstack() }
         {unpack_limbs_to_nibbles()}
@@ -586,16 +637,14 @@ pub(crate) fn hash_fp12() -> Script {
         {hash_64b_75k.clone()}
         {pack_nibbles_to_limbs()}
 
-    } 
+    }
 }
 
-
 pub(crate) fn hash_fp6() -> Script {
-
     let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
     let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
 
-    script!{
+    script! {
         for _ in 0..5 {
             {Fq::toaltstack()}
         }
@@ -625,7 +674,7 @@ pub(crate) fn hash_fp6() -> Script {
         {hash_64b_75k.clone()}
         {pack_nibbles_to_limbs()}
 
-    } 
+    }
 }
 
 pub(crate) fn hash_fp12_192() -> Script {
@@ -657,15 +706,13 @@ pub(crate) fn hash_fp12_192() -> Script {
     }
 }
 
-
 // 6Fp_hash
 // fp6
 pub fn hash_fp12_with_hints() -> Script {
-
     let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
     let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
 
-    script!{
+    script! {
         {Fq::toaltstack()} //Hc0
         for _ in 0..=4 {
             {Fq::toaltstack()}
@@ -700,6 +747,98 @@ pub fn hash_fp12_with_hints() -> Script {
         {hash_64b_75k.clone()}
         {pack_nibbles_to_limbs()}
 
-    } 
+    }
 }
 
+pub(crate) fn sig_to_msg(sig: &Sig, skey: (u32, bool)) -> HashBytes {
+    let mut scr = script! {};
+    let bcelem = sig.cache.get(&skey.0).unwrap().clone();
+    for i in 0..bcelem.len() {
+        if i % 2 == 1 {
+            scr = scr.push_script(bcelem[i].clone().compile());
+        }
+    }
+    let exec_result = execute_script(scr);
+    let mut arr = [0u8; 64];
+    let mut len = 40;
+    if skey.1 {
+        len = 64;
+    }
+    assert!(exec_result.final_stack.len() == 64 + 3 || exec_result.final_stack.len() == 40 + 3);
+    for i in 0..len {
+        let v = exec_result.final_stack.get(i);
+        if v.len() == 0 {
+            arr[i] = 0;
+        } else {
+            arr[i] = v[0].clone();
+        }
+        
+    }
+    arr.reverse();
+    arr
+}
+
+
+
+#[cfg(test)]
+mod test {
+    use std::collections::HashMap;
+
+    use super::*;
+    use ark_ff::UniformRand;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
+
+    use crate::{bigint::U254, bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::{primitves::unpack_limbs_to_nibbles, wots::{wots_p160_sign_digits, wots_p256_sign_digits}}, execute_script};
+
+    #[test]
+    fn test_fq_from_nibbles() { // pack_nibbles_to_fq
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let p = ark_bn254::Fq::rand(&mut prng);
+
+
+        // let script = script!(
+        //     {fq_push_not_montgomery(p)}
+        //     {Fq::copy(0)}
+        //     {unpack_limbs_to_nibbles()}
+        //     {fq_from_nibbles()}
+        //     {Fq::equalverify(1, 0)}
+        // );
+        // let exec_result = execute_script(script);
+        // for i in 0..exec_result.final_stack.len() {
+        //     println!("{i:} {:?}", exec_result.final_stack.get(i));
+        // }
+       
+       let mut nib32 = [0u8;64];
+       nib32[0] = 5;
+       let script = script!{
+            for i in nib32 {
+                {i}
+            }
+            {fq_from_nibbles()}
+            {unpack_limbs_to_nibbles()}
+       };
+       let exec_result = execute_script(script);
+       for i in 0..exec_result.final_stack.len() {
+           println!("{i:} {:?}", exec_result.final_stack.get(i));
+       }
+    }
+
+
+    #[test]
+    fn test_sig_to_msg() {
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let p = ark_bn254::Fq::rand(&mut prng);
+        let p = emulate_fq_to_nibbles(p);
+        let secret = "a01b23c45d67e89f";
+
+        let sigs = wots_p160_sign_digits(secret, p[24..64].try_into().unwrap());
+        let mut sigmap: HashMap<u32, Vec<Script>> = HashMap::new();
+        sigmap.insert(0, sigs);
+        let sig = Sig {msk: None, cache:sigmap};
+        let res = sig_to_msg(&sig, (0, false));
+        println!("p {:?}", p);
+        println!("res {:?}", res);
+    
+    }
+}

@@ -2,12 +2,15 @@ use std::collections::HashMap;
 
 use ark_ec::bn::BnConfig;
 
-use crate::signatures::{
-    winternitz_compact::{self, WOTSPubKey},
-    winternitz_compact_hash,
-};
+
+use super::wots::{wots_p256_get_pub_key, wots_p160_get_pub_key, WOTSPubKey};
 
 pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
+
+pub const NUM_PUBS: usize = 3;
+pub const NUM_U256: usize = 40;
+pub const NUM_U160: usize = 574;
+pub const PUB_ID: &str = "k0,k1,k2";
 
 #[derive(Debug)]
 pub(crate) struct ScriptItem {
@@ -15,50 +18,6 @@ pub(crate) struct ScriptItem {
     pub(crate) link_id: String,  // link identifier
     pub(crate) dependencies: String,
     pub(crate) is_type_field: bool, // output type
-}
-
-// these values are agreed during compile time
-pub(crate) fn public_params_config_gen() -> Vec<ScriptItem> {
-    let mut r = vec![];
-    let r1 = vec![String::from("identity")]; // hash of Fp12::one()
-    for item in r1 {
-        r.push(ScriptItem {
-            category: String::from("PubHashIden"),
-            link_id: String::from(item),
-            dependencies: String::new(),
-            is_type_field: false,
-        })
-    }
-    let r2 = vec![
-        String::from("Q3y1"), // vk
-        String::from("Q3y0"),
-        String::from("Q3x1"),
-        String::from("Q3x0"),
-        String::from("Q2y1"), // vk
-        String::from("Q2y0"),
-        String::from("Q2x1"),
-        String::from("Q2x0"),
-    ];
-    for item in r2 {
-        r.push(ScriptItem {
-            category: String::from("PubVK"),
-            link_id: String::from(item),
-            dependencies: String::new(),
-            is_type_field: true,
-        })
-    }
-    let r3 = vec![
-        String::from("f_fixed"), // hash of output of miller loop for fixed P,Q
-    ];
-    for item in r3 {
-        r.push(ScriptItem {
-            category: String::from("PubHashFixedAcc"),
-            link_id: String::from(item),
-            dependencies: String::new(),
-            is_type_field: false,
-        })
-    }
-    r
 }
 
 pub(crate) fn groth16_config_gen() -> Vec<ScriptItem> {
@@ -83,15 +42,6 @@ pub(crate) fn groth16_config_gen() -> Vec<ScriptItem> {
             is_type_field: true,
         })
     }
-    let r3 = vec!["c", "c2"];
-    for item in r3 {
-        r.push(ScriptItem {
-            category: String::from("GrothAuxHash"),
-            link_id: String::from(item),
-            dependencies: String::new(),
-            is_type_field: false,
-        })
-    }
     let r4 = vec![
         "Gs11", "Gs10", "Gs9", "Gs8", "Gs7", "Gs6", "Gs5", "Gs4", "Gs3", "Gs2", "Gs1", "Gs0",
     ];
@@ -103,7 +53,7 @@ pub(crate) fn groth16_config_gen() -> Vec<ScriptItem> {
             is_type_field: true,
         })
     }
-    let r5 = vec!["s", "cinv", "cinv2"];
+    let r5 = vec!["cinv"]; 
     for item in r5 {
         r.push(ScriptItem {
             category: String::from("GrothAuxHash"),
@@ -121,7 +71,7 @@ pub(crate) fn groth16_config_gen() -> Vec<ScriptItem> {
             is_type_field: true,
         })
     }
-    let r7 = vec!["k0", "k1"];
+    let r7 = vec!["k0", "k1", "k2"];
     for item in r7 {
         r.push(ScriptItem {
             category: String::from("GrothPubs"),
@@ -153,37 +103,6 @@ pub(crate) fn msm_config_gen(pub_ins: String) -> Vec<ScriptItem> {
     items
 }
 
-pub(crate) fn premiller_config_gen() -> Vec<ScriptItem> {
-    let mut r = vec![];
-    let r1 = vec!["T4"];
-    for item in r1 {
-        r.push(ScriptItem {
-            category: String::from("PreMiller"),
-            link_id: String::from(item),
-            dependencies: String::new(),
-            is_type_field: false,
-        })
-    }
-    let r2 = vec!["P4y", "P4x", "P3y", "P3x", "P2y", "P2x"];
-    for item in r2 {
-        r.push(ScriptItem {
-            category: String::from("PreMiller"),
-            link_id: String::from(item),
-            dependencies: String::new(),
-            is_type_field: true,
-        })
-    }
-    let r3 = vec!["cinv0"];
-    for item in r3 {
-        r.push(ScriptItem {
-            category: String::from("PreMiller"),
-            link_id: String::from(item),
-            dependencies: String::new(),
-            is_type_field: false,
-        })
-    }
-    r
-}
 
 pub(crate) fn pre_miller_config_gen() -> Vec<ScriptItem> {
     let tables: Vec<ScriptItem> = vec![
@@ -261,14 +180,14 @@ pub(crate) fn pre_miller_config_gen() -> Vec<ScriptItem> {
         },
         ScriptItem {
             category: String::from("DD2"),
-            link_id: String::from("identity"),
+            link_id: String::from("ccinvone"),
             dependencies: String::from("c2,cinv,cinv0"),
             is_type_field: false,
         },
         ScriptItem {
             category: String::from("P3Hash"),
-            link_id: String::from("M31"),
-            dependencies: String::from("GP3y,GP3x"),
+            link_id: String::from("GP3H"),
+            dependencies: String::from("M31,GP3y,GP3x"),
             is_type_field: false,
         },
     ];
@@ -404,15 +323,15 @@ pub(crate) fn post_miller_config_gen(f_acc: String, t4_acc: String) -> Vec<Scrip
             is_type_field: false,
         },
         ScriptItem {
-            category: String::from("DD1"),
+            category: String::from("DK1"),
             link_id: String::from("U21"),
-            dependencies: String::from("U20,f_fixed"),
+            dependencies: String::from("U20"),
             is_type_field: false,
         },
         ScriptItem {
-            category: String::from("DD2"),
+            category: String::from("DK2"),
             link_id: String::from("fin"),
-            dependencies: String::from("U20,f_fixed,U21"),
+            dependencies: String::from("U20,U21"),
             is_type_field: false,
         },
         //// SS1;S4;P3,P2;
@@ -699,94 +618,93 @@ pub(crate) fn miller_config_gen() -> Vec<Vec<ScriptItem>> {
     run()
 }
 
-fn assign_ids_to_public_params(start_identifier: u32) -> HashMap<String, (u32, bool)> {
-    let pub_params = public_params_config_gen();
-    let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
-    for i in 0..pub_params.len() {
+fn assign_ids_to_params(item: &ScriptItem, name_to_id: &mut HashMap<String, (u32, bool)>, cpub_ids: &mut usize, cp256: &mut usize, cp160: &mut usize) {
+    if item.category == "GrothPubs" {
         name_to_id.insert(
-            pub_params[i].link_id.clone(),
-            (start_identifier + i as u32, pub_params[i].is_type_field),
+            item.link_id.clone(),
+            (*cpub_ids as u32, item.is_type_field),
         );
+        *cpub_ids += 1;
+    } else {
+        if item.is_type_field {
+            name_to_id.insert(
+                item.link_id.clone(),
+                (*cp256 as u32, item.is_type_field),
+            );
+            *cp256 += 1;
+        } else {
+            name_to_id.insert(
+                item.link_id.clone(),
+                (*cp160 as u32, item.is_type_field),
+            );
+            *cp160 += 1;
+        }
     }
-    name_to_id
 }
 
-fn assign_ids_to_groth16_params(start_identifier: u32) -> HashMap<String, (u32, bool)> {
+fn assign_ids_to_groth16_params(cpub_ids: &mut usize, cp256: &mut usize, cp160: &mut usize) -> HashMap<String, (u32, bool)> {
     let g_params = groth16_config_gen();
     let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
     for i in 0..g_params.len() {
-        name_to_id.insert(
-            g_params[i].link_id.clone(),
-            (start_identifier + i as u32, g_params[i].is_type_field),
-        );
+        let item = &g_params[i];
+        assign_ids_to_params(item, &mut name_to_id, cpub_ids, cp256, cp160);
     }
     name_to_id
 }
 
-fn assign_ids_to_premiller_params(start_identifier: u32) -> HashMap<String, (u32, bool)> {
-    let g_params = premiller_config_gen();
+fn assign_ids_to_premiller_params(cpub_ids: &mut usize, cp256: &mut usize, cp160: &mut usize) -> HashMap<String, (u32, bool)> {
+    let g_params = pre_miller_config_gen();
     let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
     for i in 0..g_params.len() {
-        name_to_id.insert(
-            g_params[i].link_id.clone(),
-            (start_identifier + i as u32, g_params[i].is_type_field),
-        );
+        let item = &g_params[i];
+        assign_ids_to_params(item, &mut name_to_id, cpub_ids, cp256, cp160);
     }
     name_to_id
 }
 
 fn assign_ids_to_miller_blocks(
-    start_identifier: u32,
+    cpub_ids: &mut usize, cp256: &mut usize, cp160: &mut usize
 ) -> (HashMap<String, (u32, bool)>, String, String) {
     let g_params = miller_config_gen();
     let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
-    let mut counter = 0;
     let mut last_f_block_id = String::new();
     let mut last_t4_block_id = String::new();
     for t in g_params {
-        for r in t {
-            name_to_id.insert(
-                r.link_id.clone(),
-                (start_identifier + counter as u32, r.is_type_field),
-            );
-            counter += 1;
-            if r.category.starts_with("DD") {
-                last_f_block_id = r.link_id;
-            } else if r.category.starts_with("Dbl") {
-                last_t4_block_id = r.link_id;
+        for item in t {
+            assign_ids_to_params(&item, &mut name_to_id, cpub_ids, cp256, cp160);
+            if item.category.starts_with("DD") {
+                last_f_block_id = item.link_id;
+            } else if item.category.starts_with("Dbl") {
+                last_t4_block_id = item.link_id;
             }
         }
     }
     (name_to_id, last_f_block_id, last_t4_block_id)
 }
 
-fn assign_ids_to_postmiller_params(start_identifier: u32) -> HashMap<String, (u32, bool)> {
+fn assign_ids_to_postmiller_params(cpub_ids: &mut usize, cp256: &mut usize, cp160: &mut usize) -> HashMap<String, (u32, bool)> {
     let g_params = post_miller_config_gen(String::new(), String::new());
     let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
     for i in 0..g_params.len() {
-        name_to_id.insert(
-            g_params[i].link_id.clone(),
-            (start_identifier + i as u32, g_params[i].is_type_field),
-        );
+        let item = &g_params[i];
+        assign_ids_to_params(item, &mut name_to_id, cpub_ids, cp256, cp160);
     }
     name_to_id
 }
 
-fn assign_ids_to_msm_params(start_identifier: u32) -> HashMap<String, (u32, bool)> {
-    let hardcoded_scalars = String::from("k0,k1");
+fn assign_ids_to_msm_params(cpub_ids: &mut usize, cp256: &mut usize, cp160: &mut usize) -> HashMap<String, (u32, bool)> {
+    let hardcoded_scalars = String::from(PUB_ID);
     let g_params = msm_config_gen(hardcoded_scalars);
     let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
     for i in 0..g_params.len() {
-        name_to_id.insert(
-            g_params[i].link_id.clone(),
-            (start_identifier + i as u32, g_params[i].is_type_field),
-        );
+        let item = &g_params[i];
+        assign_ids_to_params(item, &mut name_to_id, cpub_ids, cp256, cp160);
     }
     name_to_id
 }
 
 pub(crate) fn get_type_for_link_id(index: u32) -> Option<bool> {
-    let (lid, _, _) = assign_link_ids();
+    let (lid, _, _) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
     let res = lid.iter().find(|(_, v)| v.0 == index);
     if res.is_none() {
         None
@@ -794,47 +712,56 @@ pub(crate) fn get_type_for_link_id(index: u32) -> Option<bool> {
         Some(res.unwrap().1 .1)
     }
 }
-
-pub(crate) fn assign_link_ids() -> (HashMap<String, (u32, bool)>, String, String) {
+pub(crate) fn assign_link_ids(pub_ids: usize, p256: usize, p160: usize) -> (HashMap<String, (u32, bool)>, String, String) {
     let mut all_ids: HashMap<String, (u32, bool)> = HashMap::new();
+    let c_pub_ids = &mut 0usize;
+    let cp256 = &mut pub_ids.clone();
+    let cp160 = &mut (pub_ids + p256);
     let mut total_len = 0;
-    let pubp = assign_ids_to_public_params(0);
-    total_len += pubp.len();
-    let grothp = assign_ids_to_groth16_params(total_len as u32);
+    let grothp = assign_ids_to_groth16_params(c_pub_ids, cp256, cp160);
     total_len += grothp.len();
-    let premillp = assign_ids_to_premiller_params(total_len as u32);
+    let premillp = assign_ids_to_premiller_params(c_pub_ids, cp256, cp160);
     total_len += premillp.len();
-    let (millp, f_blk, t4_blk) = assign_ids_to_miller_blocks(total_len as u32);
+    let (millp, f_blk, t4_blk) = assign_ids_to_miller_blocks(c_pub_ids, cp256, cp160);
     total_len += millp.len();
-    let postmillp = assign_ids_to_postmiller_params(total_len as u32);
+    let postmillp = assign_ids_to_postmiller_params(c_pub_ids, cp256, cp160);
     total_len += postmillp.len();
-    let msmp = assign_ids_to_msm_params(total_len as u32);
+    let msmp = assign_ids_to_msm_params(c_pub_ids, cp256, cp160);
     total_len += msmp.len();
-
-    all_ids.extend(pubp.clone());
     all_ids.extend(grothp.clone());
+
+    //println!("total len {:?}", (c_pub_ids, cp256, cp160, total_len));
+
     all_ids.extend(premillp.clone());
     all_ids.extend(millp.clone());
     all_ids.extend(postmillp.clone());
     all_ids.extend(msmp.clone());
     assert_eq!(total_len, all_ids.len());
+
     (all_ids, f_blk, t4_blk)
 }
 
 pub fn keygen(msk: &str) -> HashMap<u32, WOTSPubKey> {
     // given master secret key and number of links, generate pub keys
-    let (links, _, _) = assign_link_ids();
+    let (links, _, _) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
     let mut scripts = HashMap::new();
     for (_, link) in links {
         let link_id = link.0;
-        let mut pub_key = vec![];
         if link.1 {
-            pub_key = winternitz_compact::get_pub_key(&format!("{}{:04X}", msk, link.0));
+            scripts.insert(link_id as u32,wots_p256_get_pub_key(&format!("{}{:04X}", msk, link.0)));
         } else {
-            pub_key = winternitz_compact_hash::get_pub_key(&format!("{}{:04X}", msk, link.0));
+            scripts.insert(link_id as u32,wots_p160_get_pub_key(&format!("{}{:04X}", msk, link.0)));
         }
-        //let s = checksig_verify_fq(pub_key);
-        scripts.insert(link_id as u32, pub_key);
     }
     scripts
+}
+
+#[cfg(test)]
+mod test {
+    use super::{assign_link_ids, NUM_PUBS, NUM_U160, NUM_U256};
+
+    #[test]
+    fn test_assign_link_ids() {
+        let ret = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
+    }
 }
