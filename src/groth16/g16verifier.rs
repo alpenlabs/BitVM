@@ -5,6 +5,8 @@ pub const N_VERIFIER_PUBLIC_INPUTS: usize = 3;
 pub const N_VERIFIER_FQs: usize = 48;
 pub const N_VERIFIER_HASHES: usize = 598;
 
+pub const N_TAPLEAVES: usize = 602;
+
 type WotsPublicKeys = (
     (wots32::PublicKey, wots256::PublicKey, wots256::PublicKey),
     [wots256::PublicKey; N_VERIFIER_FQs],
@@ -42,26 +44,27 @@ impl Groth16Verifier {
         Self { vk }
     }
 
-    fn compile() -> [Script; 602] {
+    pub fn compile() -> [Script; N_TAPLEAVES] {
         todo!()
     }
 
-    fn generate_tapscripts(
+    pub fn generate_tapscripts(
         public_keys: WotsPublicKeys,
-        verifier_scripts: [Script; 602],
+        verifier_scripts: [Script; N_TAPLEAVES],
     ) -> [Script; 602] {
         todo!()
     }
 
-    fn generate_assertions(proof: Proof) -> Groth16ProofAssertions {
+    pub fn generate_assertions(proof: Proof) -> Groth16ProofAssertions {
         todo!()
     }
 
-    /// Validates the groth16 proof assertion signatures and returns a tuple of (tapleaf_index, tapscript, and witness_script) if
+    /// Validates the groth16 proof assertion signatures and returns a tuple of (tapleaf_index, tapleaf_script, and witness_script) if
     /// the proof is invalid, else returns none
-    fn validate_assertion_signatures(
+    pub fn validate_assertion_signatures(
         public_keys: WotsPublicKeys,
         signatures: WotsSignatures,
+        verifier_scripts: [Script; N_TAPLEAVES],
     ) -> Option<(u32, Script, Script)> {
         todo!()
     }
