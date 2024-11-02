@@ -432,6 +432,7 @@ pub(crate) fn compile(vk: Vkey, link_ids: &HashMap<u32, WOTSPubKey>, collect_bit
     scrs
 }
 
+
 #[cfg(test)]
 mod test {
     use ark_ff::UniformRand;
