@@ -61,11 +61,14 @@ impl Verifier {
     /// Validates the groth16 proof assertion signatures and returns a tuple of (tapleaf_index, tapleaf_script, and witness_script) if
     /// the proof is invalid, else returns none
     pub fn validate_assertion_signatures(
-        public_keys: WotsPublicKeys,
+        proof: Proof,
+        vk: VerificationKey,
         signatures: WotsSignatures,
+        pubkeys: WotsPublicKeys,
         verifier_scripts: [Script; N_TAPLEAVES],
     ) -> Option<(u32, Script, Script)> {
-        todo!()
+        let r = chunk::api::validate_assertions(proof.proof, proof.public_inputs, &vk.ark_vk, signatures, pubkeys, verifier_scripts);
+        r
     }
 }
 
@@ -265,7 +268,23 @@ mod test {
         assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
         let proof_asserts = Verifier::generate_assertions(VerificationKey { ark_vk: mock_vk }, Proof { proof, public_inputs: pubs }, );
         let signed_asserts = sign_assertions(proof_asserts);
-    
+        
+    }
+
+    #[test]
+    fn test_fn_validate_assertions() {
+        let (proof, pubs, mock_vk) = generate_mock_proof();
+        assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
+        let proof_asserts = Verifier::generate_assertions(VerificationKey { ark_vk: mock_vk.clone() }, Proof { proof: proof.clone(), public_inputs: pubs.clone() }, );
+        let signed_asserts = sign_assertions(proof_asserts);
+        let ops_scripts = Verifier::compile(VerificationKey {
+            ark_vk: mock_vk.clone(),
+        });
+        let mock_pubks = mock_pubkeys();
+        let verifer_scripts = Verifier::generate_tapscripts(mock_pubks, ops_scripts);
+
+        let fault = Verifier::validate_assertion_signatures(Proof { proof, public_inputs: pubs }, VerificationKey { ark_vk: mock_vk }, signed_asserts, mock_pubks, verifer_scripts);
+        println!("fault {:?}", fault);
     }
 
     #[test]

@@ -6,7 +6,7 @@ use crate::chunk::config::{assign_link_ids, keygen, NUM_PUBS, NUM_U160, NUM_U256
 use crate::chunk::evaluate::{evaluate, extract_values_from_hints};
 use crate::chunk::taps::Sig;
 use crate::chunk::wots::WOTSPubKey;
-use crate::groth16::g16::{N_VERIFIER_FQs, ProofAssertions, WotsPublicKeys, N_VERIFIER_HASHES};
+use crate::groth16::g16::{N_VERIFIER_FQs, ProofAssertions, WotsPublicKeys, WotsSignatures, N_TAPLEAVES, N_VERIFIER_HASHES};
 use crate::groth16::offchain_checker::compute_c_wi;
 use crate::signatures::wots::{wots160, wots256};
 use crate::treepp::*;
@@ -229,6 +229,126 @@ pub fn generate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, sca
     let batch3: [[u8;20]; N_VERIFIER_HASHES] = batch3.try_into().unwrap();
 
    (batch1, batch2, batch3)
+}
+
+fn get_script_from_sig256(signature: wots256::Signature) -> Vec<Script> {
+    let mut sigs: Vec<Script> = vec![];
+
+    for (sig, digit) in signature {
+        sigs.push(script!({ sig.to_vec() }));
+        sigs.push(script!({ digit }));
+    }
+    sigs
+}
+
+fn get_script_from_sig160(signature: wots160::Signature) -> Vec<Script> {
+    let mut sigs: Vec<Script> = vec![];
+
+    for (sig, digit) in signature {
+        sigs.push(script!({ sig.to_vec() }));
+        sigs.push(script!({ digit }));
+    }
+    sigs
+}
+
+pub fn validate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, scalars: Vec<ark_bn254::Fr>, vk: &ark_groth16::VerifyingKey<Bn254>, signed_asserts: WotsSignatures, pubkeys: WotsPublicKeys, verifier_scripts: [Script; N_TAPLEAVES]) -> Option<(u32, Script, Script)> {
+    assert_eq!(scalars.len(), 3);
+    let mut sigcache: HashMap<u32, Vec<Script>> = HashMap::new();
+    let (sa0, sa1, sa2) = (signed_asserts.0, signed_asserts.1, signed_asserts.2);
+    sigcache.insert(0, get_script_from_sig256(sa0.0));
+    sigcache.insert(1, get_script_from_sig256(sa0.1));
+    sigcache.insert(2, get_script_from_sig256(sa0.2));
+
+    for i in 0..N_VERIFIER_FQs {
+        sigcache.insert((3 + i) as u32, get_script_from_sig256(sa1[i]));
+    }
+
+    for i in 0..N_VERIFIER_HASHES {
+        sigcache.insert((3 + i + N_VERIFIER_FQs) as u32, get_script_from_sig160(sa2[i]));
+    }
+
+    let (p0, p1, p2) = pubkeys.0;
+    let fq_arr = pubkeys.1;
+    let hash_arr = pubkeys.2;
+
+    let mut pubkeys: HashMap<u32, WOTSPubKey> = HashMap::new();
+    pubkeys.insert(0, WOTSPubKey::P256(p0));
+    pubkeys.insert(1, WOTSPubKey::P256(p1));
+    pubkeys.insert(2, WOTSPubKey::P256(p2));
+    let len = pubkeys.len();
+    for i in 0..fq_arr.len() {
+        pubkeys.insert((len + i) as u32, WOTSPubKey::P256(fq_arr[i]));
+    }
+    let len = pubkeys.len();
+    for i in 0..hash_arr.len() {
+        pubkeys.insert((len + i) as u32, WOTSPubKey::P160(hash_arr[i]));
+    }
+
+    let mut sig = Sig {
+        msk: None,
+        cache: sigcache,
+    };
+
+
+    let msm_scalar = vec![scalars[2],scalars[1],scalars[0]];
+    let msm_gs = vec![vk.gamma_abc_g1[3],vk.gamma_abc_g1[2],vk.gamma_abc_g1[1]]; // vk.vk_pubs[0]
+    let p3 =  vk.gamma_abc_g1[0] * ark_bn254::Fr::ONE + vk.gamma_abc_g1[1] * scalars[0] + vk.gamma_abc_g1[2] * scalars[1] + vk.gamma_abc_g1[3] * scalars[2];
+    let p3 = p3.into_affine();
+    let ( p2, p1, p4) = ( proof.c, vk.alpha_g1, proof.a);
+    let (q3, q2, q1, q4) = (
+        vk.gamma_g2.into_group().neg().into_affine(),
+        vk.delta_g2.into_group().neg().into_affine(),
+        -vk.beta_g2,
+        proof.b,
+    );
+    let f_fixed = Bn254::multi_miller_loop_affine([p1], [q1]).0;
+    let f = Bn254::multi_miller_loop_affine([p1, p2, p3, p4], [q1, q2, q3, q4]).0;
+   
+    let (c, s) = compute_c_wi(f);
+
+
+    let (_, fault) = evaluate(
+        &mut sig,
+        &pubkeys,
+        p2,
+        p3,
+        p4,
+        q2,
+        q3,
+        q4,
+        c,
+        s,
+        f_fixed,
+        msm_scalar.clone(),
+        msm_gs.clone(),
+        vk.gamma_abc_g1[0],
+    );
+    if fault.is_none() {
+        return None;
+    }
+    let (fault_index, hint_scr) = fault.unwrap();
+    let bitcom_scripts_per_link = compile(
+        Vkey {
+            q2: ark_bn254::G2Affine::identity(),
+            q3: ark_bn254::G2Affine::identity(),
+            p3vk: vec![],
+            p1q1: ark_bn254::Fq12::ONE,
+            vky0: ark_bn254::G1Affine::identity(),
+        },
+        &pubkeys,
+        true,
+    );
+    let mut script_index = 0; // tapleaf index
+    for arr_index in 0..bitcom_scripts_per_link.len() {
+        let (k, _) = bitcom_scripts_per_link[arr_index];
+        if k == fault_index {
+            script_index = arr_index;
+        }
+    }
+
+
+
+   Some((script_index as u32, hint_scr, verifier_scripts[script_index].clone()))
 }
 
 
