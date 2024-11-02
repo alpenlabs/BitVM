@@ -31,6 +31,8 @@ macro_rules! impl_wots {
                 const _: u32 = 0 - (N_BITS % 8);
 
                 pub type PublicKey = [[u8; 20]; N_DIGITS as usize];
+                pub type Signature = [([u8; 20], u8); N_DIGITS as usize];
+
 
                 /// Compute the checksum of the message's digits.
                 fn checksum(message_digits: [u8; M_DIGITS as usize]) -> u32 {
@@ -44,6 +46,16 @@ macro_rules! impl_wots {
                     })
                 }
 
+                /// Convert message bytes to digits
+                fn msg_bytes_to_digits(msg_bytes: &[u8]) -> [u8; M_DIGITS as usize] {
+                    let mut msg_digits = [0u8; M_DIGITS as usize];
+                    for (digits, byte) in msg_digits.chunks_mut(2).zip(msg_bytes) {
+                        digits[0] = byte & 0b00001111;
+                        digits[1] = byte >> 4;
+                    }
+                    msg_digits
+                }
+
                 /// Generate the public key for the i-th digit of the message
                 fn public_key_for_digit(secret: &str, digit_index: u32) -> [u8; 20] {
                     let mut secret = hex::decode(secret).expect("invalid secret key");
@@ -55,42 +67,45 @@ macro_rules! impl_wots {
                     *hash.as_byte_array()
                 }
 
-                /// Compute the signature for the i-th digit of the message
-                fn sign_digit(secret: &str, digit_index: u32, message_digit: u8) -> Script {
+                /// Generate wots public key
+                pub fn generate_public_key(secret: &str) -> PublicKey {
+                    std::array::from_fn(|i| public_key_for_digit(secret, i as u32))
+                }
+
+                fn get_digit_signature(secret: &str, digit_index: u32, message_digit: u8) -> ([u8; 20], u8) {
                     let mut secret = hex::decode(secret).expect("invalid secret key");
                     secret.push(digit_index as u8);
                     let mut hash = hash160::Hash::hash(&secret); // first secret, for 0
                     for _ in 0..message_digit {
                         hash = hash160::Hash::hash(&hash[..]);
                     }
+                    (hash.to_byte_array(), message_digit)
+                }
+
+                /// Compute the signature for the i-th digit of the message
+                fn sign_digit(secret: &str, digit_index: u32, message_digit: u8) -> Script {
+                    let (hash, digit) = get_digit_signature(secret, digit_index, message_digit);
                     script! {
-                        { hash.as_byte_array().to_vec() }
+                        { hash.to_vec() }
+                        { digit }
                     }
                 }
 
-                /// Convert message bytes to digits
-                fn msg_bytes_to_digits(msg_bytes: &[u8]) -> [u8; M_DIGITS as usize] {
-                    let mut msg_digits = [0u8; M_DIGITS as usize];
-                    for (digits, byte) in msg_digits.chunks_mut(2).zip(msg_bytes) {
-                        digits[0] = byte & 0b00001111;
-                        digits[1] = byte >> 4;
-                    }
-                    msg_digits
-                }
-
-                /// Generate wots public key
-                pub fn generate_public_key(secret: &str) -> PublicKey {
-                    std::array::from_fn(|i| public_key_for_digit(secret, i as u32))
-                }
-
-                pub fn sign(secret: &str, msg_bytes: &[u8]) -> Script {
+                pub fn get_signature(secret: &str, msg_bytes: &[u8]) -> Signature {
                     let msg_digits = msg_bytes_to_digits(msg_bytes);
                     let mut digits = checksum_to_digits(checksum(msg_digits)).to_vec();
                     digits.append(&mut msg_digits.to_vec());
+                    std::array::from_fn(|i| {
+                        get_digit_signature(secret, i as u32, digits[N_DIGITS as usize - i - 1])
+                    })
+                }
+
+                pub fn sign(secret: &str, msg_bytes: &[u8]) -> Script {
+                    let signature = get_signature(secret, msg_bytes);
                     script! {
-                        for i in 0..N_DIGITS {
-                            { sign_digit(secret, i, digits[(N_DIGITS - 1 - i) as usize])}
-                            { digits[(N_DIGITS - 1 - i) as usize] }
+                        for (sig, digit) in signature {
+                            { sig.to_vec() }
+                            { digit }
                         }
                     }
                 }
@@ -135,13 +150,22 @@ macro_rules! impl_wots {
                 pub mod compact {
                     use super::*;
 
-                    pub fn sign(secret: &str, msg_bytes: &[u8]) -> Script {
+                    pub type Signature = [[u8; 20]; N_DIGITS as usize];
+
+                    pub fn get_signature(secret: &str, msg_bytes: &[u8]) -> Signature {
                         let msg_digits = msg_bytes_to_digits(msg_bytes);
                         let mut digits = checksum_to_digits(checksum(msg_digits)).to_vec();
                         digits.append(&mut msg_digits.to_vec());
+                        std::array::from_fn(|i| {
+                            get_digit_signature(secret, i as u32, digits[N_DIGITS as usize - i - 1]).0
+                        })
+                    }
+
+                    pub fn sign(secret: &str, msg_bytes: &[u8]) -> Script {
+                        let signature = get_signature(secret, msg_bytes);
                         script! {
-                            for i in 0..N_DIGITS {
-                                { sign_digit(secret, i, digits[(N_DIGITS - 1 - i) as usize])}
+                            for sig in signature {
+                                { sig.to_vec() }
                             }
                         }
                     }
@@ -194,46 +218,7 @@ impl_wots!(256);
 
 #[cfg(test)]
 mod tests {
-
-    use crate::treepp::*;
-
-    use super::{wots160, wots256, wots32};
-
-    #[test]
-    fn test_wots() {
-        let secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let public_key = wots32::generate_public_key(&secret);
-
-        // let msg = "a0b1d2c3";
-        // let msg_bytes = hex::decode(&msg).unwrap();
-
-        const MESSAGE: [u8; 64] = [
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7, 1, 2, 3, 4, 5,
-            6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7, 1, 2, 3, 4, 5, 6, 7, 8, 9,
-            0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7, 1, 2, 3, 4,
-        ];
-        let msg_bytes = MESSAGE.to_vec();
-
-        let script = script! {
-            { wots256::compact::sign(&secret, &msg_bytes) }
-        };
-
-        let res = execute_script(script);
-        for i in 0..res.final_stack.len() {
-            println!("{i:3} {:?}", res.final_stack.get(i));
-        }
-
-        println!("NEXT THING");
-
-        let script = script! {
-            { wots256::sign(&secret, &msg_bytes) }
-        };
-
-        let res = execute_script(script);
-        for i in 0..res.final_stack.len() {
-            println!("{i:3} {:?}", res.final_stack.get(i));
-        }
-    }
+    use super::*;
 
     #[test]
     fn test_wots32() {
