@@ -196,6 +196,37 @@ mod test {
         wotspubkey
     }
 
+    fn sign_assertions(assn: ProofAssertions) -> WotsSignatures {
+        let (ps, fs, hs) = (assn.0, assn.1, assn.2);
+        let secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let ps0 = wots256::get_signature(&format!("{secret}{:04x}", 0), &ps[0]);
+        let ps1 = wots256::get_signature(&format!("{secret}{:04x}", 1), &ps[1]);
+        let ps2 = wots256::get_signature(&format!("{secret}{:04x}", 2), &ps[2]);
+
+        let mut fsig: Vec<wots256::Signature> = vec![];
+        for i in 0..fs.len() {
+            let fsi = wots256::get_signature(&format!("{secret}{:04x}", 3 + i), &fs[i]);
+            fsig.push(fsi);
+        }
+        let fsig: [wots256::Signature; N_VERIFIER_FQs] = fsig.try_into().unwrap();
+        
+        let mut hsig: Vec<wots160::Signature> = vec![];
+        for i in 0..hs.len() {
+            let hsi = wots160::get_signature(&format!("{secret}{:04x}", 3 + fs.len() + i), &hs[i]);
+            hsig.push(hsi);
+        }
+        let hsig: [wots160::Signature; N_VERIFIER_HASHES] = hsig.try_into().unwrap();
+
+        
+
+        let r = (
+            (ps0, ps1, ps2),
+            fsig,
+            hsig,
+        );
+        r
+    }
+
     #[test]
     fn test_fn_compile() {
         let (_, _, mock_vk) = generate_mock_proof();
@@ -232,7 +263,9 @@ mod test {
     fn test_fn_generate_assertions() {
         let (proof, pubs, mock_vk) = generate_mock_proof();
         assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
-        Verifier::generate_assertions(VerificationKey { ark_vk: mock_vk }, Proof { proof, public_inputs: pubs }, );
+        let proof_asserts = Verifier::generate_assertions(VerificationKey { ark_vk: mock_vk }, Proof { proof, public_inputs: pubs }, );
+        let signed_asserts = sign_assertions(proof_asserts);
+    
     }
 
     #[test]

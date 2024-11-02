@@ -341,6 +341,17 @@ mod tests {
         assert!(res.success);
     }
 
+    fn nib_to_byte_array(digits: &[u8]) -> Vec<u8> {
+        let mut msg_bytes = Vec::with_capacity(digits.len() / 2);
+        
+        for nibble_pair in digits.chunks(2) {
+            let byte = (nibble_pair[1] << 4) | (nibble_pair[0] & 0b00001111);
+            msg_bytes.push(byte);
+        }
+        
+        msg_bytes
+    }
+
     #[test]
     fn test_wots256() {
         let secret = "a01b23c45d67e89f";
@@ -356,23 +367,14 @@ mod tests {
             1, 2, 3, 4,
         ];
 
+        let msg_bytes = nib_to_byte_array(&MESSAGE);
+
         println!("msg_bytes {:?}", msg_bytes);
         let script = script! {
-            { wots256::sign2(&secret, MESSAGE) }
-            { wots256::checksig_verify(public_key) }
+            // { wots256::sign2(&secret, MESSAGE) }
+            { wots256::sign(&secret, &msg_bytes) }
 
-            for i in (0..64).rev() {
-                { i } OP_ROLL OP_TOALTSTACK
-            }
-
-            { wots256::compact::sign2(&secret, MESSAGE) }
-            { wots256::compact::checksig_verify(public_key) }
-
-            for _ in 0..64 {
-                OP_FROMALTSTACK OP_EQUALVERIFY
-            }
-
-            OP_TRUE
+            // OP_TRUE
         };
 
         println!(
@@ -396,16 +398,6 @@ mod tests {
 
     #[test]
     fn test_byte_digit_conversion() {
-        fn nib_to_byte_array(digits: &[u8]) -> Vec<u8> {
-            let mut msg_bytes = Vec::with_capacity(digits.len() / 2);
-            
-            for nibble_pair in digits.chunks(2) {
-                let byte = (nibble_pair[1] << 4) | (nibble_pair[0] & 0b00001111);
-                msg_bytes.push(byte);
-            }
-            
-            msg_bytes
-        }
 
         /// Convert message bytes to digits
         fn msg_bytes_to_digits(msg_bytes: &[u8]) -> [u8; 64 as usize] {

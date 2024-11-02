@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use crate::chunk::compile::ATE_LOOP_COUNT;
 use crate::chunk::config::miller_config_gen;
-use crate::chunk::msm::{bitcom_hash_p, bitcom_msm, hint_hash_p, hint_msm, tap_hash_p, tap_msm, HintInMSM};
+use crate::chunk::msm::{bitcom_hash_p, bitcom_msm, hint_hash_p, hint_msm, tap_hash_p, tap_msm, HintInMSM, HintOutMSM};
 use crate::chunk::primitves::emulate_extern_hash_fps;
 use crate::chunk::{taps, taps_mul};
 use crate::chunk::taps::*;
@@ -1574,7 +1574,7 @@ fn evaluate_pre_miller_circuit(
         } else if row.category == "P3Hash" {
             assert!(hints.len() == 3);
             let t = match hints[0].clone() {
-                HintOut::MSM(r) => r.t,
+                HintOut::MSM(r) => r,
                 _ => panic!("failed to match"),
             };
             let p3y = match hints[1].clone() {
@@ -1594,8 +1594,8 @@ fn evaluate_pre_miller_circuit(
                 HintInHashP {
                     qx: vky0.x,
                     qy: vky0.y,
-                    tx: t.x,
-                    ty: t.y,
+                    tx: t.t.x,
+                    ty: t.t.y,
                     rx: p3x,
                     ry: p3y,
                 },
@@ -1617,6 +1617,7 @@ fn evaluate_pre_miller_circuit(
             }
             assert!(!exec_result.success);
             assert!(exec_result.final_stack.len() == 1);
+            aux_output_per_link.insert(row.link_id, HintOut::MSM(t));
         }
     }
     None

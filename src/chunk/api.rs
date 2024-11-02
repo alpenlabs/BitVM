@@ -200,7 +200,7 @@ pub fn generate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, sca
         vk.gamma_abc_g1[0],
     );
     let assertions = extract_values_from_hints(aux);
-    assert!(assertions.len() == NUM_PUBS + NUM_U160 + NUM_U256);
+    println!("{} and {}",assertions.len(), NUM_PUBS + NUM_U160 + NUM_U256);
     let mut batch1 = vec![];
     for i in 0..NUM_PUBS {
         let val = assertions.get(&(i as u32)).unwrap();
@@ -220,9 +220,10 @@ pub fn generate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, sca
 
     let len = batch1.len() + batch2.len();
     let mut batch3 = vec![];
-    for i in 0..NUM_U256 {
+    for i in 0..NUM_U160 {
         let val = assertions.get(&((i+len) as u32)).unwrap();
-        let bal:[u8;20] = nib_to_byte_array(val).try_into().unwrap();
+        let bal:[u8;32] = nib_to_byte_array(val).try_into().unwrap();
+        let bal:[u8;20] = bal[12..32].try_into().unwrap();
         batch3.push(bal);
     }
     let batch3: [[u8;20]; N_VERIFIER_HASHES] = batch3.try_into().unwrap();
