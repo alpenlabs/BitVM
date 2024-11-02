@@ -32,8 +32,8 @@ pub struct VerificationKey {
 }
 
 pub struct Proof {
-    proof: ark_groth16::Proof<Bn254>,
-    public_inputs: Vec<ark_bn254::Fr>,
+    pub proof: ark_groth16::Proof<Bn254>,
+    pub public_inputs: Vec<ark_bn254::Fr>,
 }
 
 pub struct Verifier {
@@ -67,7 +67,14 @@ impl Verifier {
         pubkeys: WotsPublicKeys,
         verifier_scripts: [Script; N_TAPLEAVES],
     ) -> Option<(u32, Script, Script)> {
-        let r = chunk::api::validate_assertions(proof.proof, proof.public_inputs, &vk.ark_vk, signatures, pubkeys, verifier_scripts);
+        let r = chunk::api::validate_assertions(
+            proof.proof,
+            proof.public_inputs,
+            &vk.ark_vk,
+            signatures,
+            pubkeys,
+            verifier_scripts,
+        );
         r
     }
 }
@@ -212,7 +219,7 @@ mod test {
             fsig.push(fsi);
         }
         let fsig: [wots256::Signature; N_VERIFIER_FQs] = fsig.try_into().unwrap();
-        
+
         let mut hsig: Vec<wots160::Signature> = vec![];
         for i in 0..hs.len() {
             let hsi = wots160::get_signature(&format!("{secret}{:04x}", 3 + fs.len() + i), &hs[i]);
@@ -220,13 +227,7 @@ mod test {
         }
         let hsig: [wots160::Signature; N_VERIFIER_HASHES] = hsig.try_into().unwrap();
 
-        
-
-        let r = (
-            (ps0, ps1, ps2),
-            fsig,
-            hsig,
-        );
+        let r = ((ps0, ps1, ps2), fsig, hsig);
         r
     }
 
@@ -266,16 +267,29 @@ mod test {
     fn test_fn_generate_assertions() {
         let (proof, pubs, mock_vk) = generate_mock_proof();
         assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
-        let proof_asserts = Verifier::generate_assertions(VerificationKey { ark_vk: mock_vk }, Proof { proof, public_inputs: pubs }, );
+        let proof_asserts = Verifier::generate_assertions(
+            VerificationKey { ark_vk: mock_vk },
+            Proof {
+                proof,
+                public_inputs: pubs,
+            },
+        );
         let signed_asserts = sign_assertions(proof_asserts);
-        
     }
 
     #[test]
     fn test_fn_validate_assertions() {
         let (proof, pubs, mock_vk) = generate_mock_proof();
         assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
-        let proof_asserts = Verifier::generate_assertions(VerificationKey { ark_vk: mock_vk.clone() }, Proof { proof: proof.clone(), public_inputs: pubs.clone() }, );
+        let proof_asserts = Verifier::generate_assertions(
+            VerificationKey {
+                ark_vk: mock_vk.clone(),
+            },
+            Proof {
+                proof: proof.clone(),
+                public_inputs: pubs.clone(),
+            },
+        );
         let signed_asserts = sign_assertions(proof_asserts);
         let ops_scripts = Verifier::compile(VerificationKey {
             ark_vk: mock_vk.clone(),
@@ -283,7 +297,16 @@ mod test {
         let mock_pubks = mock_pubkeys();
         let verifer_scripts = Verifier::generate_tapscripts(mock_pubks, ops_scripts);
 
-        let fault = Verifier::validate_assertion_signatures(Proof { proof, public_inputs: pubs }, VerificationKey { ark_vk: mock_vk }, signed_asserts, mock_pubks, verifer_scripts);
+        let fault = Verifier::validate_assertion_signatures(
+            Proof {
+                proof,
+                public_inputs: pubs,
+            },
+            VerificationKey { ark_vk: mock_vk },
+            signed_asserts,
+            mock_pubks,
+            verifer_scripts,
+        );
         println!("fault {:?}", fault);
     }
 
