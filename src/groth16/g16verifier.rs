@@ -35,11 +35,11 @@ struct VerificationKey {}
 
 struct Proof {}
 
-pub struct Groth16Verifier {
+pub struct Verifier {
     pub vk: VerificationKey,
 }
 
-impl Groth16Verifier {
+impl Verifier {
     pub fn new(vk: VerificationKey) -> Self {
         Self { vk }
     }
