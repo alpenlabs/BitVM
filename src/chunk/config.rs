@@ -7,6 +7,11 @@ use super::wots::{wots_p256_get_pub_key, wots_p160_get_pub_key, WOTSPubKey};
 
 pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 
+pub const NUM_PUBS: usize = 3;
+pub const NUM_U256: usize = 40;
+pub const NUM_U160: usize = 574;
+pub const PUB_ID: &str = "k0,k1,k2";
+
 #[derive(Debug)]
 pub(crate) struct ScriptItem {
     pub(crate) category: String, // script category
@@ -613,83 +618,93 @@ pub(crate) fn miller_config_gen() -> Vec<Vec<ScriptItem>> {
     run()
 }
 
+fn assign_ids_to_params(item: &ScriptItem, name_to_id: &mut HashMap<String, (u32, bool)>, cpub_ids: &mut usize, cp256: &mut usize, cp160: &mut usize) {
+    if item.category == "GrothPubs" {
+        name_to_id.insert(
+            item.link_id.clone(),
+            (*cpub_ids as u32, item.is_type_field),
+        );
+        *cpub_ids += 1;
+    } else {
+        if item.is_type_field {
+            name_to_id.insert(
+                item.link_id.clone(),
+                (*cp256 as u32, item.is_type_field),
+            );
+            *cp256 += 1;
+        } else {
+            name_to_id.insert(
+                item.link_id.clone(),
+                (*cp160 as u32, item.is_type_field),
+            );
+            *cp160 += 1;
+        }
+    }
+}
 
-fn assign_ids_to_groth16_params(start_identifier: u32) -> HashMap<String, (u32, bool)> {
+fn assign_ids_to_groth16_params(cpub_ids: &mut usize, cp256: &mut usize, cp160: &mut usize) -> HashMap<String, (u32, bool)> {
     let g_params = groth16_config_gen();
     let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
     for i in 0..g_params.len() {
-        name_to_id.insert(
-            g_params[i].link_id.clone(),
-            (start_identifier + i as u32, g_params[i].is_type_field),
-        );
+        let item = &g_params[i];
+        assign_ids_to_params(item, &mut name_to_id, cpub_ids, cp256, cp160);
     }
     name_to_id
 }
 
-fn assign_ids_to_premiller_params(start_identifier: u32) -> HashMap<String, (u32, bool)> {
+fn assign_ids_to_premiller_params(cpub_ids: &mut usize, cp256: &mut usize, cp160: &mut usize) -> HashMap<String, (u32, bool)> {
     let g_params = pre_miller_config_gen();
     let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
     for i in 0..g_params.len() {
-        name_to_id.insert(
-            g_params[i].link_id.clone(),
-            (start_identifier + i as u32, g_params[i].is_type_field),
-        );
+        let item = &g_params[i];
+        assign_ids_to_params(item, &mut name_to_id, cpub_ids, cp256, cp160);
     }
     name_to_id
 }
 
 fn assign_ids_to_miller_blocks(
-    start_identifier: u32,
+    cpub_ids: &mut usize, cp256: &mut usize, cp160: &mut usize
 ) -> (HashMap<String, (u32, bool)>, String, String) {
     let g_params = miller_config_gen();
     let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
-    let mut counter = 0;
     let mut last_f_block_id = String::new();
     let mut last_t4_block_id = String::new();
     for t in g_params {
-        for r in t {
-            name_to_id.insert(
-                r.link_id.clone(),
-                (start_identifier + counter as u32, r.is_type_field),
-            );
-            counter += 1;
-            if r.category.starts_with("DD") {
-                last_f_block_id = r.link_id;
-            } else if r.category.starts_with("Dbl") {
-                last_t4_block_id = r.link_id;
+        for item in t {
+            assign_ids_to_params(&item, &mut name_to_id, cpub_ids, cp256, cp160);
+            if item.category.starts_with("DD") {
+                last_f_block_id = item.link_id;
+            } else if item.category.starts_with("Dbl") {
+                last_t4_block_id = item.link_id;
             }
         }
     }
     (name_to_id, last_f_block_id, last_t4_block_id)
 }
 
-fn assign_ids_to_postmiller_params(start_identifier: u32) -> HashMap<String, (u32, bool)> {
+fn assign_ids_to_postmiller_params(cpub_ids: &mut usize, cp256: &mut usize, cp160: &mut usize) -> HashMap<String, (u32, bool)> {
     let g_params = post_miller_config_gen(String::new(), String::new());
     let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
     for i in 0..g_params.len() {
-        name_to_id.insert(
-            g_params[i].link_id.clone(),
-            (start_identifier + i as u32, g_params[i].is_type_field),
-        );
+        let item = &g_params[i];
+        assign_ids_to_params(item, &mut name_to_id, cpub_ids, cp256, cp160);
     }
     name_to_id
 }
 
-fn assign_ids_to_msm_params(start_identifier: u32) -> HashMap<String, (u32, bool)> {
-    let hardcoded_scalars = String::from("k0,k1,k2");
+fn assign_ids_to_msm_params(cpub_ids: &mut usize, cp256: &mut usize, cp160: &mut usize) -> HashMap<String, (u32, bool)> {
+    let hardcoded_scalars = String::from(PUB_ID);
     let g_params = msm_config_gen(hardcoded_scalars);
     let mut name_to_id: HashMap<String, (u32, bool)> = HashMap::new();
     for i in 0..g_params.len() {
-        name_to_id.insert(
-            g_params[i].link_id.clone(),
-            (start_identifier + i as u32, g_params[i].is_type_field),
-        );
+        let item = &g_params[i];
+        assign_ids_to_params(item, &mut name_to_id, cpub_ids, cp256, cp160);
     }
     name_to_id
 }
 
 pub(crate) fn get_type_for_link_id(index: u32) -> Option<bool> {
-    let (lid, _, _) = assign_link_ids();
+    let (lid, _, _) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
     let res = lid.iter().find(|(_, v)| v.0 == index);
     if res.is_none() {
         None
@@ -697,35 +712,25 @@ pub(crate) fn get_type_for_link_id(index: u32) -> Option<bool> {
         Some(res.unwrap().1 .1)
     }
 }
-
-pub(crate) fn assign_link_ids() -> (HashMap<String, (u32, bool)>, String, String) {
+pub(crate) fn assign_link_ids(pub_ids: usize, p256: usize, p160: usize) -> (HashMap<String, (u32, bool)>, String, String) {
     let mut all_ids: HashMap<String, (u32, bool)> = HashMap::new();
+    let c_pub_ids = &mut 0usize;
+    let cp256 = &mut pub_ids.clone();
+    let cp160 = &mut (pub_ids + p256);
     let mut total_len = 0;
-    let grothp = assign_ids_to_groth16_params(total_len as u32);
+    let grothp = assign_ids_to_groth16_params(c_pub_ids, cp256, cp160);
     total_len += grothp.len();
-    println!("non-taproot ids {:?}", total_len);
-    let premillp = assign_ids_to_premiller_params(total_len as u32);
+    let premillp = assign_ids_to_premiller_params(c_pub_ids, cp256, cp160);
     total_len += premillp.len();
-    let (millp, f_blk, t4_blk) = assign_ids_to_miller_blocks(total_len as u32);
+    let (millp, f_blk, t4_blk) = assign_ids_to_miller_blocks(c_pub_ids, cp256, cp160);
     total_len += millp.len();
-    let postmillp = assign_ids_to_postmiller_params(total_len as u32);
+    let postmillp = assign_ids_to_postmiller_params(c_pub_ids, cp256, cp160);
     total_len += postmillp.len();
-    let msmp = assign_ids_to_msm_params(total_len as u32);
+    let msmp = assign_ids_to_msm_params(c_pub_ids, cp256, cp160);
     total_len += msmp.len();
-    println!("total-taproot ids {:?}", total_len);
     all_ids.extend(grothp.clone());
 
-    let mut fcounter = 0;
-    let mut hcounter = 0;
-    for (k, v) in &all_ids {
-        if v.1 {
-            fcounter += 1;
-        } else {
-            hcounter += 1;
-        }
-    }
-    println!("nfcounter {}", fcounter);
-    println!("nhcounter {}", hcounter);
+    //println!("total len {:?}", (c_pub_ids, cp256, cp160, total_len));
 
     all_ids.extend(premillp.clone());
     all_ids.extend(millp.clone());
@@ -733,24 +738,12 @@ pub(crate) fn assign_link_ids() -> (HashMap<String, (u32, bool)>, String, String
     all_ids.extend(msmp.clone());
     assert_eq!(total_len, all_ids.len());
 
-    let mut tfcounter = 0;
-    let mut thcounter = 0;
-    for (k, v) in &all_ids {
-        if v.1 {
-            tfcounter += 1;
-        } else {
-            thcounter += 1;
-        }
-    }
-    println!("tfcounter {}", tfcounter);
-    println!("thcounter {}", thcounter);
-
     (all_ids, f_blk, t4_blk)
 }
 
 pub fn keygen(msk: &str) -> HashMap<u32, WOTSPubKey> {
     // given master secret key and number of links, generate pub keys
-    let (links, _, _) = assign_link_ids();
+    let (links, _, _) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
     let mut scripts = HashMap::new();
     for (_, link) in links {
         let link_id = link.0;
@@ -761,4 +754,14 @@ pub fn keygen(msk: &str) -> HashMap<u32, WOTSPubKey> {
         }
     }
     scripts
+}
+
+#[cfg(test)]
+mod test {
+    use super::{assign_link_ids, NUM_PUBS, NUM_U160, NUM_U256};
+
+    #[test]
+    fn test_assign_link_ids() {
+        let ret = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
+    }
 }

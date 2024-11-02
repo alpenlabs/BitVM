@@ -16,8 +16,7 @@ use crate::chunk::taps_mul::*;
 use crate::execute_script;
 
 use super::config::{
-    assign_link_ids, groth16_config_gen, msm_config_gen, post_miller_config_gen,
-    pre_miller_config_gen,
+    assign_link_ids, groth16_config_gen, msm_config_gen, post_miller_config_gen, pre_miller_config_gen, NUM_PUBS, NUM_U160, NUM_U256, PUB_ID
 };
 use super::hint_models::HintOut;
 use super::primitves::emulate_fq_to_nibbles;
@@ -1224,7 +1223,7 @@ fn evaluate_msm(
     pub_ins: usize,
     qs: Vec<ark_bn254::G1Affine>,
 ) -> Option<(u32, bitcoin_script::Script)> {
-    let tables = msm_config_gen(String::from("k0,k1,k2"));
+    let tables = msm_config_gen(String::from(PUB_ID));
     let mut msm_tap_index = 0;
     for row in tables {
         println!(
@@ -1639,7 +1638,7 @@ pub fn evaluate(
     ks_vks: Vec<ark_bn254::G1Affine>,
     vky0: ark_bn254::G1Affine,
 ) -> Option<(u32, bitcoin_script::Script)> {
-    let (link_name_to_id, facc, tacc) = assign_link_ids();
+    let (link_name_to_id, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
     let mut aux_out_per_link: HashMap<String, HintOut> = HashMap::new();
 
     let grothmap = evaluate_groth16_params(

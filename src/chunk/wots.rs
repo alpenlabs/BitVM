@@ -8,7 +8,7 @@ use crate::treepp::Script;
 // use crate::signatures::{winternitz, winternitz_compact, winternitz_compact_hash, winternitz_hash};
 use crate::signatures::wots::{wots160, wots256};
 
-use super::config::assign_link_ids;
+use super::config::{assign_link_ids, NUM_PUBS, NUM_U160, NUM_U256};
 
 pub(crate) fn wots_p160_sign_digits(secret_key: &str, message_digits: [u8; 40]) -> Vec<bitcoin_script::Script> {
     //winternitz_hash::sign_digits(secret_key, message_digits)
@@ -108,7 +108,7 @@ pub struct AssertPublicKeys {
 }
 
 pub fn generate_verifier_public_keys(msk: &str) -> AssertPublicKeys {
-    let (links, _, _) = assign_link_ids();
+    let (links, _, _) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
     let mut p160 = HashMap::new();
     let mut p256 = HashMap::new();
 

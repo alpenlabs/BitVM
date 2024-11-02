@@ -2,13 +2,12 @@ use ark_bn254::g2::G2Affine;
 use ark_ec::bn::BnConfig;
 use std::collections::HashMap;
 
-use super::config::miller_config_gen;
+use super::config::{miller_config_gen, NUM_PUBS, NUM_U160, NUM_U256, PUB_ID};
 use super::config::{
     assign_link_ids, msm_config_gen, post_miller_config_gen,
     pre_miller_config_gen,
 };
 use super::msm::{bitcom_msm, tap_msm};
-use super::taps::{self, HashBytes};
 use super::taps::{
     bitcom_add_eval_mul_for_fixed_Qs_with_frob,
     bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_initT4,
@@ -379,7 +378,7 @@ fn compile_msm_circuit(
     qs: Vec<ark_bn254::G1Affine>,
     collect_bitcom: bool
 ) -> Vec<(u32, Script)> {
-    let rows = msm_config_gen(String::from("k0,k1,k2"));
+    let rows = msm_config_gen(String::from(PUB_ID));
 
     let mut msm_tap_index = 0;
     let window = 8;
@@ -420,7 +419,7 @@ pub(crate) struct Vkey {
 
 pub(crate) fn compile(vk: Vkey, link_ids: &HashMap<u32, WOTSPubKey>, collect_bitcom: bool) -> Vec<(u32, Script)> {
     let (q2, q3) = (vk.q2, vk.q3);
-    let (id_map, facc, tacc) = assign_link_ids();
+    let (id_map, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
     let mut scrs: Vec<(u32, Script)> = Vec::new();
     let scr = compile_msm_circuit(&link_ids, id_map.clone(), vk.p3vk, collect_bitcom);
     scrs.extend(scr);
