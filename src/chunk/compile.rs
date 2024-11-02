@@ -2,28 +2,34 @@ use ark_bn254::g2::G2Affine;
 use ark_ec::bn::BnConfig;
 use std::collections::HashMap;
 
-use super::config::{miller_config_gen, NUM_PUBS, NUM_U160, NUM_U256, PUB_ID};
 use super::config::{
-    assign_link_ids, msm_config_gen, post_miller_config_gen,
-    pre_miller_config_gen,
+    assign_link_ids, msm_config_gen, post_miller_config_gen, pre_miller_config_gen,
 };
+use super::config::{miller_config_gen, NUM_PUBS, NUM_U160, NUM_U256, PUB_ID};
 use super::msm::{bitcom_msm, tap_msm};
 use super::taps::{
-    bitcom_add_eval_mul_for_fixed_Qs_with_frob,
-    bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2, bitcom_initT4,
-    bitcom_point_add_with_frob, bitcom_precompute_Px, bitcom_precompute_Py,
-   
-    tap_add_eval_mul_for_fixed_Qs_with_frob, tap_frob_fp12, tap_hash_c2,
-    tap_point_add_with_frob, tap_precompute_Px, tap_precompute_Py, Link,
+    bitcom_add_eval_mul_for_fixed_Qs_with_frob, bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2,
+    bitcom_initT4, bitcom_point_add_with_frob, bitcom_precompute_Px, bitcom_precompute_Py,
+    tap_add_eval_mul_for_fixed_Qs_with_frob, tap_frob_fp12, tap_hash_c2, tap_point_add_with_frob,
+    tap_precompute_Px, tap_precompute_Py, Link,
 };
-use super::taps_mul::{bitcom_dense_dense_mul0, bitcom_dense_dense_mul1,bitcom_squaring,  bitcom_sparse_dense_mul, tap_sparse_dense_mul, tap_dense_dense_mul0, tap_dense_dense_mul1,tap_squaring};
 use super::taps::{tap_hash_c, tap_initT4};
+use super::taps_mul::{
+    bitcom_dense_dense_mul0, bitcom_dense_dense_mul1, bitcom_sparse_dense_mul, bitcom_squaring,
+    tap_dense_dense_mul0, tap_dense_dense_mul1, tap_sparse_dense_mul, tap_squaring,
+};
 use super::wots::WOTSPubKey;
 
-
 use crate::chunk::msm::{bitcom_hash_p, tap_hash_p};
-use crate::chunk::taps::{bitcom_add_eval_mul_for_fixed_Qs, bitcom_double_eval_mul_for_fixed_Qs, bitcom_point_dbl, bitcom_point_ops, tap_add_eval_mul_for_fixed_Qs, tap_double_eval_mul_for_fixed_Qs, tap_point_dbl, tap_point_ops};
-use crate::chunk::taps_mul::{bitcom_dense_dense_mul0_by_constant, bitcom_dense_dense_mul1_by_constant, tap_dense_dense_mul0_by_constant, tap_dense_dense_mul1_by_constant};
+use crate::chunk::taps::{
+    bitcom_add_eval_mul_for_fixed_Qs, bitcom_double_eval_mul_for_fixed_Qs, bitcom_point_dbl,
+    bitcom_point_ops, tap_add_eval_mul_for_fixed_Qs, tap_double_eval_mul_for_fixed_Qs,
+    tap_point_dbl, tap_point_ops,
+};
+use crate::chunk::taps_mul::{
+    bitcom_dense_dense_mul0_by_constant, bitcom_dense_dense_mul1_by_constant,
+    tap_dense_dense_mul0_by_constant, tap_dense_dense_mul1_by_constant,
+};
 use crate::treepp::*;
 
 // pub const ATE_LOOP_COUNT: &'static [i8] = &[
@@ -39,7 +45,7 @@ fn compile_miller_circuit(
     id_to_sec: HashMap<String, (u32, bool)>,
     q2: ark_bn254::G2Affine,
     q3: ark_bn254::G2Affine,
-    collect_bitcom: bool
+    collect_bitcom: bool,
 ) -> (Vec<(u32, Script)>, G2Affine, G2Affine) {
     // vk: (G1Affine, G2Affine, G2Affine, G2Affine)
     // groth16 is 1 G2 and 2 G1, P4, Q4,
@@ -99,7 +105,7 @@ fn compile_miller_circuit(
             } else if blk_name == "DblAdd" {
                 let mut sc = script!();
                 if collect_bitcom {
-                    sc =  bitcom_point_ops(link_ids, sec_out, deps_indices, *bit);
+                    sc = bitcom_point_ops(link_ids, sec_out, deps_indices, *bit);
                 } else {
                     sc = tap_point_ops(*bit);
                 }
@@ -172,8 +178,8 @@ fn compile_pre_miller_circuit(
     link_ids: &HashMap<u32, WOTSPubKey>,
     id_map: HashMap<String, (u32, bool)>,
     vky0: ark_bn254::G1Affine,
-    collect_bitcom: bool
-) -> Vec<(u32, Script)>{
+    collect_bitcom: bool,
+) -> Vec<(u32, Script)> {
     let tables = pre_miller_config_gen();
 
     let mut scripts: Vec<(u32, Script)> = vec![];
@@ -269,7 +275,7 @@ fn compile_post_miller_circuit(
     facc: String,
     tacc: String,
     p1q1: ark_bn254::Fq12,
-    collect_bitcom: bool
+    collect_bitcom: bool,
 ) -> Vec<(u32, Script)> {
     let tables = post_miller_config_gen(facc, tacc);
 
@@ -328,7 +334,7 @@ fn compile_post_miller_circuit(
                 sc = tap_point_add_with_frob(sign);
             }
             scripts.push((sec_out.0, sc));
-        }  else if row.category == "SD" {
+        } else if row.category == "SD" {
             let mut sc = script!();
             if collect_bitcom {
                 sc = bitcom_sparse_dense_mul(link_ids, sec_out, sec_in);
@@ -351,7 +357,7 @@ fn compile_post_miller_circuit(
                 sc = sc1;
             }
             scripts.push((sec_out.0, sc));
-        } else if row.category == "DK1"{
+        } else if row.category == "DK1" {
             let mut sc = script!();
             if collect_bitcom {
                 sc = bitcom_dense_dense_mul0_by_constant(link_ids, sec_out, sec_in);
@@ -376,7 +382,7 @@ fn compile_msm_circuit(
     link_ids: &HashMap<u32, WOTSPubKey>,
     id_map: HashMap<String, (u32, bool)>,
     qs: Vec<ark_bn254::G1Affine>,
-    collect_bitcom: bool
+    collect_bitcom: bool,
 ) -> Vec<(u32, Script)> {
     let rows = msm_config_gen(String::from(PUB_ID));
 
@@ -396,7 +402,7 @@ fn compile_msm_circuit(
         if row.category == "MSM" {
             let mut sc = script!();
             if collect_bitcom {
-               sc = bitcom_msm(link_ids, sec_out, sec_in);
+                sc = bitcom_msm(link_ids, sec_out, sec_in);
             } else {
                 sc = tap_msm(window, msm_tap_index, qs.clone());
             }
@@ -417,7 +423,11 @@ pub(crate) struct Vkey {
     pub(crate) vky0: ark_bn254::G1Affine,
 }
 
-pub(crate) fn compile(vk: Vkey, link_ids: &HashMap<u32, WOTSPubKey>, collect_bitcom: bool) -> Vec<(u32, Script)> {
+pub(crate) fn compile(
+    vk: Vkey,
+    link_ids: &HashMap<u32, WOTSPubKey>,
+    collect_bitcom: bool,
+) -> Vec<(u32, Script)> {
     let (q2, q3) = (vk.q2, vk.q3);
     let (id_map, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
     let mut scrs: Vec<(u32, Script)> = Vec::new();
@@ -427,11 +437,21 @@ pub(crate) fn compile(vk: Vkey, link_ids: &HashMap<u32, WOTSPubKey>, collect_bit
     scrs.extend(scr);
     let (scr, t2, t3) = compile_miller_circuit(&link_ids, id_map.clone(), q2, q3, collect_bitcom);
     scrs.extend(scr);
-    let scr = compile_post_miller_circuit(&link_ids, id_map, t2, t3, q2, q3, facc, tacc, vk.p1q1, collect_bitcom);
+    let scr = compile_post_miller_circuit(
+        &link_ids,
+        id_map,
+        t2,
+        t3,
+        q2,
+        q3,
+        facc,
+        tacc,
+        vk.p1q1,
+        collect_bitcom,
+    );
     scrs.extend(scr);
     scrs
 }
-
 
 #[cfg(test)]
 mod test {
@@ -460,7 +480,7 @@ mod test {
             q3,
             p3vk: vec![vka, vkb],
             p1q1,
-            vky0
+            vky0,
         };
         let bcs = compile(vk, &link_ids, false);
     }

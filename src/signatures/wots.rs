@@ -110,15 +110,23 @@ macro_rules! impl_wots {
                     }
                 }
 
-                pub fn sign2(secret: &str, msg_digits: [u8; M_DIGITS as usize]) -> Vec<Script> {
-                    //let msg_digits = msg_bytes_to_digits(msg_bytes);
+                pub fn get_signature2(secret: &str, msg_digits: [u8; M_DIGITS as usize]) -> Signature {
+                  //  let msg_digits = msg_bytes_to_digits(msg_bytes);
                     let mut digits = checksum_to_digits(checksum(msg_digits)).to_vec();
                     digits.append(&mut msg_digits.to_vec());
+                    std::array::from_fn(|i| {
+                        get_digit_signature(secret, i as u32, digits[N_DIGITS as usize - i - 1])
+                    })
+                }
+
+                pub fn sign2(secret: &str, msg_bytes: [u8; M_DIGITS as usize]) -> Vec<Script> {
+                    let signature = get_signature2(secret, msg_bytes);
                     let mut sigs: Vec<Script> = vec![];
-                        for i in 0..N_DIGITS {
-                            sigs.push({ sign_digit(secret, i, digits[(N_DIGITS - 1 - i) as usize])});
-                            sigs.push(script!{ {digits[(N_DIGITS - 1 - i) as usize]} });
-                        }
+
+                    for (sig, digit) in signature {
+                        sigs.push(script!({ sig.to_vec() }));
+                        sigs.push(script!({ digit }));
+                    }
                     sigs
                 }
 
@@ -181,17 +189,23 @@ macro_rules! impl_wots {
                             }
                         }
                     }
-
-                    pub fn sign2(secret: &str, msg_digits: [u8; M_DIGITS as usize]) -> Vec<Script> {
+                    pub fn get_signature2(secret: &str, msg_digits: [u8; M_DIGITS as usize]) -> Signature {
                         //let msg_digits = msg_bytes_to_digits(msg_bytes);
                         let mut digits = checksum_to_digits(checksum(msg_digits)).to_vec();
                         digits.append(&mut msg_digits.to_vec());
-                        let mut sigs: Vec<Script> = vec![];
-                        for i in 0..N_DIGITS {
-                            sigs.push({ sign_digit(secret, i, digits[(N_DIGITS - 1 - i) as usize])})
-                        }
-                        sigs
+                        std::array::from_fn(|i| {
+                            get_digit_signature(secret, i as u32, digits[N_DIGITS as usize - i - 1]).0
+                        })
                     }
+      
+                      pub fn sign2(secret: &str, msg_bytes: [u8; M_DIGITS as usize]) -> Vec<Script> {
+                          let signature = get_signature2(secret, msg_bytes);
+                          let mut sigs: Vec<Script> = vec![];
+                            for sig in signature {
+                                sigs.push(script!({ sig.to_vec() }));
+                            }
+                            sigs
+                      }
 
                     pub fn checksig_verify(public_key: PublicKey) -> Script {
                         script! {

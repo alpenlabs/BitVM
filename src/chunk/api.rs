@@ -43,9 +43,10 @@ pub fn api_compile(vk: &ark_groth16::VerifyingKey<Bn254>) -> Vec<Script> {
     taps
 }
 
-
-pub fn generate_tapscripts(vk: &ark_groth16::VerifyingKey<Bn254>, pubkeys: WotsPublicKeys, ops_scripts_per_link: Vec<Script>) -> Vec<Script> {
-
+pub fn generate_tapscripts(
+    pubkeys: WotsPublicKeys,
+    ops_scripts_per_link: Vec<Script>,
+) -> Vec<Script> {
     let (p0, p1, p2) = pubkeys.0;
     let fq_arr = pubkeys.1;
     let hash_arr = pubkeys.2;
@@ -63,26 +64,13 @@ pub fn generate_tapscripts(vk: &ark_groth16::VerifyingKey<Bn254>, pubkeys: WotsP
         pubkeys.insert((len + i) as u32, WOTSPubKey::P160(hash_arr[i]));
     }
 
-    assert!(vk.gamma_abc_g1.len() == 4); // supports only 3 pubs
-
-    let p1 = vk.alpha_g1;
-    let (q3, q2, q1) = (
-        vk.gamma_g2.into_group().neg().into_affine(),
-        vk.delta_g2.into_group().neg().into_affine(),
-        -vk.beta_g2,
-    );
-
-    let p1q1 = Bn254::multi_miller_loop_affine([p1], [q1]).0;
-    let p3vk = vec![vk.gamma_abc_g1[3], vk.gamma_abc_g1[2], vk.gamma_abc_g1[1]];
-    let vky0 = vk.gamma_abc_g1[0];
-
     let bitcom_scripts_per_link = compile(
         Vkey {
-            q2,
-            q3,
-            p3vk,
-            p1q1,
-            vky0,
+            q2: ark_bn254::G2Affine::identity(),
+            q3: ark_bn254::G2Affine::identity(),
+            p3vk: vec![],
+            p1q1: ark_bn254::Fq12::ONE,
+            vky0: ark_bn254::G1Affine::identity(),
         },
         &pubkeys,
         true,
