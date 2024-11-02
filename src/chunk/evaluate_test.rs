@@ -414,7 +414,7 @@ mod test {
 
         let p3 = p3.into_affine();
 
-        let fault = evaluate(
+        let (_, fault) = evaluate(
             &mut sig,
             pub_scripts_per_link_id,
             proof.p2,
@@ -483,7 +483,7 @@ mod test {
                 cache: assertion,
             };
     
-            let fault = evaluate(
+            let (_, fault) = evaluate(
                 &mut sig,
                 &pub_scripts_per_link_id,
                 proof.p2,
@@ -534,32 +534,6 @@ mod test {
         // read assertions
      }
 
-
-     #[test]
-     fn test_extract_values_from_hints() {
-        let (link_name_to_id, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
-        let aux_out_per_link: HashMap<String, HintOut> = HashMap::new();
-        for (k, v) in aux_out_per_link {
-            let x = match v {
-                HintOut::Add(r) => r.out(),
-                HintOut::DblAdd(r) => r.out(),
-                HintOut::DenseMul0(r) => r.out(),
-                HintOut::DenseMul1(r) => r.out(),
-                HintOut::Double(r) => r.out(),
-                HintOut::FieldElem(f) => emulate_fq_to_nibbles(f),
-                HintOut::FrobFp12(f) => f.out(),
-                HintOut::GrothC(r) => r.out(),
-                HintOut::HashC(r) => r.out(),
-                HintOut::InitT4(r) => r.out(),
-                HintOut::MSM(r) => r.out(),
-                HintOut::ScalarElem(r) => emulate_fr_to_nibbles(r),
-                HintOut::SparseAdd(r) => r.out(),
-                HintOut::SparseDbl(r) => r.out(),
-                HintOut::SparseDenseMul(r) => r.out(),
-                HintOut::Squaring(r) => r.out(),
-            };
-        }
-     }
 
      #[test]
      fn assign_link_ids_to_array() {

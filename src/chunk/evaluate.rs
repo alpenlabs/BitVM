@@ -19,7 +19,7 @@ use super::config::{
     assign_link_ids, groth16_config_gen, msm_config_gen, post_miller_config_gen, pre_miller_config_gen, NUM_PUBS, NUM_U160, NUM_U256, PUB_ID
 };
 use super::hint_models::HintOut;
-use super::primitves::emulate_fq_to_nibbles;
+use super::primitves::{emulate_fq_to_nibbles, emulate_fr_to_nibbles, emulate_nibbles_to_limbs};
 use super::taps::{tap_hash_c, tap_initT4};
 use super::taps::{Sig};
 use super::wots::WOTSPubKey;
@@ -1622,7 +1622,7 @@ fn evaluate_pre_miller_circuit(
     None
 }
 
-pub fn evaluate(
+pub(crate) fn evaluate(
     sig: &mut Sig,
     pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>,
     p2: G1Affine,
@@ -1637,7 +1637,7 @@ pub fn evaluate(
     ks: Vec<ark_bn254::Fr>,
     ks_vks: Vec<ark_bn254::G1Affine>,
     vky0: ark_bn254::G1Affine,
-) -> Option<(u32, bitcoin_script::Script)> {
+) -> (HashMap<String, HintOut>, Option<(u32, bitcoin_script::Script)>) {
     let (link_name_to_id, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
     let mut aux_out_per_link: HashMap<String, HintOut> = HashMap::new();
 
@@ -1664,7 +1664,7 @@ pub fn evaluate(
     );
     if re.is_some() {
         println!("Disprove evaluate_msm");
-        return re;
+        return (aux_out_per_link, re);
     }
 
     let re = evaluate_pre_miller_circuit(
@@ -1676,7 +1676,7 @@ pub fn evaluate(
     );
     if re.is_some() {
         println!("Disprove evaluate_pre_miller_circuit");
-        return re;
+        return (aux_out_per_link, re);
     }
 
     let (nt2, nt3, re) = evaluate_miller_circuit(
@@ -1691,7 +1691,7 @@ pub fn evaluate(
     );
     if re.is_some() {
         println!("Disprove evaluate_miller_circuit");
-        return re;
+        return (aux_out_per_link, re);
     }
     let re = evaluate_post_miller_circuit(
         sig,
@@ -1708,7 +1708,7 @@ pub fn evaluate(
     );
     if re.is_some() {
         println!("Disprove evaluate_post_miller_circuit");
-        return re;
+        return (aux_out_per_link, re);
     }
 
     let hint = aux_out_per_link.get("fin");
@@ -1723,8 +1723,37 @@ pub fn evaluate(
             _ => {}
         }
     }
-    None
+    (aux_out_per_link, None)
 }
+
+pub(crate) fn extract_values_from_hints(aux_out_per_link: HashMap<String, HintOut>) -> HashMap<u32, [u8; 64]> {
+    let (link_name_to_id, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
+    let mut nibbles_per_index: HashMap<u32, [u8;64]> = HashMap::new();
+
+    for (k, v) in aux_out_per_link {
+        let x = match v {
+            HintOut::Add(r) => r.out(),
+            HintOut::DblAdd(r) => r.out(),
+            HintOut::DenseMul0(r) => r.out(),
+            HintOut::DenseMul1(r) => r.out(),
+            HintOut::Double(r) => r.out(),
+            HintOut::FieldElem(f) => emulate_fq_to_nibbles(f),
+            HintOut::FrobFp12(f) => f.out(),
+            HintOut::GrothC(r) => r.out(),
+            HintOut::HashC(r) => r.out(),
+            HintOut::InitT4(r) => r.out(),
+            HintOut::MSM(r) => r.out(),
+            HintOut::ScalarElem(r) => emulate_fr_to_nibbles(r),
+            HintOut::SparseAdd(r) => r.out(),
+            HintOut::SparseDbl(r) => r.out(),
+            HintOut::SparseDenseMul(r) => r.out(),
+            HintOut::Squaring(r) => r.out(),
+        };
+        let index = link_name_to_id.get(&k).unwrap().0;
+        nibbles_per_index.insert(index, x);
+    }
+    nibbles_per_index
+ }
 // 32 byte
 // compact 9196 <- disprove
 // not 4707 <- assert
