@@ -6,7 +6,7 @@ use crate::chunk::primitves::{fq_from_nibbles, pack_nibbles_to_limbs};
 use crate::treepp::Script;
 
 // use crate::signatures::{winternitz, winternitz_compact, winternitz_compact_hash, winternitz_hash};
-use crate::signatures::wots::{wots160, wots256};
+use crate::signatures::wots::{wots160, wots256, wots32};
 
 use super::config::{assign_link_ids, NUM_PUBS, NUM_U160, NUM_U256};
 
@@ -58,7 +58,22 @@ pub(crate) fn wots_compact_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> 
                 }
                 {fq_from_nibbles()}
             }
-        }
+        },
+        WOTSPubKey::P032(pb) => {
+            let sc_nib = wots32::compact::checksig_verify(*pb);
+            const N0: usize = 8; // 8 nibbles
+            return script!{
+                {sc_nib}
+                for _ in 0..(64-N0) {
+                    {0}
+                }
+                // field element reconstruction
+                for i in 1..64 {
+                    {i} OP_ROLL
+                }
+                {fq_from_nibbles()}
+            }
+        },
     }
 }
 
@@ -92,13 +107,29 @@ fn wots_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> Script {
                 }
                 {fq_from_nibbles()}
             }
-        }
+        },
+        WOTSPubKey::P032(pb) => {
+            let sc_nib = wots32::checksig_verify(*pb);
+            const N0: usize = 8; // 8 nibbles
+            return script!{
+                {sc_nib}
+                for _ in 0..(64-N0) {
+                    {0}
+                }
+                // field element reconstruction
+                for i in 1..64 {
+                    {i} OP_ROLL
+                }
+                {fq_from_nibbles()}
+            }
+        },
     }
 }
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WOTSPubKey {
+    P032(wots32::PublicKey),
     P160(wots160::PublicKey),
     P256(wots256::PublicKey)
 }

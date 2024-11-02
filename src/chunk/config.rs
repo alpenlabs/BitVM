@@ -12,6 +12,14 @@ pub const NUM_U256: usize = 40;
 pub const NUM_U160: usize = 574;
 pub const PUB_ID: &str = "k0,k1,k2";
 
+
+#[derive(Debug)]
+pub(crate) enum DataType {
+    P032,
+    P160,
+    P256,
+}
+
 #[derive(Debug)]
 pub(crate) struct ScriptItem {
     pub(crate) category: String, // script category

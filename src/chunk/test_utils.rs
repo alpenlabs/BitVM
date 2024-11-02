@@ -24,6 +24,13 @@ pub(crate) fn serialize_pubkey(pubkey: WOTSPubKey) -> Vec<Vec<u8>> {
                 v.push(i.to_vec());
             }
             v
+        },
+        WOTSPubKey::P032(p) => {
+            let mut v = Vec::new();
+            for i in p {
+                v.push(i.to_vec());
+            }
+            v
         }
     }
 }

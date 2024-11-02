@@ -50,10 +50,12 @@ impl Verifier {
     }
 
     pub fn generate_tapscripts(
+        &self,
         public_keys: WotsPublicKeys,
         verifier_scripts: [Script; N_TAPLEAVES],
     ) -> [Script; 602] {
         todo!()
+        //let res = chunk::api::api_compile(&self.vk.ark_vk);
     }
 
     pub fn generate_assertions(proof: Proof) -> Groth16ProofAssertions {
@@ -76,7 +78,6 @@ impl Verifier {
 mod test {
     use ark_bn254::Bn254;
     use ark_groth16::{ProvingKey, VerifyingKey};
-    use self::chunk::wots::WOTSPubKey;
 
     use super::*;
 
@@ -201,9 +202,11 @@ mod test {
     fn test_fn_generate_tapscripts() {
         let (_, mock_vk) = setup_mock_groth16_circuit();
         assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
-        let _mock_pubs = mock_pubkeys();
-        let _vr = Verifier::new(VerificationKey { ark_vk: mock_vk });
-        todo!()
+        let mock_pubs = mock_pubkeys();
+        let vr = Verifier::new(VerificationKey { ark_vk: mock_vk });
+        let ops_scripts = vr.compile();
+        let tap_scripts = vr.generate_tapscripts(mock_pubs, ops_scripts);
+       
     }
 
 }
