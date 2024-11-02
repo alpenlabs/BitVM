@@ -49,7 +49,7 @@ impl Verifier {
     pub fn generate_tapscripts(
         public_keys: WotsPublicKeys,
         verifier_scripts: [Script; N_TAPLEAVES],
-    ) -> [Script; 602] {
+    ) -> [Script; N_TAPLEAVES] {
         let res = chunk::api::generate_tapscripts(public_keys, verifier_scripts.to_vec());
         res.try_into().unwrap()
     }
