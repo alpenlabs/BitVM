@@ -54,7 +54,7 @@ impl Verifier {
         res.try_into().unwrap()
     }
 
-    pub fn generate_assertions(proof: Proof) -> ProofAssertions {
+    pub fn generate_assertions(vk: VerificationKey, proof: Proof) -> ProofAssertions {
         todo!()
     }
 
