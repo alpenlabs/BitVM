@@ -4,10 +4,10 @@ use crate::signatures::wots::{wots160, wots256};
 use crate::{chunk, treepp::*};
 
 pub const N_VERIFIER_PUBLIC_INPUTS: usize = 3;
-pub const N_VERIFIER_FQs: usize = 48;
-pub const N_VERIFIER_HASHES: usize = 598;
+pub const N_VERIFIER_FQs: usize = 40;
+pub const N_VERIFIER_HASHES: usize = 574;
 
-pub const N_TAPLEAVES: usize = 602;
+pub const N_TAPLEAVES: usize = 579;
 
 pub type WotsPublicKeys = (
     (wots256::PublicKey, wots256::PublicKey, wots256::PublicKey),
