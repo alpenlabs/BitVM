@@ -17,8 +17,9 @@ use num_traits::One;
 use std::collections::HashMap;
 
 use super::primitves::{emulate_extern_hash_fps, hash_fp12_192};
-use super::taps::{HashBytes, HintOutAdd, HintOutDblAdd, HintOutDouble, HintOutFixedAcc, HintOutFrobFp12, HintOutGrothC, HintOutHashC, HintOutSparseAdd, HintOutSparseDbl, Link, Sig};
+use super::taps::{HashBytes, Link, Sig};
 use super::wots::WOTSPubKey;
+use super::hint_models::*;
 // SPARSE DENSE
 
 pub(crate) fn tap_sparse_dense_mul(dbl_blk: bool) -> Script {
@@ -103,74 +104,6 @@ pub(crate) fn bitcom_sparse_dense_mul(
         // Stack: [...,hash_out, hash_in1, hash_in2]
     };
     bitcomms_script
-}
-pub(crate) struct HintInSparseDenseMul {
-    pub(crate) a: ark_bn254::Fq12,
-    pub(crate) le0: ark_bn254::Fq2,
-    pub(crate) le1: ark_bn254::Fq2,
-    pub(crate) hash_other_le: HashBytes,
-    pub(crate) hash_aux_T: HashBytes,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct HintOutSparseDenseMul {
-    pub(crate) f: ark_bn254::Fq12,
-    hash_out: HashBytes,
-}
-
-impl HintInSparseDenseMul {
-    pub(crate) fn from_double(g: HintOutDouble, sq: HintOutSquaring) -> Self {
-        let t = g.t;
-        let hash_t = emulate_extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
-        HintInSparseDenseMul {
-            a: sq.b,
-            le0: g.dbl_le.0,
-            le1: g.dbl_le.1,
-            hash_other_le: g.hash_add_le_aux,
-            hash_aux_T: hash_t,
-        }
-    }
-
-    pub(crate) fn from_double_add_top(g: HintOutDblAdd, sq: HintOutSquaring) -> Self {
-        let t = g.t;
-        let hash_t = emulate_extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
-        let (add_le0, add_le1) = g.add_le;
-        let hash_add_le =
-            emulate_extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
-        return HintInSparseDenseMul {
-            a: sq.b,
-            le0: g.dbl_le.0,
-            le1: g.dbl_le.1,
-            hash_other_le: hash_add_le,
-            hash_aux_T: hash_t,
-        };
-    }
-
-    pub(crate) fn from_doubl_add_bottom(g: HintOutDblAdd, dmul: HintOutDenseMul1) -> Self {
-        let t = g.t;
-        let hash_t = emulate_extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
-        let (dbl_le0, dbl_le1) = g.dbl_le;
-        let hash_dbl_le =
-            emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
-        return HintInSparseDenseMul {
-            a: dmul.c,
-            le0: g.add_le.0,
-            le1: g.add_le.1,
-            hash_other_le: hash_dbl_le,
-            hash_aux_T: hash_t,
-        };
-    }
-    pub(crate) fn from_add(g: HintOutAdd, sq: HintOutDenseMul1) -> Self {
-        let t = g.t;
-        let hash_t = emulate_extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
-        HintInSparseDenseMul {
-            a: sq.c,
-            le0: g.add_le.0,
-            le1: g.add_le.1,
-            hash_other_le: g.hash_dbl_le_aux,
-            hash_aux_T: hash_t,
-        }
-    }
 }
 
 pub(crate) fn hint_sparse_dense_mul(
@@ -334,44 +267,6 @@ pub(crate) fn bitcom_dense_dense_mul0(
     bitcom_scr
 }
 
-pub(crate) struct HintInDenseMul0 {
-    pub(crate) a: ark_bn254::Fq12,
-    pub(crate) b: ark_bn254::Fq12,
-}
-
-impl HintInDenseMul0 {
-    pub(crate) fn from_groth_hc(c: HintOutHashC, d: HintOutGrothC) -> Self {
-        Self { a: c.c, b: d.c }
-    }
-    pub(crate) fn from_grothc(c: HintOutGrothC, d: HintOutGrothC) -> Self {
-        Self { a: c.c, b: d.c }
-    }
-    pub(crate) fn from_sparse_dense_dbl(c: HintOutSparseDenseMul, d: HintOutSparseDbl) -> Self {
-        Self { a: c.f, b: d.f }
-    }
-    pub(crate) fn from_sparse_dense_add(c: HintOutSparseDenseMul, d: HintOutSparseAdd) -> Self {
-        Self { a: c.f, b: d.f }
-    }
-    pub(crate) fn from_dense_c(c: HintOutDenseMul1, d: HintOutGrothC) -> Self {
-        Self { a: c.c, b: d.c }
-    }
-    pub(crate) fn from_hash_c(c: HintOutDenseMul1, d: HintOutHashC) -> Self {
-        Self { a: c.c, b: d.c }
-    }
-    pub(crate) fn from_dense_fixed_acc(c: HintOutDenseMul1, d: HintOutFixedAcc) -> Self {
-        Self { a: c.c, b: d.f }
-    }
-    pub(crate) fn from_dense_frob(c: HintOutDenseMul1, d: HintOutFrobFp12) -> Self {
-        Self { a: c.c, b: d.f }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct HintOutDenseMul0 {
-    c: ark_bn254::Fq12,
-    hash_out: HashBytes,
-}
-
 pub(crate) fn hints_dense_dense_mul0(
     sig: &mut Sig,
     sec_out: Link,
@@ -513,45 +408,6 @@ pub(crate) fn bitcom_dense_dense_mul1(
     bitcom_scr
 }
 
-pub(crate) struct HintInDenseMul1 {
-    pub(crate) a: ark_bn254::Fq12,
-    pub(crate) b: ark_bn254::Fq12,
-    // hash_aux_c0: HashBytes,
-}
-
-impl HintInDenseMul1 {
-    pub(crate) fn from_groth_hc(c: HintOutHashC, d: HintOutGrothC) -> Self {
-        Self { a: c.c, b: d.c }
-    }
-    pub(crate) fn from_grothc(c: HintOutGrothC, d: HintOutGrothC) -> Self {
-        Self { a: c.c, b: d.c }
-    }
-    pub(crate) fn from_sparse_dense_dbl(c: HintOutSparseDenseMul, d: HintOutSparseDbl) -> Self {
-        Self { a: c.f, b: d.f }
-    }
-    pub(crate) fn from_sparse_dense_add(c: HintOutSparseDenseMul, d: HintOutSparseAdd) -> Self {
-        Self { a: c.f, b: d.f }
-    }
-    pub(crate) fn from_dense_c(c: HintOutDenseMul1, d: HintOutGrothC) -> Self {
-        Self { a: c.c, b: d.c }
-    }
-    pub(crate) fn from_dense_fixed_acc(c: HintOutDenseMul1, d: HintOutFixedAcc) -> Self {
-        Self { a: c.c, b: d.f }
-    }
-    pub(crate) fn from_dense_frob(c: HintOutDenseMul1, d: HintOutFrobFp12) -> Self {
-        Self { a: c.c, b: d.f }
-    }
-    pub(crate) fn from_hash_c(c: HintOutDenseMul1, d: HintOutHashC) -> Self {
-        Self { a: c.c, b: d.c }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct HintOutDenseMul1 {
-    pub(crate) c: ark_bn254::Fq12,
-    pub(crate) hash_out: HashBytes,
-}
-
 pub(crate) fn hints_dense_dense_mul1(
     sig: &mut Sig,
     sec_out: Link,
@@ -633,31 +489,6 @@ pub(crate) fn hints_dense_dense_mul1(
 
 // SQUARING
 
-pub(crate) struct HintInSquaring {
-    pub(crate) a: ark_bn254::Fq12,
-    pub(crate) ahash: HashBytes,
-}
-
-impl HintInSquaring {
-    pub(crate) fn from_hashc(g: HintOutHashC) -> Self {
-        HintInSquaring {
-            a: g.c,
-            ahash: g.hash_out,
-        }
-    }
-    pub(crate) fn from_dmul1(g: HintOutDenseMul1) -> Self {
-        HintInSquaring {
-            a: g.c,
-            ahash: g.hash_out,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct HintOutSquaring {
-    pub(crate) b: ark_bn254::Fq12,
-    pub(crate) bhash: HashBytes,
-}
 pub(crate) fn hint_squaring(
     sig: &mut Sig,
     sec_out: Link,

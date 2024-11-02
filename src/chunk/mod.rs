@@ -10,3 +10,4 @@ mod test_utils;
 pub mod wots;
 pub mod taps_test;
 pub mod evaluate_test;
+pub mod hint_models;

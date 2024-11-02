@@ -454,7 +454,7 @@ mod test {
         let p3 =  vk.vk_pubs[0] * ark_bn254::Fr::ONE + vk.vk_pubs[1] * proof.scalars[0] + vk.vk_pubs[2] * proof.scalars[1] + vk.vk_pubs[3] * proof.scalars[2];
         let p3 = p3.into_affine();
 
-        for index_to_corrupt in 585..616 { // m0 -> 584
+        for index_to_corrupt in 39..90 { // m0 -> 584
             if index_to_corrupt == 50 {
                 continue;
             }

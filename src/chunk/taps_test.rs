@@ -3,10 +3,11 @@
 mod test {
     use std::collections::HashMap;
 
+    use crate::chunk::hint_models::*;
     use crate::chunk::msm::{bitcom_hash_p, hint_hash_p, tap_hash_p};
     use crate::chunk::taps::*;
     use crate::chunk::primitves::emulate_extern_hash_fps;
-    use crate::chunk::taps_mul::{bitcom_dense_dense_mul0, bitcom_dense_dense_mul0_by_constant, bitcom_dense_dense_mul1, bitcom_dense_dense_mul1_by_constant, bitcom_sparse_dense_mul, bitcom_squaring, hint_sparse_dense_mul, hint_squaring, hints_dense_dense_mul0, hints_dense_dense_mul0_by_constant, hints_dense_dense_mul1, hints_dense_dense_mul1_by_constant, tap_dense_dense_mul0, tap_dense_dense_mul0_by_constant, tap_dense_dense_mul1, tap_dense_dense_mul1_by_constant, tap_sparse_dense_mul, tap_squaring, HintInDenseMul0, HintInDenseMul1, HintInSparseDenseMul, HintInSquaring};
+    use crate::chunk::taps_mul::*;
     use crate::chunk::wots::{wots_p160_get_pub_key, wots_p256_get_pub_key, WOTSPubKey};
     use ark_ff::Field;
     use ark_std::UniformRand;

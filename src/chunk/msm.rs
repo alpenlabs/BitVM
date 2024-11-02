@@ -15,8 +15,9 @@ use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
 use num_traits::One;
 
+use super::hint_models::HintInHashP;
 use super::primitves::hash_fp2;
-use super::taps::{HashBytes, HintInHashP, Link, Sig};
+use super::taps::{HashBytes, Link, Sig};
 use super::wots::WOTSPubKey;
 use crate::bn254::fq2::Fq2;
 use crate::bn254::utils::Hint;

@@ -9,33 +9,20 @@ use crate::chunk::config::miller_config_gen;
 use crate::chunk::msm::{bitcom_hash_p, bitcom_msm, hint_hash_p, hint_msm, tap_hash_p, tap_msm, HintInMSM};
 use crate::chunk::primitves::emulate_extern_hash_fps;
 use crate::chunk::{taps, taps_mul};
-use crate::chunk::taps::{
-    bitcom_add_eval_mul_for_fixed_Qs, bitcom_add_eval_mul_for_fixed_Qs_with_frob,
-    bitcom_double_eval_mul_for_fixed_Qs,
-    bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2,  bitcom_initT4,
-    bitcom_point_add_with_frob, bitcom_point_dbl, bitcom_point_ops, bitcom_precompute_Px,
-    bitcom_precompute_Py,   hint_hash_c, hint_hash_c2,
-     hint_init_T4,  hints_frob_fp12,
-    hints_precompute_Px, hints_precompute_Py, tap_add_eval_mul_for_fixed_Qs,
-    tap_add_eval_mul_for_fixed_Qs_with_frob, tap_double_eval_mul_for_fixed_Qs, tap_frob_fp12,
-    tap_hash_c2,  tap_point_add_with_frob, tap_point_dbl, tap_point_ops,
-    tap_precompute_Px, tap_precompute_Py,  HintInAdd,
-    HintInDblAdd,  HintInDouble, HintInFrobFp12, HintInHashC,
-    HintInHashP, HintInInitT4, HintInPrecomputePx, HintInPrecomputePy, HintInSparseAdd,
-    HintInSparseDbl,   
-    HintOutGrothC,  Link,
-};
+use crate::chunk::taps::*;
+use crate::chunk::hint_models::*;
 
-use crate::chunk::taps_mul::{bitcom_dense_dense_mul0, bitcom_dense_dense_mul0_by_constant, bitcom_dense_dense_mul1, bitcom_dense_dense_mul1_by_constant, bitcom_sparse_dense_mul, bitcom_squaring, hints_dense_dense_mul0, hints_dense_dense_mul0_by_constant, hints_dense_dense_mul1, hints_dense_dense_mul1_by_constant, tap_dense_dense_mul0, tap_dense_dense_mul0_by_constant, tap_dense_dense_mul1, tap_dense_dense_mul1_by_constant, tap_sparse_dense_mul, tap_squaring, HintInDenseMul0, HintInDenseMul1, HintInSparseDenseMul, HintInSquaring};
+use crate::chunk::taps_mul::*;
 use crate::execute_script;
 
 use super::config::{
     assign_link_ids, groth16_config_gen, msm_config_gen, post_miller_config_gen,
     pre_miller_config_gen,
 };
+use super::hint_models::HintOut;
 use super::primitves::emulate_fq_to_nibbles;
 use super::taps::{tap_hash_c, tap_initT4};
-use super::taps::{HintOut, Sig};
+use super::taps::{Sig};
 use super::wots::WOTSPubKey;
 use crate::treepp::*;
 
