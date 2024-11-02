@@ -21,10 +21,8 @@ pub type WotsSignatures = (
     [wots160::Signature; N_VERIFIER_HASHES],
 );
 
-pub type ProofPublicInputs = ([u8; 32], [u8; 32], [u8; 32]);
-
-pub type Groth16ProofAssertions = (
-    ProofPublicInputs,
+pub type ProofAssertions = (
+    [[u8; 32]; 3],
     [[u8; 32]; N_VERIFIER_FQs],
     [[u8; 32]; N_VERIFIER_HASHES],
 );
@@ -35,7 +33,7 @@ pub struct VerificationKey {
 
 pub struct Proof {
     proof: ark_groth16::Proof<Bn254>,
-    pubs: Vec<ark_bn254::Fr>
+    public_inputs: Vec<ark_bn254::Fr>,
 }
 
 pub struct Verifier {
@@ -49,15 +47,14 @@ impl Verifier {
     }
 
     pub fn generate_tapscripts(
-        vk: VerificationKey,
         public_keys: WotsPublicKeys,
         verifier_scripts: [Script; N_TAPLEAVES],
     ) -> [Script; 602] {
-        let res = chunk::api::generate_tapscripts(&vk.ark_vk, public_keys, verifier_scripts.to_vec());
+        let res = chunk::api::generate_tapscripts(public_keys, verifier_scripts.to_vec());
         res.try_into().unwrap()
     }
 
-    pub fn generate_assertions(proof: Proof) -> Groth16ProofAssertions {
+    pub fn generate_assertions(proof: Proof) -> ProofAssertions {
         todo!()
     }
 
@@ -74,14 +71,15 @@ impl Verifier {
 
 #[cfg(test)]
 mod test {
-    use self::chunk::wots::WOTSPubKey;
     use ark_bn254::Bn254;
-    use ark_groth16::{ProvingKey, VerifyingKey};
 
     use super::*;
 
-
-    fn generate_mock_proof() -> (ark_groth16::Proof<Bn254>, Vec<ark_bn254::Fr>, ark_groth16::VerifyingKey<Bn254>) {
+    fn generate_mock_proof() -> (
+        ark_groth16::Proof<Bn254>,
+        Vec<ark_bn254::Fr>,
+        ark_groth16::VerifyingKey<Bn254>,
+    ) {
         use ark_bn254::Bn254;
         use ark_crypto_primitives::snark::{CircuitSpecificSetupSNARK, SNARK};
         use ark_ec::pairing::Pairing;
@@ -174,17 +172,15 @@ mod test {
         (proof, vec![pub_commit, pub_commit1, pub_commit2], vk)
     }
 
-
-
     fn mock_pubkeys() -> WotsPublicKeys {
         let secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
-        let pub0 = wots256::generate_public_key(&format!("{secret}{:04x}",0));
-        let pub1 = wots256::generate_public_key(&format!("{secret}{:04x}",1));
-        let pub2 = wots256::generate_public_key(&format!("{secret}{:04x}",2));
+        let pub0 = wots256::generate_public_key(&format!("{secret}{:04x}", 0));
+        let pub1 = wots256::generate_public_key(&format!("{secret}{:04x}", 1));
+        let pub2 = wots256::generate_public_key(&format!("{secret}{:04x}", 2));
         let mut fq_arr = vec![];
         for i in 0..N_VERIFIER_FQs {
-            let p256 = wots256::generate_public_key(&format!("{secret}{:04x}", 3+i));
+            let p256 = wots256::generate_public_key(&format!("{secret}{:04x}", 3 + i));
             fq_arr.push(p256);
         }
         let mut h_arr = vec![];
@@ -202,7 +198,7 @@ mod test {
 
     #[test]
     fn test_fn_compile() {
-        let (_,_, mock_vk) = generate_mock_proof();
+        let (_, _, mock_vk) = generate_mock_proof();
         assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
 
         let _ops_scripts = Verifier::compile(VerificationKey { ark_vk: mock_vk });
@@ -210,16 +206,36 @@ mod test {
 
     #[test]
     fn test_fn_generate_tapscripts() {
-        let (_,_, mock_vk) = generate_mock_proof();
+        println!("start");
+
+        let (_, _, mock_vk) = generate_mock_proof();
+        println!("compiled circuit");
+
         assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
         let mock_pubs = mock_pubkeys();
-        let ops_scripts = Verifier::compile(VerificationKey { ark_vk: mock_vk.clone() });
-        let _tapscripts = Verifier::generate_tapscripts(VerificationKey { ark_vk: mock_vk }, mock_pubs, ops_scripts);
+        let ops_scripts = Verifier::compile(VerificationKey {
+            ark_vk: mock_vk.clone(),
+        });
+        println!(
+            "script.lens: {:?}",
+            ops_scripts.as_ref().iter().map(|script| script.len())
+        );
+
+        let tapscripts = Verifier::generate_tapscripts(mock_pubs, ops_scripts);
+        println!(
+            "tapscript.lens: {:?}",
+            tapscripts.map(|script| script.len())
+        );
     }
 
     #[test]
     fn test_fn_generate_assertions() {
-        let (_,_, mock_vk) = generate_mock_proof();
-        assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs   
+        let (_, _, mock_vk) = generate_mock_proof();
+        assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
+    }
+
+    #[test]
+    fn test_hello() {
+        println!("hello");
     }
 }
