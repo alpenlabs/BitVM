@@ -30,22 +30,18 @@ pub type Groth16ProofAssertions = (
 );
 
 pub struct VerificationKey {
-    pub ark_vk: ark_groth16::VerifyingKey<Bn254>
+    pub ark_vk: ark_groth16::VerifyingKey<Bn254>,
 }
 
 pub struct Proof {}
 
 pub struct Verifier {
-    pub vk: VerificationKey
+    pub vk: VerificationKey,
 }
 
 impl Verifier {
-    pub fn new(vk: VerificationKey) -> Self {
-        Self { vk }
-    }
-
-    pub fn compile(&self) -> [Script; N_TAPLEAVES] {
-        let res = chunk::api::api_compile(&self.vk.ark_vk);
+    pub fn compile(vk: VerificationKey) -> [Script; N_TAPLEAVES] {
+        let res = chunk::api::api_compile(&vk.ark_vk);
         res.try_into().unwrap()
     }
 
@@ -73,14 +69,13 @@ impl Verifier {
     }
 }
 
-
 #[cfg(test)]
 mod test {
+    use self::chunk::wots::WOTSPubKey;
     use ark_bn254::Bn254;
     use ark_groth16::{ProvingKey, VerifyingKey};
 
     use super::*;
-
 
     fn setup_mock_groth16_circuit() -> (ProvingKey<Bn254>, VerifyingKey<Bn254>) {
         use ark_bn254::Bn254;
@@ -168,7 +163,6 @@ mod test {
         (pk, vk)
     }
 
-
     fn mock_pubkeys() -> WotsPublicKeys {
         let secret = "a01b23c45d67e89f";
 
@@ -185,7 +179,11 @@ mod test {
             let p160 = wots160::generate_public_key(&format!("{secret}vha{}", i));
             h_arr.push(p160);
         }
-        let wotspubkey: WotsPublicKeys = ((pub0, pub1, pub2), fq_arr.try_into().unwrap(), h_arr.try_into().unwrap());
+        let wotspubkey: WotsPublicKeys = (
+            (pub0, pub1, pub2),
+            fq_arr.try_into().unwrap(),
+            h_arr.try_into().unwrap(),
+        );
         wotspubkey
     }
 
@@ -194,19 +192,15 @@ mod test {
         let (_, mock_vk) = setup_mock_groth16_circuit();
         assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
 
-        let vr = Verifier::new(VerificationKey { ark_vk: mock_vk });
-        let _ops_scripts = vr.compile();
+        let _ops_scripts = Verifier::compile(VerificationKey { ark_vk: mock_vk });
     }
 
     #[test]
     fn test_fn_generate_tapscripts() {
         let (_, mock_vk) = setup_mock_groth16_circuit();
         assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
-        let mock_pubs = mock_pubkeys();
-        let vr = Verifier::new(VerificationKey { ark_vk: mock_vk });
-        let ops_scripts = vr.compile();
-        let tap_scripts = vr.generate_tapscripts(mock_pubs, ops_scripts);
-       
+        let _mock_pubs = mock_pubkeys();
+        let _ops_scripts = Verifier::compile(VerificationKey { ark_vk: mock_vk });
+        todo!()
     }
-
 }
