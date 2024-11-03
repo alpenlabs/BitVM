@@ -10,19 +10,19 @@ pub const N_VERIFIER_HASHES: usize = 574;
 pub const N_TAPLEAVES: usize = 579;
 
 pub type WotsPublicKeys = (
-    (wots256::PublicKey, wots256::PublicKey, wots256::PublicKey),
+    [wots256::PublicKey; N_VERIFIER_PUBLIC_INPUTS],
     [wots256::PublicKey; N_VERIFIER_FQs],
     [wots160::PublicKey; N_VERIFIER_HASHES],
 );
 
 pub type WotsSignatures = (
-    (wots256::Signature, wots256::Signature, wots256::Signature),
+    [wots256::Signature; N_VERIFIER_PUBLIC_INPUTS],
     [wots256::Signature; N_VERIFIER_FQs],
     [wots160::Signature; N_VERIFIER_HASHES],
 );
 
 pub type ProofAssertions = (
-    [[u8; 32]; 3],
+    [[u8; 32]; N_VERIFIER_PUBLIC_INPUTS],
     [[u8; 32]; N_VERIFIER_FQs],
     [[u8; 20]; N_VERIFIER_HASHES],
 );
@@ -201,7 +201,7 @@ mod test {
             h_arr.push(p160);
         }
         let wotspubkey: WotsPublicKeys = (
-            (pub0, pub1, pub2),
+            [pub0, pub1, pub2],
             fq_arr.try_into().unwrap(),
             h_arr.try_into().unwrap(),
         );
@@ -229,7 +229,7 @@ mod test {
         }
         let hsig: [wots160::Signature; N_VERIFIER_HASHES] = hsig.try_into().unwrap();
 
-        let r = ((ps0, ps1, ps2), fsig, hsig);
+        let r = ([ps0, ps1, ps2], fsig, hsig);
         r
     }
 

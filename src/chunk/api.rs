@@ -50,7 +50,7 @@ pub fn generate_tapscripts(
     pubkeys: WotsPublicKeys,
     ops_scripts_per_link: &[Script],
 ) -> Vec<Script> {
-    let (p0, p1, p2) = pubkeys.0;
+    let [p0, p1, p2] = pubkeys.0;
     let fq_arr = pubkeys.1;
     let hash_arr = pubkeys.2;
 
@@ -109,7 +109,7 @@ fn mock_pubkeys() -> WotsPublicKeys {
         h_arr.push(p160);
     }
     let wotspubkey: WotsPublicKeys = (
-        (pub0, pub1, pub2),
+        [pub0, pub1, pub2],
         fq_arr.try_into().unwrap(),
         h_arr.try_into().unwrap(),
     );
@@ -118,7 +118,7 @@ fn mock_pubkeys() -> WotsPublicKeys {
 
 fn generate_mock_pub_keys() -> HashMap<u32, WOTSPubKey> {
     let pubkeys = mock_pubkeys();
-    let (p0, p1, p2) = pubkeys.0;
+    let [p0, p1, p2] = pubkeys.0;
     let fq_arr = pubkeys.1;
     let hash_arr = pubkeys.2;
 
@@ -281,9 +281,9 @@ pub fn validate_assertions(
     assert_eq!(scalars.len(), 3);
     let mut sigcache: HashMap<u32, Vec<Script>> = HashMap::new();
     let (sa0, sa1, sa2) = (signed_asserts.0, signed_asserts.1, signed_asserts.2);
-    sigcache.insert(0, get_script_from_sig256(sa0.0));
-    sigcache.insert(1, get_script_from_sig256(sa0.1));
-    sigcache.insert(2, get_script_from_sig256(sa0.2));
+    sigcache.insert(0, get_script_from_sig256(sa0[0]));
+    sigcache.insert(1, get_script_from_sig256(sa0[1]));
+    sigcache.insert(2, get_script_from_sig256(sa0[2]));
 
     for i in 0..N_VERIFIER_FQs {
         sigcache.insert((3 + i) as u32, get_script_from_sig256(sa1[i]));
@@ -296,7 +296,7 @@ pub fn validate_assertions(
         );
     }
 
-    let (p0, p1, p2) = pubkeys.0;
+    let [p0, p1, p2] = pubkeys.0;
     let fq_arr = pubkeys.1;
     let hash_arr = pubkeys.2;
 
