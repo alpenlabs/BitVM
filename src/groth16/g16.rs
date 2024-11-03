@@ -48,9 +48,9 @@ impl Verifier {
 
     pub fn generate_tapscripts(
         public_keys: WotsPublicKeys,
-        verifier_scripts: [Script; N_TAPLEAVES],
+        verifier_scripts: &[Script; N_TAPLEAVES],
     ) -> [Script; N_TAPLEAVES] {
-        let res = chunk::api::generate_tapscripts(public_keys, verifier_scripts.to_vec());
+        let res = chunk::api::generate_tapscripts(public_keys, verifier_scripts);
         res.try_into().unwrap()
     }
 
@@ -65,7 +65,7 @@ impl Verifier {
         vk: VerificationKey,
         signatures: WotsSignatures,
         pubkeys: WotsPublicKeys,
-        verifier_scripts: [Script; N_TAPLEAVES],
+        verifier_scripts: &[Script; N_TAPLEAVES],
     ) -> Option<(u32, Script, Script)> {
         let r = chunk::api::validate_assertions(
             proof.proof,
@@ -256,7 +256,7 @@ mod test {
             ops_scripts.as_ref().iter().map(|script| script.len())
         );
 
-        let tapscripts = Verifier::generate_tapscripts(mock_pubs, ops_scripts);
+        let tapscripts = Verifier::generate_tapscripts(mock_pubs, &ops_scripts);
         println!(
             "tapscript.lens: {:?}",
             tapscripts.map(|script| script.len())
@@ -295,7 +295,7 @@ mod test {
             ark_vk: mock_vk.clone(),
         });
         let mock_pubks = mock_pubkeys();
-        let verifer_scripts = Verifier::generate_tapscripts(mock_pubks, ops_scripts);
+        let verifer_scripts = Verifier::generate_tapscripts(mock_pubks, &ops_scripts);
 
         let fault = Verifier::validate_assertion_signatures(
             Proof {
@@ -305,7 +305,7 @@ mod test {
             VerificationKey { ark_vk: mock_vk },
             signed_asserts,
             mock_pubks,
-            verifer_scripts,
+            &verifer_scripts,
         );
         println!("fault {:?}", fault);
     }

@@ -6,7 +6,9 @@ use crate::chunk::config::{assign_link_ids, keygen, NUM_PUBS, NUM_U160, NUM_U256
 use crate::chunk::evaluate::{evaluate, extract_values_from_hints};
 use crate::chunk::taps::Sig;
 use crate::chunk::wots::WOTSPubKey;
-use crate::groth16::g16::{N_VERIFIER_FQs, ProofAssertions, WotsPublicKeys, WotsSignatures, N_TAPLEAVES, N_VERIFIER_HASHES};
+use crate::groth16::g16::{
+    N_VERIFIER_FQs, ProofAssertions, WotsPublicKeys, WotsSignatures, N_TAPLEAVES, N_VERIFIER_HASHES,
+};
 use crate::groth16::offchain_checker::compute_c_wi;
 use crate::signatures::wots::{wots160, wots256};
 use crate::treepp::*;
@@ -46,7 +48,7 @@ pub fn api_compile(vk: &ark_groth16::VerifyingKey<Bn254>) -> Vec<Script> {
 
 pub fn generate_tapscripts(
     pubkeys: WotsPublicKeys,
-    ops_scripts_per_link: Vec<Script>,
+    ops_scripts_per_link: &[Script],
 ) -> Vec<Script> {
     let (p0, p1, p2) = pubkeys.0;
     let fq_arr = pubkeys.1;
@@ -76,7 +78,10 @@ pub fn generate_tapscripts(
         &pubkeys,
         true,
     );
-    let bitcom_scripts_per_link: Vec<Script> = bitcom_scripts_per_link.into_iter().map(|(_, f)| f).collect();
+    let bitcom_scripts_per_link: Vec<Script> = bitcom_scripts_per_link
+        .into_iter()
+        .map(|(_, f)| f)
+        .collect();
     bitcom_scripts_per_link
 }
 
@@ -105,7 +110,6 @@ fn mock_pubkeys() -> WotsPublicKeys {
 }
 
 fn generate_mock_pub_keys() -> HashMap<u32, WOTSPubKey> {
-
     let pubkeys = mock_pubkeys();
     let (p0, p1, p2) = pubkeys.0;
     let fq_arr = pubkeys.1;
@@ -141,21 +145,24 @@ fn generate_mock_pub_keys() -> HashMap<u32, WOTSPubKey> {
     //     }
 
     pubkeys
-
 }
 
 fn nib_to_byte_array(digits: &[u8]) -> Vec<u8> {
     let mut msg_bytes = Vec::with_capacity(digits.len() / 2);
-    
+
     for nibble_pair in digits.chunks(2) {
         let byte = (nibble_pair[1] << 4) | (nibble_pair[0] & 0b00001111);
         msg_bytes.push(byte);
     }
-    
+
     msg_bytes
 }
 
-pub fn generate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, scalars: Vec<ark_bn254::Fr>, vk: &ark_groth16::VerifyingKey<Bn254>) -> ProofAssertions {
+pub fn generate_assertions(
+    proof: ark_groth16::Proof<Bn<ark_bn254::Config>>,
+    scalars: Vec<ark_bn254::Fr>,
+    vk: &ark_groth16::VerifyingKey<Bn254>,
+) -> ProofAssertions {
     assert_eq!(scalars.len(), 3);
 
     let sec = "b138982ce17ac813d505b5b40b665d404e9528e7"; // can be any random hex
@@ -165,12 +172,14 @@ pub fn generate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, sca
     };
     let pk = generate_mock_pub_keys();
 
-
-    let msm_scalar = vec![scalars[2],scalars[1],scalars[0]];
-    let msm_gs = vec![vk.gamma_abc_g1[3],vk.gamma_abc_g1[2],vk.gamma_abc_g1[1]]; // vk.vk_pubs[0]
-    let p3 =  vk.gamma_abc_g1[0] * ark_bn254::Fr::ONE + vk.gamma_abc_g1[1] * scalars[0] + vk.gamma_abc_g1[2] * scalars[1] + vk.gamma_abc_g1[3] * scalars[2];
+    let msm_scalar = vec![scalars[2], scalars[1], scalars[0]];
+    let msm_gs = vec![vk.gamma_abc_g1[3], vk.gamma_abc_g1[2], vk.gamma_abc_g1[1]]; // vk.vk_pubs[0]
+    let p3 = vk.gamma_abc_g1[0] * ark_bn254::Fr::ONE
+        + vk.gamma_abc_g1[1] * scalars[0]
+        + vk.gamma_abc_g1[2] * scalars[1]
+        + vk.gamma_abc_g1[3] * scalars[2];
     let p3 = p3.into_affine();
-    let ( p2, p1, p4) = ( proof.c, vk.alpha_g1, proof.a);
+    let (p2, p1, p4) = (proof.c, vk.alpha_g1, proof.a);
     let (q3, q2, q1, q4) = (
         vk.gamma_g2.into_group().neg().into_affine(),
         vk.delta_g2.into_group().neg().into_affine(),
@@ -179,9 +188,8 @@ pub fn generate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, sca
     );
     let f_fixed = Bn254::multi_miller_loop_affine([p1], [q1]).0;
     let f = Bn254::multi_miller_loop_affine([p1, p2, p3, p4], [q1, q2, q3, q4]).0;
-   
-    let (c, s) = compute_c_wi(f);
 
+    let (c, s) = compute_c_wi(f);
 
     let (aux, fault) = evaluate(
         &mut sig,
@@ -200,35 +208,39 @@ pub fn generate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, sca
         vk.gamma_abc_g1[0],
     );
     let assertions = extract_values_from_hints(aux);
-    println!("{} and {}",assertions.len(), NUM_PUBS + NUM_U160 + NUM_U256);
+    println!(
+        "{} and {}",
+        assertions.len(),
+        NUM_PUBS + NUM_U160 + NUM_U256
+    );
     let mut batch1 = vec![];
     for i in 0..NUM_PUBS {
         let val = assertions.get(&(i as u32)).unwrap();
-        let bal:[u8;32] = nib_to_byte_array(val).try_into().unwrap();
+        let bal: [u8; 32] = nib_to_byte_array(val).try_into().unwrap();
         batch1.push(bal);
     }
-    let batch1: [[u8;32]; 3] = batch1.try_into().unwrap();
+    let batch1: [[u8; 32]; 3] = batch1.try_into().unwrap();
 
     let len = batch1.len();
     let mut batch2 = vec![];
     for i in 0..NUM_U256 {
-        let val = assertions.get(&((i+len) as u32)).unwrap();
-        let bal:[u8;32] = nib_to_byte_array(val).try_into().unwrap();
+        let val = assertions.get(&((i + len) as u32)).unwrap();
+        let bal: [u8; 32] = nib_to_byte_array(val).try_into().unwrap();
         batch2.push(bal);
     }
-    let batch2: [[u8;32]; N_VERIFIER_FQs] = batch2.try_into().unwrap();
+    let batch2: [[u8; 32]; N_VERIFIER_FQs] = batch2.try_into().unwrap();
 
     let len = batch1.len() + batch2.len();
     let mut batch3 = vec![];
     for i in 0..NUM_U160 {
-        let val = assertions.get(&((i+len) as u32)).unwrap();
-        let bal:[u8;32] = nib_to_byte_array(val).try_into().unwrap();
-        let bal:[u8;20] = bal[12..32].try_into().unwrap();
+        let val = assertions.get(&((i + len) as u32)).unwrap();
+        let bal: [u8; 32] = nib_to_byte_array(val).try_into().unwrap();
+        let bal: [u8; 20] = bal[12..32].try_into().unwrap();
         batch3.push(bal);
     }
-    let batch3: [[u8;20]; N_VERIFIER_HASHES] = batch3.try_into().unwrap();
+    let batch3: [[u8; 20]; N_VERIFIER_HASHES] = batch3.try_into().unwrap();
 
-   (batch1, batch2, batch3)
+    (batch1, batch2, batch3)
 }
 
 fn get_script_from_sig256(signature: wots256::Signature) -> Vec<Script> {
@@ -251,7 +263,14 @@ fn get_script_from_sig160(signature: wots160::Signature) -> Vec<Script> {
     sigs
 }
 
-pub fn validate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, scalars: Vec<ark_bn254::Fr>, vk: &ark_groth16::VerifyingKey<Bn254>, signed_asserts: WotsSignatures, pubkeys: WotsPublicKeys, verifier_scripts: [Script; N_TAPLEAVES]) -> Option<(u32, Script, Script)> {
+pub fn validate_assertions(
+    proof: ark_groth16::Proof<Bn<ark_bn254::Config>>,
+    scalars: Vec<ark_bn254::Fr>,
+    vk: &ark_groth16::VerifyingKey<Bn254>,
+    signed_asserts: WotsSignatures,
+    pubkeys: WotsPublicKeys,
+    verifier_scripts: &[Script; N_TAPLEAVES],
+) -> Option<(u32, Script, Script)> {
     assert_eq!(scalars.len(), 3);
     let mut sigcache: HashMap<u32, Vec<Script>> = HashMap::new();
     let (sa0, sa1, sa2) = (signed_asserts.0, signed_asserts.1, signed_asserts.2);
@@ -264,7 +283,10 @@ pub fn validate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, sca
     }
 
     for i in 0..N_VERIFIER_HASHES {
-        sigcache.insert((3 + i + N_VERIFIER_FQs) as u32, get_script_from_sig160(sa2[i]));
+        sigcache.insert(
+            (3 + i + N_VERIFIER_FQs) as u32,
+            get_script_from_sig160(sa2[i]),
+        );
     }
 
     let (p0, p1, p2) = pubkeys.0;
@@ -289,12 +311,14 @@ pub fn validate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, sca
         cache: sigcache,
     };
 
-
-    let msm_scalar = vec![scalars[2],scalars[1],scalars[0]];
-    let msm_gs = vec![vk.gamma_abc_g1[3],vk.gamma_abc_g1[2],vk.gamma_abc_g1[1]]; // vk.vk_pubs[0]
-    let p3 =  vk.gamma_abc_g1[0] * ark_bn254::Fr::ONE + vk.gamma_abc_g1[1] * scalars[0] + vk.gamma_abc_g1[2] * scalars[1] + vk.gamma_abc_g1[3] * scalars[2];
+    let msm_scalar = vec![scalars[2], scalars[1], scalars[0]];
+    let msm_gs = vec![vk.gamma_abc_g1[3], vk.gamma_abc_g1[2], vk.gamma_abc_g1[1]]; // vk.vk_pubs[0]
+    let p3 = vk.gamma_abc_g1[0] * ark_bn254::Fr::ONE
+        + vk.gamma_abc_g1[1] * scalars[0]
+        + vk.gamma_abc_g1[2] * scalars[1]
+        + vk.gamma_abc_g1[3] * scalars[2];
     let p3 = p3.into_affine();
-    let ( p2, p1, p4) = ( proof.c, vk.alpha_g1, proof.a);
+    let (p2, p1, p4) = (proof.c, vk.alpha_g1, proof.a);
     let (q3, q2, q1, q4) = (
         vk.gamma_g2.into_group().neg().into_affine(),
         vk.delta_g2.into_group().neg().into_affine(),
@@ -303,9 +327,8 @@ pub fn validate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, sca
     );
     let f_fixed = Bn254::multi_miller_loop_affine([p1], [q1]).0;
     let f = Bn254::multi_miller_loop_affine([p1, p2, p3, p4], [q1, q2, q3, q4]).0;
-   
-    let (c, s) = compute_c_wi(f);
 
+    let (c, s) = compute_c_wi(f);
 
     let (_, fault) = evaluate(
         &mut sig,
@@ -346,16 +369,16 @@ pub fn validate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, sca
         }
     }
 
-
-
-   Some((script_index as u32, hint_scr, verifier_scripts[script_index].clone()))
+    Some((
+        script_index as u32,
+        hint_scr,
+        verifier_scripts[script_index].clone(),
+    ))
 }
-
 
 #[cfg(test)]
 mod test {
     use super::generate_mock_pub_keys;
-
 
     #[test]
     fn test_it() {
