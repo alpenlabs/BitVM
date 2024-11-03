@@ -4,7 +4,7 @@ use std::ops::Neg;
 use crate::chunk::compile::{compile, Vkey};
 use crate::chunk::config::{assign_link_ids, keygen, NUM_PUBS, NUM_U160, NUM_U256};
 use crate::chunk::evaluate::{evaluate, extract_values_from_hints};
-use crate::chunk::taps::Sig;
+use crate::chunk::taps::{Sig, SigData};
 use crate::chunk::wots::WOTSPubKey;
 use crate::groth16::g16::{N_VERIFIER_FQs, ProofAssertions, WotsPublicKeys, WotsSignatures, N_TAPLEAVES, N_VERIFIER_HASHES};
 use crate::groth16::offchain_checker::compute_c_wi;
@@ -154,7 +154,7 @@ fn generate_mock_pub_keys() -> HashMap<u32, WOTSPubKey> {
 
 }
 
-fn nib_to_byte_array(digits: &[u8]) -> Vec<u8> {
+pub(crate) fn nib_to_byte_array(digits: &[u8]) -> Vec<u8> {
     let mut msg_bytes = Vec::with_capacity(digits.len() / 2);
     
     for nibble_pair in digits.chunks(2) {
@@ -241,40 +241,20 @@ pub fn generate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, sca
    (batch1, batch2, batch3)
 }
 
-fn get_script_from_sig256(signature: wots256::Signature) -> Vec<Script> {
-    let mut sigs: Vec<Script> = vec![];
-
-    for (sig, digit) in signature {
-        sigs.push(script!({ sig.to_vec() }));
-        sigs.push(script!({ digit }));
-    }
-    sigs
-}
-
-fn get_script_from_sig160(signature: wots160::Signature) -> Vec<Script> {
-    let mut sigs: Vec<Script> = vec![];
-
-    for (sig, digit) in signature {
-        sigs.push(script!({ sig.to_vec() }));
-        sigs.push(script!({ digit }));
-    }
-    sigs
-}
-
 pub fn validate_assertions(proof: ark_groth16::Proof<Bn<ark_bn254::Config>>, scalars: Vec<ark_bn254::Fr>, vk: &ark_groth16::VerifyingKey<Bn254>, signed_asserts: WotsSignatures, pubkeys: WotsPublicKeys, verifier_scripts: [Script; N_TAPLEAVES]) -> Option<(u32, Script, Script)> {
     assert_eq!(scalars.len(), 3);
-    let mut sigcache: HashMap<u32, Vec<Script>> = HashMap::new();
+    let mut sigcache: HashMap<u32, SigData> = HashMap::new();
     let (sa0, sa1, sa2) = (signed_asserts.0, signed_asserts.1, signed_asserts.2);
-    sigcache.insert(0, get_script_from_sig256(sa0.0));
-    sigcache.insert(1, get_script_from_sig256(sa0.1));
-    sigcache.insert(2, get_script_from_sig256(sa0.2));
+    sigcache.insert(0, SigData::Sig256(sa0.0));
+    sigcache.insert(1, SigData::Sig256(sa0.1));
+    sigcache.insert(2, SigData::Sig256(sa0.2));
 
     for i in 0..N_VERIFIER_FQs {
-        sigcache.insert((3 + i) as u32, get_script_from_sig256(sa1[i]));
+        sigcache.insert((3 + i) as u32, SigData::Sig256(sa1[i]));
     }
 
     for i in 0..N_VERIFIER_HASHES {
-        sigcache.insert((3 + i + N_VERIFIER_FQs) as u32, get_script_from_sig160(sa2[i]));
+        sigcache.insert((3 + i + N_VERIFIER_FQs) as u32, SigData::Sig160(sa2[i]));
     }
 
     let (p0, p1, p2) = pubkeys.0;

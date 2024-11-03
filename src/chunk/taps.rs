@@ -7,6 +7,8 @@ use crate::bn254::utils::{
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::primitves::*;
 use crate::chunk::wots::{wots_compact_checksig_verify_with_pubkey};
+use crate::signatures;
+use crate::signatures::wots::{wots160, wots256, wots32};
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
@@ -28,9 +30,15 @@ pub(crate) type HashBytes = [u8; 64];
 pub type Link = (u32, bool);
 
 #[derive(Debug, Clone)]
+pub enum SigData {
+    Sig256(wots256::Signature),
+    Sig160(wots160::Signature)
+}
+
+#[derive(Debug, Clone)]
 pub struct Sig {
     pub(crate) msk: Option<&'static str>,
-    pub(crate) cache: HashMap<u32, Vec<Script>>,
+    pub(crate) cache: HashMap<u32, SigData>,
 }
 
 pub(crate) fn tup_to_scr(sig: &mut Sig, tup: Vec<(Link, [u8; 64])>) -> Vec<Script> {
@@ -41,26 +49,39 @@ pub(crate) fn tup_to_scr(sig: &mut Sig, tup: Vec<(Link, [u8; 64])>) -> Vec<Scrip
         } else {
             if skey.1 {
                 let v =
-                    wots_p256_sign_digits(&format!("{}{:04X}", sig.msk.unwrap(), skey.0), elem);
+                    wots256::get_signature(&format!("{}{:04X}", sig.msk.unwrap(), skey.0), &elem);
+                let v = SigData::Sig256(v);
                 sig.cache.insert(skey.0, v.clone());
                 v
             } else {
-                let v = wots_p160_sign_digits(
+                let v = wots160::get_signature(
                     &format!("{}{:04X}", sig.msk.unwrap(), skey.0),
                     elem[24..64].try_into().unwrap(),
                 );
+                let v = SigData::Sig160(v);
                 sig.cache.insert(skey.0, v.clone());
                 v
             }
         };
-        // to compact form
-        let mut compact_sig = script! {};
-        for i in 0..bcelem.len() {
-            if i % 2 == 0 {
-                compact_sig = compact_sig.push_script(bcelem[i].clone().compile());
+        let scr = match bcelem {
+            SigData::Sig160(signature) => {
+                script! {
+                    for (sig, _) in signature {
+                        { sig.to_vec() }
+                    }
+                }
             }
-        }
-        compact_bc_scripts.push(compact_sig);
+            SigData::Sig256(signature) => {
+                script! {
+                    for (sig, _) in signature {
+                        { sig.to_vec() }
+                    }
+                }
+            }
+        };
+        compact_bc_scripts.push(scr);
+        // to compact form
+
     }
     compact_bc_scripts
 }
