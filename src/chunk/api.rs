@@ -78,11 +78,18 @@ pub fn generate_tapscripts(
         &pubkeys,
         true,
     );
-    let bitcom_scripts_per_link: Vec<Script> = bitcom_scripts_per_link
-        .into_iter()
-        .map(|(_, f)| f)
-        .collect();
-    bitcom_scripts_per_link
+    assert_eq!(ops_scripts_per_link.len(), bitcom_scripts_per_link.len());
+    let mut itr = 0;
+    let mut taps_per_link = vec![];
+    for (_, bcs) in bitcom_scripts_per_link {
+        let scr = script!(
+            {bcs}
+            {ops_scripts_per_link[itr].clone()}
+        );
+        taps_per_link.push(scr);
+        itr += 1;
+    }
+    taps_per_link
 }
 
 fn mock_pubkeys() -> WotsPublicKeys {
@@ -368,7 +375,6 @@ pub fn validate_assertions(
             script_index = arr_index;
         }
     }
-
     Some((
         script_index as u32,
         hint_scr,

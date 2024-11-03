@@ -82,6 +82,7 @@ impl Verifier {
 #[cfg(test)]
 mod test {
     use ark_bn254::Bn254;
+    use rand::Rng;
 
     use super::*;
 
@@ -195,7 +196,8 @@ mod test {
         }
         let mut h_arr = vec![];
         for i in 0..N_VERIFIER_HASHES {
-            let p160 = wots160::generate_public_key(&format!("{secret}{:04x}", N_VERIFIER_FQs + 3 + i));
+            let p160 =
+                wots160::generate_public_key(&format!("{secret}{:04x}", N_VERIFIER_FQs + 3 + i));
             h_arr.push(p160);
         }
         let wotspubkey: WotsPublicKeys = (
@@ -307,7 +309,77 @@ mod test {
             mock_pubks,
             &verifer_scripts,
         );
-        println!("fault {:?}", fault);
+        assert!(fault.is_none());
+    }
+
+    fn corrupt(proof_asserts: &mut ProofAssertions) {
+        let mut rng = rand::thread_rng();
+
+        // Generate a random number between 1 and 100 (inclusive)
+        let random_number =
+            rng.gen_range(0..N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQs + N_VERIFIER_HASHES);
+        println!("corrupted assertion at index {}", random_number);
+        if random_number < N_VERIFIER_PUBLIC_INPUTS {
+            let index = random_number;
+            if index == 0 {
+                proof_asserts.0[0] = [1u8; 32];
+            } else if index == 1 {
+                proof_asserts.0[1] = [1u8; 32];
+            } else {
+                proof_asserts.0[2] = [1u8; 32];
+            }
+        } else if random_number < N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQs {
+            let index = random_number - N_VERIFIER_PUBLIC_INPUTS;
+            proof_asserts.1[index] = [1u8; 32];
+        } else if random_number < N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQs + N_VERIFIER_HASHES {
+            let index = random_number - N_VERIFIER_PUBLIC_INPUTS - N_VERIFIER_FQs;
+            proof_asserts.2[index] = [1u8; 20];
+        }
+    }
+
+    #[test]
+    fn test_fn_disprove_invalid_assertions() {
+        let (proof, pubs, mock_vk) = generate_mock_proof();
+        assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
+        let mut proof_asserts = Verifier::generate_assertions(
+            VerificationKey {
+                ark_vk: mock_vk.clone(),
+            },
+            Proof {
+                proof: proof.clone(),
+                public_inputs: pubs.clone(),
+            },
+        );
+        // corrupt some assertion value randomly
+        corrupt(&mut proof_asserts);
+        let signed_asserts = sign_assertions(proof_asserts);
+        let ops_scripts = Verifier::compile(VerificationKey {
+            ark_vk: mock_vk.clone(),
+        });
+        let mock_pubks = mock_pubkeys();
+        let verifer_scripts = Verifier::generate_tapscripts(mock_pubks, &ops_scripts);
+
+        let fault = Verifier::validate_assertion_signatures(
+            Proof {
+                proof,
+                public_inputs: pubs,
+            },
+            VerificationKey { ark_vk: mock_vk },
+            signed_asserts,
+            mock_pubks,
+            &verifer_scripts,
+        );
+        let (index, hint_script, ops_script) = fault.unwrap();
+        println!("taproot index {:?}", index);
+        let scr = script!(
+            {hint_script}
+            {ops_script}
+        );
+        let res = execute_script(scr);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        assert!(res.success);
     }
 
     #[test]
