@@ -49,12 +49,12 @@ pub(crate) fn tup_to_scr(sig: &mut Sig, tup: Vec<(Link, [u8; 64])>) -> Vec<Scrip
         } else {
             if skey.1 {
                 let v =
-                    wots256::get_signature(&format!("{}{:04X}", sig.msk.unwrap(), skey.0), &elem);
+                    wots256::get_signature2(&format!("{}{:04X}", sig.msk.unwrap(), skey.0), elem);
                 let v = SigData::Sig256(v);
                 sig.cache.insert(skey.0, v.clone());
                 v
             } else {
-                let v = wots160::get_signature(
+                let v = wots160::get_signature2(
                     &format!("{}{:04X}", sig.msk.unwrap(), skey.0),
                     elem[24..64].try_into().unwrap(),
                 );
