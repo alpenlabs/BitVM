@@ -195,7 +195,7 @@ mod test {
         }
         let mut h_arr = vec![];
         for i in 0..N_VERIFIER_HASHES {
-            let p160 = wots160::generate_public_key(&format!("{secret}{:04x}", N_VERIFIER_FQs + i));
+            let p160 = wots160::generate_public_key(&format!("{secret}{:04x}", N_VERIFIER_FQs + 3 + i));
             h_arr.push(p160);
         }
         let wotspubkey: WotsPublicKeys = (
