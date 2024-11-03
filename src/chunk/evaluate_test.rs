@@ -431,9 +431,9 @@ mod test {
             vk.vk_pubs[0],
         );
         assert!(fault.is_none());
-        if dump_assertions_to_file {
-            write_scripts_to_file(sig.cache, assert_f);
-        }
+        // if dump_assertions_to_file {
+        //     write_scripts_to_file(sig.cache, assert_f);
+        // }
     }
 
     #[test]
@@ -480,7 +480,7 @@ mod test {
     
             let mut sig = Sig {
                 msk: None,
-                cache: assertion,
+                cache: HashMap::new(),
             };
     
             let (_, fault) = evaluate(

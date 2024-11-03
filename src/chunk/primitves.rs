@@ -750,35 +750,6 @@ pub fn hash_fp12_with_hints() -> Script {
     }
 }
 
-pub(crate) fn sig_to_msg(sig: &Sig, skey: (u32, bool)) -> HashBytes {
-    let mut scr = script! {};
-    let bcelem = sig.cache.get(&skey.0).unwrap().clone();
-    for i in 0..bcelem.len() {
-        if i % 2 == 1 {
-            scr = scr.push_script(bcelem[i].clone().compile());
-        }
-    }
-    let exec_result = execute_script(scr);
-    let mut arr = [0u8; 64];
-    let mut len = 40;
-    if skey.1 {
-        len = 64;
-    }
-    assert!(exec_result.final_stack.len() == 64 + 3 || exec_result.final_stack.len() == 40 + 3);
-    for i in 0..len {
-        let v = exec_result.final_stack.get(i);
-        if v.len() == 0 {
-            arr[i] = 0;
-        } else {
-            arr[i] = v[0].clone();
-        }
-        
-    }
-    arr.reverse();
-    arr
-}
-
-
 
 #[cfg(test)]
 mod test {
@@ -825,20 +796,4 @@ mod test {
     }
 
 
-    #[test]
-    fn test_sig_to_msg() {
-        let mut prng = ChaCha20Rng::seed_from_u64(1);
-        let p = ark_bn254::Fq::rand(&mut prng);
-        let p = emulate_fq_to_nibbles(p);
-        let secret = "a01b23c45d67e89f";
-
-        let sigs = wots_p160_sign_digits(secret, p[24..64].try_into().unwrap());
-        let mut sigmap: HashMap<u32, Vec<Script>> = HashMap::new();
-        sigmap.insert(0, sigs);
-        let sig = Sig {msk: None, cache:sigmap};
-        let res = sig_to_msg(&sig, (0, false));
-        println!("p {:?}", p);
-        println!("res {:?}", res);
-    
-    }
 }
