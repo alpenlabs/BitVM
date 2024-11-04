@@ -242,7 +242,14 @@ mod test {
         let (_, _, mock_vk) = generate_mock_proof();
         assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
 
-        let _ops_scripts = Verifier::compile(VerificationKey { ark_vk: mock_vk });
+        let ops_scripts = Verifier::compile(VerificationKey { ark_vk: mock_vk });
+        let mut script_cache = HashMap::new();
+
+        for i in 0..ops_scripts.len() {
+            script_cache.insert(i as u32, vec![ops_scripts[i].clone()]);
+        }
+
+        write_scripts_to_separate_files(script_cache, "tapnode");
     }
 
     #[test]
@@ -267,13 +274,7 @@ mod test {
             "tapscript.lens: {:?}",
             tapscripts.clone().map(|script| script.len())
         );
-        let mut script_cache = HashMap::new();
 
-        for i in 0..tapscripts.len() {
-            script_cache.insert(i as u32, vec![tapscripts[i].clone()]);
-        }
-
-        write_scripts_to_separate_files(script_cache, "tapnode");
     }
 
     #[test]
