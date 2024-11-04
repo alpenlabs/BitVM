@@ -256,8 +256,7 @@ pub fn validate_assertions(
     vk: &ark_groth16::VerifyingKey<Bn254>,
     signed_asserts: WotsSignatures,
     pubkeys: WotsPublicKeys,
-    verifier_scripts: &[Script; N_TAPLEAVES],
-) -> Option<(u32, Script, Script)> {
+) -> Option<(usize, Script)> {
     assert_eq!(scalars.len(), 3);
     let mut sigcache: HashMap<u32, SigData> = HashMap::new();
     let (sa0, sa1, sa2) = (signed_asserts.0, signed_asserts.1, signed_asserts.2);
@@ -352,11 +351,7 @@ pub fn validate_assertions(
             script_index = arr_index;
         }
     }
-    Some((
-        script_index as u32,
-        hint_scr,
-        verifier_scripts[script_index].clone(),
-    ))
+    Some((script_index, hint_scr))
 }
 
 #[cfg(test)]

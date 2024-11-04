@@ -58,22 +58,20 @@ impl Verifier {
         chunk::api::generate_assertions(proof.proof, proof.public_inputs, &vk.ark_vk)
     }
 
-    /// Validates the groth16 proof assertion signatures and returns a tuple of (tapleaf_index, tapleaf_script, and witness_script) if
+    /// Validates the groth16 proof assertion signatures and returns a tuple of (tapleaf_index, witness_script) if
     /// the proof is invalid, else returns none
     pub fn validate_assertion_signatures(
         proof: Proof,
         vk: VerificationKey,
         signatures: WotsSignatures,
         pubkeys: WotsPublicKeys,
-        verifier_scripts: &[Script; N_TAPLEAVES],
-    ) -> Option<(u32, Script, Script)> {
+    ) -> Option<(usize, Script)> {
         let r = chunk::api::validate_assertions(
             proof.proof,
             proof.public_inputs,
             &vk.ark_vk,
             signatures,
             pubkeys,
-            verifier_scripts,
         );
         r
     }
@@ -2789,7 +2787,6 @@ mod test {
             ark_vk: mock_vk.clone(),
         });
         let mock_pubks = mock_pubkeys();
-        let verifer_scripts = Verifier::generate_tapscripts(mock_pubks, &ops_scripts);
 
         let fault = Verifier::validate_assertion_signatures(
             Proof {
@@ -2799,14 +2796,11 @@ mod test {
             VerificationKey { ark_vk: mock_vk },
             signed_asserts,
             mock_pubks,
-            &verifer_scripts,
         );
         assert!(fault.is_none());
     }
 
     fn corrupt(proof_asserts: &mut ProofAssertions) {
-        let mut rng = rand::thread_rng();
-
         // Generate a random number between 1 and 100 (inclusive)
         let random_number = 52; //rng.gen_range(0..N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQs + N_VERIFIER_HASHES);
         println!("corrupted assertion at index {}", random_number);
@@ -2848,7 +2842,7 @@ mod test {
         let ops_scripts: [Script; N_TAPLEAVES] = op_scripts.try_into().unwrap();
 
         let mock_pubks = mock_pubkeys();
-        let verifer_scripts = Verifier::generate_tapscripts(mock_pubks, &ops_scripts);
+        let verifier_scripts = Verifier::generate_tapscripts(mock_pubks, &ops_scripts);
 
         let mut proof_asserts = mock_asserts();
         corrupt(&mut proof_asserts);
@@ -2862,14 +2856,13 @@ mod test {
             VerificationKey { ark_vk: mock_vk },
             signed_asserts,
             mock_pubks,
-            &verifer_scripts,
         );
         if fault.is_some() {
-            let (index, hint_script, ops_script) = fault.unwrap();
+            let (index, hint_script) = fault.unwrap();
             println!("taproot index {:?}", index);
             let scr = script!(
                 {hint_script}
-                {ops_script}
+                {verifier_scripts[index].clone()}
             );
             let res = execute_script(scr);
             for i in 0..res.final_stack.len() {
@@ -2877,7 +2870,6 @@ mod test {
             }
             assert!(res.success);
         }
-
     }
 
     #[test]
