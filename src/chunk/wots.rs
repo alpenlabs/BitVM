@@ -179,13 +179,14 @@ pub fn generate_assertion_spending_key_lengths(apk: &AssertPublicKeys) -> Vec<us
 #[cfg(test)]
 mod test {
 
-    use ark_ff::{Field, UniformRand};
+    use ark_ff::{BigInteger, Field, PrimeField, UniformRand};
+    use ark_std::test_rng;
     use bitcoin::opcodes::{all::OP_ROLL, OP_TRUE};
-    use rand::SeedableRng;
+    use rand::{RngCore, SeedableRng};
     use rand_chacha::ChaCha20Rng;
 
     use super::*;
-    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::primitves::{emulate_extern_hash_fps, emulate_extern_hash_nibbles, emulate_fq_to_nibbles, unpack_limbs_to_nibbles}, execute_script, signatures::{self, wots::{wots256}}};
+    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::{evaluate::nib_to_byte_array, primitves::{emulate_extern_hash_fps, emulate_extern_hash_nibbles, emulate_fq_to_nibbles, unpack_limbs_to_nibbles}}, execute_script, signatures::{self, wots::wots256}};
 
 
     #[test]
@@ -234,4 +235,97 @@ mod test {
             assert!(res.success);
     }
 
+
+// 0110 0100
+// 0011 1100 0000
+    #[test]
+    fn test_nib() {
+        let secret = "a01b23c45d67e89f";
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let f = ark_bn254::Fq::from(100);
+        let mut fb = emulate_fq_to_nibbles(f);
+        println!("fb {:?}", fb);
+        let sig = wots256::get_signature(secret, &fb);  
+        let mut bs = vec![]; 
+        for (a, b) in sig {
+            bs.push(b);
+        }
+        println!("bs {:?}", bs);
+        // let r = from_wots_signature(sig);
+        // println!("f {:?}", f);
+        // println!("r {:?}", r);
+    }
+
+    fn from_wots_signature<F: ark_ff::PrimeField>(
+        signature: wots256::Signature,
+        public_key: wots256::PublicKey,
+    ) -> F {
+        let nibbles = &signature.map(|(sig, digit)| digit)[0..wots256::M_DIGITS as usize];
+        let bytes = nibbles
+            .chunks(2)
+            .rev()
+            .map(|bn| (bn[0] << 4) + bn[1])
+            .collect::<Vec<u8>>();
+        F::from_le_bytes_mod_order(&bytes)
+    }
+
+    #[test]
+    fn test_fq_from_wots_signature() {
+        let secret = "0011";
+
+        let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
+
+        let fq = ark_bn254::Fq::ONE;
+        let fqnib = emulate_fq_to_nibbles(fq);
+        let fqr = nib_to_byte_array(&fqnib);
+        let public_key = wots256::generate_public_key(secret);
+        let signature = wots256::get_signature(secret, &fqr);
+        let nibbles = &signature.map(|(sig, digit)| digit)[0..wots256::M_DIGITS as usize];
+        println!("{:?}", fqr);
+        println!("{:?}", nibbles);
+        let fq_s = from_wots_signature::<ark_bn254::Fq>(signature, public_key);
+        println!("{:?}", fq_s);
+        // assert_eq!(fq, fq_s);
+
+        // let fr = ark_bn254::Fr::ONE;
+        // let public_key = wots256::generate_public_key(secret);
+        // let signature = wots256::get_signature(secret, &fr.into_bigint().to_bytes_le());
+        // let fr_s = from_wots_signature::<ark_bn254::Fr>(signature, public_key);
+        // assert_eq!(fr, fr_s);
+    }
+
+
+    #[test]
+    fn test_em1() {
+        let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
+        let fq = ark_bn254::Fq::from(280);
+        let fq2 = fq.into_bigint().to_bytes_le();
+        let fqs = emulate_fq_to_nibbles(fq);
+        println!("fqs {:?}", fqs);
+        println!("fqs {:?}", fq2);
+    }
+    
+
+    #[test]
+    fn test_emq() {
+        let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
+
+        let fq = ark_bn254::Fq::rand(&mut rng);
+        // let mut fqb = fq.into_bigint().to_bytes_le();
+        // fqb.reverse();
+        // println!("fqb {:?}", fqb);
+
+        // let nibs = emulate_fq_to_nibbles(fq);
+        // println!("nibs {:?}", nibs);
+
+        let fq = ark_bn254::Fq::rand(&mut rng);
+        let fqb = fq.into_bigint().to_bytes_le();
+        let secret = "0011";
+        let signature = wots256::get_signature(secret, &fq.into_bigint().to_bytes_le());
+        let nibbles = &signature.map(|(sig, digit)| digit)[0..wots256::M_DIGITS as usize];
+        println!("fqb {:?}", nibbles);
+
+        let nibs = emulate_fq_to_nibbles(fq);
+        println!("nibs {:?}", nibs);
+    }
 }

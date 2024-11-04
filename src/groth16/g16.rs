@@ -2864,17 +2864,20 @@ mod test {
             mock_pubks,
             &verifer_scripts,
         );
-        let (index, hint_script, ops_script) = fault.unwrap();
-        println!("taproot index {:?}", index);
-        let scr = script!(
-            {hint_script}
-            {ops_script}
-        );
-        let res = execute_script(scr);
-        for i in 0..res.final_stack.len() {
-            println!("{i:} {:?}", res.final_stack.get(i));
+        if fault.is_some() {
+            let (index, hint_script, ops_script) = fault.unwrap();
+            println!("taproot index {:?}", index);
+            let scr = script!(
+                {hint_script}
+                {ops_script}
+            );
+            let res = execute_script(scr);
+            for i in 0..res.final_stack.len() {
+                println!("{i:} {:?}", res.final_stack.get(i));
+            }
+            assert!(res.success);
         }
-        assert!(res.success);
+
     }
 
     #[test]

@@ -756,11 +756,11 @@ mod test {
     use std::collections::HashMap;
 
     use super::*;
-    use ark_ff::UniformRand;
+    use ark_ff::{BigInteger, PrimeField, UniformRand};
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{bigint::U254, bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::{primitves::unpack_limbs_to_nibbles, wots::{wots_p160_sign_digits, wots_p256_sign_digits}}, execute_script};
+    use crate::{bigint::U254, bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::{evaluate::nib_to_byte_array, primitves::unpack_limbs_to_nibbles, wots::{wots_p160_sign_digits, wots_p256_sign_digits}}, execute_script, signatures::wots::{wots128::compact::{get_signature, get_signature2}, wots160, wots256}};
 
     #[test]
     fn test_fq_from_nibbles() { // pack_nibbles_to_fq
@@ -787,7 +787,6 @@ mod test {
                 {i}
             }
             {fq_from_nibbles()}
-            {unpack_limbs_to_nibbles()}
        };
        let exec_result = execute_script(script);
        for i in 0..exec_result.final_stack.len() {
@@ -795,5 +794,37 @@ mod test {
        }
     }
 
+
+    #[test]
+    fn test_emq() {
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let p = ark_bn254::Fq::rand(&mut prng);
+        let pb = emulate_fq_to_nibbles(p);
+
+        let pbarr = nib_to_byte_array(&pb)[12..32].to_vec();
+        //let pbcomparr = p.into_bigint().to_bytes_le();
+        //println!("nbs {:?}", pb);
+        //println!("pbarr {:?}", pbarr);
+        //println!("pbcomparr {:?}", pbcomparr);
+        println!("orig {:?}", pb);
+
+
+        let secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let res = wots160::get_signature(secret, &pbarr);
+        let mut nbcoll = vec![];
+        for (k, v) in res {
+            nbcoll.push(v);
+        }
+
+        let mut nbcoll = nbcoll[0..40].to_vec();
+        nbcoll.reverse();
+        for chunk in nbcoll.chunks_exact_mut(2) {
+            chunk.swap(0, 1);
+        }
+
+        // let pbarr = nib_to_byte_array(&nbcoll);
+        println!("nbcoll {:?}", nbcoll);
+        
+    }
 
 }

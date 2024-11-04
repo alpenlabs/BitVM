@@ -1,11 +1,11 @@
 use ark_bn254::g2::G2Affine;
 use ark_bn254::{Fq12, G1Affine};
 use ark_ff::{BigInteger, Field, PrimeField};
+use bitcoin::opcodes::OP_TRUE;
 use bitcoin_script::script;
 use num_bigint::BigUint;
 use std::collections::HashMap;
 
-use crate::chunk::api::nib_to_byte_array;
 use crate::chunk::compile::ATE_LOOP_COUNT;
 use crate::chunk::config::miller_config_gen;
 use crate::chunk::msm::{bitcom_hash_p, bitcom_msm, hint_hash_p, hint_msm, tap_hash_p, tap_msm, HintInMSM, HintOutMSM};
@@ -1126,39 +1126,50 @@ fn evaluate_groth16_params_from_sig(
         let mut nibs = vec![];
         match sigdata {
             SigData::Sig160(sig_msg) => {
-                for (_, msg) in sig_msg {
-                    nibs.push(*msg);
-                }
+                 nibs.extend_from_slice(&sig_msg.map(|(_sig, digit)| digit));
             },
             SigData::Sig256(sig_msg) => {
-                for (_, msg) in sig_msg {
-                    nibs.push(*msg);
-                }
+                nibs.extend_from_slice(&sig_msg.map(|(sig, digit)| digit));
             }
-        }
-        id_to_witness.insert(gparams[i].link_id.clone(), nibs);
+        };
+        id_to_witness.insert(gparams[i].link_id.clone(), nibs.to_vec());
     }
     let mut hout_per_name = HashMap::new();
     for i in 0..gparams.len() {
         let item = &gparams[i];
         let hout = if item.category == "GrothPubs" {
-            let nibs = id_to_witness.get(&item.link_id).unwrap().clone();
-            //let nibs: [u8; 64] = nibs.try_into().unwrap();
-            let barr = nibbles_to_bigint_le(&nibs[3..67]);
-            let fq = ark_bn254::Fr::from_bigint(barr).unwrap();
-            HintOut::ScalarElem(fq)
+            let nibs = &id_to_witness.get(&item.link_id).unwrap().clone()[0..64];
+            let mut nibs = nibs
+                .chunks(2)
+                .rev()
+                .map(|bn| (bn[1] << 4) + bn[0])
+                .collect::<Vec<u8>>();
+            nibs.reverse();
+            println!("nibss {:?}", nibs);
+            let fr =  ark_bn254::Fr::from_le_bytes_mod_order(&nibs);
+            HintOut::ScalarElem(fr)
         } else {
             if item.is_type_field {
-                let nibs = id_to_witness.get(&item.link_id).unwrap().clone();
-                //let nibs: [u8; 64] = nibs.try_into().unwrap();
-                let barr = nibbles_to_bigint_le(&nibs[3..67]);
-                let fq = ark_bn254::Fq::from_bigint(barr).unwrap();
+                let nibs = &id_to_witness.get(&item.link_id).unwrap().clone()[0..64];
+                let mut nibs = nibs
+                    .chunks(2)
+                    .rev()
+                    .map(|bn| (bn[1] << 4) + bn[0])
+                    .collect::<Vec<u8>>();
+                nibs.reverse();
+                println!("nibff {:?}", nibs);
+                let fq =  ark_bn254::Fq::from_le_bytes_mod_order(&nibs);
                 HintOut::FieldElem(fq)
             } else {
-                let nibs = id_to_witness.get(&item.link_id).unwrap().clone();
-                let nibs: [u8; 43] = nibs.try_into().unwrap();
+                let nibs = &id_to_witness.get(&item.link_id).unwrap().clone()[0..40];
+                let mut nibs = nibs[0..40].to_vec();
+                nibs.reverse();
+                // for chunk in nibs.chunks_exact_mut(2) {
+                //     chunk.swap(0, 1);
+                // }
+                let nibs: [u8; 40] = nibs.try_into().unwrap();
                 let mut padded_nibs = [0u8; 64]; // initialize with zeros
-                padded_nibs[..40].copy_from_slice(&nibs[3..43]);
+                padded_nibs[24..64].copy_from_slice(&nibs[0..40]);
                 HintOut::GrothC(HintOutGrothC { c: ark_bn254::Fq12::ONE, chash: padded_nibs })
             }
         };
@@ -1176,31 +1187,28 @@ fn evaluate_groth16_params_from_sig(
             cs.push(*c);
         };
     }
-    let chash = emulate_extern_hash_fps(cs, false);
+    // todo
+    let gc = fq12_from_vec(cs);
+    let f = gc.inverse().unwrap();
+    let cs = vec![
+        f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
+        f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
+    ];
+    let chash = emulate_extern_hash_fps(cs.clone(), false);
     let v = hout_per_name.get("cinv").unwrap();
     if let HintOut::GrothC(x) = v {
-        hout_per_name.insert(String::from("cinv"), HintOut::GrothC(HintOutGrothC { c: x.c, chash }));
+        hout_per_name.insert(String::from("cinv"), HintOut::GrothC(HintOutGrothC { c: f, chash }));
     }
     return hout_per_name;
 
 }
 
-fn nibbles_to_bigint_le(nibbles: &[u8]) -> ark_ff::BigInt<4> {
-    // Convert each nibble into its 4-bit representation and collect all bits into a vector
-    let mut bits = Vec::new();
-    
-    for &nibble in nibbles {
-        // Push each of the 4 bits of the nibble into the bits vector in little-endian order
-        bits.push((nibble >> 0) & 1 != 0);
-        bits.push((nibble >> 1) & 1 != 0);
-        bits.push((nibble >> 2) & 1 != 0);
-        bits.push((nibble >> 3) & 1 != 0);
-    }
-    
-    // Convert bits to a BigUint using from_bits_le
-    ark_ff::BigInt::from_bits_le(&bits)
+fn fq12_from_vec(fs: Vec<ark_bn254::Fq>) -> ark_bn254::Fq12 {
+    ark_bn254::Fq12::new(
+        ark_bn254::Fq6::new(ark_bn254::Fq2::new(fs[0], fs[1]), ark_bn254::Fq2::new(fs[2], fs[3]), ark_bn254::Fq2::new(fs[4], fs[5])), 
+        ark_bn254::Fq6::new(ark_bn254::Fq2::new(fs[6], fs[7]), ark_bn254::Fq2::new(fs[8], fs[9]), ark_bn254::Fq2::new(fs[10], fs[11])),  
+    )
 }
-
 fn evaluate_groth16_params(
     sig: &mut Sig, // TODO: add sig values here ?
     link_name_to_id: HashMap<String, (u32, bool)>,
@@ -1389,7 +1397,6 @@ fn evaluate_pre_miller_circuit(
 ) -> Option<(u32, bitcoin_script::Script)> {
     let tables = pre_miller_config_gen();
 
-    println!("{:?}", link_name_to_id);
     for row in tables {
         let sec_in: Vec<Link> = row
             .dependencies
@@ -1724,18 +1731,24 @@ pub(crate) fn evaluate(
     let (link_name_to_id, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
     let mut aux_out_per_link: HashMap<String, HintOut> = HashMap::new();
 
-    let grothmap = evaluate_groth16_params(
-        sig,
-        link_name_to_id.clone(),
-        p2,
-        p3,
-        p4,
-        q4,
-        c,
-        s,
-        ks.clone(),
-    );
+    let mut grothmap = HashMap::new();
+    if sig.cache.len() > 0 {
+        grothmap = evaluate_groth16_params_from_sig(sig, link_name_to_id.clone());
+    } else {
+        grothmap = evaluate_groth16_params(
+            sig,
+            link_name_to_id.clone(),
+            p2,
+            p3,
+            p4,
+            q4,
+            c,
+            s,
+            ks.clone(),
+        );
+    }
     aux_out_per_link.extend(grothmap);
+
 
     let re = evaluate_msm(
         sig,
@@ -1809,6 +1822,17 @@ pub(crate) fn evaluate(
     (aux_out_per_link, None)
 }
 
+pub(crate) fn nib_to_byte_array(digits: &[u8]) -> Vec<u8> {
+    let mut msg_bytes = Vec::with_capacity(digits.len() / 2);
+
+    for nibble_pair in digits.chunks(2) {
+        let byte = (nibble_pair[1] << 4) | (nibble_pair[0] & 0b00001111);
+        msg_bytes.push(byte);
+    }
+
+    msg_bytes
+}
+
 pub(crate) fn extract_sigs_from_hints(secret: &str, aux_out_per_link: HashMap<String, HintOut>) -> HashMap<u32, SigData> {
     let (link_name_to_id, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
     let mut nibbles_per_index: HashMap<u32, SigData> = HashMap::new();
@@ -1818,16 +1842,22 @@ pub(crate) fn extract_sigs_from_hints(secret: &str, aux_out_per_link: HashMap<St
         let x = match v {
             HintOut::FieldElem(f) => {
                 let msg_bytes = emulate_fq_to_nibbles(f);
-                let c = wots256::get_signature(&format!("{secret}{:04x}", index), &msg_bytes);
+                let bal: [u8; 32] = nib_to_byte_array(&msg_bytes).try_into().unwrap();
+                let c = wots256::get_signature(&format!("{secret}{:04x}", index), &bal);
                 SigData::Sig256(c)
             },
             HintOut::GrothC(r) => {
-                let c = wots160::get_signature(&format!("{secret}{:04x}", index), &r.chash[24..64]);
+                // println!("match {:?}", r.chash);
+                let bal: [u8; 32] = nib_to_byte_array(&r.chash).try_into().unwrap();
+
+                let bal: [u8; 20] = bal[12..32].try_into().unwrap();
+                let c = wots160::get_signature(&format!("{secret}{:04x}", index), &bal);
                 SigData::Sig160(c)
             },
             HintOut::ScalarElem(f) => {
                 let msg_bytes = emulate_fr_to_nibbles(f);
-                let c = wots256::get_signature(&format!("{secret}{:04x}", index), &msg_bytes);
+                let bal: [u8; 32] = nib_to_byte_array(&msg_bytes).try_into().unwrap();
+                let c = wots256::get_signature(&format!("{secret}{:04x}", index), &bal);
                 SigData::Sig256(c)
             }
             _ => {
@@ -1888,14 +1918,15 @@ mod test {
 
     use super::*;
     #[test]
-    fn this_test() {
+    fn evaluate_groth16_params_from_sig_test() {
         let (link_name_to_id, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
         let sig = &mut Sig { msk: None, cache: HashMap::new() };
         let mut rng = &mut test_rng();
         let ks = [ark_bn254::Fr::rand(&mut rng), ark_bn254::Fr::rand(&mut rng), ark_bn254::Fr::rand(&mut rng)];
-        let eval1 = evaluate_groth16_params(sig, link_name_to_id.clone(), ark_bn254::G1Affine::rand(&mut rng), ark_bn254::G1Affine::rand(&mut rng), ark_bn254::G1Affine::rand(&mut rng), ark_bn254::G2Affine::rand(&mut rng), ark_bn254::Fq12::rand(&mut rng), ark_bn254::Fq12::rand(&mut rng), ks.to_vec());
+        let eval1 = evaluate_groth16_params(sig, link_name_to_id.clone(), ark_bn254::G1Affine::rand(&mut rng), ark_bn254::G1Affine::rand(&mut rng), ark_bn254::G1Affine::rand(&mut rng), ark_bn254::G2Affine::rand(&mut rng), ark_bn254::Fq12::ONE, ark_bn254::Fq12::ONE, ks.to_vec());
         let secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
+        println!("ks {:?}", ks);
         let assertions = extract_sigs_from_hints(secret, eval1.clone());
         sig.cache = assertions;
         let eval2 = evaluate_groth16_params_from_sig(sig, link_name_to_id);
@@ -1926,4 +1957,6 @@ mod test {
             }
         }
     }
+
+
 }
