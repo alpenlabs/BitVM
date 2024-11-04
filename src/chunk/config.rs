@@ -162,18 +162,6 @@ pub(crate) fn pre_miller_config_gen() -> Vec<ScriptItem> {
             is_type_field: false,
         },
         ScriptItem {
-            category: String::from("HashC2"),
-            link_id: String::from("cinv2"),
-            dependencies: String::from("cinv"),
-            is_type_field: false,
-        },
-        ScriptItem {
-            category: String::from("HashC"),
-            link_id: String::from("s"),
-            dependencies: String::from("Gs11,Gs10,Gs9,Gs8,Gs7,Gs6,Gs5,Gs4,Gs3,Gs2,Gs1,Gs0"),
-            is_type_field: false,
-        },
-        ScriptItem {
             category: String::from("DD1"),
             link_id: String::from("cinv0"),
             dependencies: String::from("c2,cinv"),
@@ -183,6 +171,18 @@ pub(crate) fn pre_miller_config_gen() -> Vec<ScriptItem> {
             category: String::from("DD2"),
             link_id: String::from("ccinvone"),
             dependencies: String::from("c2,cinv,cinv0"),
+            is_type_field: false,
+        },
+        ScriptItem { 
+            category: String::from("HashC2"),
+            link_id: String::from("cinv2"),
+            dependencies: String::from("cinv"),
+            is_type_field: false,
+        },
+        ScriptItem {
+            category: String::from("HashC"),
+            link_id: String::from("s"),
+            dependencies: String::from("Gs11,Gs10,Gs9,Gs8,Gs7,Gs6,Gs5,Gs4,Gs3,Gs2,Gs1,Gs0"),
             is_type_field: false,
         },
         ScriptItem {

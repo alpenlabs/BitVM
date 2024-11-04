@@ -20,6 +20,7 @@ pub(crate) enum HintOut {
     GrothC(HintOutGrothC), // c, s, cinv
     HashC(HintOutHashC),
     InitT4(HintOutInitT4),
+    HashBytes(HashBytes),
 
     FrobFp12(HintOutFrobFp12),
     Add(HintOutAdd),

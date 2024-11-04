@@ -1057,6 +1057,140 @@ mod test {
         );
     }
 
+
+    #[test]
+    fn test_hinited_dense_dense_mul0_by_hash() {
+        // compile time
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let dense_dense_mul_script = tap_dense_dense_mul0_by_hash();
+
+        let sec_out = 0;
+        let sec_in = vec![1, 2];
+
+        let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
+        let pk = wots_p160_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        pub_scripts.insert(sec_out, pk);
+        for i in &sec_in {
+            let pk = wots_p160_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            pub_scripts.insert(*i, pk);
+        }
+
+        let sec_out = (sec_out, false);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, false)).collect();
+
+        let bitcom_scr = bitcom_dense_dense_mul0_by_hash(&pub_scripts, sec_out, sec_in.clone());
+
+        // runtime
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let f = ark_bn254::Fq12::rand(&mut prng);
+        let g = f.inverse().unwrap(); // check_is_identity true
+        let ghash = emulate_extern_hash_fps(
+        vec![
+            g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
+            g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
+        ],
+        false,  
+        ); // sparse
+        //let h = ark_bn254::Fq12::ONE;
+
+        let hint_in = HintInDenseMulByHash0 { a: f, bhash: ghash };
+
+        let (_, simulate_stack_input) = hints_dense_dense_mul0_by_hash(
+            &mut Sig {
+                msk: Some(sec_key_for_bitcomms),
+                cache: HashMap::new(),
+            },
+            sec_out,
+            sec_in,
+            hint_in,
+        );
+
+        let tap_len = dense_dense_mul_script.len();
+
+        let script = script! {
+            { simulate_stack_input }
+            { bitcom_scr }
+            { dense_dense_mul_script }
+        };
+
+        let exec_result = execute_script(script);
+        println!("stack len {:?}", exec_result.final_stack.len());
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:} {:?}", exec_result.final_stack.get(i));
+        }
+        assert!(!exec_result.success && exec_result.final_stack.len() == 1);
+        println!(
+            "stack len {:?} script len {:?}",
+            exec_result.stats.max_nb_stack_items, tap_len
+        );
+    }
+
+    #[test]
+    fn test_hinited_dense_dense_mul1_by_hash() {
+        // compile time
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let dense_dense_mul_script = tap_dense_dense_mul1(false);
+
+        let sec_out = 0;
+        let sec_in = vec![1, 2, 3];
+
+        let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
+        let pk = wots_p160_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        pub_scripts.insert(sec_out, pk);
+        for i in &sec_in {
+            let pk = wots_p160_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            pub_scripts.insert(*i, pk);
+        }
+
+        let sec_out = (sec_out, false);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, false)).collect();
+
+        let bitcom_script = bitcom_dense_dense_mul1_by_hash(&pub_scripts, sec_out, sec_in.clone());
+
+
+        // runtime
+        let mut prng = ChaCha20Rng::seed_from_u64(17);
+        let f = ark_bn254::Fq12::rand(&mut prng);
+        let g = f.inverse().unwrap();
+
+        let hash_g = emulate_extern_hash_fps(
+            vec![
+                g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
+                g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
+            ],
+            false,
+        );
+
+        let hint_in = HintInDenseMulByHash1 { a: f, bhash: hash_g };
+
+        let (_, simulate_stack_input) = hints_dense_dense_mul1_by_hash(
+            &mut Sig {
+                msk: Some(sec_key_for_bitcomms),
+                cache: HashMap::new(),
+            },
+            sec_out,
+            sec_in,
+            hint_in,
+        );
+
+        let tap_len = dense_dense_mul_script.len();
+
+        let script = script! {
+            { simulate_stack_input }
+            { bitcom_script }
+            { dense_dense_mul_script }
+        };
+
+        let exec_result = execute_script(script);
+        assert!(!exec_result.success && exec_result.final_stack.len() == 1);
+        println!(
+            "stack len {:?} script len {:?}",
+            exec_result.stats.max_nb_stack_items, tap_len
+        );
+    }
+
+
+
     // #[test]
     // fn nib_reconstruction() {
     //     let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";

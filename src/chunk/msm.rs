@@ -700,7 +700,15 @@ pub(crate) fn tap_hash_p(q: G1Affine) -> Script {
         {Fq::equalverify(1, 0)}
         {Fq2::fromaltstack()} {Fq::roll(1)}
         // // [ntx, nty, gpx, gpy]
-        {Fq2::equal()}  OP_NOT OP_VERIFY
+        {Fq2::equal()}  OP_NOT 
+        OP_IF 
+            {Fq::fromaltstack()} // remove zeroelem and exit
+            {Fq::drop()}
+        OP_ELSE
+            {Fq::fromaltstack()}
+            {fq_push_not_montgomery(ark_bn254::Fq::ZERO)}
+            {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+        OP_ENDIF
 
     };
 
@@ -713,13 +721,15 @@ pub(crate) fn tap_hash_p(q: G1Affine) -> Script {
 
 pub(crate) fn bitcom_hash_p(
     link_ids: &HashMap<u32, WOTSPubKey>,
-    _sec_out: Link,
+    sec_out: Link,
     sec_in: Vec<Link>,
 ) -> Script {
     assert_eq!(sec_in.len(), 3);
 
     let bitcom_scr = script! {
 
+        {wots_locking_script(sec_out, link_ids)} // zeroth
+        {Fq::toaltstack()}
         {wots_locking_script(sec_in[2], link_ids)} // gp3x // R
         {Fq::toaltstack()}
         {wots_locking_script(sec_in[1], link_ids)} // gp3y
@@ -728,26 +738,30 @@ pub(crate) fn bitcom_hash_p(
         {Fq::toaltstack()}
         // P + vkY0 ?= gp3
 
-        // Altstack:[gpx, gpy, th]
+        // Altstack:[identity, gpx, gpy, th]
     };
     bitcom_scr
 }
 
 pub(crate) fn hint_hash_p(
     sig: &mut Sig,
-    _sec_out: Link,
+    sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInHashP,
-) -> ((), Script) {
+) -> (HashBytes, Script) {
     // r (gp3) = t(msm) + q(vk0)
     let (tx, qx, ty, qy) = (hint_in.tx, hint_in.qx, hint_in.ty, hint_in.qy);
     
     let (rx, ry) = (hint_in.rx, hint_in.ry);
     let thash = emulate_extern_hash_fps(vec![hint_in.tx, hint_in.ty], false);
 
-    let mut tups = vec![(sec_in[0], thash)];
+    let zero_nib = [0u8;64];
+
+    let mut tups = vec![];
+    tups.push((sec_in[0], thash));
     tups.push((sec_in[1], emulate_fq_to_nibbles(ry)));
     tups.push((sec_in[2], emulate_fq_to_nibbles(rx)));
+    tups.push((sec_out, zero_nib));
 
     let bc_elems = tup_to_scr(sig, tups);
 
@@ -782,7 +796,7 @@ pub(crate) fn hint_hash_p(
             {bc}
         }
     };
-    ((), simulate_stack_input)
+    (zero_nib, simulate_stack_input)
 }
 
 
@@ -993,6 +1007,7 @@ mod test {
         let hash_c_scr = tap_hash_p(q);
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
+        pub_scripts.insert(sec_out, wots_p160_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, 0)));
         for j in 0..sec_in.len() {
             let i = &sec_in[j];
             if j == 0 {

@@ -17,7 +17,7 @@ use num_traits::One;
 use std::collections::HashMap;
 
 use super::primitves::{emulate_extern_hash_fps, hash_fp12_192};
-use super::taps::{Link, Sig};
+use super::taps::{HashBytes, Link, Sig};
 use super::wots::WOTSPubKey;
 use super::hint_models::*;
 // SPARSE DENSE
@@ -336,6 +336,7 @@ pub(crate) fn hints_dense_dense_mul0(
         simulate_stack_input,
     )
 }
+
 
 // DENSE DENSE MUL ONE
 
@@ -902,3 +903,326 @@ pub(crate) fn hints_dense_dense_mul1_by_constant(
         simulate_stack_input,
     )
 }
+
+
+// DENSE DENSE MUL BY HASH
+
+pub(crate) struct HintInDenseMulByHash0 {
+    pub(crate) a: ark_bn254::Fq12,
+    pub(crate) bhash: HashBytes,
+}
+
+pub(crate) fn tap_dense_dense_mul0_by_hash() -> Script {
+    let (hinted_mul, _) =
+        Fq12::hinted_mul_first(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
+    const check_id: u8 = 1;
+
+
+    let hash_scr = script! {
+        {hash_fp6()} // c
+        { Fq::toaltstack()}
+
+        {Fq12::roll(12)}
+        { hash_fp12()} //
+        { Fq::toaltstack()}
+
+        {hash_fp12_192()} // Hash_g
+        { Fq::fromaltstack()} // Hash_f
+        { Fq::fromaltstack()} // Hash_c
+        // Alt: [od, d, s], [c0, d, s]
+        // Stack: [gc, fc, hc, gk, fk, hk]
+        { Fq::fromaltstack()} // Hash_c
+        { Fq::fromaltstack()} // Hash_f
+        { Fq::fromaltstack()} // Hash_g
+
+        // Disprove either if the user did not claim that the output is identity
+        // or claimed wrong value of input hash
+        {Fq::equal(0, 3)} // identity hash was not used as claimed output
+        OP_NOT OP_IF 
+            for _ in 0..4{
+                {Fq::drop()}
+            }
+        OP_ELSE 
+            // Stack: [gc, fc, gk, fk]
+            {Fq::equalverify(0, 2)}
+            {Fq::equal(0, 1)} OP_NOT OP_VERIFY
+        OP_ENDIF
+    };
+
+    let ops_scr = script! {
+        { hinted_mul }
+        {check_id} 1 OP_NUMEQUAL
+        OP_IF
+            {Fq6::copy(0)}
+            {fq_push_not_montgomery(ark_bn254::Fq::one())}
+            for _ in 0..5 {
+                {fq_push_not_montgomery(ark_bn254::Fq::zero())}
+            }
+            {Fq6::equalverify()}
+        OP_ENDIF
+    };
+    let scr = script! {
+        {ops_scr}
+        {hash_scr}
+        OP_TRUE
+    };
+    scr
+}
+
+pub(crate) fn bitcom_dense_dense_mul0_by_hash(
+    link_ids: &HashMap<u32, WOTSPubKey>,
+    sec_out: Link,
+    sec_in: Vec<Link>,
+) -> Script {
+    assert_eq!(sec_in.len(), 2);
+
+    let bitcom_scr = script! {
+        {wots_locking_script(sec_out, link_ids)} // od
+        {Fq::toaltstack()}
+        {wots_locking_script(sec_in[0], link_ids)} // d // SD or DD output
+        {Fq::toaltstack()}
+        {wots_locking_script(sec_in[1], link_ids)} // s // SS or c' output
+        {Fq::toaltstack()}
+    };     // [h, f, g]
+    // Alt: [od, d, s]
+    bitcom_scr
+}
+
+pub(crate) fn hints_dense_dense_mul0_by_hash(
+    sig: &mut Sig,
+    sec_out: Link,
+    sec_in: Vec<Link>,
+    hint_in: HintInDenseMulByHash0,
+) -> (HintOutDenseMul0, Script) {
+    assert_eq!(sec_in.len(), 2);
+    let (f, hash_g) = (hint_in.a, hint_in.bhash);
+    let g = f.inverse().unwrap();
+    let h = ark_bn254::Fq12::ONE;
+
+    let (_, mul_hints) = Fq12::hinted_mul_first(12, f, 0, g);
+
+    let hash_f = emulate_extern_hash_fps(
+        vec![
+            f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
+            f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
+        ],
+        true,
+    ); // dense
+    // let hash_g = emulate_extern_hash_fps(
+    //     vec![
+    //         g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
+    //         g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
+    //     ],
+    //     false,
+    // ); // sparse
+    let hash_h = emulate_extern_hash_fps(
+        vec![
+            h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
+        ],
+        true,
+    );
+
+    let tup = vec![
+        (sec_in[1], hash_g), //s
+        (sec_in[0], hash_f), // d
+        (sec_out, hash_h),   //od
+    ];
+
+    let bc_elems = tup_to_scr(sig, tup);
+
+    // data passed to stack in runtime
+    let simulate_stack_input = script! {
+        // quotients for tmul
+        for hint in mul_hints {
+            { hint.push() }
+        }
+        // aux_a
+        {fq12_push_not_montgomery(f)}
+        {fq12_push_not_montgomery(g)}
+
+        // aux_hashes
+        // bit commit hashes
+        // in2: SS or c' link
+        // in1: SD or DD1 link
+        // out
+        for bc in bc_elems {
+            {bc}
+        }
+    };
+
+    (
+        HintOutDenseMul0 {
+            c: h,
+            hash_out: hash_h,
+        },
+        simulate_stack_input,
+    )
+}
+
+pub(crate) fn tap_dense_dense_mul1_by_hash() -> Script {
+    const check_id: u8 = 1;
+
+    let (hinted_mul, _) =
+        Fq12::hinted_mul_second(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
+
+    let hash_scr = script! {
+        {Fq::fromaltstack()} // Hc0
+        {hash_fp12_with_hints()} // Hc
+        { Fq::toaltstack()}
+
+        {Fq12::roll(12)}
+        { hash_fp12()} //
+        { Fq::toaltstack()}
+
+        {hash_fp12_192()} // Hash_g
+        { Fq::fromaltstack()} // Hash_f
+        { Fq::fromaltstack()} // Hash_c
+
+        { Fq::fromaltstack()} // Hash_c
+        { Fq::fromaltstack()} // Hash_f
+        { Fq::fromaltstack()} // Hash_g
+        // [gc, fc, hc,  gk, fk, hk]
+
+
+        // Disprove either if the user did not claim that the output is identity
+        // or claimed wrong value of input hash
+        {Fq::equal(0, 3)} // identity hash was not used as claimed output
+        OP_NOT OP_IF 
+            for _ in 0..4{
+                {Fq::drop()}
+            }
+            {1} OP_VERIFY
+        OP_ELSE 
+            // Stack: [gc, fc, gk, fk]
+            {Fq::equalverify(0, 2)}
+            {Fq::equal(0, 1)} OP_NOT OP_VERIFY
+        OP_ENDIF
+    };
+
+    let ops_scr = script! {
+        { hinted_mul }
+        {check_id} 1 OP_NUMEQUAL
+        OP_IF
+            {Fq6::copy(0)}
+            for _ in 0..6 {
+                {fq_push_not_montgomery(ark_bn254::Fq::zero())}
+            }
+            {Fq6::equalverify()}
+        OP_ENDIF
+    };
+    let scr = script! {
+        {ops_scr}
+        {hash_scr}
+        OP_TRUE
+    };
+    scr
+}
+
+pub(crate) fn bitcom_dense_dense_mul1_by_hash(
+    link_ids: &HashMap<u32, WOTSPubKey>,
+    sec_out: Link,
+    sec_in: Vec<Link>,
+) -> Script {
+    assert_eq!(sec_in.len(), 3);
+
+    let bitcom_scr = script! {
+        {wots_locking_script(sec_out, link_ids)} // g
+        {Fq::toaltstack()}
+        {wots_locking_script(sec_in[0], link_ids)} // f // SD or DD output
+        {Fq::toaltstack()}
+        {wots_locking_script(sec_in[1], link_ids)}// c // SS or c' output
+        {Fq::toaltstack()}
+        {wots_locking_script(sec_in[2], link_ids)} // c // dense0 output
+        {Fq::toaltstack()}
+    };
+    bitcom_scr
+}
+
+
+pub(crate) struct HintInDenseMulByHash1 {
+    pub(crate) a: ark_bn254::Fq12,
+    pub(crate) bhash: HashBytes,
+}
+
+
+pub(crate) fn hints_dense_dense_mul1_by_hash(
+    sig: &mut Sig,
+    sec_out: Link,
+    sec_in: Vec<Link>,
+    hint_in: HintInDenseMulByHash1,
+) -> (HintOutDenseMul1, Script) {
+    let (f, hash_g) = (hint_in.a, hint_in.bhash);
+    let g = f.inverse().unwrap();
+    let h = ark_bn254::Fq12::ONE;
+
+    let (_, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
+
+
+    let hash_f = emulate_extern_hash_fps(
+        vec![
+            f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
+            f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
+        ],
+        true,
+    );
+    // let hash_g = emulate_extern_hash_fps(
+    //     vec![
+    //         g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
+    //         g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
+    //     ],
+    //     false,
+    // );
+
+    let hash_c0 = emulate_extern_hash_fps( // dense0 has already assured this value is correct
+        vec![
+            h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
+        ],
+        true,
+    );
+    let hash_c = emulate_extern_hash_fps(
+        vec![
+            h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1, h.c1.c0.c0,
+            h.c1.c0.c1, h.c1.c1.c0, h.c1.c1.c1, h.c1.c2.c0, h.c1.c2.c1,
+        ],
+        true,
+    );
+
+    let tup = vec![
+        (sec_in[2], hash_c0),
+        (sec_in[1], hash_g),
+        (sec_in[0], hash_f),
+        (sec_out, hash_c),
+    ];
+
+    let bc_elems = tup_to_scr(sig, tup);
+
+    // data passed to stack in runtime
+    let simulate_stack_input = script! {
+        // quotients for tmul
+        for hint in mul_hints {
+            { hint.push() }
+        }
+        // aux_a
+        {fq12_push_not_montgomery(f)}
+        {fq12_push_not_montgomery(g)}
+
+        // aux_hashes
+        // bit commit hashes
+
+        // in3: links to DD0
+        // in2: SS or c' link
+        // in1: SD or DD1 link
+        // out
+        for bc in bc_elems {
+            {bc}
+        }
+    };
+    (
+        HintOutDenseMul1 {
+            c: h,
+            hash_out: hash_c,
+        },
+        simulate_stack_input,
+    )
+}
+

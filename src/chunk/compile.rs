@@ -27,8 +27,7 @@ use crate::chunk::taps::{
     tap_point_dbl, tap_point_ops,
 };
 use crate::chunk::taps_mul::{
-    bitcom_dense_dense_mul0_by_constant, bitcom_dense_dense_mul1_by_constant,
-    tap_dense_dense_mul0_by_constant, tap_dense_dense_mul1_by_constant,
+    bitcom_dense_dense_mul0_by_constant, bitcom_dense_dense_mul0_by_hash, bitcom_dense_dense_mul1_by_constant, bitcom_dense_dense_mul1_by_hash, tap_dense_dense_mul0_by_constant, tap_dense_dense_mul0_by_hash, tap_dense_dense_mul1_by_constant, tap_dense_dense_mul1_by_hash
 };
 use crate::treepp::*;
 
@@ -237,17 +236,17 @@ fn compile_pre_miller_circuit(
         } else if row.category == "DD1" {
             let mut sc = script!();
             if collect_bitcom {
-                sc = bitcom_dense_dense_mul0(link_ids, sec_out, sec_in);
+                sc = bitcom_dense_dense_mul0_by_hash(link_ids, sec_out, sec_in);
             } else {
-                sc = tap_dense_dense_mul0(true);
+                sc = tap_dense_dense_mul0_by_hash();
             }
             scripts.push((sec_out.0, sc));
         } else if row.category == "DD2" {
             let mut sc = script!();
             if collect_bitcom {
-                sc = bitcom_dense_dense_mul1(link_ids, sec_out, sec_in);
+                sc = bitcom_dense_dense_mul1_by_hash(link_ids, sec_out, sec_in);
             } else {
-                sc = tap_dense_dense_mul1(true);
+                sc = tap_dense_dense_mul1_by_hash();
             }
             scripts.push((sec_out.0, sc));
         } else if row.category == "P3Hash" {

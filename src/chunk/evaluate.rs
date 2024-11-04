@@ -1187,17 +1187,16 @@ fn evaluate_groth16_params_from_sig(
             cs.push(*c);
         };
     }
-    // todo
     let gc = fq12_from_vec(cs);
     let f = gc.inverse().unwrap();
-    let cs = vec![
-        f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-        f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-    ];
-    let chash = emulate_extern_hash_fps(cs.clone(), false);
+    // let cs = vec![
+    //     f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
+    //     f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
+    // ];
+    //let chash = emulate_extern_hash_fps(cs.clone(), false);
     let v = hout_per_name.get("cinv").unwrap();
     if let HintOut::GrothC(x) = v {
-        hout_per_name.insert(String::from("cinv"), HintOut::GrothC(HintOutGrothC { c: f, chash }));
+        hout_per_name.insert(String::from("cinv"), HintOut::GrothC(HintOutGrothC { c: f, chash: x.chash }));
     }
     return hout_per_name;
 
@@ -1593,17 +1592,17 @@ fn evaluate_pre_miller_circuit(
                 _ => panic!("failed to match"),
             };
             let (c, hint_script) = match hints[0].clone() {
-                HintOut::HashC(c) => hints_dense_dense_mul0(
+                HintOut::HashC(c) => hints_dense_dense_mul0_by_hash(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    HintInDenseMul0::from_groth_hc(c, d),
+                    HintInDenseMulByHash0 { a: c.c, bhash: d.chash },
                 ),
                 _ => panic!("failed to match"),
             };
-            let ops_script = tap_dense_dense_mul0(true);
+            let ops_script = tap_dense_dense_mul0_by_hash();
             let bcs_script =
-                bitcom_dense_dense_mul0(pub_scripts_per_link_id, sec_out, sec_in.clone());
+                bitcom_dense_dense_mul0_by_hash(pub_scripts_per_link_id, sec_out, sec_in.clone());
             let script = script! {
                 { hint_script.clone() }
                 {bcs_script}
@@ -1632,17 +1631,17 @@ fn evaluate_pre_miller_circuit(
             //     _ => panic!("failed to match"),
             // };
             let (hout, hint_script) = match hints[0].clone() {
-                HintOut::HashC(a) => hints_dense_dense_mul1(
+                HintOut::HashC(a) => hints_dense_dense_mul1_by_hash(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    HintInDenseMul1::from_groth_hc(a, b),
+                    HintInDenseMulByHash1 { a: a.c, bhash: b.chash },
                 ),
                 _ => panic!("failed to match"),
             };
-            let ops_script = tap_dense_dense_mul1(true);
+            let ops_script = tap_dense_dense_mul1_by_hash();
             let bcs_script =
-                bitcom_dense_dense_mul1(pub_scripts_per_link_id, sec_out, sec_in.clone());
+                bitcom_dense_dense_mul1_by_hash(pub_scripts_per_link_id, sec_out, sec_in.clone());
             let script = script! {
                 { hint_script.clone() }
                 { bcs_script }
@@ -1676,7 +1675,7 @@ fn evaluate_pre_miller_circuit(
             };
 
             let ops_script = tap_hash_p(vky0);
-            let (_, hint_script) = hint_hash_p(
+            let (hint_out, hint_script) = hint_hash_p(
                 sig,
                 sec_out,
                 sec_in.clone(),
@@ -1706,7 +1705,7 @@ fn evaluate_pre_miller_circuit(
             }
             assert!(!exec_result.success);
             assert!(exec_result.final_stack.len() == 1);
-            aux_output_per_link.insert(row.link_id, HintOut::MSM(t));
+            aux_output_per_link.insert(row.link_id, HintOut::HashBytes(hint_out));
         }
     }
     None
@@ -1892,6 +1891,7 @@ pub(crate) fn extract_sigs_from_hints(secret: &str, aux_out_per_link: HashMap<St
             HintOut::SparseDbl(r) => r.out(),
             HintOut::SparseDenseMul(r) => r.out(),
             HintOut::Squaring(r) => r.out(),
+            HintOut::HashBytes(r) => r,
         };
         let index = link_name_to_id.get(&k).unwrap().0;
         nibbles_per_index.insert(index, x);
