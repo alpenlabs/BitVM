@@ -1145,7 +1145,6 @@ fn evaluate_groth16_params_from_sig(
                 .map(|bn| (bn[1] << 4) + bn[0])
                 .collect::<Vec<u8>>();
             nibs.reverse();
-            println!("nibss {:?}", nibs);
             let fr =  ark_bn254::Fr::from_le_bytes_mod_order(&nibs);
             HintOut::ScalarElem(fr)
         } else {
@@ -1157,7 +1156,6 @@ fn evaluate_groth16_params_from_sig(
                     .map(|bn| (bn[1] << 4) + bn[0])
                     .collect::<Vec<u8>>();
                 nibs.reverse();
-                println!("nibff {:?}", nibs);
                 let fq =  ark_bn254::Fq::from_le_bytes_mod_order(&nibs);
                 HintOut::FieldElem(fq)
             } else {
