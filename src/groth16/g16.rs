@@ -338,30 +338,33 @@ mod test {
         assert!(fault.is_none());
     }
 
-    fn corrupt(proof_asserts: &mut ProofAssertions, index: Option<usize>) {
+    fn corrupt(proof_asserts: &mut ProofAssertions, random: Option<usize>) {
         let mut rng = rand::thread_rng();
 
         // Generate a random number between 1 and 100 (inclusive)
-        let mut random_number = rng.gen_range(0..N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQs + N_VERIFIER_HASHES);
-        if index.is_some() {
-            random_number = index.unwrap();
+        let mut index = rng.gen_range(0..N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQs + N_VERIFIER_HASHES);
+        if random.is_some() {
+            index = random.unwrap();
         }
-        println!("corrupted assertion at index {}", random_number);
-        if random_number < N_VERIFIER_PUBLIC_INPUTS {
-            let index = random_number;
+        let mut scramble: [u8;32] = [0u8; 32];
+        scramble[16] = 37;
+        let mut scramble2: [u8;20] = [0u8; 20];
+        scramble2[10] = 37;
+        println!("corrupted assertion at index {}", index);
+        if index < N_VERIFIER_PUBLIC_INPUTS {
             if index == 0 {
-                proof_asserts.0[0] = [1u8; 32];
+                proof_asserts.0[0] = scramble;
             } else if index == 1 {
-                proof_asserts.0[1] = [1u8; 32];
+                proof_asserts.0[1] = scramble;
             } else {
-                proof_asserts.0[2] = [1u8; 32];
+                proof_asserts.0[2] = scramble;
             }
-        } else if random_number < N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQs {
-            let index = random_number - N_VERIFIER_PUBLIC_INPUTS;
-            proof_asserts.1[index] = [1u8; 32];
-        } else if random_number < N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQs + N_VERIFIER_HASHES {
-            let index = random_number - N_VERIFIER_PUBLIC_INPUTS - N_VERIFIER_FQs;
-            proof_asserts.2[index] = [1u8; 20];
+        } else if index < N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQs {
+            let index = index - N_VERIFIER_PUBLIC_INPUTS;
+            proof_asserts.1[index] = scramble;
+        } else if index < N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQs + N_VERIFIER_HASHES {
+            let index = index - N_VERIFIER_PUBLIC_INPUTS - N_VERIFIER_FQs;
+            proof_asserts.2[index] = scramble2;
         }
     }
 
@@ -387,31 +390,36 @@ mod test {
         let mock_pubks = mock_pubkeys();
         let verifier_scripts = Verifier::generate_tapscripts(mock_pubks, &ops_scripts);
 
-        let mut proof_asserts = new_mock_asserts();
-        corrupt(&mut proof_asserts, Some(43));
-        let signed_asserts = sign_assertions(proof_asserts);
 
-        let fault = Verifier::validate_assertion_signatures(
-            Proof {
-                proof,
-                public_inputs: pubs,
-            },
-            VerificationKey { ark_vk: mock_vk },
-            signed_asserts,
-            mock_pubks,
-        );
-        if fault.is_some() {
-            let (index, hint_script) = fault.unwrap();
-            println!("taproot index {:?}", index);
-            let scr = script!(
-                {hint_script}
-                {verifier_scripts[index].clone()}
+        for i in 0..3 {
+            println!("ITERATION {:?}", i);
+            let mut proof_asserts = new_mock_asserts();
+            corrupt(&mut proof_asserts, Some(i));
+            let signed_asserts = sign_assertions(proof_asserts);
+    
+            let fault = Verifier::validate_assertion_signatures(
+                Proof {
+                    proof: proof.clone(),
+                    public_inputs: pubs.clone(),
+                },
+                VerificationKey { ark_vk: mock_vk.clone() },
+                signed_asserts,
+                mock_pubks,
             );
-            let res = execute_script(scr);
-            for i in 0..res.final_stack.len() {
-                println!("{i:} {:?}", res.final_stack.get(i));
+            if fault.is_some() {
+                let (index, hint_script) = fault.unwrap();
+                println!("taproot index {:?}", index);
+                let scr = script!(
+                    {hint_script}
+                    {verifier_scripts[index].clone()}
+                );
+                let res = execute_script(scr);
+                for i in 0..res.final_stack.len() {
+                    println!("{i:} {:?}", res.final_stack.get(i));
+                }
+                assert!(res.success);
             }
-            assert!(res.success);
         }
+ 
     }
 }

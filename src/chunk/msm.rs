@@ -13,6 +13,7 @@ use crate::{
 use ark_bn254::G1Affine;
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
+use bitcoin::opcodes::all::OP_ENDIF;
 use num_traits::One;
 
 use super::hint_models::HintInHashP;
@@ -101,7 +102,6 @@ pub(crate) fn tap_msm(window: usize, msm_tap_index: usize, qs: Vec<ark_bn254::G1
         OP_ELSE
             {tap_bake_precompute(qs[0], window)}
             // [a, b, tx, ty, ntx, nty, qx, qy]
-
             {Fq2::roll(2)}
             // [tx, ty, qx, qy, ntx, nty]
             {Fq::copy(0)}
@@ -144,23 +144,31 @@ pub(crate) fn tap_msm(window: usize, msm_tap_index: usize, qs: Vec<ark_bn254::G1
                 {tap_bake_precompute(qs[i], window)}
                 {Fq2::roll(2)}
                 //[alpha, bias, tx, ty, qx, qy, ntx, nty]
-                {Fq2::copy(6)}
-                // [alpha, bias,tx,ty, qx, qy, ntx, nty, alpha, bias]
-                {Fq2::copy(2)}
-                {hinted_check_chord_t.clone()}
-                //[alpha, bias, qx, qy, ntx, nty]
-                {Fq2::copy(6)}
-                {Fq2::copy(4)}
-                {hinted_check_chord_q.clone()}
-                //[alpha, bias,tx,ty, qx, qy, ntx, nty]
-                {Fq::drop()}
-                {Fq::roll(1)} {Fq::drop()}
-                //[alpha, bias, tx, ty, qx, ntx]
-                {Fq::roll(4)} {Fq::roll(5)}
-                //[tx, ty, qx, ntx, bias, alpha]
-                {Fq::roll(2)} {Fq::roll(3)}
-                //[tx, ty, bias, alpha, ntx, qx]
-                {hinted_add_line.clone()}
+                {Fq::copy(0)}
+                {fq_push_not_montgomery(ark_bn254::Fq::ZERO)} // ty == 0 ?
+                {Fq::equal(1, 0)}
+                OP_IF
+                    {Fq2::drop()}
+                    // [ntx,nty] = [qx,qy]
+                OP_ELSE
+                    {Fq2::copy(6)}
+                    // [alpha, bias,tx,ty, qx, qy, ntx, nty, alpha, bias]
+                    {Fq2::copy(2)}
+                    {hinted_check_chord_t.clone()}
+                    //[alpha, bias, qx, qy, ntx, nty]
+                    {Fq2::copy(6)}
+                    {Fq2::copy(4)}
+                    {hinted_check_chord_q.clone()}
+                    //[alpha, bias,tx,ty, qx, qy, ntx, nty]
+                    {Fq::drop()}
+                    {Fq::roll(1)} {Fq::drop()}
+                    //[alpha, bias, tx, ty, qx, ntx]
+                    {Fq::roll(4)} {Fq::roll(5)}
+                    //[tx, ty, qx, ntx, bias, alpha]
+                    {Fq::roll(2)} {Fq::roll(3)}
+                    //[tx, ty, bias, alpha, ntx, qx]
+                    {hinted_add_line.clone()}
+                OP_ENDIF
             OP_ENDIF
         }
 
@@ -520,6 +528,7 @@ pub(crate) fn hint_msm(
     tup.push((sec_out, outhash));
     let bc_elems = tup_to_scr(sig, tup);
 
+    println!("hints len {:?} {:?} {:?} {:?}", hints_tangent.len(), hints_chord.len(), aux_tangent.len(), aux_chord.len());
     let simulate_stack_input = script! {
         // // tmul hints
         for hint in hints_tangent { // check_tangent then double line
@@ -543,8 +552,7 @@ pub(crate) fn hint_msm(
             {bc}
         }
     };
-
-    let hint_out = HintOutMSM { t, hasht: outhash };
+    let hint_out = HintOutMSM { t: t, hasht: outhash };
 
     (hint_out, simulate_stack_input)
 }
@@ -572,7 +580,7 @@ pub fn try_msm(qs: Vec<ark_bn254::G1Affine>, scalars: Vec<ark_bn254::Fr>) {
     // constants
     let num_bits: usize = 256;
     let window = 8;
-    let pub_ins = 2;
+    let pub_ins = 3;
     let msk = "b138982ce17ac813d505b5b40b665d404e9528e7";
     let mut sec_in: Vec<u32> = (0..pub_ins).collect();
     let mut sec_out = pub_ins;
@@ -808,8 +816,10 @@ mod test {
         bn254::{fq2::Fq2, utils::fr_push_not_montgomery},
     };
 
+    use self::mock::{compile_circuit, generate_proof};
+
     use super::*;
-    use ark_bn254::G1Affine;
+    use ark_bn254::{Bn254, G1Affine};
     use ark_ff::UniformRand;
     use bitcoin::opcodes::{all::OP_EQUALVERIFY, OP_TRUE};
     use rand::SeedableRng;
@@ -820,11 +830,16 @@ mod test {
     #[test]
     fn test_try_msm() {
         let mut prng = ChaCha20Rng::seed_from_u64(2);
+
+        let (proof, scalars, vk) = generate_new_mock_proof();
+        assert!(scalars.len() == 3);
+        let scalars = vec![scalars[2], scalars[1], scalars[0]];
         let qs = vec![
-            ark_bn254::G1Affine::rand(&mut prng),
-            ark_bn254::G1Affine::rand(&mut prng),
+            vk.gamma_abc_g1[3],
+            vk.gamma_abc_g1[2],
+            vk.gamma_abc_g1[1],
         ];
-        let scalars = vec![ark_bn254::Fr::rand(&mut prng), ark_bn254::Fr::ONE];
+
         try_msm(qs, scalars);
     }
 
@@ -1053,5 +1068,116 @@ mod test {
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
 
+
+
+    pub mod mock {
+        use ark_bn254::{Bn254, Fr as F};
+        use ark_crypto_primitives::snark::{CircuitSpecificSetupSNARK, SNARK};
+        use ark_ff::AdditiveGroup;
+        use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
+        use ark_r1cs_std::{alloc::AllocVar, eq::EqGadget, fields::fp::FpVar};
+        use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+        use ark_std::test_rng;
+        use rand::{RngCore, SeedableRng};
+        use super::*;
+
+        #[derive(Clone)]
+        pub struct DummyCircuit {
+            pub a: Option<F>, // Private input a
+            pub b: Option<F>, // Private input b
+            pub c: F,         // Public output: a * b
+            pub d: F,         // Public output: a + b
+            pub e: F,         // Public output: a - b
+        }
+
+        impl ConstraintSynthesizer<F> for DummyCircuit {
+            fn generate_constraints(self, cs: ConstraintSystemRef<F>) -> Result<(), SynthesisError> {
+                // Allocate private inputs a and b as witnesses
+                let a = FpVar::new_witness(cs.clone(), || {
+                    self.a.ok_or(SynthesisError::AssignmentMissing)
+                })?;
+                let b = FpVar::new_witness(cs.clone(), || {
+                    self.b.ok_or(SynthesisError::AssignmentMissing)
+                })?;
+
+                // Allocate public outputs c, d, and e
+                let c = FpVar::new_input(cs.clone(), || Ok(self.c))?;
+                let d = FpVar::new_input(cs.clone(), || Ok(self.d))?;
+                let e = FpVar::new_input(cs.clone(), || Ok(self.e))?;
+
+                // Enforce the constraints: c = a * b, d = a + b, e = a - b
+                let computed_c = &a * &b;
+                let computed_d = &a + &b;
+                let computed_e = &a - &b;
+
+                computed_c.enforce_equal(&c)?;
+                computed_d.enforce_equal(&d)?;
+                computed_e.enforce_equal(&e)?;
+
+                Ok(())
+            }
+        }
+
+        pub fn compile_circuit() -> (ProvingKey<Bn254>, VerifyingKey<Bn254>) {
+            type E = Bn254;
+            let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
+            let circuit = DummyCircuit {
+                a: None,
+                b: None,
+                c: F::ZERO,
+                d: F::ZERO,
+                e: F::ZERO,
+            };
+            let (pk, vk) = Groth16::<E>::setup(circuit, &mut rng).unwrap();
+            (pk, vk)
+        }
+
+
+            pub struct Proof {
+                pub proof: ark_groth16::Proof<Bn254>,
+                pub public_inputs: Vec<ark_bn254::Fr>,
+            }
+
+
+        pub fn generate_proof() -> Proof {
+            let (a, b) = (5, 3);
+            let (c, d, e) = (a * b, a + b, a - b);
+
+            let circuit = DummyCircuit {
+                a: Some(F::from(a)),
+                b: Some(F::from(b)),
+                c: F::from(c),
+                d: F::from(d),
+                e: F::from(e),
+            };
+
+            let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
+
+            let (pk, _) = compile_circuit();
+
+            let proof = Groth16::<Bn254>::prove(&pk, circuit.clone(), &mut rng).unwrap();
+            let public_inputs = vec![circuit.c, circuit.d, circuit.e];
+
+            Proof {
+                proof,
+                public_inputs,
+            }
+        }
+
+    }
+
+    fn generate_new_mock_proof() -> (
+        ark_groth16::Proof<Bn254>,
+        Vec<ark_bn254::Fr>,
+        ark_groth16::VerifyingKey<Bn254>,
+    )  {
+        let (_, vk) = compile_circuit();
+        let proof = generate_proof();
+        (
+            proof.proof,
+            proof.public_inputs,
+            vk
+        )
+    }
 
 }
