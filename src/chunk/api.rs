@@ -29,8 +29,10 @@ pub fn api_compile(vk: &ark_groth16::VerifyingKey<Bn254>) -> Vec<Script> {
     );
 
     let p1q1 = Bn254::multi_miller_loop_affine([p1], [q1]).0;
-    let p3vk = vec![vk.gamma_abc_g1[3], vk.gamma_abc_g1[2], vk.gamma_abc_g1[1]];
-    let vky0 = vk.gamma_abc_g1[0];
+    let mut p3vk = vk.gamma_abc_g1.clone(); // vk.vk_pubs[0]
+    p3vk.reverse();
+    let vky0 = p3vk.pop().unwrap();
+
     let res = compile(
         Vkey {
             q2,
