@@ -80,9 +80,9 @@ mod test {
     use ark_bn254::Bn254;
     use rand::Rng;
 
-    use crate::chunk::test_utils::{read_scripts_from_file, write_scripts_to_separate_files};
+    use crate::chunk::{api::mock_pubkeys, test_utils::{read_scripts_from_file, write_scripts_to_separate_files}};
 
-    use self::mock::{compile_circuit, generate_proof};
+    use self::{chunk::config::NUM_PUBS, mock::{compile_circuit, generate_proof}};
 
     use super::*;
 
@@ -190,37 +190,16 @@ mod test {
         )
     }
 
-    fn mock_pubkeys() -> WotsPublicKeys {
-        let secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
-
-        let pub0 = wots256::generate_public_key(&format!("{secret}{:04x}", 0));
-        let pub1 = wots256::generate_public_key(&format!("{secret}{:04x}", 1));
-        let pub2 = wots256::generate_public_key(&format!("{secret}{:04x}", 2));
-        let mut fq_arr = vec![];
-        for i in 0..N_VERIFIER_FQs {
-            let p256 = wots256::generate_public_key(&format!("{secret}{:04x}", 3 + i));
-            fq_arr.push(p256);
-        }
-        let mut h_arr = vec![];
-        for i in 0..N_VERIFIER_HASHES {
-            let p160 =
-                wots160::generate_public_key(&format!("{secret}{:04x}", N_VERIFIER_FQs + 3 + i));
-            h_arr.push(p160);
-        }
-        let wotspubkey: WotsPublicKeys = (
-            [pub0, pub1, pub2],
-            fq_arr.try_into().unwrap(),
-            h_arr.try_into().unwrap(),
-        );
-        wotspubkey
-    }
-
     fn sign_assertions(assn: ProofAssertions) -> WotsSignatures {
         let (ps, fs, hs) = (assn.0, assn.1, assn.2);
         let secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let ps0 = wots256::get_signature(&format!("{secret}{:04x}", 0), &ps[0]);
-        let ps1 = wots256::get_signature(&format!("{secret}{:04x}", 1), &ps[1]);
-        let ps2 = wots256::get_signature(&format!("{secret}{:04x}", 2), &ps[2]);
+        
+        let mut psig: Vec<wots256::Signature> = vec![];
+        for i in 0..NUM_PUBS {
+            let psi = wots256::get_signature(&format!("{secret}{:04x}", i), &ps[i]);
+            psig.push(psi);
+        }
+        let psig: [wots256::Signature; NUM_PUBS] = psig.try_into().unwrap();
 
         let mut fsig: Vec<wots256::Signature> = vec![];
         for i in 0..fs.len() {
@@ -236,14 +215,14 @@ mod test {
         }
         let hsig: [wots160::Signature; N_VERIFIER_HASHES] = hsig.try_into().unwrap();
 
-        let r = ([ps0, ps1, ps2], fsig, hsig);
+        let r = (psig, fsig, hsig);
         r
     }
 
     #[test]
     fn test_fn_compile() {
         let (_, _, mock_vk) = generate_new_mock_proof();
-        assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
+        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1); // 3 pub inputs
 
         let ops_scripts = Verifier::compile(VerificationKey { ark_vk: mock_vk });
         let mut script_cache = HashMap::new();
@@ -262,7 +241,7 @@ mod test {
         let (_, _, mock_vk) = generate_new_mock_proof();
         println!("compiled circuit");
 
-        assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
+        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1); // 3 pub inputs
         let mock_pubs = mock_pubkeys();
         let ops_scripts = Verifier::compile(VerificationKey {
             ark_vk: mock_vk.clone(),
@@ -283,7 +262,7 @@ mod test {
     #[test]
     fn test_fn_generate_assertions() {
         let (proof, pubs, mock_vk) = generate_new_mock_proof();
-        assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
+        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1); // 3 pub inputs
         let proof_asserts = Verifier::generate_assertions(
             VerificationKey { ark_vk: mock_vk },
             Proof {
@@ -302,7 +281,7 @@ mod test {
     #[test]
     fn test_fn_validate_assertions() {
         let (proof, pubs, mock_vk) = generate_new_mock_proof();
-        assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
+        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1); // 3 pub inputs
         let proof_asserts = Verifier::generate_assertions(
             VerificationKey {
                 ark_vk: mock_vk.clone(),
@@ -359,7 +338,7 @@ mod test {
     #[test]
     fn test_fn_disprove_invalid_assertions() {
         let (proof, pubs, mock_vk) = generate_new_mock_proof();
-        assert!(mock_vk.gamma_abc_g1.len() == 4); // 3 pub inputs
+        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS+1); // 3 pub inputs
                                                   //let mut proof_asserts = Verifier::generate_assertions(VerificationKey { ark_vk: mock_vk.clone() }, Proof { proof: proof.clone(), public_inputs: pubs.clone() }, );
                                                   // corrupt some assertion value randomly
 

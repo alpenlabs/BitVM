@@ -425,12 +425,12 @@ pub(crate) fn hint_msm(
     msm_tap_index: usize,
     qs: Vec<ark_bn254::G1Affine>,
 ) -> (HintOutMSM, Script) {
-    const window: u8 = 8;
-    const num_pubs: usize = 3;
+    const WINDOW_LEN: u8 = 8;
+    const MAX_SUPPORTED_PUBS: usize = 3;
 
     // hint_in
     let mut t = hint_in.t.clone();
-    assert!(qs.len() <= num_pubs);
+    assert!(qs.len() <= MAX_SUPPORTED_PUBS);
     assert_eq!(qs.len(), hint_in.scalars.len());
 
     // constants
@@ -442,7 +442,7 @@ pub(crate) fn hint_msm(
     let mut hints_tangent: Vec<Hint> = Vec::new();
 
     if t.y != ark_bn254::Fq::ZERO {
-        for _ in 0..window {
+        for _ in 0..WINDOW_LEN {
             let mut alpha = t.x.square();
             alpha /= t.y;
             alpha *= three_div_two;
@@ -472,7 +472,7 @@ pub(crate) fn hint_msm(
     let mut aux_chord = vec![];
     let mut q = ark_bn254::G1Affine::identity();
     for (qi, qq) in qs.iter().enumerate() {
-        q = get_byte_mul_g1(hint_in.scalars[qi], window, msm_tap_index, *qq);
+        q = get_byte_mul_g1(hint_in.scalars[qi], WINDOW_LEN, msm_tap_index, *qq);
         if t.y == ark_bn254::Fq::ZERO {
             t = q.clone();
             continue;
