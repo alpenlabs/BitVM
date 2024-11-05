@@ -1246,7 +1246,7 @@ fn evaluate_groth16_params(
     );
 
     let gparams = groth16_config_gen();
-    let gouts = vec![
+    let mut gouts = vec![
         HintOut::FieldElem(p4.y),
         HintOut::FieldElem(p4.x),
         HintOut::FieldElem(p3.y),
@@ -1285,10 +1285,15 @@ fn evaluate_groth16_params(
         HintOut::FieldElem(q4.y.c0),
         HintOut::FieldElem(q4.x.c1),
         HintOut::FieldElem(q4.x.c0),
-        HintOut::ScalarElem(ks[0]),
-        HintOut::ScalarElem(ks[1]),
-        HintOut::ScalarElem(ks[2]),
+        // HintOut::ScalarElem(ks[0]),
+        // HintOut::ScalarElem(ks[1]),
+        // HintOut::ScalarElem(ks[2]),
     ];
+    for i in 0..ks.len() {
+        gouts.push(HintOut::ScalarElem(ks[i]));
+    }
+
+
     assert_eq!(gparams.len(), gouts.len());
 
     let mut id_to_witness: HashMap<String, HintOut> = HashMap::new();

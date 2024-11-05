@@ -7,10 +7,10 @@ use super::wots::{wots_p256_get_pub_key, wots_p160_get_pub_key, WOTSPubKey};
 
 pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 
-pub const NUM_PUBS: usize = 3;
+pub const NUM_PUBS: usize = 1;
 pub const NUM_U256: usize = 40;
 pub const NUM_U160: usize = 574;
-pub const PUB_ID: &str = "k0,k1,k2";
+pub const PUB_ID: &str = "k0";
 
 #[derive(Debug)]
 pub(crate) struct ScriptItem {
@@ -73,6 +73,7 @@ pub(crate) fn groth16_config_gen() -> Vec<ScriptItem> {
     }
 
     let r7: Vec<&str>= PUB_ID.split(",").map(|s| s.trim()).collect();
+    assert_eq!(r7.len(), NUM_PUBS);
     for item in r7 {
         r.push(ScriptItem {
             category: String::from("GrothPubs"),
