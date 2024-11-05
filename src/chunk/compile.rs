@@ -84,14 +84,14 @@ fn compile_miller_circuit(
         for block in blocks_of_a_loop {
             let sec_out = get_index(&block.link_id, id_to_sec.clone());
             let deps_indices = get_deps(&block.dependencies, id_to_sec.clone());
-            println!(
-                "{itr} ate {:?} ID {:?} deps {:?}",
-                *bit, block.link_id, block.dependencies
-            );
-            println!(
-                "{itr} {} ID {:?} deps {:?}",
-                block.category, sec_out, deps_indices
-            );
+            // println!(
+            //     "{itr} ate {:?} ID {:?} deps {:?}",
+            //     *bit, block.link_id, block.dependencies
+            // );
+            // println!(
+            //     "{itr} {} ID {:?} deps {:?}",
+            //     block.category, sec_out, deps_indices
+            // );
             let blk_name = block.category.clone();
             if blk_name == "Sqr" {
                 let mut sc = script!();
@@ -189,9 +189,9 @@ fn compile_pre_miller_circuit(
             .into_iter()
             .map(|s| id_map.get(s).unwrap().clone())
             .collect();
-        println!("row ID {:?}", row.link_id);
+        //println!("row ID {:?}", row.link_id);
         let sec_out = id_map.get(&row.link_id).unwrap().clone();
-        println!(" {} ID {:?} deps {:?}", row.category, sec_out, sec_in);
+        //println!(" {} ID {:?} deps {:?}", row.category, sec_out, sec_in);
 
         if row.category == "T4Init" {
             let mut sc = script!();
@@ -288,7 +288,7 @@ fn compile_post_miller_circuit(
             .into_iter()
             .map(|s| id_map.get(s).unwrap().clone())
             .collect();
-        println!("row ID {:?}", row.link_id);
+        //println!("row ID {:?}", row.link_id);
         let sec_out = id_map.get(&row.link_id).unwrap().clone();
         if row.category == "Frob1" || row.category == "Frob2" || row.category == "Frob3" {
             let mut sc = script!();
@@ -395,7 +395,7 @@ fn compile_msm_circuit(
             .into_iter()
             .map(|s| id_map.get(s).unwrap().clone())
             .collect();
-        println!("row ID {:?}", row.link_id);
+        //println!("row ID {:?}", row.link_id);
         let sec_out = id_map.get(&row.link_id).unwrap().clone();
 
         if row.category == "MSM" {
@@ -486,11 +486,8 @@ mod test {
 
     #[test]
     fn print_links() {
-        let compiled = read_scripts_from_file("compile.json");
-        let id = 101;
-        let compiled_script = compiled.get(&id).unwrap();
-        for c in compiled_script {
-            println!("cs len {:?}", c.len());
-        }
+        let (id_map, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
+        let mut scrs: Vec<(u32, Script)> = Vec::new();
+        println!("idmap {:?}", id_map);
     }
 }

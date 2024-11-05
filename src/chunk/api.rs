@@ -202,7 +202,7 @@ pub fn generate_assertions(
         let bal: [u8; 32] = nib_to_byte_array(val).try_into().unwrap();
         batch1.push(bal);
     }
-    let batch1: [[u8; 32]; 3] = batch1.try_into().unwrap();
+    let batch1: [[u8; 32]; NUM_PUBS] = batch1.try_into().unwrap();
 
     let len = batch1.len();
     let mut batch2 = vec![];
