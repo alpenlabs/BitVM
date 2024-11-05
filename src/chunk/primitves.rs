@@ -1,18 +1,14 @@
 use crate::bigint::U254;
 use crate::bn254::utils::fq_push_not_montgomery;
+use crate::chunk::blake3compiled;
 use crate::pseudo::NMUL;
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
 };
-use bitcoin::ScriptBuf;
 use std::cmp::min;
-use std::fs::File;
-use std::io::{self, Read};
 
 use crate::bn254::utils::fr_push_not_montgomery;
-
-use super::taps::{HashBytes, Sig};
 
 fn split_digit(window: u32, index: u32) -> Script {
     script! {
@@ -324,8 +320,6 @@ pub fn pack_nibbles_to_limbs() -> Script {
     }
 }
 
-
-
 pub fn fq_from_nibbles() -> Script {
     fn split_digit(window: u32, index: u32) -> Script {
         script! {
@@ -348,7 +342,7 @@ pub fn fq_from_nibbles() -> Script {
             OP_SWAP
         }
     }
-    
+
     const WINDOW: u32 = 4;
     const LIMB_SIZE: u32 = 29;
     const N_BITS: u32 = U254::N_BITS;
@@ -377,38 +371,6 @@ pub fn fq_from_nibbles() -> Script {
     }
 }
 
-
-
-pub fn read_script_from_file(file_path: &str) -> Script {
-    fn read_file_to_bytes(file_path: &str) -> io::Result<Vec<u8>> {
-        let mut file = File::open(file_path)?;
-        let mut all_script_bytes = Vec::new();
-        file.read_to_end(&mut all_script_bytes)?;
-        Ok(all_script_bytes)
-    }
-    //let file_path = "blake3_bin/blake3_192b_252k.bin"; // Replace with your file path
-    let all_script_bytes = read_file_to_bytes(file_path).unwrap();
-    let scb = ScriptBuf::from_bytes(all_script_bytes);
-    let sc = script!();
-    let sc = sc.push_script(scb);
-    let truncated_script = script! {
-       {sc}
-       for _ in 0..40 {
-        OP_TOALTSTACK
-       }
-       for _ in 0..(64-40)/2 {
-        OP_2DROP
-       }
-       for _ in 0..(64-40) {
-        {0}
-       }
-       for _ in 0..40 {
-        OP_FROMALTSTACK
-       }
-    };
-    truncated_script
-}
-
 // [a0, a1, a2, a3, a4, a5]
 // [H(a0,a1), H(a2,a3,a4,a5)]
 // [Hb0, Hb1]
@@ -417,19 +379,17 @@ pub fn read_script_from_file(file_path: &str) -> Script {
 // Hb
 
 pub(crate) fn hash_fp2() -> Script {
-    let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
     script! {
         { Fq::toaltstack() }
         { unpack_limbs_to_nibbles() }
         { Fq::fromaltstack()}
         { unpack_limbs_to_nibbles() }
-        { hash_64b_75k }
+        { blake3compiled::hash_64b_75k() }
         { pack_nibbles_to_limbs() }
     }
 }
 
 pub(crate) fn hash_fp4() -> Script {
-    let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
     script! {
         { Fq::toaltstack() }
         { Fq::toaltstack() }
@@ -442,7 +402,7 @@ pub(crate) fn hash_fp4() -> Script {
         { unpack_limbs_to_nibbles() }
         { Fq::fromaltstack()}
         { unpack_limbs_to_nibbles() }
-        { hash_128b_168k }
+        { blake3compiled::hash_128b_168k() }
         { pack_nibbles_to_limbs() }
     }
 }
@@ -570,8 +530,8 @@ pub(crate) fn emulate_nibbles_to_limbs(msg: [u8; 64]) -> [u32; 9] {
 }
 
 pub(crate) fn hash_fp12() -> Script {
-    let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
-    let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
+    let hash_64b_75k = blake3compiled::hash_64b_75k();
+    let hash_128b_168k = blake3compiled::hash_128b_168k();
 
     script! {
         for _ in 0..=10 {
@@ -641,8 +601,8 @@ pub(crate) fn hash_fp12() -> Script {
 }
 
 pub(crate) fn hash_fp6() -> Script {
-    let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
-    let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
+    let hash_64b_75k = blake3compiled::hash_64b_75k();
+    let hash_128b_168k = blake3compiled::hash_128b_168k();
 
     script! {
         for _ in 0..5 {
@@ -678,8 +638,9 @@ pub(crate) fn hash_fp6() -> Script {
 }
 
 pub(crate) fn hash_fp12_192() -> Script {
-    let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
-    let hash_192b_252k = read_script_from_file("blake3_bin/blake3_192b_252k.bin");
+    let hash_64b_75k = blake3compiled::hash_64b_75k();
+    let hash_192b_252k = blake3compiled::hash_192b_252k();
+
     script! {
         for _ in 0..=10 {
             {Fq::toaltstack()}
@@ -709,8 +670,8 @@ pub(crate) fn hash_fp12_192() -> Script {
 // 6Fp_hash
 // fp6
 pub fn hash_fp12_with_hints() -> Script {
-    let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
-    let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
+    let hash_64b_75k = blake3compiled::hash_64b_75k();
+    let hash_128b_168k = blake3compiled::hash_128b_168k();
 
     script! {
         {Fq::toaltstack()} //Hc0
@@ -750,7 +711,6 @@ pub fn hash_fp12_with_hints() -> Script {
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
@@ -760,13 +720,26 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{bigint::U254, bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::{evaluate::nib_to_byte_array, primitves::unpack_limbs_to_nibbles, wots::{wots_p160_sign_digits, wots_p256_sign_digits}}, execute_script, signatures::wots::{wots128::compact::{get_signature, get_signature2}, wots160, wots256}};
+    use crate::{
+        bigint::U254,
+        bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery},
+        chunk::{
+            evaluate::nib_to_byte_array,
+            primitves::unpack_limbs_to_nibbles,
+            wots::{wots_p160_sign_digits, wots_p256_sign_digits},
+        },
+        execute_script,
+        signatures::wots::{
+            wots128::compact::{get_signature, get_signature2},
+            wots160, wots256,
+        },
+    };
 
     #[test]
-    fn test_fq_from_nibbles() { // pack_nibbles_to_fq
+    fn test_fq_from_nibbles() {
+        // pack_nibbles_to_fq
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let p = ark_bn254::Fq::rand(&mut prng);
-
 
         // let script = script!(
         //     {fq_push_not_montgomery(p)}
@@ -779,22 +752,21 @@ mod test {
         // for i in 0..exec_result.final_stack.len() {
         //     println!("{i:} {:?}", exec_result.final_stack.get(i));
         // }
-       
-       let mut nib32 = [15u8;64];
-       let script = script!{
-            for i in nib32 {
-                {i}
-            }
-            {fq_from_nibbles()}
-            {fq_push_not_montgomery(ark_bn254::Fq::ONE)}
-            {Fq::add(1, 0)}
-       };
-       let exec_result = execute_script(script);
-       for i in 0..exec_result.final_stack.len() {
-           println!("{i:} {:?}", exec_result.final_stack.get(i));
-       }
-    }
 
+        let mut nib32 = [15u8; 64];
+        let script = script! {
+             for i in nib32 {
+                 {i}
+             }
+             {fq_from_nibbles()}
+             {fq_push_not_montgomery(ark_bn254::Fq::ONE)}
+             {Fq::add(1, 0)}
+        };
+        let exec_result = execute_script(script);
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:} {:?}", exec_result.final_stack.get(i));
+        }
+    }
 
     #[test]
     fn test_emq() {
@@ -808,7 +780,6 @@ mod test {
         //println!("pbarr {:?}", pbarr);
         //println!("pbcomparr {:?}", pbcomparr);
         println!("orig {:?}", pb);
-
 
         let secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
         let res = wots160::get_signature(secret, &pbarr);
@@ -825,7 +796,5 @@ mod test {
 
         // let pbarr = nib_to_byte_array(&nbcoll);
         println!("nbcoll {:?}", nbcoll);
-        
     }
-
 }

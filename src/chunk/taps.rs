@@ -7,9 +7,9 @@ use crate::bn254::utils::{
 };
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::primitves::*;
-use crate::chunk::wots::{wots_compact_checksig_verify_with_pubkey};
-use crate::{bn254, signatures};
+use crate::chunk::wots::wots_compact_checksig_verify_with_pubkey;
 use crate::signatures::wots::{wots160, wots256, wots32};
+use crate::{bn254, signatures};
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
@@ -25,7 +25,7 @@ use std::str::FromStr;
 
 use super::primitves::{emulate_extern_hash_fps, hash_fp12_192};
 use super::wots::{wots_p160_sign_digits, wots_p256_sign_digits, WOTSPubKey};
-use super::hint_models::*;
+use super::{blake3compiled, hint_models::*};
 
 pub(crate) type HashBytes = [u8; 64];
 
@@ -34,7 +34,7 @@ pub type Link = (u32, bool);
 #[derive(Debug, Clone)]
 pub enum SigData {
     Sig256(wots256::Signature),
-    Sig160(wots160::Signature)
+    Sig160(wots160::Signature),
 }
 
 #[derive(Debug, Clone)]
@@ -83,11 +83,9 @@ pub(crate) fn tup_to_scr(sig: &mut Sig, tup: Vec<(Link, [u8; 64])>) -> Vec<Scrip
         };
         compact_bc_scripts.push(scr);
         // to compact form
-
     }
     compact_bc_scripts
 }
-
 
 pub(crate) fn wots_locking_script(link: Link, link_ids: &HashMap<u32, WOTSPubKey>) -> Script {
     wots_compact_checksig_verify_with_pubkey(link_ids.get(&link.0).unwrap())
@@ -101,7 +99,6 @@ pub(crate) fn wots_locking_script(link: Link, link_ids: &HashMap<u32, WOTSPubKey
     //     }
     // }
 }
-
 
 // POINT DBL
 pub(crate) fn tap_point_dbl() -> Script {
@@ -123,8 +120,8 @@ pub(crate) fn tap_point_dbl() -> Script {
         ark_bn254::Fq2::one(),
     );
 
-    let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
-    let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
+    let hash_64b_75k = blake3compiled::hash_64b_75k();
+    let hash_128b_168k = blake3compiled::hash_128b_168k();
 
     let ops_script = script! {
         // { fq2_push_not_montgomery(alpha_tangent)}
@@ -298,7 +295,6 @@ pub(crate) fn bitcom_point_dbl(
     }
 }
 
-
 pub(crate) fn hint_point_dbl(
     sig: &mut Sig,
     sec_out: Link,
@@ -399,8 +395,6 @@ pub(crate) fn hint_point_dbl(
     (hint_out, simulate_stack_input)
 }
 
-
-
 pub(crate) fn tap_point_add_with_frob(ate: i8) -> Script {
     assert!(ate == 1 || ate == -1);
     let mut ate_unsigned_bit = 1; // Q1 = pi(Q), T = T + Q1 // frob
@@ -433,8 +427,8 @@ pub(crate) fn tap_point_add_with_frob(ate: i8) -> Script {
         ark_bn254::Fq2::one(),
     );
 
-    let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
-    let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
+    let hash_64b_75k = blake3compiled::hash_64b_75k();
+    let hash_128b_168k = blake3compiled::hash_128b_168k();
 
     let ops_script = script! {
         // [a,b,tx,ty, aux_in]
@@ -915,8 +909,8 @@ pub(crate) fn tap_point_ops(ate: i8) -> Script {
         ark_bn254::Fq2::one(),
     );
 
-    let hash_64b_75k = read_script_from_file("blake3_bin/blake3_64b_75k.bin");
-    let hash_128b_168k = read_script_from_file("blake3_bin/blake3_128b_168k.bin");
+    let hash_64b_75k = blake3compiled::hash_64b_75k();
+    let hash_128b_168k = blake3compiled::hash_128b_168k();
 
     let bcsize = 6 + 3;
     let ops_script = script! {
@@ -2104,7 +2098,6 @@ pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs_with_frob(
     bitcomms_script
 }
 
-
 // HASH_C
 pub(crate) fn tap_hash_c() -> Script {
     let hash_scr = script! {
@@ -2112,7 +2105,7 @@ pub(crate) fn tap_hash_c() -> Script {
             {Fq::roll(11)}
             {Fq::copy(0)}
             { Fq::push_hex_not_montgomery(Fq::MODULUS) }
-            { U254::lessthan(1, 0) } // a < p 
+            { U254::lessthan(1, 0) } // a < p
             OP_TOALTSTACK
         }
         for _ in 0..12 {
@@ -2268,17 +2261,18 @@ pub(crate) fn hint_hash_c2(
 
 // precompute P
 pub(crate) fn tap_precompute_Px() -> Script {
-    let (eval_x, _) = new_hinted_x_from_eval_point(G1Affine::new_unchecked(
+    let (eval_x, _) = new_hinted_x_from_eval_point(
+        G1Affine::new_unchecked(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE),
         ark_bn254::Fq::ONE,
-        ark_bn254::Fq::ONE,
-    ), ark_bn254::Fq::ONE);
+    );
 
-    let (on_curve_scr, _) =  crate::bn254::curves::G1Affine::hinted_is_on_curve(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE);
+    let (on_curve_scr, _) =
+        crate::bn254::curves::G1Affine::hinted_is_on_curve(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE);
     let ops_scr = script! {
         {Fq::copy(0)}
         {fq_push_not_montgomery(ark_bn254::Fq::ZERO)}
         {Fq::equal(1, 0)}
-        OP_IF 
+        OP_IF
             for _ in 0..9 {
                 {Fq::drop()}
             }
@@ -2287,7 +2281,7 @@ pub(crate) fn tap_precompute_Px() -> Script {
             {Fq2::copy(0)}
             // Stack: [hints, pxd, pyd, px, py, px, py]
             {on_curve_scr}
-            OP_IF 
+            OP_IF
                 {eval_x}
                 {Fq::equal(1, 0)} OP_NOT OP_VERIFY
             OP_ELSE
@@ -2338,7 +2332,7 @@ pub(crate) fn tap_precompute_Py() -> Script {
         {Fq::copy(0)}
         {fq_push_not_montgomery(ark_bn254::Fq::ZERO)}
         {Fq::equal(1, 0)}
-        OP_IF 
+        OP_IF
             {Fq2::drop()}
             {Fq2::drop()}
         OP_ELSE
@@ -2390,7 +2384,7 @@ pub(crate) fn hints_precompute_Px(
     let p_x = emulate_fq_to_nibbles(p.x);
     let p_y = emulate_fq_to_nibbles(p.y);
 
-    let (_, on_curve_hint) =  crate::bn254::curves::G1Affine::hinted_is_on_curve(p.x, p.y);
+    let (_, on_curve_hint) = crate::bn254::curves::G1Affine::hinted_is_on_curve(p.x, p.y);
 
     let tups = vec![
         (sec_out, pdash_x),
@@ -2415,7 +2409,6 @@ pub(crate) fn hints_precompute_Px(
     (pdx, simulate_stack_input)
 }
 
-
 pub(crate) fn hints_precompute_Py(
     sig: &mut Sig,
     sec_out: Link,
@@ -2432,7 +2425,6 @@ pub(crate) fn hints_precompute_Py(
         println!("non-invertible input point");
     }
     let pdash_y = emulate_fq_to_nibbles(pdy);
-
 
     let (_, hints) = new_hinted_y_from_eval_point(p, pdy);
 
@@ -2455,10 +2447,10 @@ pub(crate) fn hints_precompute_Py(
     (pdy, simulate_stack_input)
 }
 
-
 // hash T4
 pub(crate) fn tap_initT4() -> Script {
-    let (on_curve_scr, _) = bn254::curves::G2Affine::hinted_is_on_curve(ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE);
+    let (on_curve_scr, _) =
+        bn254::curves::G2Affine::hinted_is_on_curve(ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE);
 
     let hash_scr = script! {
         {Fq2::copy(2)}
@@ -2472,12 +2464,12 @@ pub(crate) fn tap_initT4() -> Script {
             {pack_nibbles_to_limbs()}
             {hash_fp2()}
             {Fq::equal(1, 0)} OP_NOT OP_VERIFY
-        OP_ELSE 
+        OP_ELSE
             {Fq2::drop()}
             {Fq2::drop()}
             {Fq::drop()}
-        OP_ENDIF 
-        // if the point is not on curve 
+        OP_ENDIF
+        // if the point is not on curve
     };
     let sc = script! {
         {hash_scr}
@@ -2533,7 +2525,6 @@ pub(crate) fn hint_init_T4(
     let bc_elems = tup_to_scr(sig, tups);
 
     let (_, hints) = bn254::curves::G2Affine::hinted_is_on_curve(t4.x, t4.y);
-
 
     let simulate_stack_input = script! {
         // bit commits raw
