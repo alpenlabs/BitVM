@@ -18,6 +18,7 @@ use ark_ec::pairing::Pairing;
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::Field;
 
+
 pub fn api_compile(vk: &ark_groth16::VerifyingKey<Bn254>) -> Vec<Script> {
     assert!(vk.gamma_abc_g1.len() == NUM_PUBS + 1); // supports only 3 pubs
 
@@ -90,21 +91,20 @@ pub fn generate_tapscripts(
     taps_per_link
 }
 
-pub fn mock_pubkeys() -> WotsPublicKeys {
-    let secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
+pub fn mock_pubkeys(mock_secret: &str) -> WotsPublicKeys {
 
     let mut pubins = vec![];
     for i in 0..NUM_PUBS {
-        pubins.push(wots256::generate_public_key(&format!("{secret}{:04x}", i)));
+        pubins.push(wots256::generate_public_key(&format!("{mock_secret}{:04x}", i)));
     }
     let mut fq_arr = vec![];
     for i in 0..N_VERIFIER_FQs {
-        let p256 = wots256::generate_public_key(&format!("{secret}{:04x}", NUM_PUBS + i));
+        let p256 = wots256::generate_public_key(&format!("{mock_secret}{:04x}", NUM_PUBS + i));
         fq_arr.push(p256);
     }
     let mut h_arr = vec![];
     for i in 0..N_VERIFIER_HASHES {
-        let p160 = wots160::generate_public_key(&format!("{secret}{:04x}", N_VERIFIER_FQs + NUM_PUBS + i));
+        let p160 = wots160::generate_public_key(&format!("{mock_secret}{:04x}", N_VERIFIER_FQs + NUM_PUBS + i));
         h_arr.push(p160);
     }
     let wotspubkey: WotsPublicKeys = (
@@ -115,8 +115,8 @@ pub fn mock_pubkeys() -> WotsPublicKeys {
     wotspubkey
 }
 
-fn generate_mock_pub_keys() -> HashMap<u32, WOTSPubKey> {
-    let inpubkeys = mock_pubkeys();
+fn generate_mock_pub_keys(mock_secret: &str) -> HashMap<u32, WOTSPubKey> {
+    let inpubkeys = mock_pubkeys(mock_secret);
     let mut pubkeys: HashMap<u32, WOTSPubKey> = HashMap::new();
     for i in 0..NUM_PUBS {
         pubkeys.insert(i as u32, WOTSPubKey::P256(inpubkeys.0[i]));
@@ -151,12 +151,18 @@ pub fn generate_assertions(
 ) -> ProofAssertions {
     assert_eq!(scalars.len(), NUM_PUBS);
 
-    let sec = "b138982ce17ac813d505b5b40b665d404e9528e7"; // can be any random hex
+    // you do not need any secret to generate proof assertions,
+    // the use of "secret" below is merely an artifact of legacy code and doesn't serve any purpse
+    // will remove the need for passing it.
+    pub const MOCK_KEY: &str = "b138982ce17ac813d505a5b40b665d404e9528e7";
+    let random_secret = MOCK_KEY;
     let mut sig = Sig {
-        msk: Some(sec),
+        msk: Some(random_secret),
         cache: HashMap::new(),
     };
-    let pk = generate_mock_pub_keys();
+
+
+    let pk = generate_mock_pub_keys(MOCK_KEY);
 
     let mut msm_scalar = scalars.clone();
     msm_scalar.reverse();
@@ -313,12 +319,3 @@ pub fn validate_assertions(
     Some((script_index, hint_scr))
 }
 
-#[cfg(test)]
-mod test {
-    use super::generate_mock_pub_keys;
-
-    #[test]
-    fn test_it() {
-        generate_mock_pub_keys();
-    }
-}
