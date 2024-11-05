@@ -7,7 +7,7 @@ use crate::chunk::evaluate::{evaluate, extract_values_from_hints, EvalIns};
 use crate::chunk::taps::{Sig, SigData};
 use crate::chunk::wots::WOTSPubKey;
 use crate::groth16::g16::{
-    N_VERIFIER_FQs, ProofAssertions, WotsPublicKeys, WotsSignatures, N_TAPLEAVES, N_VERIFIER_HASHES,
+    Assertions, PublicKeys, Signatures, N_TAPLEAVES, N_VERIFIER_FQS, N_VERIFIER_HASHES,
 };
 use crate::groth16::offchain_checker::compute_c_wi;
 use crate::signatures::wots::{wots160, wots256};
@@ -48,10 +48,7 @@ pub fn api_compile(vk: &ark_groth16::VerifyingKey<Bn254>) -> Vec<Script> {
     taps
 }
 
-pub fn generate_tapscripts(
-    inpubkeys: WotsPublicKeys,
-    ops_scripts_per_link: &[Script],
-) -> Vec<Script> {
+pub fn generate_tapscripts(inpubkeys: PublicKeys, ops_scripts_per_link: &[Script]) -> Vec<Script> {
     let mut pubkeys: HashMap<u32, WOTSPubKey> = HashMap::new();
     for i in 0..NUM_PUBS {
         pubkeys.insert(i as u32, WOTSPubKey::P256(inpubkeys.0[i]));
@@ -90,7 +87,7 @@ pub fn generate_tapscripts(
     taps_per_link
 }
 
-pub fn mock_pubkeys() -> WotsPublicKeys {
+pub fn mock_pubkeys() -> PublicKeys {
     let secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
     let mut pubins = vec![];
@@ -98,17 +95,17 @@ pub fn mock_pubkeys() -> WotsPublicKeys {
         pubins.push(wots256::generate_public_key(&format!("{secret}{:04x}", i)));
     }
     let mut fq_arr = vec![];
-    for i in 0..N_VERIFIER_FQs {
+    for i in 0..N_VERIFIER_FQS {
         let p256 = wots256::generate_public_key(&format!("{secret}{:04x}", NUM_PUBS + i));
         fq_arr.push(p256);
     }
     let mut h_arr = vec![];
     for i in 0..N_VERIFIER_HASHES {
         let p160 =
-            wots160::generate_public_key(&format!("{secret}{:04x}", N_VERIFIER_FQs + NUM_PUBS + i));
+            wots160::generate_public_key(&format!("{secret}{:04x}", N_VERIFIER_FQS + NUM_PUBS + i));
         h_arr.push(p160);
     }
-    let wotspubkey: WotsPublicKeys = (
+    let wotspubkey: PublicKeys = (
         pubins.try_into().unwrap(),
         fq_arr.try_into().unwrap(),
         h_arr.try_into().unwrap(),
@@ -148,7 +145,7 @@ pub fn generate_assertions(
     proof: ark_groth16::Proof<Bn<ark_bn254::Config>>,
     scalars: Vec<ark_bn254::Fr>,
     vk: &ark_groth16::VerifyingKey<Bn254>,
-) -> ProofAssertions {
+) -> Assertions {
     assert_eq!(scalars.len(), NUM_PUBS);
 
     let sec = "b138982ce17ac813d505b5b40b665d404e9528e7"; // can be any random hex
@@ -221,7 +218,7 @@ pub fn generate_assertions(
         let bal: [u8; 32] = nib_to_byte_array(val).try_into().unwrap();
         batch2.push(bal);
     }
-    let batch2: [[u8; 32]; N_VERIFIER_FQs] = batch2.try_into().unwrap();
+    let batch2: [[u8; 32]; N_VERIFIER_FQS] = batch2.try_into().unwrap();
 
     let len = batch1.len() + batch2.len();
     let mut batch3 = vec![];
@@ -238,8 +235,8 @@ pub fn generate_assertions(
 
 pub fn validate_assertions(
     vk: &ark_groth16::VerifyingKey<Bn254>,
-    signed_asserts: WotsSignatures,
-    inpubkeys: WotsPublicKeys,
+    signed_asserts: Signatures,
+    inpubkeys: PublicKeys,
 ) -> Option<(usize, Script)> {
     let mut sigcache: HashMap<u32, SigData> = HashMap::new();
 
@@ -249,13 +246,13 @@ pub fn validate_assertions(
         sigcache.insert(i as u32, SigData::Sig256(signed_asserts.0[i]));
     }
 
-    for i in 0..N_VERIFIER_FQs {
+    for i in 0..N_VERIFIER_FQS {
         sigcache.insert((NUM_PUBS + i) as u32, SigData::Sig256(signed_asserts.1[i]));
     }
 
     for i in 0..N_VERIFIER_HASHES {
         sigcache.insert(
-            (NUM_PUBS + N_VERIFIER_FQs + i) as u32,
+            (NUM_PUBS + N_VERIFIER_FQS + i) as u32,
             SigData::Sig160(signed_asserts.2[i]),
         );
     }
