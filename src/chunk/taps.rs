@@ -2111,7 +2111,7 @@ pub(crate) fn tap_hash_c() -> Script {
         for _ in 0..12 {
             {Fq::roll(11)}
             {Fq::copy(0)}
-            { U254::push_hex(Fq::MODULUS) }
+            { Fq::push_hex_not_montgomery(Fq::MODULUS) }
             { U254::lessthan(1, 0) } // a < p 
             OP_TOALTSTACK
         }
@@ -2150,12 +2150,8 @@ pub(crate) fn bitcom_hash_c(
             {Fq::toaltstack()}
         }
         {wots_locking_script(sec_out, link_ids)}  // f_hash
-        for i in 0..12 {
+        for _ in 0..12 {
             {Fq::fromaltstack()}
-            if i == 4 {
-                {Fq::drop()}
-                {U254::push_hex(Fq::MODULUS)}
-            }
         }
         // Stack:[f_hash_claim, f0, ..,f11]
     };
