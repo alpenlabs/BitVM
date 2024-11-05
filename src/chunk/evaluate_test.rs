@@ -414,19 +414,15 @@ mod test {
 
         let p3 = p3.into_affine();
 
+        let eval_ins: EvalIns = EvalIns { p2: proof.p2, p3, q4: proof.q4, c: proof.c, s: proof.s, ks: msm_scalar, p4: proof.p4  };
+
         let (_, fault) = evaluate(
             &mut sig,
             pub_scripts_per_link_id,
-            proof.p2,
-            p3,
-            proof.p4,
+            Some(eval_ins),
             vk.q2,
             vk.q3,
-            proof.q4,
-            proof.c,
-            proof.s,
             vk.f_fixed,
-            msm_scalar,
             msm_gs,
             vk.vk_pubs[0],
         );
@@ -482,20 +478,15 @@ mod test {
                 msk: None,
                 cache: HashMap::new(),
             };
+            let eval_ins: EvalIns = EvalIns { p2: proof.p2, p3, q4: proof.q4, c: proof.c, s: proof.s, ks: msm_scalar.clone(), p4: proof.p4  };
     
             let (_, fault) = evaluate(
                 &mut sig,
                 &pub_scripts_per_link_id,
-                proof.p2,
-                p3,
-                proof.p4,
+                Some(eval_ins),
                 vk.q2,
                 vk.q3,
-                proof.q4,
-                proof.c,
-                proof.s,
                 vk.f_fixed,
-                msm_scalar.clone(),
                 msm_gs.clone(),
                 vk.vk_pubs[0],
             );

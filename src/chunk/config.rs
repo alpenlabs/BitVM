@@ -12,7 +12,6 @@ pub const NUM_U256: usize = 40;
 pub const NUM_U160: usize = 574;
 pub const PUB_ID: &str = "k0,k1,k2";
 
-
 #[derive(Debug)]
 pub(crate) struct ScriptItem {
     pub(crate) category: String, // script category
@@ -72,7 +71,8 @@ pub(crate) fn groth16_config_gen() -> Vec<ScriptItem> {
             is_type_field: true,
         })
     }
-    let r7 = vec!["k0", "k1", "k2"];
+
+    let r7: Vec<&str>= PUB_ID.split(",").map(|s| s.trim()).collect();
     for item in r7 {
         r.push(ScriptItem {
             category: String::from("GrothPubs"),
@@ -759,10 +759,13 @@ pub fn keygen(msk: &str) -> HashMap<u32, WOTSPubKey> {
 
 #[cfg(test)]
 mod test {
+    use crate::chunk::config::PUB_ID;
+
     use super::{assign_link_ids, NUM_PUBS, NUM_U160, NUM_U256};
 
     #[test]
     fn test_assign_link_ids() {
-        let ret = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
+        let r7: Vec<&str>= PUB_ID.split(",").map(|s| s.trim()).collect();
+        println!("{:?}", r7);
     }
 }

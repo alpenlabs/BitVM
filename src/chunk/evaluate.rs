@@ -1207,16 +1207,15 @@ fn fq12_from_vec(fs: Vec<ark_bn254::Fq>) -> ark_bn254::Fq12 {
     )
 }
 fn evaluate_groth16_params(
-    sig: &mut Sig, // TODO: add sig values here ?
-    link_name_to_id: HashMap<String, (u32, bool)>,
-    p2: G1Affine,
-    p3: G1Affine,
-    p4: G1Affine,
-    q4: G2Affine,
-    c: Fq12,
-    s: Fq12,
-    ks: Vec<ark_bn254::Fr>,
+    eval_ins: EvalIns,
 ) -> HashMap<String, HintOut> {
+    let p2 = eval_ins.p2;
+    let p3 = eval_ins.p3;
+    let p4 = eval_ins.p4;
+    let q4 = eval_ins.q4;
+    let c = eval_ins.c;
+    let s = eval_ins.s;
+    let ks = eval_ins.ks;
     let cv = vec![
         c.c0.c0.c0, c.c0.c0.c1, c.c0.c1.c0, c.c0.c1.c1, c.c0.c2.c0, c.c0.c2.c1, c.c1.c0.c0,
         c.c1.c0.c1, c.c1.c1.c0, c.c1.c1.c1, c.c1.c2.c0, c.c1.c2.c1,
@@ -1709,19 +1708,23 @@ fn evaluate_pre_miller_circuit(
     None
 }
 
+pub(crate) struct EvalIns {
+    pub(crate) p2: G1Affine,
+    pub(crate) p3: G1Affine,
+    pub(crate) p4: G1Affine,
+    pub(crate) q4: G2Affine,
+    pub(crate) c: ark_bn254::Fq12,
+    pub(crate) s: ark_bn254::Fq12,
+    pub(crate) ks: Vec<ark_bn254::Fr>,
+}
+
 pub(crate) fn evaluate(
     sig: &mut Sig,
     pub_scripts_per_link_id: &HashMap<u32, WOTSPubKey>,
-    p2: G1Affine,
-    p3: G1Affine,
-    p4: G1Affine,
+    eval_ins: Option<EvalIns>,
     q2: ark_bn254::G2Affine,
     q3: ark_bn254::G2Affine,
-    q4: G2Affine,
-    c: Fq12,
-    s: Fq12,
     fixed_acc: ark_bn254::Fq12,
-    ks: Vec<ark_bn254::Fr>,
     ks_vks: Vec<ark_bn254::G1Affine>,
     vky0: ark_bn254::G1Affine,
 ) -> (HashMap<String, HintOut>, Option<(u32, bitcoin_script::Script)>) {
@@ -1733,15 +1736,7 @@ pub(crate) fn evaluate(
         grothmap = evaluate_groth16_params_from_sig(sig, link_name_to_id.clone());
     } else {
         grothmap = evaluate_groth16_params(
-            sig,
-            link_name_to_id.clone(),
-            p2,
-            p3,
-            p4,
-            q4,
-            c,
-            s,
-            ks.clone(),
+            eval_ins.unwrap()
         );
     }
     aux_out_per_link.extend(grothmap);
@@ -1752,7 +1747,7 @@ pub(crate) fn evaluate(
         pub_scripts_per_link_id,
         link_name_to_id.clone(),
         &mut aux_out_per_link,
-        ks.len(),
+        NUM_PUBS,
         ks_vks,
     );
     if re.is_some() {
@@ -1921,7 +1916,8 @@ mod test {
         let sig = &mut Sig { msk: None, cache: HashMap::new() };
         let mut rng = &mut test_rng();
         let ks = [ark_bn254::Fr::rand(&mut rng), ark_bn254::Fr::rand(&mut rng), ark_bn254::Fr::rand(&mut rng)];
-        let eval1 = evaluate_groth16_params(sig, link_name_to_id.clone(), ark_bn254::G1Affine::rand(&mut rng), ark_bn254::G1Affine::rand(&mut rng), ark_bn254::G1Affine::rand(&mut rng), ark_bn254::G2Affine::rand(&mut rng), ark_bn254::Fq12::ONE, ark_bn254::Fq12::ONE, ks.to_vec());
+        let eval_ins: EvalIns = EvalIns { p2: ark_bn254::G1Affine::rand(&mut rng), p3: ark_bn254::G1Affine::rand(&mut rng), p4: ark_bn254::G1Affine::rand(&mut rng), q4: ark_bn254::G2Affine::rand(&mut rng), c: ark_bn254::Fq12::ONE, s: ark_bn254::Fq12::ONE, ks: ks.to_vec()};
+        let eval1 = evaluate_groth16_params(eval_ins);
         let secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
 
         println!("ks {:?}", ks);

@@ -3,7 +3,7 @@ use std::ops::Neg;
 
 use crate::chunk::compile::{compile, Vkey};
 use crate::chunk::config::{assign_link_ids, keygen, NUM_PUBS, NUM_U160, NUM_U256};
-use crate::chunk::evaluate::{evaluate, extract_values_from_hints};
+use crate::chunk::evaluate::{evaluate, extract_values_from_hints, EvalIns};
 use crate::chunk::taps::{Sig, SigData};
 use crate::chunk::wots::WOTSPubKey;
 use crate::groth16::g16::{
@@ -165,6 +165,7 @@ pub(crate) fn nib_to_byte_array(digits: &[u8]) -> Vec<u8> {
     msg_bytes
 }
 
+
 pub fn generate_assertions(
     proof: ark_groth16::Proof<Bn<ark_bn254::Config>>,
     scalars: Vec<ark_bn254::Fr>,
@@ -198,19 +199,14 @@ pub fn generate_assertions(
 
     let (c, s) = compute_c_wi(f);
 
+    let eval_ins: EvalIns = EvalIns { p2, p3, p4, q4, c, s, ks: msm_scalar.clone() };
     let (aux, fault) = evaluate(
         &mut sig,
         &pk,
-        p2,
-        p3,
-        p4,
+        Some(eval_ins),
         q2,
         q3,
-        q4,
-        c,
-        s,
         f_fixed,
-        msm_scalar.clone(),
         msm_gs.clone(),
         vk.gamma_abc_g1[0],
     );
@@ -251,13 +247,10 @@ pub fn generate_assertions(
 }
 
 pub fn validate_assertions(
-    proof: ark_groth16::Proof<Bn<ark_bn254::Config>>,
-    scalars: Vec<ark_bn254::Fr>,
     vk: &ark_groth16::VerifyingKey<Bn254>,
     signed_asserts: WotsSignatures,
     pubkeys: WotsPublicKeys,
 ) -> Option<(usize, Script)> {
-    assert_eq!(scalars.len(), 3);
     let mut sigcache: HashMap<u32, SigData> = HashMap::new();
     let (sa0, sa1, sa2) = (signed_asserts.0, signed_asserts.1, signed_asserts.2);
     sigcache.insert(0, SigData::Sig256(sa0[0]));
@@ -294,38 +287,22 @@ pub fn validate_assertions(
         cache: sigcache,
     };
 
-    let msm_scalar = vec![scalars[2], scalars[1], scalars[0]];
     let msm_gs = vec![vk.gamma_abc_g1[3], vk.gamma_abc_g1[2], vk.gamma_abc_g1[1]]; // vk.vk_pubs[0]
-    let p3 = vk.gamma_abc_g1[0] * ark_bn254::Fr::ONE
-        + vk.gamma_abc_g1[1] * scalars[0]
-        + vk.gamma_abc_g1[2] * scalars[1]
-        + vk.gamma_abc_g1[3] * scalars[2];
-    let p3 = p3.into_affine();
-    let (p2, p1, p4) = (proof.c, vk.alpha_g1, proof.a);
-    let (q3, q2, q1, q4) = (
+
+    let (q3, q2, q1) = (
         vk.gamma_g2.into_group().neg().into_affine(),
         vk.delta_g2.into_group().neg().into_affine(),
         -vk.beta_g2,
-        proof.b,
     );
-    let f_fixed = Bn254::multi_miller_loop_affine([p1], [q1]).0;
-    let f = Bn254::multi_miller_loop_affine([p1, p2, p3, p4], [q1, q2, q3, q4]).0;
-
-    let (c, s) = compute_c_wi(f);
+    let f_fixed = Bn254::multi_miller_loop_affine([vk.alpha_g1], [q1]).0;
 
     let (_, fault) = evaluate(
         &mut sig,
         &pubkeys,
-        p2,
-        p3,
-        p4,
+        None,
         q2,
         q3,
-        q4,
-        c,
-        s,
         f_fixed,
-        msm_scalar.clone(),
         msm_gs.clone(),
         vk.gamma_abc_g1[0],
     );
