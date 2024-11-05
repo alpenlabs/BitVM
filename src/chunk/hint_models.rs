@@ -425,7 +425,6 @@ impl HintInPrecomputePy {
 
 pub(crate) struct HintInPrecomputePx {
     pub(crate) p: G1Affine,
-    pub(crate) pdy: ark_bn254::Fq,
 }
 
 impl HintInPrecomputePx {
@@ -433,7 +432,6 @@ impl HintInPrecomputePx {
         // GP3y,GP3x,P3y
         Self {
             p: ark_bn254::G1Affine::new_unchecked(v[1], v[0]),
-            pdy: v[2],
         }
     }
 }

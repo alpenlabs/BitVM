@@ -9,7 +9,7 @@ mod test {
     use crate::chunk::primitves::emulate_extern_hash_fps;
     use crate::chunk::taps_mul::*;
     use crate::chunk::wots::{wots_p160_get_pub_key, wots_p256_get_pub_key, WOTSPubKey};
-    use ark_ff::Field;
+    use ark_ff::{AdditiveGroup, Field};
     use ark_std::UniformRand;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
@@ -112,10 +112,10 @@ mod test {
         };
 
         let res = execute_script(script);
-        assert!(!res.success && res.final_stack.len() == 1);
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
+        assert!(!res.success && res.final_stack.len() == 1);
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
 
@@ -203,6 +203,7 @@ mod test {
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let t4 = ark_bn254::G2Affine::rand(&mut prng);
+        //t4.y = t4.y + t4.y;
         let hint_in = HintInInitT4 { t4 };
         let (_, simulate_stack_input) = hint_init_T4(
             &mut Sig {
@@ -222,10 +223,11 @@ mod test {
         };
 
         let res = execute_script(script);
-        assert!(!res.success && res.final_stack.len() == 1);
+
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
+        assert!(!res.success && res.final_stack.len() == 1);
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
 
@@ -255,7 +257,6 @@ mod test {
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hint_in = HintInPrecomputePx {
             p,
-            pdy: p.y.inverse().unwrap(),
         };
         let (_, simulate_stack_input) = hints_precompute_Px(
             &mut Sig {
@@ -275,65 +276,68 @@ mod test {
         };
 
         let res = execute_script(script);
-        assert!(!res.success && res.final_stack.len() == 1);
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
+        assert!(!res.success && res.final_stack.len() == 1);
+
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
 
-    // #[test]
-    // fn test_precompute_Py() {
-    //     // compile time
-    //     let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-    //     let sec_out = 0;
-    //     let sec_in = vec![1];
+    #[test]
+    fn test_precompute_Py() {
+        // compile time
+        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        let sec_out = 0;
+        let sec_in = vec![1];
 
-    //     let precompute_p = tap_precompute_Py();
-    //     let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-    //     let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
-    //     pub_scripts.insert(sec_out, pk);
-    //     for i in &sec_in {
-    //         let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
-    //         pub_scripts.insert(*i, pk);
-    //     }
+        let precompute_p = tap_precompute_Py();
+        let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
+        let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        pub_scripts.insert(sec_out, pk);
+        for i in &sec_in {
+            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            pub_scripts.insert(*i, pk);
+        }
 
-    //     let sec_out = (sec_out, true);
-    //     let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+        let sec_out = (sec_out, true);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
 
-    //     let bitcom_scr = bitcom_precompute_Py(&pub_scripts, sec_out, sec_in.clone());
+        let bitcom_scr = bitcom_precompute_Py(&pub_scripts, sec_out, sec_in.clone());
 
-    //     // runtime
-    //     let mut prng = ChaCha20Rng::seed_from_u64(0);
-    //     let p = ark_bn254::Fq::rand(&mut prng);
-    //     let hint_in = HintInPrecomputePy { p };
-    //     let (_, simulate_stack_input) = hints_precompute_Py(
-    //         &mut Sig {
-    //             msk: Some(sec_key_for_bitcomms),
-    //             cache: HashMap::new(),
-    //         },
-    //         sec_out,
-    //         sec_in,
-    //         hint_in,
-    //     );
+        // runtime
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let p = ark_bn254::Fq::rand(&mut prng);
+        let hint_in = HintInPrecomputePy { p };
+        let (_, simulate_stack_input) = hints_precompute_Py(
+            &mut Sig {
+                msk: Some(sec_key_for_bitcomms),
+                cache: HashMap::new(),
+            },
+            sec_out,
+            sec_in,
+            hint_in,
+        );
 
-    //     let tap_len = precompute_p.len();
-    //     let script = script! {
-    //         {simulate_stack_input}
-    //         {bitcom_scr}
-    //         {precompute_p}
-    //     };
+        let tap_len = precompute_p.len();
+        let script = script! {
+            {simulate_stack_input}
+            {bitcom_scr}
+            {precompute_p}
+        };
 
-    //     let res = execute_script(script);
-    //     assert!(!res.success && res.final_stack.len() == 1);
-    //     for i in 0..res.final_stack.len() {
-    //         println!("{i:} {:?}", res.final_stack.get(i));
-    //     }
-    //     println!(
-    //         "success {}, script {} stack {}",
-    //         res.success, tap_len, res.stats.max_nb_stack_items
-    //     );
-    // }
+        let res = execute_script(script);
+
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        assert!(!res.success);
+        assert_eq!(res.final_stack.len(), 1);
+        println!(
+            "success {}, script {} stack {}",
+            res.success, tap_len, res.stats.max_nb_stack_items
+        );
+    }
 
     #[test]
     fn test_hinited_sparse_dense_mul() {

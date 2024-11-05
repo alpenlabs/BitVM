@@ -431,10 +431,10 @@ pub fn from_eval_point(p: ark_bn254::G1Affine) -> Script {
 ///      x' = -p.x / p.y
 ///      y' = 1 / p.y
 ///  // Stack: [hints, pxd, pyd, px, py] 
-pub fn new_hinted_x_from_eval_point(p: ark_bn254::G1Affine) -> (Script, Vec<Hint>) {
+pub fn new_hinted_x_from_eval_point(p: ark_bn254::G1Affine, py_inv: ark_bn254::Fq) -> (Script, Vec<Hint>) {
     let mut hints = Vec::new();
 
-    let py_inv = p.y().unwrap().inverse().unwrap();
+    // let py_inv = p.y().unwrap().inverse().unwrap();
 
     let (hinted_script1, hint1) = Fq::hinted_mul(1, p.y, 0, py_inv);
     let (hinted_script2, hint2) = Fq::hinted_mul(1, py_inv, 0, -p.x);
@@ -461,10 +461,9 @@ pub fn new_hinted_x_from_eval_point(p: ark_bn254::G1Affine) -> (Script, Vec<Hint
     (script, hints)
 }
 
-pub fn new_hinted_y_from_eval_point(py: ark_bn254::Fq) -> (Script, Vec<Hint>) {
+pub fn new_hinted_y_from_eval_point(py: ark_bn254::Fq, py_inv: ark_bn254::Fq) -> (Script, Vec<Hint>) {
     let mut hints = Vec::new();
 
-    let py_inv = py.inverse().unwrap();
 
     let (hinted_script1, hint1) = Fq::hinted_mul(1, py_inv, 0, py);
     let script_lines = vec! [
@@ -1668,7 +1667,7 @@ mod test {
     fn test_new_hintedx_from_eval_point() {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let p = ark_bn254::G1Affine::rand(&mut prng);
-        let (ell_by_constant_affine_script, hints) = new_hinted_x_from_eval_point(p);
+        let (ell_by_constant_affine_script, hints) = new_hinted_x_from_eval_point(p, p.y.inverse().unwrap());
         let script = script! {
             for tmp in hints { 
                 { tmp.push() }
@@ -1689,7 +1688,7 @@ mod test {
     fn test_new_hintedy_from_eval_point() {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let p = ark_bn254::G1Affine::rand(&mut prng);
-        let (ell_by_constant_affine_script, hints) = new_hinted_y_from_eval_point(p.y);
+        let (ell_by_constant_affine_script, hints) = new_hinted_y_from_eval_point(p.y, p.y.inverse().unwrap());
         let script = script! {
             for tmp in hints { 
                 { tmp.push() }

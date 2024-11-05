@@ -756,7 +756,7 @@ mod test {
     use std::collections::HashMap;
 
     use super::*;
-    use ark_ff::{BigInteger, PrimeField, UniformRand};
+    use ark_ff::{BigInteger, Field, PrimeField, UniformRand};
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
@@ -780,13 +780,14 @@ mod test {
         //     println!("{i:} {:?}", exec_result.final_stack.get(i));
         // }
        
-       let mut nib32 = [0u8;64];
-       nib32[0] = 5;
+       let mut nib32 = [15u8;64];
        let script = script!{
             for i in nib32 {
                 {i}
             }
             {fq_from_nibbles()}
+            {fq_push_not_montgomery(ark_bn254::Fq::ONE)}
+            {Fq::add(1, 0)}
        };
        let exec_result = execute_script(script);
        for i in 0..exec_result.final_stack.len() {
