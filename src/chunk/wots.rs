@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bitcoin_script::script;
 
-use crate::chunk::primitves::{fq_from_nibbles, pack_nibbles_to_limbs};
+use crate::chunk::primitves::{pack_nibbles_to_limbs};
 use crate::treepp::Script;
 
 // use crate::signatures::{winternitz, winternitz_compact, winternitz_compact_hash, winternitz_hash};
@@ -45,7 +45,7 @@ pub(crate) fn wots_compact_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> 
                     {i} OP_ROLL
                 }
         
-                {fq_from_nibbles()}
+                {pack_nibbles_to_limbs()}
             }
         },
         WOTSPubKey::P256(pb) => {
@@ -56,7 +56,7 @@ pub(crate) fn wots_compact_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> 
                 for i in 1..64 {
                     {i} OP_ROLL
                 }
-                {fq_from_nibbles()}
+                {pack_nibbles_to_limbs()}
             }
         },
     }
@@ -79,7 +79,7 @@ fn wots_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> Script {
                     {i} OP_ROLL
                 }
         
-                {fq_from_nibbles()}
+                {pack_nibbles_to_limbs()}
             }
         },
         WOTSPubKey::P256(pb) => {
@@ -90,7 +90,7 @@ fn wots_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> Script {
                 for i in 1..64 {
                     {i} OP_ROLL
                 }
-                {fq_from_nibbles()}
+                {pack_nibbles_to_limbs()}
             }
         }
     }
