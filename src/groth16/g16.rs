@@ -125,6 +125,8 @@ mod test {
 
             let mut vk = vk.clone();
 
+            // when public inputs of proofs are constants (e.g. ZKVM-ENV), effect of those constants can be precomputed and embedded
+            // into the first element of vk_gamma
             let mut vk_gamma_abc_g1_0 = vk.gamma_abc_g1[0] * Fr::ONE;
             for (i, public_input) in compile_time_public_inputs.iter().enumerate() {
                 vk_gamma_abc_g1_0 += vk.gamma_abc_g1[i + 1] * public_input;
@@ -220,7 +222,8 @@ mod test {
         write_scripts_to_separate_files(script_cache, "tapnode");
     }
 
-    // Step 2: Operator Generates Bitcomm part of tapscript: different between setups; yields complete tapscript
+    // Step 2: Operator Generates keypairs and broadcasts pubkeys for a Bitvm setup; 
+    // Anyone can create Bitcomm part of tapscript; yields complete tapscript
     #[test]
     fn test_fn_generate_tapscripts() {
         println!("start");
@@ -252,7 +255,7 @@ mod test {
 
     }
 
-    // Step 3: Operator Generates Assertions, Sign it and submit on chain
+    // Step 3: Operator Generates Assertions, Signs it and submit on chain
     #[test]
     fn test_fn_generate_assertions() {
         let (_, mock_vk) = mock::compile_circuit();
@@ -271,7 +274,7 @@ mod test {
         let (_, mock_vk) = mock::compile_circuit();
         let (proof, public_inputs) = mock::generate_proof();
 
-        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1); // 3 pub inputs
+        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1);
         let proof_asserts = generate_proof_assertions(mock_vk.clone(), proof, public_inputs);
         let signed_asserts = sign_assertions(proof_asserts);
         let mock_pubks = mock_pubkeys(MOCK_SECRET);
@@ -288,6 +291,8 @@ mod test {
         if random.is_some() {
             index = random.unwrap();
         }
+        // WARN: KNOWN ISSUE: scramble: [u8; 32] = [255; 32]; fails because tapscripts do not check that the asserted value is a field element 
+        // A 256 bit number is not a field element. For now, this prototype only supports corruption that is still a field element
         let mut scramble: [u8; 32] = [0u8; 32];
         //scramble[16] = 37;
         let mut scramble2: [u8; 20] = [0u8; 20];
