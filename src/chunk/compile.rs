@@ -422,6 +422,20 @@ pub(crate) struct Vkey {
     pub(crate) vky0: ark_bn254::G1Affine,
 }
 
+pub(crate) fn get_tapscript_link_ids() -> Vec<u32> {
+    let (id_map, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
+    let mut all_ids: Vec<u32> = vec![];
+    let ids: Vec<u32> = msm_config_gen(String::from(PUB_ID)).iter().map(|f| id_map.get(&f.link_id).unwrap().0).collect();
+    all_ids.extend_from_slice(&ids);
+    let ids: Vec<u32> = pre_miller_config_gen().iter().map(|f| id_map.get(&f.link_id).unwrap().0).collect();
+    all_ids.extend_from_slice(&ids);
+    let ids: Vec<u32> = miller_config_gen().iter().flatten().map(|f| id_map.get(&f.link_id).unwrap().0).collect();
+    all_ids.extend_from_slice(&ids);
+    let ids: Vec<u32> = post_miller_config_gen(facc, tacc).iter().map(|f| id_map.get(&f.link_id).unwrap().0).collect();
+    all_ids.extend_from_slice(&ids);
+    all_ids
+}
+
 pub(crate) fn compile(
     vk: Vkey,
     link_ids: &HashMap<u32, WOTSPubKey>,

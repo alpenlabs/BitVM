@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ops::Neg;
 
-use crate::chunk::compile::{compile, Vkey};
+use crate::chunk::compile::{compile, get_tapscript_link_ids, Vkey};
 use crate::chunk::config::{assign_link_ids, keygen, NUM_PUBS, NUM_U160, NUM_U256};
 use crate::chunk::evaluate::{evaluate, extract_values_from_hints, EvalIns};
 use crate::chunk::taps::{Sig, SigData};
@@ -113,23 +113,6 @@ pub fn mock_pubkeys(mock_secret: &str) -> PublicKeys {
         h_arr.try_into().unwrap(),
     );
     wotspubkey
-}
-
-fn generate_mock_pub_keys(mock_secret: &str) -> HashMap<u32, WOTSPubKey> {
-    let inpubkeys = mock_pubkeys(mock_secret);
-    let mut pubkeys: HashMap<u32, WOTSPubKey> = HashMap::new();
-    for i in 0..NUM_PUBS {
-        pubkeys.insert(i as u32, WOTSPubKey::P256(inpubkeys.0[i]));
-    }
-    let len = pubkeys.len();
-    for i in 0..inpubkeys.1.len() {
-        pubkeys.insert((len + i) as u32, WOTSPubKey::P256(inpubkeys.1[i]));
-    }
-    let len = pubkeys.len();
-    for i in 0..inpubkeys.2.len() {
-        pubkeys.insert((len + i) as u32, WOTSPubKey::P160(inpubkeys.2[i]));
-    }
-    pubkeys
 }
 
 pub(crate) fn nib_to_byte_array(digits: &[u8]) -> Vec<u8> {
@@ -305,20 +288,10 @@ pub fn validate_assertions(
         return None;
     }
     let (fault_index, hint_scr) = fault.unwrap();
-    let bitcom_scripts_per_link = compile(
-        Vkey {
-            q2: ark_bn254::G2Affine::identity(),
-            q3: ark_bn254::G2Affine::identity(),
-            p3vk: vec![],
-            p1q1: ark_bn254::Fq12::ONE,
-            vky0: ark_bn254::G1Affine::identity(),
-        },
-        &pubkeys,
-        true,
-    );
+    let script_link_ids_in_order = get_tapscript_link_ids();
     let mut script_index = 0; // tapleaf index
-    for arr_index in 0..bitcom_scripts_per_link.len() {
-        let (k, _) = bitcom_scripts_per_link[arr_index];
+    for arr_index in 0..script_link_ids_in_order.len() {
+        let k = script_link_ids_in_order[arr_index];
         if k == fault_index {
             script_index = arr_index;
         }
