@@ -193,7 +193,8 @@ mod test {
 
         let mut hsig: Vec<wots160::Signature> = vec![];
         for i in 0..hs.len() {
-            let hsi = wots160::get_signature(&format!("{secret}{:04x}", NUM_PUBS + fs.len() + i), &hs[i]);
+            let hsi =
+                wots160::get_signature(&format!("{secret}{:04x}", NUM_PUBS + fs.len() + i), &hs[i]);
             hsig.push(hsi);
         }
         let hsig: [wots160::Signature; N_VERIFIER_HASHES] = hsig.try_into().unwrap();
@@ -279,7 +280,6 @@ mod test {
         assert!(fault.is_none());
     }
 
-
     fn corrupt(proof_asserts: &mut Assertions, random: Option<usize>) {
         let mut rng = rand::thread_rng();
 
@@ -288,9 +288,9 @@ mod test {
         if random.is_some() {
             index = random.unwrap();
         }
-        let mut scramble: [u8;32] = [0u8; 32];
+        let mut scramble: [u8; 32] = [0u8; 32];
         //scramble[16] = 37;
-        let mut scramble2: [u8;20] = [0u8; 20];
+        let mut scramble2: [u8; 20] = [0u8; 20];
         //scramble2[10] = 37;
         println!("corrupted assertion at index {}", index);
         if index < N_VERIFIER_PUBLIC_INPUTS {
@@ -358,7 +358,6 @@ mod test {
                 assert!(res.success);
             }
         }
- 
     }
 
     fn write_asserts_to_file(proof_asserts: Assertions, filename: &str) {

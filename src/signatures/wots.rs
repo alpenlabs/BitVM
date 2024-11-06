@@ -11,6 +11,11 @@ const fn ceil_div(numerator: u32, denominator: u32) -> u32 {
     (numerator + denominator - 1) / denominator
 }
 
+pub trait SignatureImpl {
+    fn to_script(self) -> Script;
+    fn to_compact_script(self) -> Script;
+}
+
 macro_rules! impl_wots {
     ($N_BITS:literal) => {
         paste::paste! {
@@ -33,6 +38,24 @@ macro_rules! impl_wots {
                 pub type PublicKey = [[u8; 20]; N_DIGITS as usize];
                 pub type Signature = [([u8; 20], u8); N_DIGITS as usize];
 
+                impl SignatureImpl for Signature {
+                    fn to_script(self) -> Script {
+                        script! {
+                            for (preimage, digit) in self {
+                                { preimage.to_vec() }
+                                { digit }
+                            }
+                        }
+                    }
+
+                    fn to_compact_script(self) -> Script {
+                        script! {
+                            for (preimage, _) in self {
+                                { preimage.to_vec() }
+                            }
+                        }
+                    }
+                }
 
                 /// Compute the checksum of the message's digits.
                 fn checksum(message_digits: [u8; M_DIGITS as usize]) -> u32 {
@@ -197,7 +220,7 @@ macro_rules! impl_wots {
                             get_digit_signature(secret, i as u32, digits[N_DIGITS as usize - i - 1]).0
                         })
                     }
-      
+
                       pub fn sign2(secret: &str, msg_bytes: [u8; M_DIGITS as usize]) -> Vec<Script> {
                           let signature = get_signature2(secret, msg_bytes);
                           let mut sigs: Vec<Script> = vec![];
@@ -343,12 +366,12 @@ mod tests {
 
     fn nib_to_byte_array(digits: &[u8]) -> Vec<u8> {
         let mut msg_bytes = Vec::with_capacity(digits.len() / 2);
-        
+
         for nibble_pair in digits.chunks(2) {
             let byte = (nibble_pair[1] << 4) | (nibble_pair[0] & 0b00001111);
             msg_bytes.push(byte);
         }
-        
+
         msg_bytes
     }
 
@@ -361,10 +384,9 @@ mod tests {
         let msg_bytes = hex::decode(&msg).unwrap();
 
         const MESSAGE: [u8; 64] = [
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
-            1, 2, 3, 4,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7, 1, 2, 3, 4, 5,
+            6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+            0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7, 1, 2, 3, 4,
         ];
 
         let msg_bytes = nib_to_byte_array(&MESSAGE);
@@ -398,7 +420,6 @@ mod tests {
 
     #[test]
     fn test_byte_digit_conversion() {
-
         /// Convert message bytes to digits
         fn msg_bytes_to_digits(msg_bytes: &[u8]) -> [u8; 64 as usize] {
             let mut msg_digits = [0u8; 64 as usize];
@@ -410,10 +431,9 @@ mod tests {
         }
 
         const MESSAGE: [u8; 64] = [
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7,
-            1, 2, 3, 4,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7, 1, 2, 3, 4, 5,
+            6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+            0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7, 1, 2, 3, 4,
         ];
 
         let byte_array = nib_to_byte_array(&MESSAGE);

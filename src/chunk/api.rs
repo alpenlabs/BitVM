@@ -143,7 +143,6 @@ pub(crate) fn nib_to_byte_array(digits: &[u8]) -> Vec<u8> {
     msg_bytes
 }
 
-
 pub fn generate_assertions(
     proof: ark_groth16::Proof<Bn<ark_bn254::Config>>,
     scalars: Vec<ark_bn254::Fr>,
@@ -186,7 +185,15 @@ pub fn generate_assertions(
     let f_fixed = Bn254::multi_miller_loop_affine([p1], [q1]).0;
     let f = Bn254::multi_miller_loop_affine([p1, p2, p3, p4], [q1, q2, q3, q4]).0;
     let (c, s) = compute_c_wi(f);
-    let eval_ins: EvalIns = EvalIns { p2, p3, p4, q4, c, s, ks: msm_scalar.clone() };
+    let eval_ins: EvalIns = EvalIns {
+        p2,
+        p3,
+        p4,
+        q4,
+        c,
+        s,
+        ks: msm_scalar.clone(),
+    };
 
     let (aux, fault) = evaluate(
         &mut sig,
