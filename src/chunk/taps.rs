@@ -43,48 +43,48 @@ pub struct Sig {
     pub(crate) cache: HashMap<u32, SigData>,
 }
 
-pub(crate) fn tup_to_scr(sig: &mut Sig, tup: Vec<(Link, [u8; 64])>) -> Vec<Script> {
-    let mut compact_bc_scripts = vec![];
-    for (skey, elem) in tup {
-        let bcelem = if sig.cache.contains_key(&skey.0) {
-            sig.cache.get(&skey.0).unwrap().clone()
-        } else {
-            if skey.1 {
-                let v =
-                    wots256::get_signature2(&format!("{}{:04X}", sig.msk.unwrap(), skey.0), elem);
-                let v = SigData::Sig256(v);
-                sig.cache.insert(skey.0, v.clone());
-                v
-            } else {
-                let v = wots160::get_signature2(
-                    &format!("{}{:04X}", sig.msk.unwrap(), skey.0),
-                    elem[24..64].try_into().unwrap(),
-                );
-                let v = SigData::Sig160(v);
-                sig.cache.insert(skey.0, v.clone());
-                v
-            }
-        };
-        let scr = match bcelem {
-            SigData::Sig160(signature) => {
-                script! {
-                    for (sig, _) in signature {
-                        { sig.to_vec() }
+pub(crate) fn tup_to_scr(sig: &mut Sig, tup: Vec<(Link, [u8; 64])>) -> (Script, bool) {
+    let mut compact_bc_scripts = script!();
+    let mut execute: bool = false;
+    if !sig.cache.is_empty() {
+        for (skey, elem) in tup {
+            let bcelem = sig.cache.get(&skey.0).unwrap();
+            let scr = match bcelem {
+                SigData::Sig160(signature) => {
+                    let s = script! {
+                        for (sig, _) in signature {
+                            { sig.to_vec() }
+                        }
+                    };
+                    let msg: Vec<u8> = signature.iter().map(|(_, c)| *c).collect();
+                    let mut msg: [u8; 40] = msg[0..40].try_into().unwrap();
+                    msg.reverse();
+                    let mut padded_nibs = [0u8; 64]; 
+                    padded_nibs[24..64].copy_from_slice(&msg[0..40]);
+                    if padded_nibs != elem {
+                        execute = true;
                     }
+                    s
                 }
-            }
-            SigData::Sig256(signature) => {
-                script! {
-                    for (sig, _) in signature {
-                        { sig.to_vec() }
+                SigData::Sig256(signature) => {
+                    let s = script! {
+                        for (sig, _) in signature {
+                            { sig.to_vec() }
+                        }
+                    };
+                    let msg: Vec<u8> = signature.iter().map(|(_, c)| *c).collect();
+                    let mut msg: [u8; 64] = msg[0..64].try_into().unwrap();
+                    msg.reverse();
+                    if msg != elem {
+                        execute = true;
                     }
+                    s
                 }
-            }
-        };
-        compact_bc_scripts.push(scr);
-        // to compact form
+            };
+            compact_bc_scripts = compact_bc_scripts.push_script(scr.compile());
+        }        
     }
-    compact_bc_scripts
+    (compact_bc_scripts, execute)
 }
 
 pub(crate) fn wots_locking_script(link: Link, link_ids: &HashMap<u32, WOTSPubKey>) -> Script {
@@ -300,7 +300,7 @@ pub(crate) fn hint_point_dbl(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInDouble,
-) -> (HintOutDouble, Script) {
+) -> (HintOutDouble, Script, bool) {
     assert_eq!(sec_in.len(), 3);
     let t = hint_in.t;
     let p = hint_in.p;
@@ -364,7 +364,7 @@ pub(crate) fn hint_point_dbl(
         (sec_in[0], hash_input),
         (sec_out, hash_root_claim),
     ];
-    let bc_elems = tup_to_scr(sig, tup);
+    let (bc_elems, should_validate) = tup_to_scr(sig, tup);
 
     let simulate_stack_input = script! {
         // tmul_hints
@@ -382,9 +382,7 @@ pub(crate) fn hint_point_dbl(
         }
         // bit commits raw
 
-        for bcs in bc_elems {
-            {bcs}
-        }
+        {bc_elems}
     };
     let hint_out: HintOutDouble = HintOutDouble {
         t: G2Affine::new_unchecked(new_tx, new_ty),
@@ -392,7 +390,7 @@ pub(crate) fn hint_point_dbl(
         hash_add_le_aux: hash_add_le,
         hash_out: hash_root_claim,
     };
-    (hint_out, simulate_stack_input)
+    (hint_out, simulate_stack_input, should_validate)
 }
 
 pub(crate) fn tap_point_add_with_frob(ate: i8) -> Script {
@@ -692,7 +690,7 @@ pub(crate) fn hint_point_add_with_frob(
     sec_in: Vec<Link>,
     hint_in: HintInAdd,
     ate: i8,
-) -> (HintOutAdd, Script) {
+) -> (HintOutAdd, Script, bool) {
     assert!(ate == 1 || ate == -1);
     assert_eq!(sec_in.len(), 7);
     let (tt, p, q) = (hint_in.t, hint_in.p, hint_in.q);
@@ -833,7 +831,7 @@ pub(crate) fn hint_point_add_with_frob(
         (sec_out, hash_root_claim),
     ];
 
-    let bc_elems = tup_to_scr(sig, tup);
+    let (bc_elems, should_validate) = tup_to_scr(sig, tup);
 
     let simulate_stack_input = script! {
         // tmul_hints
@@ -851,9 +849,7 @@ pub(crate) fn hint_point_add_with_frob(
         }
 
         // bit commits raw
-        for bc in bc_elems {
-            {bc}
-        }
+        { bc_elems }
     };
     let hint_out = HintOutAdd {
         t: G2Affine::new_unchecked(new_tx, new_ty),
@@ -861,7 +857,7 @@ pub(crate) fn hint_point_add_with_frob(
         hash_dbl_le_aux: hash_dbl_le,
         hash_out: hash_root_claim,
     };
-    (hint_out, simulate_stack_input)
+    (hint_out, simulate_stack_input, should_validate)
 }
 
 // POINT DBL AND ADD
@@ -1178,7 +1174,7 @@ pub(crate) fn hint_point_ops(
     sec_in: Vec<Link>,
     hint_in: HintInDblAdd,
     ate: i8,
-) -> (HintOutDblAdd, Script) {
+) -> (HintOutDblAdd, Script, bool) {
     assert_eq!(sec_in.len(), 7);
     let (t, p, q) = (hint_in.t, hint_in.p, hint_in.q);
 
@@ -1296,7 +1292,7 @@ pub(crate) fn hint_point_ops(
         (sec_out, hash_root_claim),
     ];
 
-    let bc_elems = tup_to_scr(sig, tup);
+    let (bc_elems, should_validate) = tup_to_scr(sig, tup);
 
     let simulate_stack_input = script! {
         // tmul_hints
@@ -1316,9 +1312,7 @@ pub(crate) fn hint_point_ops(
         }
 
         // bit commits
-        for bc in bc_elems {
-            {bc}
-        }
+        { bc_elems }
     };
 
     let hint_out = HintOutDblAdd {
@@ -1328,7 +1322,7 @@ pub(crate) fn hint_point_ops(
         hash_out: hash_root_claim,
     };
 
-    (hint_out, simulate_stack_input)
+    (hint_out, simulate_stack_input, should_validate)
 }
 
 // DOUBLE EVAL
@@ -1338,7 +1332,7 @@ pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInSparseDbl,
-) -> (HintOutSparseDbl, Script) {
+) -> (HintOutSparseDbl, Script, bool) {
     assert_eq!(sec_in.len(), 4);
     let (t2, t3, p2, p3) = (hint_in.t2, hint_in.t3, hint_in.p2, hint_in.p3);
     // First
@@ -1411,16 +1405,14 @@ pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
         (sec_in[0], p3dash_y),
     ];
 
-    let bc_elems = tup_to_scr(sig, tup);
+    let (bc_elems, should_validate) = tup_to_scr(sig, tup);
 
     let simulate_stack_input = script! {
         for hint in hints {
             { hint.push() }
         }
 
-        for bc in bc_elems {
-            {bc}
-        }
+        { bc_elems }
 
     };
 
@@ -1431,7 +1423,7 @@ pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
         fhash: b_hash,
     };
 
-    (hint_out, simulate_stack_input)
+    (hint_out, simulate_stack_input, should_validate)
 }
 
 pub(crate) fn tap_double_eval_mul_for_fixed_Qs(
@@ -1561,7 +1553,7 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
     sec_in: Vec<Link>,
     hint_in: HintInSparseAdd,
     ate: i8,
-) -> (HintOutSparseAdd, Script) {
+) -> (HintOutSparseAdd, Script, bool) {
     assert_eq!(sec_in.len(), 4);
     let (t2, t3, p2, p3, qq2, qq3) = (
         hint_in.t2, hint_in.t3, hint_in.p2, hint_in.p3, hint_in.q2, hint_in.q3,
@@ -1637,16 +1629,14 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
         (sec_in[0], p3dash_y),
     ];
 
-    let bc_elems = tup_to_scr(sig, tup);
+    let (bc_elems, should_validate) = tup_to_scr(sig, tup);
 
     let simulate_stack_input = script! {
         for hint in hints {
             { hint.push() }
         }
         // bit commits
-        for bc in bc_elems {
-            {bc}
-        }
+        { bc_elems }
     };
 
     let hint_out = HintOutSparseAdd {
@@ -1656,7 +1646,7 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
         fhash: b_hash,
     };
 
-    (hint_out, simulate_stack_input)
+    (hint_out, simulate_stack_input, should_validate)
 }
 
 pub(crate) fn tap_add_eval_mul_for_fixed_Qs(
@@ -1785,7 +1775,7 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
     sec_in: Vec<Link>,
     hint_in: HintInSparseAdd,
     ate: i8,
-) -> (HintOutSparseAdd, Script) {
+) -> (HintOutSparseAdd, Script, bool) {
     assert_eq!(sec_in.len(), 4);
     let (t2, t3, p2, p3, qq2, qq3) = (
         hint_in.t2, hint_in.t3, hint_in.p2, hint_in.p3, hint_in.q2, hint_in.q3,
@@ -1908,16 +1898,14 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
         (sec_in[0], p3dash_y),
     ];
 
-    let bc_elems = tup_to_scr(sig, tup);
+    let (bc_elems, should_validate) = tup_to_scr(sig, tup);
 
     let simulate_stack_input = script! {
         for hint in hints {
             { hint.push() }
         }
         // bit commits
-        for bc in bc_elems {
-            {bc}
-        }
+        { bc_elems }
     };
 
     let hint_out = HintOutSparseAdd {
@@ -1927,7 +1915,7 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
         fhash: b_hash,
     };
 
-    (hint_out, simulate_stack_input)
+    (hint_out, simulate_stack_input, should_validate)
 }
 
 pub(crate) fn tap_add_eval_mul_for_fixed_Qs_with_frob(
@@ -2156,7 +2144,7 @@ pub(crate) fn hint_hash_c(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInHashC,
-) -> (HintOutHashC, Script) {
+) -> (HintOutHashC, Script, bool) {
     let f = hint_in.c;
     let f = vec![
         f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
@@ -2168,13 +2156,11 @@ pub(crate) fn hint_hash_c(
     for i in 0..12 {
         tups.push((sec_in[11 - i], emulate_fq_to_nibbles(f[i])));
     }
-    let bc_elems = tup_to_scr(sig, tups);
+    let (bc_elems, should_validate) = tup_to_scr(sig, tups);
 
     let simulate_stack_input = script! {
         // bit commits raw
-        for bc in bc_elems {
-            {bc}
-        }
+        { bc_elems }
     };
     (
         HintOutHashC {
@@ -2182,6 +2168,7 @@ pub(crate) fn hint_hash_c(
             hash_out: fhash,
         },
         simulate_stack_input,
+        should_validate
     )
 }
 
@@ -2230,7 +2217,7 @@ pub(crate) fn hint_hash_c2(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInHashC,
-) -> (HintOutHashC, Script) {
+) -> (HintOutHashC, Script, bool) {
     let f = hint_in.c;
     let f = vec![
         f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
@@ -2239,16 +2226,14 @@ pub(crate) fn hint_hash_c2(
     let outhash = emulate_extern_hash_fps(f.clone(), true);
 
     let tups = vec![(sec_out, outhash), (sec_in[0], hint_in.hashc)];
-    let bc_elems = tup_to_scr(sig, tups);
+    let (bc_elems, should_validate) = tup_to_scr(sig, tups);
 
     let simulate_stack_input = script! {
         // bit commits raw
         {fq12_push_not_montgomery(hint_in.c)}
         // hash
         // hash192
-        for bc in bc_elems {
-            {bc}
-        }
+        { bc_elems }
     };
     (
         HintOutHashC {
@@ -2256,6 +2241,7 @@ pub(crate) fn hint_hash_c2(
             hash_out: outhash,
         },
         simulate_stack_input,
+        should_validate
     )
 }
 
@@ -2369,7 +2355,7 @@ pub(crate) fn hints_precompute_Px(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInPrecomputePx,
-) -> (ark_bn254::Fq, Script) {
+) -> (ark_bn254::Fq, Script, bool) {
     assert_eq!(sec_in.len(), 3);
     let p = hint_in.p.clone();
     let mut pdy = ark_bn254::Fq::ONE;
@@ -2392,7 +2378,7 @@ pub(crate) fn hints_precompute_Px(
         (sec_in[1], p_x),
         (sec_in[0], p_y),
     ];
-    let bc_elems = tup_to_scr(sig, tups);
+    let (bc_elems, should_validate) = tup_to_scr(sig, tups);
 
     let simulate_stack_input = script! {
         for hint in on_curve_hint {
@@ -2402,11 +2388,9 @@ pub(crate) fn hints_precompute_Px(
             { hint.push() }
         }
         // bit commits raw
-        for bc in bc_elems {
-            {bc}
-        }
+        { bc_elems }
     };
-    (pdx, simulate_stack_input)
+    (pdx, simulate_stack_input, should_validate)
 }
 
 pub(crate) fn hints_precompute_Py(
@@ -2414,7 +2398,7 @@ pub(crate) fn hints_precompute_Py(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInPrecomputePy,
-) -> (ark_bn254::Fq, Script) {
+) -> (ark_bn254::Fq, Script, bool) {
     assert_eq!(sec_in.len(), 1);
     let p = hint_in.p.clone();
 
@@ -2431,7 +2415,7 @@ pub(crate) fn hints_precompute_Py(
     let p_y = emulate_fq_to_nibbles(p);
 
     let tups = vec![(sec_out, pdash_y), (sec_in[0], p_y)];
-    let bc_elems = tup_to_scr(sig, tups);
+    let (bc_elems, should_validate) = tup_to_scr(sig, tups);
 
     let simulate_stack_input = script! {
         for hint in hints {
@@ -2440,11 +2424,9 @@ pub(crate) fn hints_precompute_Py(
             {fq_push_not_montgomery(pdy)} // calc pdy
 
         // bit commits raw
-        for bc in bc_elems {
-            {bc}
-        }
+        { bc_elems }
     };
-    (pdy, simulate_stack_input)
+    (pdy, simulate_stack_input, should_validate)
 }
 
 // hash T4
@@ -2509,7 +2491,7 @@ pub(crate) fn hint_init_T4(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInInitT4,
-) -> (HintOutInitT4, Script) {
+) -> (HintOutInitT4, Script, bool) {
     assert_eq!(sec_in.len(), 4);
     let t4 = hint_in.t4;
     let t4hash = emulate_extern_hash_fps(vec![t4.x.c0, t4.x.c1, t4.y.c0, t4.y.c1], false);
@@ -2522,7 +2504,7 @@ pub(crate) fn hint_init_T4(
         (sec_in[1], emulate_fq_to_nibbles(t4.y.c0)),
         (sec_in[0], emulate_fq_to_nibbles(t4.y.c1)),
     ];
-    let bc_elems = tup_to_scr(sig, tups);
+    let (bc_elems, should_validate) = tup_to_scr(sig, tups);
 
     let (_, hints) = bn254::curves::G2Affine::hinted_is_on_curve(t4.x, t4.y);
 
@@ -2531,16 +2513,14 @@ pub(crate) fn hint_init_T4(
         for hint in hints {
             {hint.push()}
         }
-        for bc in bc_elems {
-            {bc}
-        }
+        { bc_elems }
     };
     let hint_out: HintOutInitT4 = HintOutInitT4 {
         t4,
         t4hash,
         hash_le_aux: [0u8; 64],
     };
-    (hint_out, simulate_stack_input)
+    (hint_out, simulate_stack_input, should_validate)
 }
 
 // POST MILLER
@@ -2595,7 +2575,7 @@ pub(crate) fn hints_frob_fp12(
     sec_in: Vec<Link>,
     hint_in: HintInFrobFp12,
     power: usize,
-) -> (HintOutFrobFp12, Script) {
+) -> (HintOutFrobFp12, Script, bool) {
     assert_eq!(sec_in.len(), 1);
     let f = hint_in.f;
     let (_, hints_frobenius_map) = Fq12::hinted_frobenius_map(power, f);
@@ -2618,16 +2598,14 @@ pub(crate) fn hints_frob_fp12(
     );
 
     let tups = vec![(sec_in[0], fhash), (sec_out, ghash)];
-    let bc_elems = tup_to_scr(sig, tups);
+    let (bc_elems, should_validate) = tup_to_scr(sig, tups);
 
     let simulate_stack_input = script! {
         for hint in hints_frobenius_map {
             { hint.push() }
         }
         { fq12_push_not_montgomery(f) }
-        for bc in bc_elems {
-            {bc}
-        }
+        { bc_elems }
     };
-    (HintOutFrobFp12 { f: g, fhash: ghash }, simulate_stack_input)
+    (HintOutFrobFp12 { f: g, fhash: ghash }, simulate_stack_input, should_validate)
 }

@@ -161,8 +161,6 @@ pub fn generate_assertions(
     };
 
 
-    let pk = generate_mock_pub_keys(MOCK_KEY);
-
     let mut msm_scalar = scalars.clone();
     msm_scalar.reverse();
     let mut msm_gs = vk.gamma_abc_g1.clone(); // vk.vk_pubs[0]
@@ -197,13 +195,14 @@ pub fn generate_assertions(
 
     let (aux, fault) = evaluate(
         &mut sig,
-        &pk,
+        &HashMap::new(),
         Some(eval_ins),
         q2,
         q3,
         f_fixed,
         msm_gs.clone(),
         vky0,
+        false
     );
     let assertions = extract_values_from_hints(aux);
     println!(
@@ -300,6 +299,7 @@ pub fn validate_assertions(
         f_fixed,
         msm_gs.clone(),
         vky0,
+        false
     );
     if fault.is_none() {
         return None;

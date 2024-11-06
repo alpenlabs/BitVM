@@ -186,7 +186,7 @@ mod test {
     use rand_chacha::ChaCha20Rng;
 
     use super::*;
-    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::{evaluate::nib_to_byte_array, primitves::{emulate_extern_hash_fps, emulate_extern_hash_nibbles, emulate_fq_to_nibbles, unpack_limbs_to_nibbles}}, execute_script, signatures::{self, wots::wots256}};
+    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::{primitves::{emulate_extern_hash_fps, emulate_extern_hash_nibbles, emulate_fq_to_nibbles, unpack_limbs_to_nibbles}}, execute_script, signatures::{self, wots::wots256}};
 
 
     #[test]
@@ -271,20 +271,20 @@ mod test {
 
     #[test]
     fn test_fq_from_wots_signature() {
-        let secret = "0011";
+        // let secret = "0011";
 
-        let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
+        // let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
 
-        let fq = ark_bn254::Fq::ONE;
-        let fqnib = emulate_fq_to_nibbles(fq);
-        let fqr = nib_to_byte_array(&fqnib);
-        let public_key = wots256::generate_public_key(secret);
-        let signature = wots256::get_signature(secret, &fqr);
-        let nibbles = &signature.map(|(sig, digit)| digit)[0..wots256::M_DIGITS as usize];
-        println!("{:?}", fqr);
-        println!("{:?}", nibbles);
-        let fq_s = from_wots_signature::<ark_bn254::Fq>(signature, public_key);
-        println!("{:?}", fq_s);
+        // let fq = ark_bn254::Fq::ONE;
+        // let fqnib = emulate_fq_to_nibbles(fq);
+        // let fqr = nib_to_byte_array(&fqnib);
+        // let public_key = wots256::generate_public_key(secret);
+        // let signature = wots256::get_signature(secret, &fqr);
+        // let nibbles = &signature.map(|(sig, digit)| digit)[0..wots256::M_DIGITS as usize];
+        // println!("{:?}", fqr);
+        // println!("{:?}", nibbles);
+        // let fq_s = from_wots_signature::<ark_bn254::Fq>(signature, public_key);
+        // println!("{:?}", fq_s);
         // assert_eq!(fq, fq_s);
 
         // let fr = ark_bn254::Fr::ONE;

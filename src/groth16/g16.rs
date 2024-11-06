@@ -338,9 +338,9 @@ mod test {
         let mock_pubks = mock_pubkeys(MOCK_SECRET);
         let verifier_scripts = generate_disprove_scripts(mock_pubks, &ops_scripts);
 
-        for i in 52..53 {
+        for i in 0..70 {
             println!("ITERATION {:?}", i);
-            let mut proof_asserts = read_asserts_from_file("chunker_data/assert.json");
+            let mut proof_asserts = read_asserts_from_file("chunker_data/assert2.json");
             corrupt(&mut proof_asserts, Some(i));
             let signed_asserts = sign_assertions(proof_asserts);
     

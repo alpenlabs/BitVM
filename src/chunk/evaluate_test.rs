@@ -425,6 +425,7 @@ mod test {
             vk.f_fixed,
             msm_gs,
             vk.vk_pubs[0],
+            false
         );
         assert!(fault.is_none());
         // if dump_assertions_to_file {
@@ -489,6 +490,7 @@ mod test {
                 vk.f_fixed,
                 msm_gs.clone(),
                 vk.vk_pubs[0],
+                true
             );
             assert!(fault.is_some());
             let fault = fault.unwrap();

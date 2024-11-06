@@ -424,7 +424,7 @@ pub(crate) fn hint_msm(
     hint_in: HintInMSM,
     msm_tap_index: usize,
     qs: Vec<ark_bn254::G1Affine>,
-) -> (HintOutMSM, Script) {
+) -> (HintOutMSM, Script, bool) {
     const WINDOW_LEN: u8 = 8;
     const MAX_SUPPORTED_PUBS: usize = 3;
 
@@ -526,7 +526,7 @@ pub(crate) fn hint_msm(
     }
     let outhash = emulate_extern_hash_fps(vec![t.x, t.y], true);
     tup.push((sec_out, outhash));
-    let bc_elems = tup_to_scr(sig, tup);
+    let (bc_elems, should_validate) = tup_to_scr(sig, tup);
 
     println!("hints len {:?} {:?} {:?} {:?}", hints_tangent.len(), hints_chord.len(), aux_tangent.len(), aux_chord.len());
     let simulate_stack_input = script! {
@@ -548,13 +548,11 @@ pub(crate) fn hint_msm(
         {fq_push_not_montgomery(hint_in.t.x)}
         {fq_push_not_montgomery(hint_in.t.y)}
 
-        for bc in bc_elems {
-            {bc}
-        }
+        { bc_elems }
     };
     let hint_out = HintOutMSM { t: t, hasht: outhash };
 
-    (hint_out, simulate_stack_input)
+    (hint_out, simulate_stack_input, should_validate)
 }
 
 pub(crate) fn bitcom_msm(
@@ -626,7 +624,7 @@ pub fn try_msm(qs: Vec<ark_bn254::G1Affine>, scalars: Vec<ark_bn254::Fr>) {
         let bitcomms_tapscript = bitcom_msm(&pub_scripts, msec_out, msec_in.clone());
         let msm_ops = tap_msm(window, i, qs.clone());
 
-        let (aux, stack_data) = hint_msm(
+        let (aux, stack_data, maybe_wrong) = hint_msm(
             &mut sig,
             msec_out,
             msec_in.clone(),
@@ -756,7 +754,7 @@ pub(crate) fn hint_hash_p(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInHashP,
-) -> (HashBytes, Script) {
+) -> (HashBytes, Script, bool) {
     // r (gp3) = t(msm) + q(vk0)
     let (tx, qx, ty, qy) = (hint_in.tx, hint_in.qx, hint_in.ty, hint_in.qy);
     
@@ -771,7 +769,7 @@ pub(crate) fn hint_hash_p(
     tups.push((sec_in[2], emulate_fq_to_nibbles(rx)));
     tups.push((sec_out, zero_nib));
 
-    let bc_elems = tup_to_scr(sig, tups);
+    let (bc_elems, should_validate) = tup_to_scr(sig, tups);
 
     let alpha_chord = (ty - qy) / (tx - qx);
     let bias_minus_chord = alpha_chord * tx - ty;
@@ -800,11 +798,9 @@ pub(crate) fn hint_hash_p(
         {fq_push_not_montgomery(tx)}
         {fq_push_not_montgomery(ty)}
 
-        for bc in bc_elems {
-            {bc}
-        }
+        { bc_elems }
     };
-    (zero_nib, simulate_stack_input)
+    (zero_nib, simulate_stack_input, should_validate)
 }
 
 
@@ -1050,7 +1046,7 @@ mod test {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input) = hint_hash_p(&mut sig, (sec_out, false), sec_in_arr, hint_in);
+        let (_, simulate_stack_input, maybe_wrong) = hint_hash_p(&mut sig, (sec_out, false), sec_in_arr, hint_in);
 
         let tap_len = hash_c_scr.len();
         let script = script! {

@@ -541,7 +541,6 @@ mod test {
         bigint::U254,
         bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery},
         chunk::{
-            evaluate::nib_to_byte_array,
             primitves::unpack_limbs_to_nibbles,
             wots::{wots_p160_sign_digits, wots_p256_sign_digits},
         },

@@ -41,7 +41,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
         let hint_in: HintInFrobFp12 = HintInFrobFp12 { f };
-        let (_, simulate_stack_input) = hints_frob_fp12(
+        let (_, simulate_stack_input, maybe_wrong) = hints_frob_fp12(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -102,7 +102,7 @@ mod test {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input) = hint_hash_c(&mut sig, sec_out, sec_in, hint_in);
+        let (_, simulate_stack_input, maybe_wrong) = hint_hash_c(&mut sig, sec_out, sec_in, hint_in);
 
         let tap_len = hash_c_scr.len();
         let script = script! {
@@ -151,7 +151,7 @@ mod test {
             false,
         );
         let hint_in = HintInHashC { c: f, hashc: fhash };
-        let (_, simulate_stack_input) = hint_hash_c2(
+        let (_, simulate_stack_input, maybe_wrong) = hint_hash_c2(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -205,7 +205,7 @@ mod test {
         let t4 = ark_bn254::G2Affine::rand(&mut prng);
         //t4.y = t4.y + t4.y;
         let hint_in = HintInInitT4 { t4 };
-        let (_, simulate_stack_input) = hint_init_T4(
+        let (_, simulate_stack_input, maybe_wrong) = hint_init_T4(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -258,7 +258,7 @@ mod test {
         let hint_in = HintInPrecomputePx {
             p,
         };
-        let (_, simulate_stack_input) = hints_precompute_Px(
+        let (_, simulate_stack_input, maybe_wrong) = hints_precompute_Px(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -309,7 +309,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let p = ark_bn254::Fq::rand(&mut prng);
         let hint_in = HintInPrecomputePy { p };
-        let (_, simulate_stack_input) = hints_precompute_Py(
+        let (_, simulate_stack_input, maybe_wrong) = hints_precompute_Py(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -375,7 +375,7 @@ mod test {
             hash_aux_T: [3u8; 64],
         };
 
-        let (_, simulate_stack_input) = hint_sparse_dense_mul(
+        let (_, simulate_stack_input, maybe_wrong) = hint_sparse_dense_mul(
             &mut &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -435,7 +435,7 @@ mod test {
 
         let hint_in = HintInDenseMul0 { a: f, b: g };
 
-        let (_, simulate_stack_input) = hints_dense_dense_mul0(
+        let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul0(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -490,7 +490,7 @@ mod test {
         let g = ark_bn254::Fq12::rand(&mut prng);
         let hint_in = HintInDenseMul1 { a: f, b: g };
 
-        let (_, simulate_stack_input) = hints_dense_dense_mul1(
+        let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul1(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -552,7 +552,7 @@ mod test {
 
         let hint_in = HintInDenseMul0 { a: f, b: g };
 
-        let (_, simulate_stack_input) = hints_dense_dense_mul0_by_constant(
+        let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul0_by_constant(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -616,7 +616,7 @@ mod test {
 
         let hint_in = HintInDenseMul1 { a: f, b: g };
 
-        let (_, simulate_stack_input) = hints_dense_dense_mul1_by_constant(
+        let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul1_by_constant(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -680,7 +680,7 @@ mod test {
             msk: Some(&msk),
             cache: HashMap::new(),
         };
-        let (_, stack_data) = hint_squaring(&mut sig, sec_out, sec_in, hint_in);
+        let (_, stack_data, maybe_wrong) = hint_squaring(&mut sig, sec_out, sec_in, hint_in);
 
         let tap_len = squaring_tapscript.len();
         let script = script! {
@@ -738,7 +738,7 @@ mod test {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input) = hint_point_ops(&mut sig, sec_out, sec_in, hint_in, ate);
+        let (_, simulate_stack_input, maybe_wrong) = hint_point_ops(&mut sig, sec_out, sec_in, hint_in, ate);
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {
@@ -786,7 +786,7 @@ mod test {
             msk: Some(&sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input) = hint_point_dbl(&mut sig, sec_out, sec_in.clone(), hint_in);
+        let (_, simulate_stack_input, maybe_wrong) = hint_point_dbl(&mut sig, sec_out, sec_in.clone(), hint_in);
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {
@@ -841,7 +841,7 @@ mod test {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input) =
+        let (_, simulate_stack_input, maybe_wrong) =
             hint_point_add_with_frob(&mut sig, sec_out, sec_in, hint_in, ate);
 
         let tap_len = point_ops_tapscript.len();
@@ -900,7 +900,7 @@ mod test {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input) =
+        let (_, simulate_stack_input, maybe_wrong) =
             hint_double_eval_mul_for_fixed_Qs(&mut sig, sec_out, sec_in, hint_in);
 
         let tap_len = sparse_dbl_tapscript.len();
@@ -968,7 +968,7 @@ mod test {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input) =
+        let (_, simulate_stack_input, maybe_wrong) =
             hint_add_eval_mul_for_fixed_Qs(&mut sig, sec_out, sec_in, hint_in, ate);
 
         let tap_len = sparse_add_tapscript.len();
@@ -1031,7 +1031,7 @@ mod test {
             q2,
             q3,
         };
-        let (_, simulate_stack_input) = hint_add_eval_mul_for_fixed_Qs_with_frob(
+        let (_, simulate_stack_input, maybe_wrong) = hint_add_eval_mul_for_fixed_Qs_with_frob(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -1099,7 +1099,7 @@ mod test {
 
         let hint_in = HintInDenseMulByHash0 { a: f, bhash: ghash };
 
-        let (_, simulate_stack_input) = hints_dense_dense_mul0_by_hash(
+        let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul0_by_hash(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -1167,7 +1167,7 @@ mod test {
 
         let hint_in = HintInDenseMulByHash1 { a: f, bhash: hash_g };
 
-        let (_, simulate_stack_input) = hints_dense_dense_mul1_by_hash(
+        let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul1_by_hash(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
