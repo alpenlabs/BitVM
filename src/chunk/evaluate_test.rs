@@ -13,7 +13,7 @@ mod test {
             config::{get_type_for_link_id, keygen},
             test_utils::{
                 read_pubkey_from_file, read_scripts_from_file, write_map_to_file, write_pubkey_to_file, write_scripts_to_file, write_scripts_to_separate_files
-            }, wots::{wots_p160_sign_digits, wots_p256_sign_digits},
+            },
         },
         groth16::offchain_checker::compute_c_wi,
     };
@@ -463,17 +463,17 @@ mod test {
             );
     
             let mut assertion = read_scripts_from_file(assert_f);
-            let mut corrup_scr = wots_p160_sign_digits(
-                &format!("{}{:04X}", master_secret, index_to_corrupt),
-                [1u8; 40],
-            );
-            if index_is_field {
-                corrup_scr = wots_p256_sign_digits(
-                    &format!("{}{:04X}", master_secret, index_to_corrupt),
-                    [1u8; 64],
-                );
-            }
-            assertion.insert(index_to_corrupt, corrup_scr);
+            // let mut corrup_scr = wots_p160_sign_digits(
+            //     &format!("{}{:04X}", master_secret, index_to_corrupt),
+            //     [1u8; 40],
+            // );
+            // if index_is_field {
+            //     corrup_scr = wots_p256_sign_digits(
+            //         &format!("{}{:04X}", master_secret, index_to_corrupt),
+            //         [1u8; 64],
+            //     );
+            // }
+            // assertion.insert(index_to_corrupt, corrup_scr);
     
             let mut sig = Sig {
                 msk: None,

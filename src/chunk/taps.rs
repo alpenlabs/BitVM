@@ -8,15 +8,14 @@ use crate::bn254::utils::{
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::primitves::*;
 use crate::chunk::wots::wots_compact_checksig_verify_with_pubkey;
-use crate::signatures::wots::{wots160, wots256, wots32};
-use crate::{bn254, signatures};
+use crate::signatures::wots::{wots160, wots256};
+use crate::bn254;
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
 };
 use ark_bn254::{G1Affine, G2Affine};
-use ark_ff::{AdditiveGroup, Field, PrimeField, Zero};
-use bitcoin::opcodes::all::{OP_BOOLAND, OP_ELSE, OP_ENDIF, OP_FROMALTSTACK, OP_TOALTSTACK};
+use ark_ff::{AdditiveGroup, Field, Zero};
 use num_bigint::BigUint;
 use num_traits::One;
 use std::collections::HashMap;
@@ -24,7 +23,7 @@ use std::ops::Neg;
 use std::str::FromStr;
 
 use super::primitves::{emulate_extern_hash_fps, hash_fp12_192};
-use super::wots::{wots_p160_sign_digits, wots_p256_sign_digits, WOTSPubKey};
+use super::wots::WOTSPubKey;
 use super::{blake3compiled, hint_models::*};
 
 pub(crate) type HashBytes = [u8; 64];

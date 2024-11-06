@@ -530,25 +530,14 @@ pub fn hash_fp12_with_hints() -> Script {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
-
     use super::*;
-    use ark_ff::{BigInteger, Field, PrimeField, UniformRand};
+    use ark_ff::{Field, UniformRand};
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
     use crate::{
-        bigint::U254,
-        bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery},
-        chunk::{
-            primitves::unpack_limbs_to_nibbles,
-            wots::{wots_p160_sign_digits, wots_p256_sign_digits},
-        },
+        bn254::{utils::fq_push_not_montgomery},
         execute_script,
-        signatures::wots::{
-            wots128::compact::{get_signature, get_signature2},
-            wots160, wots256,
-        },
     };
 
     #[test]
