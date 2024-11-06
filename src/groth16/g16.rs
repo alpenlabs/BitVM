@@ -1,117 +1,102 @@
-use ark_bn254::Bn254;
+use ark_bn254::{Bn254, Fr};
 
 use crate::signatures::wots::{wots160, wots256};
 use crate::{chunk, treepp::*};
 
 pub const N_VERIFIER_PUBLIC_INPUTS: usize = 1;
-pub const N_VERIFIER_FQs: usize = 40;
+pub const N_VERIFIER_FQS: usize = 40;
 pub const N_VERIFIER_HASHES: usize = 574;
 
 pub const N_TAPLEAVES: usize = 579;
 
-pub type WotsPublicKeys = (
+pub type Proof = ark_groth16::Proof<Bn254>;
+pub type VerifyingKey = ark_groth16::VerifyingKey<Bn254>;
+
+pub type PublicInputs = [Fr; N_VERIFIER_PUBLIC_INPUTS];
+
+pub type PublicKeys = (
     [wots256::PublicKey; N_VERIFIER_PUBLIC_INPUTS],
-    [wots256::PublicKey; N_VERIFIER_FQs],
+    [wots256::PublicKey; N_VERIFIER_FQS],
     [wots160::PublicKey; N_VERIFIER_HASHES],
 );
 
-pub type WotsSignatures = (
+pub type Signatures = (
     [wots256::Signature; N_VERIFIER_PUBLIC_INPUTS],
-    [wots256::Signature; N_VERIFIER_FQs],
+    [wots256::Signature; N_VERIFIER_FQS],
     [wots160::Signature; N_VERIFIER_HASHES],
 );
 
-
-pub type ProofAssertions = (
+pub type Assertions = (
     [[u8; 32]; N_VERIFIER_PUBLIC_INPUTS],
-    [[u8; 32]; N_VERIFIER_FQs],
+    [[u8; 32]; N_VERIFIER_FQS],
     [[u8; 20]; N_VERIFIER_HASHES],
 );
 
-pub struct VerificationKey {
-    pub ark_vk: ark_groth16::VerifyingKey<Bn254>,
+pub fn compile_verifier(vk: VerifyingKey) -> [Script; N_TAPLEAVES] {
+    chunk::api::api_compile(&vk).try_into().unwrap()
 }
 
-pub struct Proof {
-    pub proof: ark_groth16::Proof<Bn254>,
-    pub public_inputs: Vec<ark_bn254::Fr>,
+pub fn generate_disprove_scripts(
+    public_keys: PublicKeys,
+    partial_disprove_scripts: &[Script; N_TAPLEAVES],
+) -> [Script; N_TAPLEAVES] {
+    chunk::api::generate_tapscripts(public_keys, partial_disprove_scripts)
+        .try_into()
+        .unwrap()
 }
 
-pub struct Verifier {
-    pub vk: VerificationKey,
+pub fn generate_proof_assertions(vk: VerifyingKey, proof: Proof, public_inputs: PublicInputs) -> Assertions {
+    chunk::api::generate_assertions(proof, public_inputs.to_vec(), &vk)
 }
 
-impl Verifier {
-    pub fn compile(vk: VerificationKey) -> [Script; N_TAPLEAVES] {
-        let res = chunk::api::api_compile(&vk.ark_vk);
-        res.try_into().unwrap()
-    }
-
-    pub fn generate_tapscripts(
-        public_keys: WotsPublicKeys,
-        verifier_scripts: &[Script; N_TAPLEAVES],
-    ) -> [Script; N_TAPLEAVES] {
-        let res = chunk::api::generate_tapscripts(public_keys, verifier_scripts);
-        res.try_into().unwrap()
-    }
-
-    pub fn generate_assertions(vk: VerificationKey, proof: Proof) -> ProofAssertions {
-        chunk::api::generate_assertions(proof.proof, proof.public_inputs, &vk.ark_vk)
-    }
-
-    /// Validates the groth16 proof assertion signatures and returns a tuple of (tapleaf_index, witness_script) if
-    /// the proof is invalid, else returns none
-    pub fn validate_assertion_signatures(
-        vk: VerificationKey,
-        signatures: WotsSignatures,
-        pubkeys: WotsPublicKeys,
-    ) -> Option<(usize, Script)> {
-        let r = chunk::api::validate_assertions(
-            &vk.ark_vk,
-            signatures,
-            pubkeys,
-        );
-        r
-    }
+/// Validates the groth16 proof assertion signatures and returns a tuple of (tapleaf_index, witness_script) if
+/// the proof is invalid, else returns none
+pub fn verify_signed_assertions(
+    vk: VerifyingKey,
+    public_keys: PublicKeys,
+    signatures: Signatures,
+) -> Option<(usize, Script)> {
+    chunk::api::validate_assertions(&vk,signatures,public_keys)
 }
+
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
 
-    use ark_bn254::Bn254;
     use ark_ec::CurveGroup;
     use ark_ff::Field;
     use rand::Rng;
 
     use crate::chunk::{api::mock_pubkeys, test_utils::{read_scripts_from_file, write_map_to_file, write_scripts_to_file, write_scripts_to_separate_files}};
 
-    use self::{chunk::{config::NUM_PUBS, test_utils::read_map_from_file}, mock::{compile_circuit, generate_proof}};
+    use crate::chunk::{config::NUM_PUBS, test_utils::read_map_from_file};
 
     use super::*;
 
-
     pub mod mock {
+        use super::*;
         use ark_bn254::{Bn254, Fr as F};
         use ark_crypto_primitives::snark::{CircuitSpecificSetupSNARK, SNARK};
         use ark_ff::AdditiveGroup;
-        use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
+        use ark_groth16::{Groth16, ProvingKey};
         use ark_r1cs_std::{alloc::AllocVar, eq::EqGadget, fields::fp::FpVar};
         use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
         use ark_std::test_rng;
         use rand::{RngCore, SeedableRng};
-        use super::*;
 
         #[derive(Clone)]
         pub struct DummyCircuit {
             pub a: Option<F>, // Private input a
             pub b: Option<F>, // Private input b
-            pub c: F,         // Public output: a * b
-            pub d: F,         // Public output: a + b
-            pub e: F,         // Public output: a - b
+            pub c: F,         // Public output: a + b = 0
+            pub d: F,         // Public output: a * b
         }
 
         impl ConstraintSynthesizer<F> for DummyCircuit {
-            fn generate_constraints(self, cs: ConstraintSystemRef<F>) -> Result<(), SynthesisError> {
+            fn generate_constraints(
+                self,
+                cs: ConstraintSystemRef<F>,
+            ) -> Result<(), SynthesisError> {
                 // Allocate private inputs a and b as witnesses
                 let a = FpVar::new_witness(cs.clone(), || {
                     self.a.ok_or(SynthesisError::AssignmentMissing)
@@ -123,22 +108,35 @@ mod test {
                 // Allocate public outputs c, d, and e
                 let c = FpVar::new_input(cs.clone(), || Ok(self.c))?;
                 let d = FpVar::new_input(cs.clone(), || Ok(self.d))?;
-                let e = FpVar::new_input(cs.clone(), || Ok(self.e))?;
 
                 // Enforce the constraints: c = a * b, d = a + b, e = a - b
-                let computed_c = &a * &b;
-                let computed_d = &a + &b;
-                let computed_e = &a - &b;
+                let computed_c = &a + &b;
+                let computed_d = &a * &b;
 
                 computed_c.enforce_equal(&c)?;
                 computed_d.enforce_equal(&d)?;
-                computed_e.enforce_equal(&e)?;
 
                 Ok(())
             }
         }
 
-        pub fn compile_circuit() -> (ProvingKey<Bn254>, VerifyingKey<Bn254>) {
+        fn get_verifying_key(vk: &VerifyingKey) -> VerifyingKey {
+            let compile_time_public_inputs = vec![Fr::ZERO];
+
+            let mut vk = vk.clone();
+
+            let mut vk_gamma_abc_g1_0 = vk.gamma_abc_g1[0] * Fr::ONE;
+            for (i, public_input) in compile_time_public_inputs.iter().enumerate() {
+                vk_gamma_abc_g1_0 += vk.gamma_abc_g1[i + 1] * public_input;
+            }
+            let mut vk_gamma_abc_g1 = vec![vk_gamma_abc_g1_0.into_affine()];
+            vk_gamma_abc_g1.extend(&vk.gamma_abc_g1[1 + compile_time_public_inputs.len()..]);
+            vk.gamma_abc_g1 = vk_gamma_abc_g1;
+
+            vk
+        }
+
+        pub fn compile_circuit() -> (ProvingKey<Bn254>, VerifyingKey) {
             type E = Bn254;
             let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
             let circuit = DummyCircuit {
@@ -146,22 +144,20 @@ mod test {
                 b: None,
                 c: F::ZERO,
                 d: F::ZERO,
-                e: F::ZERO,
             };
             let (pk, vk) = Groth16::<E>::setup(circuit, &mut rng).unwrap();
-            (pk, vk)
+            (pk, get_verifying_key(&vk))
         }
 
-        pub fn generate_proof() -> Proof {
-            let (a, b) = (5, 3);
-            let (c, d, e) = (a * b, a + b, a - b);
+        pub fn generate_proof() -> (Proof, PublicInputs) {
+            let (a, b) = (5, -5);
+            let (c, d) = (a + b, a * b);
 
             let circuit = DummyCircuit {
                 a: Some(F::from(a)),
                 b: Some(F::from(b)),
                 c: F::from(c),
                 d: F::from(d),
-                e: F::from(e),
             };
 
             let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
@@ -169,54 +165,15 @@ mod test {
             let (pk, _) = compile_circuit();
 
             let proof = Groth16::<Bn254>::prove(&pk, circuit.clone(), &mut rng).unwrap();
-            let public_inputs = vec![circuit.c, circuit.d, circuit.e];
+            let public_inputs = [circuit.d];
 
-            Proof {
-                proof,
-                public_inputs,
-            }
+            (proof, public_inputs)
         }
-
-
     }
 
     const MOCK_SECRET: &str = "a138982ce17ac813d505a5b40b665d404e9528e7";
 
-    fn generate_mock_proof() -> (
-        ark_groth16::Proof<Bn254>,
-        Vec<ark_bn254::Fr>,
-        ark_groth16::VerifyingKey<Bn254>,
-    )  {
-        let (_, vk) = compile_circuit();
-        let proof = generate_proof();
-
-        // change public inputs count by mergin vks
-        let pubins = proof.public_inputs.clone(); // [0, 1, 2]
-
-        let mut new_vky0 = vk.gamma_abc_g1[0] * ark_bn254::Fr::ONE;
-        for i in 0..pubins.len() - N_VERIFIER_PUBLIC_INPUTS { // 0..3-1
-            new_vky0 = new_vky0 + vk.gamma_abc_g1[i+1] * pubins[i];
-        }
-        let mut new_vky = vec![];
-        let mut new_scalars = vec![];
-        for i in (pubins.len() - N_VERIFIER_PUBLIC_INPUTS)..pubins.len() { // 3-1..3
-            new_vky.push(vk.gamma_abc_g1[i+1]);
-            new_scalars.push(pubins[i]);
-        }
-
-        let mut new_vk = vk.clone();
-        new_vk.gamma_abc_g1 = vec![new_vky0.into_affine()];
-        new_vk.gamma_abc_g1.extend(new_vky);
-
-        let r = (
-            proof.proof,
-            new_scalars,
-            new_vk
-        );
-        r
-    }
-
-    fn sign_assertions(assn: ProofAssertions) -> WotsSignatures {
+    fn sign_assertions(assn: Assertions) -> Signatures {
         let (ps, fs, hs) = (assn.0, assn.1, assn.2);
         let secret = MOCK_SECRET;
         
@@ -232,7 +189,7 @@ mod test {
             let fsi = wots256::get_signature(&format!("{secret}{:04x}", NUM_PUBS + i), &fs[i]);
             fsig.push(fsi);
         }
-        let fsig: [wots256::Signature; N_VERIFIER_FQs] = fsig.try_into().unwrap();
+        let fsig: [wots256::Signature; N_VERIFIER_FQS] = fsig.try_into().unwrap();
 
         let mut hsig: Vec<wots160::Signature> = vec![];
         for i in 0..hs.len() {
@@ -248,12 +205,13 @@ mod test {
     // Step 1: Anyone can Generate Operation (mul & hash) part of tapscript: same for all vks
     #[test]
     fn test_fn_compile() {
-        let (_, _, mock_vk) = generate_mock_proof();
-        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1); // 3 pub inputs
+        let (_, mock_vk) = mock::compile_circuit();
+        
+        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1); 
 
-        let ops_scripts = Verifier::compile(VerificationKey { ark_vk: mock_vk });
-
+        let ops_scripts = compile_verifier(mock_vk);
         let mut script_cache = HashMap::new();
+
         for i in 0..ops_scripts.len() {
             script_cache.insert(i as u32, vec![ops_scripts[i].clone()]);
         }
@@ -266,13 +224,13 @@ mod test {
     fn test_fn_generate_tapscripts() {
         println!("start");
 
-        let (_, _, mock_vk) = generate_mock_proof();
+        let (_, mock_vk) = mock::compile_circuit();
         println!("compiled circuit");
 
-        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1); // 3 pub inputs
+        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1); 
         let mock_pubs = mock_pubkeys(MOCK_SECRET);
-
         let mut op_scripts = vec![];
+
         println!("load scripts from file");
         for index in 0..N_TAPLEAVES {
             let read = read_scripts_from_file(&format!("chunker_data/tapnode_{index}.json"));
@@ -282,9 +240,9 @@ mod test {
             op_scripts.push(tap_node);
         }
         println!("done");
-        let ops_scripts: [Script; N_TAPLEAVES] = op_scripts.try_into().unwrap();
+        let ops_scripts: [Script; N_TAPLEAVES] = op_scripts.try_into().unwrap(); //compile_verifier(mock_vk);
 
-        let tapscripts = Verifier::generate_tapscripts(mock_pubs, &ops_scripts);
+        let tapscripts = generate_disprove_scripts(mock_pubs, &ops_scripts);
         println!(
             "tapscript.lens: {:?}",
             tapscripts.clone().map(|script| script.len())
@@ -296,28 +254,37 @@ mod test {
     // Step 3: Operator Generates Assertions, Sign it and submit on chain
     #[test]
     fn test_fn_generate_assertions() {
-        let (proof, pubs, mock_vk) = generate_mock_proof();
-        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1); // 3 pub inputs
-        let proof_asserts = Verifier::generate_assertions(
-            VerificationKey { ark_vk: mock_vk },
-            Proof {
-                proof,
-                public_inputs: pubs,
-            },
-        );
+        let (_, mock_vk) = mock::compile_circuit();
+        let (proof, public_inputs) = mock::generate_proof();
+
+        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1);
+        let proof_asserts = generate_proof_assertions(mock_vk, proof, public_inputs);
         println!("signed_asserts {:?}", proof_asserts);
-   
    
         write_asserts_to_file(proof_asserts, "chunker_data/assert.json");
         let _signed_asserts = sign_assertions(proof_asserts);
     }
 
+    #[test]
+    fn test_fn_validate_assertions() {
+        let (_, mock_vk) = mock::compile_circuit();
+        let (proof, public_inputs) = mock::generate_proof();
 
-    fn corrupt(proof_asserts: &mut ProofAssertions, random: Option<usize>) {
+        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1); // 3 pub inputs
+        let proof_asserts = generate_proof_assertions(mock_vk.clone(), proof, public_inputs);
+        let signed_asserts = sign_assertions(proof_asserts);
+        let mock_pubks = mock_pubkeys(MOCK_SECRET);
+
+        let fault = verify_signed_assertions(mock_vk, mock_pubks, signed_asserts);
+        assert!(fault.is_none());
+    }
+
+
+    fn corrupt(proof_asserts: &mut Assertions, random: Option<usize>) {
         let mut rng = rand::thread_rng();
 
         // Generate a random number between 1 and 100 (inclusive)
-        let mut index = rng.gen_range(0..N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQs + N_VERIFIER_HASHES);
+        let mut index = rng.gen_range(0..N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES);
         if random.is_some() {
             index = random.unwrap();
         }
@@ -334,11 +301,11 @@ mod test {
             } else {
                 proof_asserts.0[2] = scramble;
             }
-        } else if index < N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQs {
+        } else if index < N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS {
             let index = index - N_VERIFIER_PUBLIC_INPUTS;
             proof_asserts.1[index] = scramble;
-        } else if index < N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQs + N_VERIFIER_HASHES {
-            let index = index - N_VERIFIER_PUBLIC_INPUTS - N_VERIFIER_FQs;
+        } else if index < N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES {
+            let index = index - N_VERIFIER_PUBLIC_INPUTS - N_VERIFIER_FQS;
             proof_asserts.2[index] = scramble2;
         }
     }
@@ -346,10 +313,10 @@ mod test {
     // Step 4: Challenger finds fault given signatures
     #[test]
     fn test_fn_disprove_invalid_assertions() {
-        let (_, _, mock_vk) = generate_mock_proof();
-        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS+1); // 3 pub inputs
-                                                  //let mut proof_asserts = Verifier::generate_assertions(VerificationKey { ark_vk: mock_vk.clone() }, Proof { proof: proof.clone(), public_inputs: pubs.clone() }, );
-                                                  // corrupt some assertion value randomly
+        let (_, mock_vk) = mock::compile_circuit();
+        let (proof, public_inputs) = mock::generate_proof();
+
+        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS+1); 
 
         let mut op_scripts = vec![];
         println!("load scripts from file");
@@ -364,8 +331,7 @@ mod test {
         let ops_scripts: [Script; N_TAPLEAVES] = op_scripts.try_into().unwrap();
 
         let mock_pubks = mock_pubkeys(MOCK_SECRET);
-        let verifier_scripts = Verifier::generate_tapscripts(mock_pubks, &ops_scripts);
-
+        let verifier_scripts = generate_disprove_scripts(mock_pubks, &ops_scripts);
 
         for i in 52..53 {
             println!("ITERATION {:?}", i);
@@ -373,11 +339,7 @@ mod test {
             corrupt(&mut proof_asserts, Some(i));
             let signed_asserts = sign_assertions(proof_asserts);
     
-            let fault = Verifier::validate_assertion_signatures(
-                VerificationKey { ark_vk: mock_vk.clone() },
-                signed_asserts,
-                mock_pubks,
-            );
+            let fault = verify_signed_assertions(mock_vk.clone(), mock_pubks, signed_asserts);
             if fault.is_some() {
                 let (index, hint_script) = fault.unwrap();
                 println!("taproot index {:?}", index);
@@ -399,7 +361,7 @@ mod test {
  
     }
 
-    fn write_asserts_to_file(proof_asserts: ProofAssertions, filename: &str) {
+    fn write_asserts_to_file(proof_asserts: Assertions, filename: &str) {
         //let proof_asserts = mock_asserts();
         let mut proof_vec: Vec<Vec<u8>> = vec![];
         for k in proof_asserts.0 {
@@ -417,7 +379,7 @@ mod test {
         write_map_to_file(&obj, filename).unwrap();
     }
 
-    fn read_asserts_from_file(filename: &str) -> ProofAssertions {
+    fn read_asserts_from_file(filename: &str) -> Assertions {
         let res = read_map_from_file(filename).unwrap();
         let proof_vec = res.get(&0).unwrap();
         
@@ -429,15 +391,15 @@ mod test {
         let assert1: [[u8; 32]; N_VERIFIER_PUBLIC_INPUTS] = assert1.try_into().unwrap();
 
         let mut assert2 = vec![];
-        for i in 0..N_VERIFIER_FQs {
+        for i in 0..N_VERIFIER_FQS {
             let v:[u8;32] = proof_vec[N_VERIFIER_PUBLIC_INPUTS + i].clone().try_into().unwrap();
             assert2.push(v);
         }
-        let assert2: [[u8; 32]; N_VERIFIER_FQs] = assert2.try_into().unwrap();
+        let assert2: [[u8; 32]; N_VERIFIER_FQS] = assert2.try_into().unwrap();
 
         let mut assert3 = vec![];
         for i in 0..N_VERIFIER_HASHES {
-            let v:[u8;20] = proof_vec[N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQs + i].clone().try_into().unwrap();
+            let v:[u8;20] = proof_vec[N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + i].clone().try_into().unwrap();
             assert3.push(v);
         }
         let assert3: [[u8; 20]; N_VERIFIER_HASHES] = assert3.try_into().unwrap();
