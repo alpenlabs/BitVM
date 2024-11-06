@@ -12,8 +12,10 @@ const fn ceil_div(numerator: u32, denominator: u32) -> u32 {
 }
 
 pub trait SignatureImpl {
+    type T;
     fn to_script(self) -> Script;
     fn to_compact_script(self) -> Script;
+    fn parse(self) -> Self::T;
 }
 
 macro_rules! impl_wots {
@@ -39,6 +41,8 @@ macro_rules! impl_wots {
                 pub type Signature = [([u8; 20], u8); N_DIGITS as usize];
 
                 impl SignatureImpl for Signature {
+                    type T = [u8; M_DIGITS as usize / 2];
+
                     fn to_script(self) -> Script {
                         script! {
                             for (preimage, digit) in self {
@@ -55,6 +59,13 @@ macro_rules! impl_wots {
                             }
                         }
                     }
+
+                    fn parse(self) -> Self::T {
+                        let digits = self.map(|(_, digit)| digit);
+                        let mut bytes = std::array::from_fn(|i| (digits[2 * i] << WINDOW) + digits[2 * i + 1]);
+                        bytes.reverse();
+                        bytes
+                    }
                 }
 
                 /// Compute the checksum of the message's digits.
@@ -67,6 +78,11 @@ macro_rules! impl_wots {
                     std::array::from_fn(|i| {
                         ((checksum / (MAX_DIGIT + 1).pow(i as u32)) % (MAX_DIGIT + 1)) as u8
                     })
+                }
+
+                fn digits_to_msg_bytes(digits: [u8; M_DIGITS as usize]) -> [u8; M_DIGITS as usize / 2] {
+                    // digits.chunks(2).map(|v| 0u8).try_into().unwrap()
+                    todo!()
                 }
 
                 /// Convert message bytes to digits
@@ -439,5 +455,16 @@ mod tests {
         let byte_array = nib_to_byte_array(&MESSAGE);
         let nib_array = msg_bytes_to_digits(&byte_array).to_vec();
         assert!(nib_array == MESSAGE);
+    }
+
+    #[test]
+    fn test_signature_parse() {
+        let data: [_; 32] = std::array::from_fn(|i| i as u8);
+
+        let signature = wots256::get_signature("00", &data);
+
+        let parsed_data = signature.parse();
+
+        assert_eq!(data, parsed_data);
     }
 }
