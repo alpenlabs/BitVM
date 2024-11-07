@@ -1001,13 +1001,13 @@ pub(crate) fn hints_dense_dense_mul0_by_hash(
         ],
         true,
     ); // dense
-    // let hash_g = emulate_extern_hash_fps(
-    //     vec![
-    //         g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-    //         g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
-    //     ],
-    //     false,
-    // ); // sparse
+    let hash_g_calc = emulate_extern_hash_fps(
+        vec![
+            g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
+            g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
+        ],
+        false,
+    ); // sparse
     let hash_h = emulate_extern_hash_fps(
         vec![
             h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
@@ -1021,8 +1021,11 @@ pub(crate) fn hints_dense_dense_mul0_by_hash(
         (sec_out, hash_h),   //od
     ];
 
-    let (bc_elems, should_validate) = tup_to_scr(sig, tup);
+    let (bc_elems, mut should_validate) = tup_to_scr(sig, tup);
 
+    if hash_g_calc != hash_g {
+        should_validate = true;
+    }
     // data passed to stack in runtime
     let simulate_stack_input = script! {
         // quotients for tmul
