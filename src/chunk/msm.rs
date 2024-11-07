@@ -697,7 +697,7 @@ pub(crate) fn tap_hash_p(q: G1Affine) -> Script {
         {fq_push_not_montgomery(q.x)}
         { hinted_add_line.clone() }
 
-        // Altstack:[gpx, gpy, th]
+        // Altstack:[identity, gpx, gpy, th]
         //[ntx, nty, tx, ty]
 
         {Fq2::fromaltstack()}
@@ -706,16 +706,20 @@ pub(crate) fn tap_hash_p(q: G1Affine) -> Script {
         {Fq::equalverify(1, 0)}
         {Fq2::fromaltstack()} {Fq::roll(1)}
         // // [ntx, nty, gpx, gpy]
-        {Fq2::equal()}  OP_NOT 
+        {Fq::fromaltstack()}
+        {fq_push_not_montgomery(ark_bn254::Fq::ZERO)}
+        // [ntx, nty, gpx, gpy, zero, 0]
+        {Fq::equal(1, 0)}
         OP_IF 
-            {Fq::fromaltstack()} // remove zeroelem and exit
-            {Fq::drop()}
+            // equal so, continue verify rest
+            {Fq2::equal()}
+            OP_NOT OP_VERIFY
         OP_ELSE
-            {Fq::fromaltstack()}
-            {fq_push_not_montgomery(ark_bn254::Fq::ZERO)}
-            {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+            // not equal, disproven, so drop and exit
+            {Fq2::drop()}
+            {Fq2::drop()}
+            {1} OP_VERIFY
         OP_ENDIF
-
     };
 
     let sc = script! {
@@ -811,7 +815,7 @@ mod test {
     use std::collections::HashMap;
 
     use crate::{
-        bn254::{fq2::Fq2, utils::fr_push_not_montgomery},
+        bn254::{fq2::Fq2, utils::fr_push_not_montgomery}, chunk::{api::nib_to_byte_array, taps::SigData}, signatures::wots::{wots160, wots256},
     };
 
     use self::mock::{compile_circuit, generate_proof};
@@ -1043,10 +1047,32 @@ mod test {
 
         let r = (t + q).into_affine();
 
+        let thash = emulate_extern_hash_fps(vec![t.x, t.y], false);
+
+        let mut sig_cache: HashMap<u32, SigData> = HashMap::new();
+        let bal: [u8; 32] = nib_to_byte_array(&thash).try_into().unwrap();
+        let bal: [u8; 20] = bal[12..32].try_into().unwrap();
+        sig_cache.insert(sec_in_arr[0].0, SigData::Sig160(wots160::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in_arr[0].0), &bal)));
+
+        let bal = emulate_fq_to_nibbles(r.y);
+        let bal: [u8; 32] = nib_to_byte_array(&bal).try_into().unwrap();
+        sig_cache.insert(sec_in_arr[1].0, SigData::Sig256(wots256::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in_arr[1].0), &bal)));
+
+
+        let bal = emulate_fq_to_nibbles(r.x);
+        let bal: [u8; 32] = nib_to_byte_array(&bal).try_into().unwrap();
+        sig_cache.insert(sec_in_arr[2].0, SigData::Sig256(wots256::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in_arr[2].0), &bal)));
+
+
+        let bal: [u8; 32] = nib_to_byte_array(&[0u8;64]).try_into().unwrap();
+        let bal: [u8; 20] = bal[12..32].try_into().unwrap();
+        sig_cache.insert(sec_out, SigData::Sig160(wots160::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out), &bal)));
+
+
         let hint_in = HintInHashP { tx:t.x, qx: q.x, ty: t.y, qy:  q.y, rx: r.x, ry: r.y };
         let mut sig = Sig {
-            msk: Some(sec_key_for_bitcomms),
-            cache: HashMap::new(),
+            msk: None,
+            cache: sig_cache,
         };
         let (_, simulate_stack_input, maybe_wrong) = hint_hash_p(&mut sig, (sec_out, false), sec_in_arr, hint_in);
 
@@ -1061,7 +1087,8 @@ mod test {
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
-        assert!(!res.success && res.final_stack.len() == 1);
+        assert!(!res.success);
+        assert!(res.final_stack.len() == 1);
 
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }

@@ -326,7 +326,7 @@ mod test {
         } else if index < N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES {
             let index = index - N_VERIFIER_PUBLIC_INPUTS - N_VERIFIER_FQS;
             if proof_asserts.2[index] == scramble2 {
-                scramble[10] += 1;
+                scramble2[10] += 1;
             }
             proof_asserts.2[index] = scramble2;
         }
