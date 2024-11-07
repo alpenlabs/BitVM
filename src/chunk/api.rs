@@ -133,13 +133,8 @@ pub fn generate_assertions(
 ) -> Assertions {
     assert_eq!(scalars.len(), NUM_PUBS);
 
-    // you do not need any secret to generate proof assertions,
-    // the use of "secret" below is merely an artifact of legacy code and doesn't serve any purpse
-    // will remove the need for passing it.
-    pub const MOCK_KEY: &str = "b138982ce17ac813d505a5b40b665d404e9528e7";
-    let random_secret = MOCK_KEY;
     let mut sig = Sig {
-        msk: Some(random_secret),
+        msk: None,
         cache: HashMap::new(),
     };
 
