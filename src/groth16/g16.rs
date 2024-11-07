@@ -283,6 +283,8 @@ mod test {
         assert!(fault.is_none());
     }
 
+    
+
     fn corrupt(proof_asserts: &mut Assertions, random: Option<usize>) {
         let mut rng = rand::thread_rng();
 
@@ -300,17 +302,32 @@ mod test {
         println!("corrupted assertion at index {}", index);
         if index < N_VERIFIER_PUBLIC_INPUTS {
             if index == 0 {
+                if proof_asserts.0[0] == scramble {
+                    scramble[16] += 1;
+                }
                 proof_asserts.0[0] = scramble;
             } else if index == 1 {
+                if proof_asserts.0[1] == scramble {
+                    scramble[16] += 1;
+                }
                 proof_asserts.0[1] = scramble;
             } else {
+                if proof_asserts.0[2] == scramble {
+                    scramble[16] += 1;
+                }
                 proof_asserts.0[2] = scramble;
             }
         } else if index < N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS {
             let index = index - N_VERIFIER_PUBLIC_INPUTS;
+            if proof_asserts.1[index] == scramble {
+                scramble[16] += 1;
+            }
             proof_asserts.1[index] = scramble;
         } else if index < N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES {
             let index = index - N_VERIFIER_PUBLIC_INPUTS - N_VERIFIER_FQS;
+            if proof_asserts.2[index] == scramble2 {
+                scramble[10] += 1;
+            }
             proof_asserts.2[index] = scramble2;
         }
     }
@@ -338,13 +355,14 @@ mod test {
         let mock_pubks = mock_pubkeys(MOCK_SECRET);
         let verifier_scripts = generate_disprove_scripts(mock_pubks, &ops_scripts);
 
-        for i in 0..70 {
+        for i in 0..N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES {
             println!("ITERATION {:?}", i);
-            let mut proof_asserts = read_asserts_from_file("chunker_data/assert2.json");
+            let mut proof_asserts = read_asserts_from_file("chunker_data/assert.json");
             corrupt(&mut proof_asserts, Some(i));
             let signed_asserts = sign_assertions(proof_asserts);
     
             let fault = verify_signed_assertions(mock_vk.clone(), mock_pubks, signed_asserts);
+            assert!(fault.is_some());
             if fault.is_some() {
                 let (index, hint_script) = fault.unwrap();
                 println!("taproot index {:?}", index);

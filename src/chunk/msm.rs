@@ -769,8 +769,10 @@ pub(crate) fn hint_hash_p(
     tups.push((sec_in[2], emulate_fq_to_nibbles(rx)));
     tups.push((sec_out, zero_nib));
 
-    let (bc_elems, should_validate) = tup_to_scr(sig, tups);
-
+    let (bc_elems, mut should_validate) = tup_to_scr(sig, tups);
+    if bc_elems.len() > 0 {
+        should_validate = true;  // intermediate fix to force validate
+    }
     let alpha_chord = (ty - qy) / (tx - qx);
     let bias_minus_chord = alpha_chord * tx - ty;
     assert_eq!(alpha_chord * tx - ty, bias_minus_chord);
