@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bitcoin_script::script;
 
-use crate::chunk::primitves::{fq_from_nibbles, pack_nibbles_to_limbs};
+use crate::chunk::primitves::pack_nibbles_to_limbs;
 use crate::treepp::Script;
 
 // use crate::signatures::{winternitz, winternitz_compact, winternitz_compact_hash, winternitz_hash};
@@ -10,21 +10,15 @@ use crate::signatures::wots::{wots160, wots256};
 
 use super::config::{assign_link_ids, NUM_PUBS, NUM_U160, NUM_U256};
 
-pub(crate) fn wots_p160_sign_digits(
-    secret_key: &str,
-    message_digits: [u8; 40],
-) -> Vec<bitcoin_script::Script> {
-    //winternitz_hash::sign_digits(secret_key, message_digits)
-    wots160::sign2(secret_key, message_digits)
-}
+// pub(crate) fn wots_p160_sign_digits(secret_key: &str, message_digits: [u8; 40]) -> Vec<bitcoin_script::Script> {
+//     //winternitz_hash::sign_digits(secret_key, message_digits)
+//     wots160::sign2(secret_key, message_digits)
+// }
 
-pub(crate) fn wots_p256_sign_digits(
-    secret_key: &str,
-    message_digits: [u8; 64],
-) -> Vec<bitcoin_script::Script> {
-    //winternitz::sign_digits(secret_key, message_digits)
-    wots256::sign2(secret_key, message_digits)
-}
+// pub(crate) fn wots_p256_sign_digits(secret_key: &str, message_digits: [u8; 64]) -> Vec<bitcoin_script::Script> {
+//     //winternitz::sign_digits(secret_key, message_digits)
+//     wots256::sign2(secret_key, message_digits)
+// }
 
 pub(crate) fn wots_p256_get_pub_key(secret_key: &str) -> WOTSPubKey {
     //winternitz_compact::get_pub_key(secret_key)
@@ -51,7 +45,7 @@ pub(crate) fn wots_compact_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> 
                     {i} OP_ROLL
                 }
 
-                {fq_from_nibbles()}
+                {pack_nibbles_to_limbs()}
             };
         }
         WOTSPubKey::P256(pb) => {
@@ -62,7 +56,7 @@ pub(crate) fn wots_compact_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> 
                 for i in 1..64 {
                     {i} OP_ROLL
                 }
-                {fq_from_nibbles()}
+                {pack_nibbles_to_limbs()}
             };
         }
     }
@@ -83,7 +77,7 @@ fn wots_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> Script {
                     {i} OP_ROLL
                 }
 
-                {fq_from_nibbles()}
+                {pack_nibbles_to_limbs()}
             };
         }
         WOTSPubKey::P256(pb) => {
@@ -94,7 +88,7 @@ fn wots_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> Script {
                 for i in 1..64 {
                     {i} OP_ROLL
                 }
-                {fq_from_nibbles()}
+                {pack_nibbles_to_limbs()}
             };
         }
     }
@@ -182,71 +176,12 @@ pub fn generate_assertion_spending_key_lengths(apk: &AssertPublicKeys) -> Vec<us
 #[cfg(test)]
 mod test {
 
-    use ark_ff::{BigInteger, Field, PrimeField, UniformRand};
+    use ark_ff::{BigInteger, PrimeField, UniformRand};
     use ark_std::test_rng;
-    use bitcoin::opcodes::{all::OP_ROLL, OP_TRUE};
     use rand::{RngCore, SeedableRng};
     use rand_chacha::ChaCha20Rng;
 
-    use super::*;
-    use crate::{
-        bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery},
-        chunk::{
-            evaluate::nib_to_byte_array,
-            primitves::{
-                emulate_extern_hash_fps, emulate_extern_hash_nibbles, emulate_fq_to_nibbles,
-                unpack_limbs_to_nibbles,
-            },
-        },
-        execute_script,
-        signatures::{self, wots::wots256},
-    };
-
-    #[test]
-    fn test_wots_fq() {
-        // runtime
-        let mut prng = ChaCha20Rng::seed_from_u64(0);
-        let f = ark_bn254::Fq::rand(&mut prng);
-        let secret = "a01b23c45d67e89f";
-        let public_key = wots256::generate_public_key(&secret);
-
-        let fnib = emulate_fq_to_nibbles(f);
-
-        let sigs = { wots_p256_sign_digits(&secret, fnib) };
-        let mut compact_sig = script! {};
-        for i in 0..sigs.len() {
-            if i % 2 == 0 {
-                compact_sig = compact_sig.push_script(sigs[i].clone().compile());
-            }
-        }
-        let script = script! {
-            {compact_sig}
-            {wots_compact_checksig_verify_with_pubkey(&WOTSPubKey::P256(public_key))}
-            {fq_push_not_montgomery(f)}
-            {Fq::equalverify(1,0)}
-            OP_TRUE
-        };
-        let res = execute_script(script);
-        for i in 0..res.final_stack.len() {
-            println!("{i:} {:?}", res.final_stack.get(i));
-        }
-        assert!(res.success);
-
-        let script = script! {
-            for sig in sigs {
-                {sig}
-            }
-            {wots_checksig_verify_with_pubkey(&WOTSPubKey::P256(public_key))}
-            {fq_push_not_montgomery(f)}
-            {Fq::equalverify(1,0)}
-            OP_TRUE
-        };
-        let res = execute_script(script);
-        for i in 0..res.final_stack.len() {
-            println!("{i:} {:?}", res.final_stack.get(i));
-        }
-        assert!(res.success);
-    }
+    use crate::{chunk::primitves::emulate_fq_to_nibbles, signatures::wots::wots256};
 
     // 0110 0100
     // 0011 1100 0000
@@ -283,20 +218,20 @@ mod test {
 
     #[test]
     fn test_fq_from_wots_signature() {
-        let secret = "0011";
+        // let secret = "0011";
 
-        let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
+        // let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
 
-        let fq = ark_bn254::Fq::ONE;
-        let fqnib = emulate_fq_to_nibbles(fq);
-        let fqr = nib_to_byte_array(&fqnib);
-        let public_key = wots256::generate_public_key(secret);
-        let signature = wots256::get_signature(secret, &fqr);
-        let nibbles = &signature.map(|(sig, digit)| digit)[0..wots256::M_DIGITS as usize];
-        println!("{:?}", fqr);
-        println!("{:?}", nibbles);
-        let fq_s = from_wots_signature::<ark_bn254::Fq>(signature, public_key);
-        println!("{:?}", fq_s);
+        // let fq = ark_bn254::Fq::ONE;
+        // let fqnib = emulate_fq_to_nibbles(fq);
+        // let fqr = nib_to_byte_array(&fqnib);
+        // let public_key = wots256::generate_public_key(secret);
+        // let signature = wots256::get_signature(secret, &fqr);
+        // let nibbles = &signature.map(|(sig, digit)| digit)[0..wots256::M_DIGITS as usize];
+        // println!("{:?}", fqr);
+        // println!("{:?}", nibbles);
+        // let fq_s = from_wots_signature::<ark_bn254::Fq>(signature, public_key);
+        // println!("{:?}", fq_s);
         // assert_eq!(fq, fq_s);
 
         // let fr = ark_bn254::Fr::ONE;

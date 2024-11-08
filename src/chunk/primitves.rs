@@ -138,189 +138,6 @@ pub fn unpack_limbs_to_nibbles() -> Script {
 }
 
 pub fn pack_nibbles_to_limbs() -> Script {
-    let n_limbs = 9;
-    script! {
-        {58} OP_ROLL
-        {59} OP_ROLL
-        {60} OP_ROLL
-        {61} OP_ROLL
-        {62} OP_ROLL
-        {63} OP_ROLL
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        OP_TOALTSTACK
-
-        {50} OP_ROLL
-        {51} OP_ROLL
-        {52} OP_ROLL
-        {53} OP_ROLL
-        {54} OP_ROLL
-        {55} OP_ROLL
-        {56} OP_ROLL
-        {57} OP_ROLL
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(2)}
-        OP_SWAP
-        {split_digit(4, 1)}
-        OP_ROT OP_ROT OP_ADD
-        OP_TOALTSTACK
-
-        OP_TOALTSTACK
-        {43} OP_ROLL
-        {44} OP_ROLL
-        {45} OP_ROLL
-        {46} OP_ROLL
-        {47} OP_ROLL
-        {48} OP_ROLL
-        {49} OP_ROLL
-        OP_FROMALTSTACK
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(4)}
-        OP_SWAP
-        {split_digit(4, 2)}
-        OP_ROT OP_ROT OP_ADD
-        OP_TOALTSTACK
-
-        OP_TOALTSTACK
-        {36} OP_ROLL
-        {37} OP_ROLL
-        {38} OP_ROLL
-        {39} OP_ROLL
-        {40} OP_ROLL
-        {41} OP_ROLL
-        {42} OP_ROLL
-        OP_FROMALTSTACK
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(8)}
-        OP_SWAP
-        {split_digit(4, 3)}
-        OP_ROT OP_ROT OP_ADD
-        OP_TOALTSTACK
-
-        OP_TOALTSTACK
-        {29} OP_ROLL
-        {30} OP_ROLL
-        {31} OP_ROLL
-        {32} OP_ROLL
-        {33} OP_ROLL
-        {34} OP_ROLL
-        {35} OP_ROLL
-        OP_FROMALTSTACK
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        OP_TOALTSTACK
-
-        {21} OP_ROLL
-        {22} OP_ROLL
-        {23} OP_ROLL
-        {24} OP_ROLL
-        {25} OP_ROLL
-        {26} OP_ROLL
-        {27} OP_ROLL
-        {28} OP_ROLL
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(2)}
-        OP_SWAP
-        {split_digit(4, 1)}
-        OP_ROT OP_ROT OP_ADD
-        OP_TOALTSTACK
-
-        OP_TOALTSTACK
-        {14} OP_ROLL
-        {15} OP_ROLL
-        {16} OP_ROLL
-        {17} OP_ROLL
-        {18} OP_ROLL
-        {19} OP_ROLL
-        {20} OP_ROLL
-        OP_FROMALTSTACK
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(4)}
-        OP_SWAP
-        {split_digit(4, 2)}
-        OP_ROT OP_ROT OP_ADD
-        OP_TOALTSTACK
-
-        OP_TOALTSTACK
-        {7} OP_ROLL
-        {8} OP_ROLL
-        {9} OP_ROLL
-        {10} OP_ROLL
-        {11} OP_ROLL
-        {12} OP_ROLL
-        {13} OP_ROLL
-        OP_FROMALTSTACK
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(8)}
-        OP_SWAP
-        {split_digit(4, 3)}
-        OP_ROT OP_ROT OP_ADD
-        OP_TOALTSTACK
-
-        OP_TOALTSTACK
-        {1} OP_ROLL
-        {2} OP_ROLL
-        {3} OP_ROLL
-        {4} OP_ROLL
-        {5} OP_ROLL
-        {6} OP_ROLL
-        OP_FROMALTSTACK
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-        {NMUL(16)} OP_ADD
-
-        for i in 1..n_limbs {
-            OP_FROMALTSTACK
-        }
-        for i in 1..n_limbs {
-            {i} OP_ROLL
-        }
-    }
-}
-
-pub fn fq_from_nibbles() -> Script {
     fn split_digit(window: u32, index: u32) -> Script {
         script! {
             // {v}
@@ -713,26 +530,14 @@ pub fn hash_fp12_with_hints() -> Script {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
-
     use super::*;
-    use ark_ff::{BigInteger, Field, PrimeField, UniformRand};
+    use ark_ff::{Field, UniformRand};
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
     use crate::{
-        bigint::U254,
-        bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery},
-        chunk::{
-            evaluate::nib_to_byte_array,
-            primitves::unpack_limbs_to_nibbles,
-            wots::{wots_p160_sign_digits, wots_p256_sign_digits},
-        },
+        bn254::{utils::fq_push_not_montgomery},
         execute_script,
-        signatures::wots::{
-            wots128::compact::{get_signature, get_signature2},
-            wots160, wots256,
-        },
     };
 
     #[test]
@@ -741,26 +546,11 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let p = ark_bn254::Fq::rand(&mut prng);
 
-        // let script = script!(
-        //     {fq_push_not_montgomery(p)}
-        //     {Fq::copy(0)}
-        //     {unpack_limbs_to_nibbles()}
-        //     {fq_from_nibbles()}
-        //     {Fq::equalverify(1, 0)}
-        // );
-        // let exec_result = execute_script(script);
-        // for i in 0..exec_result.final_stack.len() {
-        //     println!("{i:} {:?}", exec_result.final_stack.get(i));
-        // }
-
         let mut nib32 = [15u8; 64];
         let script = script! {
-             for i in nib32 {
-                 {i}
-             }
-             {fq_from_nibbles()}
              {fq_push_not_montgomery(ark_bn254::Fq::ONE)}
-             {Fq::add(1, 0)}
+             {unpack_limbs_to_nibbles()}
+             //{Fq::add(1, 0)}
         };
         let exec_result = execute_script(script);
         for i in 0..exec_result.final_stack.len() {
@@ -770,31 +560,33 @@ mod test {
 
     #[test]
     fn test_emq() {
-        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let mut prng = ChaCha20Rng::seed_from_u64(100);
         let p = ark_bn254::Fq::rand(&mut prng);
-        let pb = emulate_fq_to_nibbles(p);
+        let pb1 = emulate_fq_to_nibbles(p);
 
-        let pbarr = nib_to_byte_array(&pb)[12..32].to_vec();
-        //let pbcomparr = p.into_bigint().to_bytes_le();
-        //println!("nbs {:?}", pb);
-        //println!("pbarr {:?}", pbarr);
-        //println!("pbcomparr {:?}", pbcomparr);
-        println!("orig {:?}", pb);
 
-        let secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let res = wots160::get_signature(secret, &pbarr);
-        let mut nbcoll = vec![];
-        for (k, v) in res {
-            nbcoll.push(v);
-        }
+        println!("pb1 {:?}", pb1);
+        // let pbarr = nib_to_byte_array(&pb)[12..32].to_vec();
+        // //let pbcomparr = p.into_bigint().to_bytes_le();
+        // //println!("nbs {:?}", pb);
+        // //println!("pbarr {:?}", pbarr);
+        // //println!("pbcomparr {:?}", pbcomparr);
+        // println!("orig {:?}", pb);
 
-        let mut nbcoll = nbcoll[0..40].to_vec();
-        nbcoll.reverse();
-        for chunk in nbcoll.chunks_exact_mut(2) {
-            chunk.swap(0, 1);
-        }
+        // let secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
+        // let res = wots160::get_signature(secret, &pbarr);
+        // let mut nbcoll = vec![];
+        // for (k, v) in res {
+        //     nbcoll.push(v);
+        // }
 
-        // let pbarr = nib_to_byte_array(&nbcoll);
-        println!("nbcoll {:?}", nbcoll);
+        // let mut nbcoll = nbcoll[0..40].to_vec();
+        // nbcoll.reverse();
+        // for chunk in nbcoll.chunks_exact_mut(2) {
+        //     chunk.swap(0, 1);
+        // }
+
+        // // let pbarr = nib_to_byte_array(&nbcoll);
+        // println!("nbcoll {:?}", nbcoll);
     }
 }

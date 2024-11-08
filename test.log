@@ -1,0 +1,1557 @@
+warning: patch for `ark-bn254` uses the features mechanism. default-features and features will not take effect because the patch dependency does not support this mechanism
+   Compiling bitvm v0.1.0 (/Users/bbist/Works/github.com/alpenlabs/BitVM)
+warning: unused import: `ScriptBuf`
+  --> src/lib.rs:12:54
+   |
+12 | use bitcoin::{hashes::Hash, hex::DisplayHex, Opcode, ScriptBuf, TapLeafHash, Transaction};
+   |                                                      ^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `bitcoin_script::analyzer::StackStatus`
+   --> src/bigint/inv.rs:371:9
+    |
+371 |     use bitcoin_script::analyzer::StackStatus;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::treepp::execute_script`
+   --> src/bigint/std.rs:295:9
+    |
+295 |     use crate::treepp::execute_script;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `OP_BOOLAND`, `OP_FROMALTSTACK`, and `OP_TOALTSTACK`
+ --> src/bn254/curves.rs:3:29
+  |
+3 | use bitcoin::opcodes::all::{OP_BOOLAND, OP_FROMALTSTACK, OP_TOALTSTACK};
+  |                             ^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^
+
+warning: unused import: `num_traits::Num`
+ --> src/bn254/curves.rs:5:5
+  |
+5 | use num_traits::Num;
+  |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `fq_push`
+    --> src/bn254/curves.rs:1956:44
+     |
+1956 | ...   fq2_push, fq2_push_not_montgomery, fq_push, fq_push_not_montgomery, fr_push, fr_push_not_montgomery, g1_affine_push, g1_affine_push...
+     |                                          ^^^^^^^
+
+warning: unused import: `execute_script_as_chunks`
+    --> src/bn254/curves.rs:1959:25
+     |
+1959 |         execute_script, execute_script_as_chunks, execute_script_without_stack_limit, run,
+     |                         ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `bitcoin::opcodes::all::OP_EQUALVERIFY`
+    --> src/bn254/curves.rs:1968:9
+     |
+1968 |     use bitcoin::opcodes::all::OP_EQUALVERIFY;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::cmp::min`
+ --> src/bn254/msm.rs:1:5
+  |
+1 | use std::cmp::min;
+  |     ^^^^^^^^^^^^^
+
+warning: unused import: `execute_script`
+   --> src/bn254/msm.rs:373:17
+    |
+373 |     use crate::{execute_script, execute_script_without_stack_limit};
+    |                 ^^^^^^^^^^^^^^
+
+warning: unused import: `crate::bn254::fp254impl::Fp254Impl`
+   --> src/bn254/msm.rs:611:13
+    |
+611 |         use crate::bn254::fp254impl::Fp254Impl;
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `bitcoin::opcodes::all::OP_DUP`
+  --> src/bn254/utils.rs:11:5
+   |
+11 | use bitcoin::opcodes::all::OP_DUP;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `bitcoin::ScriptBuf`
+  --> src/bn254/utils.rs:12:5
+   |
+12 | use bitcoin::ScriptBuf;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `ark_bn254::G2Affine`
+    --> src/bn254/utils.rs:1447:9
+     |
+1447 |     use ark_bn254::G2Affine;
+     |         ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `self`
+ --> src/fflonk/checkpairing_miller_loop.rs:8:31
+  |
+8 |     use crate::bn254::utils::{self, fq12_push};
+  |                               ^^^^
+
+warning: unused import: `crate::execute_script_as_chunks`
+  --> src/fflonk/verifier.rs:14:9
+   |
+14 |     use crate::execute_script_as_chunks;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `BigInteger`
+ --> src/groth16/test.rs:6:14
+  |
+6 | use ark_ff::{BigInteger, PrimeField};
+  |              ^^^^^^^^^^
+
+warning: unused imports: `hinted_msm_with_constant_bases` and `msm_with_constant_bases`
+ --> src/groth16/verifier.rs:6:5
+  |
+6 |     hinted_msm_with_constant_bases, hinted_msm_with_constant_bases_affine, msm_with_constant_bases, msm_with_constant_bases_affine
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                                         ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `bitcoin::opcodes::all::OP_PUSHNUM_1`
+   --> src/hash/blake3.rs:501:9
+    |
+501 |     use bitcoin::opcodes::all::OP_PUSHNUM_1;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `execute_script_as_chunks` and `execute_script_without_stack_limit`
+   --> src/hash/blake3.rs:506:17
+    |
+506 |     use crate::{execute_script_as_chunks, execute_script_without_stack_limit, run};
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `bitcoin::script`
+ --> src/hash/blake3_u32.rs:4:5
+  |
+4 | use bitcoin::script;
+  |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::run`
+   --> src/hash/blake3_u32.rs:628:9
+    |
+628 |     use crate::run;
+    |         ^^^^^^^^^^
+
+warning: unused imports: `OP_EQUALVERIFY`, `OP_FROMALTSTACK`, `OP_SWAP`, and `OP_TOALTSTACK`
+   --> src/signatures/wots.rs:299:33
+    |
+299 |     use bitcoin::opcodes::all::{OP_EQUALVERIFY, OP_FROMALTSTACK, OP_SWAP, OP_TOALTSTACK};
+    |                                 ^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^  ^^^^^^^^^^^^^
+
+warning: unused import: `pseudo::NMUL`
+   --> src/signatures/wots.rs:305:9
+    |
+305 |         pseudo::NMUL,
+    |         ^^^^^^^^^^^^
+
+warning: unused import: `execute_script`
+   --> src/u32/u32_or.rs:109:25
+    |
+109 |     use crate::treepp::{execute_script, script};
+    |                         ^^^^^^^^^^^^^^
+
+warning: unused import: `bitcoin::opcodes::all::OP_ROLL`
+ --> src/u32/u32_std.rs:3:5
+  |
+3 | use bitcoin::opcodes::all::OP_ROLL;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `limb_to_be_bits` and `limb_to_le_bits`
+ --> src/u32/u32_std.rs:5:27
+  |
+5 | use crate::bigint::bits::{limb_to_be_bits, limb_to_le_bits};
+  |                           ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^
+
+warning: unused imports: `assign_link_ids` and `keygen`
+ --> src/chunk/api.rs:5:28
+  |
+5 | use crate::chunk::config::{assign_link_ids, keygen, NUM_PUBS, NUM_U160, NUM_U256};
+  |                            ^^^^^^^^^^^^^^^  ^^^^^^
+
+warning: unused import: `N_TAPLEAVES`
+  --> src/chunk/api.rs:10:57
+   |
+10 |     N_VERIFIER_FQS, Assertions, PublicKeys, Signatures, N_TAPLEAVES, N_VERIFIER_HASHES,
+   |                                                         ^^^^^^^^^^^
+
+warning: unused import: `test_utils::read_scripts_from_file`
+   --> src/chunk/compile.rs:461:40
+    |
+461 |     use crate::chunk::{config::keygen, test_utils::read_scripts_from_file};
+    |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `NUM_PUBS`, `NUM_U160`, `NUM_U256`, and `assign_link_ids`
+   --> src/chunk/config.rs:765:17
+    |
+765 |     use super::{assign_link_ids, NUM_PUBS, NUM_U160, NUM_U256};
+    |                 ^^^^^^^^^^^^^^^  ^^^^^^^^  ^^^^^^^^  ^^^^^^^^
+
+warning: unused import: `Fq12`
+ --> src/chunk/evaluate.rs:2:17
+  |
+2 | use ark_bn254::{Fq12, G1Affine};
+  |                 ^^^^
+
+warning: unused import: `BigInteger`
+ --> src/chunk/evaluate.rs:3:14
+  |
+3 | use ark_ff::{BigInteger, Field, PrimeField};
+  |              ^^^^^^^^^^
+
+warning: unused import: `bitcoin::opcodes::OP_TRUE`
+ --> src/chunk/evaluate.rs:4:5
+  |
+4 | use bitcoin::opcodes::OP_TRUE;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `num_bigint::BigUint`
+ --> src/chunk/evaluate.rs:6:5
+  |
+6 | use num_bigint::BigUint;
+  |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `HintOutMSM`
+  --> src/chunk/evaluate.rs:11:107
+   |
+11 | use crate::chunk::msm::{bitcom_hash_p, bitcom_msm, hint_hash_p, hint_msm, tap_hash_p, tap_msm, HintInMSM, HintOutMSM};
+   |                                                                                                           ^^^^^^^^^^
+
+warning: unused import: `emulate_nibbles_to_limbs`
+  --> src/chunk/evaluate.rs:25:70
+   |
+25 | use super::primitves::{emulate_fq_to_nibbles, emulate_fr_to_nibbles, emulate_nibbles_to_limbs};
+   |                                                                      ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `NUM_PUBS`, `NUM_U160`, `NUM_U256`, `assign_link_ids`, `emulate_fq_to_nibbles`, `emulate_fr_to_nibbles`, and `hint_models::HintOut`
+ --> src/chunk/evaluate_test.rs:6:33
+  |
+6 | ...::{assign_link_ids, NUM_PUBS, NUM_U160, NUM_U256}, evaluate::*, hint_models::HintOut, primitves::{emulate_fq_to_nibbles, emulate_fr_to_nibbles}, ...
+  |       ^^^^^^^^^^^^^^^  ^^^^^^^^  ^^^^^^^^  ^^^^^^^^                ^^^^^^^^^^^^^^^^^^^^              ^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `write_map_to_file`
+  --> src/chunk/evaluate_test.rs:15:64
+   |
+15 | ...   read_pubkey_from_file, read_scripts_from_file, write_map_to_file, write_pubkey_to_file, write_scripts_to_file, write_scripts_to_sep...
+   |                                                      ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `bitcoin::opcodes::all::OP_ENDIF`
+  --> src/chunk/msm.rs:16:5
+   |
+16 | use bitcoin::opcodes::all::OP_ENDIF;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `OP_TRUE` and `all::OP_EQUALVERIFY`
+   --> src/chunk/msm.rs:824:28
+    |
+824 |     use bitcoin::opcodes::{all::OP_EQUALVERIFY, OP_TRUE};
+    |                            ^^^^^^^^^^^^^^^^^^^  ^^^^^^^
+
+warning: unused import: `super::HintInMSM`
+   --> src/chunk/msm.rs:828:9
+    |
+828 |     use super::HintInMSM;
+    |         ^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::*`
+    --> src/chunk/msm.rs:1082:13
+     |
+1082 |         use super::*;
+     |             ^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+   --> src/chunk/primitves.rs:716:9
+    |
+716 |     use std::collections::HashMap;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `BigInteger` and `PrimeField`
+   --> src/chunk/primitves.rs:719:18
+    |
+719 |     use ark_ff::{BigInteger, Field, PrimeField, UniformRand};
+    |                  ^^^^^^^^^^         ^^^^^^^^^^
+
+warning: unused imports: `bigint::U254`, `get_signature2`, `get_signature`, `primitves::unpack_limbs_to_nibbles`, `wots256`, `wots_p160_sign_digits`, and `wots_p256_sign_digits`
+   --> src/chunk/primitves.rs:724:9
+    |
+724 |         bigint::U254,
+    |         ^^^^^^^^^^^^
+...
+728 |             primitves::unpack_limbs_to_nibbles,
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+729 |             wots::{wots_p160_sign_digits, wots_p256_sign_digits},
+    |                    ^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^
+...
+733 |             wots128::compact::{get_signature, get_signature2},
+    |                                ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+734 |             wots160, wots256,
+    |                      ^^^^^^^
+
+warning: unused import: `wots32`
+  --> src/chunk/taps.rs:11:49
+   |
+11 | use crate::signatures::wots::{wots160, wots256, wots32};
+   |                                                 ^^^^^^
+
+warning: unused import: `signatures`
+  --> src/chunk/taps.rs:12:20
+   |
+12 | use crate::{bn254, signatures};
+   |                    ^^^^^^^^^^
+
+warning: unused imports: `OP_BOOLAND`, `OP_ELSE`, `OP_ENDIF`, `OP_FROMALTSTACK`, and `OP_TOALTSTACK`
+  --> src/chunk/taps.rs:19:29
+   |
+19 | use bitcoin::opcodes::all::{OP_BOOLAND, OP_ELSE, OP_ENDIF, OP_FROMALTSTACK, OP_TOALTSTACK};
+   |                             ^^^^^^^^^^  ^^^^^^^  ^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^
+
+warning: unused imports: `wots_p160_sign_digits` and `wots_p256_sign_digits`
+  --> src/chunk/taps.rs:27:19
+   |
+27 | use super::wots::{wots_p160_sign_digits, wots_p256_sign_digits, WOTSPubKey};
+   |                   ^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `bitcom_hash_p`, `hint_hash_p`, and `tap_hash_p`
+ --> src/chunk/taps_test.rs:7:29
+  |
+7 |     use crate::chunk::msm::{bitcom_hash_p, hint_hash_p, tap_hash_p};
+  |                             ^^^^^^^^^^^^^  ^^^^^^^^^^^  ^^^^^^^^^^
+
+warning: unused import: `AdditiveGroup`
+  --> src/chunk/taps_test.rs:12:18
+   |
+12 |     use ark_ff::{AdditiveGroup, Field};
+   |                  ^^^^^^^^^^^^^
+
+warning: unused imports: `io` and `ops::Neg`
+   --> src/chunk/test_utils.rs:139:37
+    |
+139 |     use std::{collections::HashMap, io, ops::Neg};
+    |                                     ^^  ^^^^^^^^
+
+warning: unused imports: `AffineRepr` and `CurveGroup`
+   --> src/chunk/test_utils.rs:141:18
+    |
+141 |     use ark_ec::{AffineRepr, CurveGroup};
+    |                  ^^^^^^^^^^  ^^^^^^^^^^
+
+warning: unused import: `groth16::offchain_checker::compute_c_wi`
+   --> src/chunk/test_utils.rs:149:9
+    |
+149 |         groth16::offchain_checker::compute_c_wi,
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `pack_nibbles_to_limbs`
+ --> src/chunk/wots.rs:5:48
+  |
+5 | use crate::chunk::primitves::{fq_from_nibbles, pack_nibbles_to_limbs};
+  |                                                ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `OP_TRUE` and `all::OP_ROLL`
+   --> src/chunk/wots.rs:187:28
+    |
+187 |     use bitcoin::opcodes::{all::OP_ROLL, OP_TRUE};
+    |                            ^^^^^^^^^^^^  ^^^^^^^
+
+warning: unused imports: `emulate_extern_hash_fps`, `emulate_extern_hash_nibbles`, `self`, and `unpack_limbs_to_nibbles`
+   --> src/chunk/wots.rs:197:17
+    |
+197 |                 emulate_extern_hash_fps, emulate_extern_hash_nibbles, emulate_fq_to_nibbles,
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+198 |                 unpack_limbs_to_nibbles,
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^
+...
+202 |         signatures::{self, wots::wots256},
+    |                      ^^^^
+
+warning: unused variable: `file_path`
+  --> src/bridge/client/data_store/sftp.rs:73:43
+   |
+73 |     async fn get_object(&self, key: &str, file_path: Option<&str>) -> Result<Vec<u8>, String> {
+   |                                           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_file_path`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `file_path`
+   --> src/bridge/client/data_store/sftp.rs:104:9
+    |
+104 |         file_path: Option<&str>,
+    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_file_path`
+
+warning: unused import: `PrimeGroup`
+ --> src/bn254/msm.rs:8:53
+  |
+8 | use ark_ec::{AdditiveGroup, AffineRepr, CurveGroup, PrimeGroup};
+  |                                                     ^^^^^^^^^^
+
+warning: unused import: `PrimeField`
+  --> src/chunk/taps.rs:18:36
+   |
+18 | use ark_ff::{AdditiveGroup, Field, PrimeField, Zero};
+   |                                    ^^^^^^^^^^
+
+warning: unused variable: `point_after_double`
+    --> src/bn254/curves.rs:1470:21
+     |
+1470 |                 let point_after_double = trace_iter.next().unwrap();
+     |                     ^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_point_after_double`
+
+warning: unused variable: `point_after_add`
+    --> src/bn254/curves.rs:1499:17
+     |
+1499 |             let point_after_add = trace_iter.next().unwrap();
+     |                 ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_point_after_add`
+
+warning: unused variable: `point_after_double`
+    --> src/bn254/curves.rs:1565:21
+     |
+1565 |                 let point_after_double = trace_iter.next().unwrap();
+     |                     ^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_point_after_double`
+
+warning: unused variable: `point_after_add`
+    --> src/bn254/curves.rs:1604:17
+     |
+1604 |             let point_after_add = trace_iter.next().unwrap();
+     |                 ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_point_after_add`
+
+warning: unused variable: `z_inv_pow3`
+    --> src/bn254/curves.rs:2533:17
+     |
+2533 |             let z_inv_pow3 = z_inv_pow2.mul(z_inv);
+     |                 ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_z_inv_pow3`
+
+warning: unused variable: `z_inv_pow3`
+    --> src/bn254/curves.rs:2597:17
+     |
+2597 |             let z_inv_pow3 = z_inv_pow2.mul(z_inv);
+     |                 ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_z_inv_pow3`
+
+warning: unused variable: `c4`
+   --> src/bn254/utils.rs:687:95
+    |
+687 | pub fn new_hinted_affine_add_line(tx: ark_bn254::Fq2, qx: ark_bn254::Fq2, c3: ark_bn254::Fq2, c4: ark_bn254::Fq2) -> (Script, Vec<Hint>) {
+    |                                                                                               ^^ help: if this is intentional, prefix it with an underscore: `_c4`
+
+warning: unused variable: `c4`
+   --> src/bn254/utils.rs:799:78
+    |
+799 | pub fn new_hinted_affine_double_line(tx: ark_bn254::Fq2, c3: ark_bn254::Fq2, c4: ark_bn254::Fq2) -> (Script, Vec<Hint>) {
+    |                                                                              ^^ help: if this is intentional, prefix it with an underscore: `_c4`
+
+warning: unused variable: `c4`
+   --> src/bn254/utils.rs:910:83
+    |
+910 | pub fn new_hinted_check_line_through_point(x: ark_bn254::Fq2, c3: ark_bn254::Fq2, c4: ark_bn254::Fq2) -> (Script, Vec<Hint>) {
+    |                                                                                   ^^ help: if this is intentional, prefix it with an underscore: `_c4`
+
+warning: unused variable: `t`
+    --> src/bn254/utils.rs:1066:36
+     |
+1066 | pub fn new_hinted_check_chord_line(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine, c3: ark_bn254::Fq2, c4: ark_bn254::Fq2) -> (Script, Ve...
+     |                                    ^ help: if this is intentional, prefix it with an underscore: `_t`
+
+warning: unused variable: `file_path`
+   --> src/bridge/client/data_store/sftp.rs:146:34
+    |
+146 |     async fn list_objects(&self, file_path: Option<&str>) -> Result<Vec<String>, String> {
+    |                                  ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_file_path`
+
+warning: unused variable: `w1_z`
+    --> src/fflonk/verifier.rs:2257:26
+     |
+2257 |         let (w1_x, w1_y, w1_z) = (
+     |                          ^^^^ help: if this is intentional, prefix it with an underscore: `_w1_z`
+
+warning: unused variable: `w2_z`
+    --> src/fflonk/verifier.rs:2263:26
+     |
+2263 |         let (w2_x, w2_y, w2_z) = (
+     |                          ^^^^ help: if this is intentional, prefix it with an underscore: `_w2_z`
+
+warning: unused variable: `w1_z`
+    --> src/fflonk/verifier.rs:2579:26
+     |
+2579 |         let (w1_x, w1_y, w1_z) = (
+     |                          ^^^^ help: if this is intentional, prefix it with an underscore: `_w1_z`
+
+warning: unused variable: `w2_z`
+    --> src/fflonk/verifier.rs:2585:26
+     |
+2585 |         let (w2_x, w2_y, w2_z) = (
+     |                          ^^^^ help: if this is intentional, prefix it with an underscore: `_w2_z`
+
+warning: variable does not need to be mutable
+   --> src/groth16/g16.rs:305:13
+    |
+305 |         let mut scramble: [u8; 32] = [0u8; 32];
+    |             ----^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: variable does not need to be mutable
+   --> src/groth16/g16.rs:307:13
+    |
+307 |         let mut scramble2: [u8; 20] = [0u8; 20];
+    |             ----^^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `proof`
+   --> src/groth16/g16.rs:331:14
+    |
+331 |         let (proof, public_inputs) = mock::generate_proof();
+    |              ^^^^^ help: if this is intentional, prefix it with an underscore: `_proof`
+
+warning: unused variable: `public_inputs`
+   --> src/groth16/g16.rs:331:21
+    |
+331 |         let (proof, public_inputs) = mock::generate_proof();
+    |                     ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_public_inputs`
+
+warning: unused variable: `num_padding_bytes`
+   --> src/hash/blake3_u32.rs:252:9
+    |
+252 |     let num_padding_bytes = num_blocks * 64 - num_bytes;
+    |         ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_num_padding_bytes`
+
+warning: unused variable: `num_padding_bytes`
+   --> src/hash/blake3_u32.rs:428:9
+    |
+428 |     let num_padding_bytes = num_blocks * 64 - num_bytes;
+    |         ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_num_padding_bytes`
+
+warning: unused variable: `i`
+   --> src/hash/blake3_u32.rs:782:13
+    |
+782 |         for i in 0..32 {
+    |             ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+warning: unused variable: `i`
+   --> src/hash/blake3_u32.rs:796:56
+    |
+796 |         let inputs = (0..32_u32).into_iter().flat_map(|i| 1_u32.to_le_bytes()).collect::<Vec<_>>();
+    |                                                        ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+warning: unused variable: `digits`
+   --> src/signatures/wots.rs:83:40
+    |
+83  |                 fn digits_to_msg_bytes(digits: [u8; M_DIGITS as usize]) -> [u8; M_DIGITS as usize / 2] {
+    |                                        ^^^^^^ help: if this is intentional, prefix it with an underscore: `_digits`
+...
+292 | impl_wots!(32);
+    | -------------- in this macro invocation
+    |
+    = note: this warning originates in the macro `impl_wots` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unused variable: `digits`
+   --> src/signatures/wots.rs:83:40
+    |
+83  |                 fn digits_to_msg_bytes(digits: [u8; M_DIGITS as usize]) -> [u8; M_DIGITS as usize / 2] {
+    |                                        ^^^^^^ help: if this is intentional, prefix it with an underscore: `_digits`
+...
+293 | impl_wots!(128);
+    | --------------- in this macro invocation
+    |
+    = note: this warning originates in the macro `impl_wots` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unused variable: `digits`
+   --> src/signatures/wots.rs:83:40
+    |
+83  |                 fn digits_to_msg_bytes(digits: [u8; M_DIGITS as usize]) -> [u8; M_DIGITS as usize / 2] {
+    |                                        ^^^^^^ help: if this is intentional, prefix it with an underscore: `_digits`
+...
+294 | impl_wots!(160);
+    | --------------- in this macro invocation
+    |
+    = note: this warning originates in the macro `impl_wots` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unused variable: `digits`
+   --> src/signatures/wots.rs:83:40
+    |
+83  |                 fn digits_to_msg_bytes(digits: [u8; M_DIGITS as usize]) -> [u8; M_DIGITS as usize / 2] {
+    |                                        ^^^^^^ help: if this is intentional, prefix it with an underscore: `_digits`
+...
+295 | impl_wots!(256);
+    | --------------- in this macro invocation
+    |
+    = note: this warning originates in the macro `impl_wots` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unused variable: `msg_160`
+   --> src/signatures/wots.rs:485:13
+    |
+485 |         let msg_160: [u8; 20] = std::array::from_fn(|i| 12 * i as u8);
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_msg_160`
+
+warning: unused variable: `script_256`
+   --> src/signatures/wots.rs:489:13
+    |
+489 |         let script_256 = script! {
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_script_256`
+
+warning: unused variable: `fault`
+   --> src/chunk/api.rs:198:15
+    |
+198 |     let (aux, fault) = evaluate(
+    |               ^^^^^ help: if this is intentional, prefix it with an underscore: `_fault`
+
+warning: value assigned to `sc` is never read
+  --> src/chunk/compile.rs:97:25
+   |
+97 |                 let mut sc = script!();
+   |                         ^^
+   |
+   = help: maybe it is overwritten before being read?
+   = note: `#[warn(unused_assignments)]` on by default
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:105:25
+    |
+105 |                 let mut sc = script!();
+    |                         ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:113:25
+    |
+113 |                 let mut sc = script!();
+    |                         ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:121:25
+    |
+121 |                 let mut sc = script!();
+    |                         ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:129:25
+    |
+129 |                 let mut sc = script!();
+    |                         ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:140:25
+    |
+140 |                 let mut sc = script!();
+    |                         ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:148:25
+    |
+148 |                 let mut sc = script!();
+    |                         ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:156:25
+    |
+156 |                 let mut sc = script!();
+    |                         ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:197:21
+    |
+197 |             let mut sc = script!();
+    |                     ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:205:21
+    |
+205 |             let mut sc = script!();
+    |                     ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:213:21
+    |
+213 |             let mut sc = script!();
+    |                     ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:221:21
+    |
+221 |             let mut sc = script!();
+    |                     ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:229:21
+    |
+229 |             let mut sc = script!();
+    |                     ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:237:21
+    |
+237 |             let mut sc = script!();
+    |                     ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:245:21
+    |
+245 |             let mut sc = script!();
+    |                     ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:253:21
+    |
+253 |             let mut sc = script!();
+    |                     ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:294:21
+    |
+294 |             let mut sc = script!();
+    |                     ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:309:21
+    |
+309 |             let mut sc = script!();
+    |                     ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:317:21
+    |
+317 |             let mut sc = script!();
+    |                     ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:329:21
+    |
+329 |             let mut sc = script!();
+    |                     ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:337:21
+    |
+337 |             let mut sc = script!();
+    |                     ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:349:21
+    |
+349 |             let mut sc = script!();
+    |                     ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:360:21
+    |
+360 |             let mut sc = script!();
+    |                     ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:368:21
+    |
+368 |             let mut sc = script!();
+    |                     ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `sc` is never read
+   --> src/chunk/compile.rs:402:21
+    |
+402 |             let mut sc = script!();
+    |                     ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: unused variable: `bcs`
+   --> src/chunk/compile.rs:484:13
+    |
+484 |         let bcs = compile(vk, &link_ids, false);
+    |             ^^^ help: if this is intentional, prefix it with an underscore: `_bcs`
+
+warning: unused variable: `facc`
+   --> src/chunk/compile.rs:489:22
+    |
+489 |         let (id_map, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
+    |                      ^^^^ help: if this is intentional, prefix it with an underscore: `_facc`
+
+warning: unused variable: `tacc`
+   --> src/chunk/compile.rs:489:28
+    |
+489 |         let (id_map, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
+    |                            ^^^^ help: if this is intentional, prefix it with an underscore: `_tacc`
+
+warning: unused variable: `scrs`
+   --> src/chunk/compile.rs:490:17
+    |
+490 |         let mut scrs: Vec<(u32, Script)> = Vec::new();
+    |                 ^^^^ help: if this is intentional, prefix it with an underscore: `_scrs`
+
+warning: variable does not need to be mutable
+   --> src/chunk/compile.rs:490:13
+    |
+490 |         let mut scrs: Vec<(u32, Script)> = Vec::new();
+    |             ----^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable `table_number` is assigned to, but never used
+   --> src/chunk/config.rs:552:17
+    |
+552 |         let mut table_number = 1;
+    |                 ^^^^^^^^^^^^
+    |
+    = note: consider using `_table_number` instead
+
+warning: unused variable: `p160`
+   --> src/chunk/config.rs:717:60
+    |
+717 | pub(crate) fn assign_link_ids(pub_ids: usize, p256: usize, p160: usize) -> (HashMap<String, (u32, bool)>, String, String) {
+    |                                                            ^^^^ help: if this is intentional, prefix it with an underscore: `_p160`
+
+warning: unused variable: `sig`
+    --> src/chunk/evaluate.rs:1132:55
+     |
+1132 |                 nibs.extend_from_slice(&sig_msg.map(|(sig, digit)| digit));
+     |                                                       ^^^ help: if this is intentional, prefix it with an underscore: `_sig`
+
+warning: value assigned to `grothmap` is never read
+    --> src/chunk/evaluate.rs:1739:13
+     |
+1739 |     let mut grothmap = HashMap::new();
+     |             ^^^^^^^^
+     |
+     = help: maybe it is overwritten before being read?
+
+warning: unused variable: `facc`
+    --> src/chunk/evaluate.rs:1834:27
+     |
+1834 |     let (link_name_to_id, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
+     |                           ^^^^ help: if this is intentional, prefix it with an underscore: `_facc`
+
+warning: unused variable: `tacc`
+    --> src/chunk/evaluate.rs:1834:33
+     |
+1834 |     let (link_name_to_id, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
+     |                                 ^^^^ help: if this is intentional, prefix it with an underscore: `_tacc`
+
+warning: unused variable: `facc`
+    --> src/chunk/evaluate.rs:1871:27
+     |
+1871 |     let (link_name_to_id, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
+     |                           ^^^^ help: if this is intentional, prefix it with an underscore: `_facc`
+
+warning: unused variable: `tacc`
+    --> src/chunk/evaluate.rs:1871:33
+     |
+1871 |     let (link_name_to_id, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
+     |                                 ^^^^ help: if this is intentional, prefix it with an underscore: `_tacc`
+
+warning: unused variable: `facc`
+    --> src/chunk/evaluate.rs:1920:31
+     |
+1920 |         let (link_name_to_id, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
+     |                               ^^^^ help: if this is intentional, prefix it with an underscore: `_facc`
+
+warning: unused variable: `tacc`
+    --> src/chunk/evaluate.rs:1920:37
+     |
+1920 |         let (link_name_to_id, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
+     |                                     ^^^^ help: if this is intentional, prefix it with an underscore: `_tacc`
+
+warning: unused variable: `d`
+   --> src/chunk/evaluate_test.rs:205:21
+    |
+205 |                 let d = cs.new_input_variable(|| {
+    |                     ^ help: if this is intentional, prefix it with an underscore: `_d`
+
+warning: unused variable: `e`
+   --> src/chunk/evaluate_test.rs:211:21
+    |
+211 |                 let e = cs.new_input_variable(|| {
+    |                     ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `assert_f`
+   --> src/chunk/evaluate_test.rs:399:13
+    |
+399 |         let assert_f = "chunker_data/assert.json";
+    |             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_assert_f`
+
+warning: unused variable: `dump_assertions_to_file`
+   --> src/chunk/evaluate_test.rs:401:13
+    |
+401 |         let dump_assertions_to_file = true;
+    |             ^^^^^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_dump_assertions_to_file`
+
+warning: unused variable: `c4`
+   --> src/chunk/msm.rs:266:5
+    |
+266 |     c4: ark_bn254::Fq,
+    |     ^^ help: if this is intentional, prefix it with an underscore: `_c4`
+
+warning: unused variable: `c4`
+   --> src/chunk/msm.rs:316:5
+    |
+316 |     c4: ark_bn254::Fq,
+    |     ^^ help: if this is intentional, prefix it with an underscore: `_c4`
+
+warning: unused variable: `c4`
+   --> src/chunk/msm.rs:359:5
+    |
+359 |     c4: ark_bn254::Fq,
+    |     ^^ help: if this is intentional, prefix it with an underscore: `_c4`
+
+warning: value assigned to `q` is never read
+   --> src/chunk/msm.rs:473:13
+    |
+473 |     let mut q = ark_bn254::G1Affine::identity();
+    |             ^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: unused variable: `prng`
+   --> src/chunk/msm.rs:832:17
+    |
+832 |         let mut prng = ChaCha20Rng::seed_from_u64(2);
+    |                 ^^^^ help: if this is intentional, prefix it with an underscore: `_prng`
+
+warning: unused variable: `proof`
+   --> src/chunk/msm.rs:834:14
+    |
+834 |         let (proof, scalars, vk) = generate_new_mock_proof();
+    |              ^^^^^ help: if this is intentional, prefix it with an underscore: `_proof`
+
+warning: variable does not need to be mutable
+   --> src/chunk/msm.rs:832:13
+    |
+832 |         let mut prng = ChaCha20Rng::seed_from_u64(2);
+    |             ----^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `i`
+   --> src/chunk/primitves.rs:314:13
+    |
+314 |         for i in 1..n_limbs {
+    |             ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+warning: unused variable: `p`
+   --> src/chunk/primitves.rs:742:13
+    |
+742 |         let p = ark_bn254::Fq::rand(&mut prng);
+    |             ^ help: if this is intentional, prefix it with an underscore: `_p`
+
+warning: variable does not need to be mutable
+   --> src/chunk/primitves.rs:756:13
+    |
+756 |         let mut nib32 = [15u8; 64];
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `k`
+   --> src/chunk/primitves.rs:787:14
+    |
+787 |         for (k, v) in res {
+    |              ^ help: if this is intentional, prefix it with an underscore: `_k`
+
+warning: unused variable: `i`
+    --> src/chunk/taps.rs:1041:13
+     |
+1041 |         for i in 0..13 {
+     |             ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+warning: unused variable: `h`
+   --> src/chunk/taps_test.rs:434:13
+    |
+434 |         let h = f * g;
+    |             ^ help: if this is intentional, prefix it with an underscore: `_h`
+
+warning: unused variable: `h`
+   --> src/chunk/taps_test.rs:551:13
+    |
+551 |         let h = f * g;
+    |             ^ help: if this is intentional, prefix it with an underscore: `_h`
+
+warning: unused variable: `public_key`
+   --> src/chunk/wots.rs:154:14
+    |
+154 |     for (_, &public_key) in &apk.p256 {
+    |              ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_public_key`
+
+warning: unused variable: `public_key`
+   --> src/chunk/wots.rs:167:14
+    |
+167 |     for (_, &public_key) in &apk.p160 {
+    |              ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_public_key`
+
+warning: unused variable: `prng`
+   --> src/chunk/wots.rs:256:17
+    |
+256 |         let mut prng = ChaCha20Rng::seed_from_u64(0);
+    |                 ^^^^ help: if this is intentional, prefix it with an underscore: `_prng`
+
+warning: unused variable: `a`
+   --> src/chunk/wots.rs:262:14
+    |
+262 |         for (a, b) in sig {
+    |              ^ help: if this is intentional, prefix it with an underscore: `_a`
+
+warning: variable does not need to be mutable
+   --> src/chunk/wots.rs:256:13
+    |
+256 |         let mut prng = ChaCha20Rng::seed_from_u64(0);
+    |             ----^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/chunk/wots.rs:258:13
+    |
+258 |         let mut fb = emulate_fq_to_nibbles(f);
+    |             ----^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `public_key`
+   --> src/chunk/wots.rs:273:9
+    |
+273 |         public_key: wots256::PublicKey,
+    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_public_key`
+
+warning: unused variable: `sig`
+   --> src/chunk/wots.rs:275:40
+    |
+275 |         let nibbles = &signature.map(|(sig, digit)| digit)[0..wots256::M_DIGITS as usize];
+    |                                        ^^^ help: if this is intentional, prefix it with an underscore: `_sig`
+
+warning: unused variable: `rng`
+   --> src/chunk/wots.rs:288:17
+    |
+288 |         let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
+    |                 ^^^ help: if this is intentional, prefix it with an underscore: `_rng`
+
+warning: unused variable: `sig`
+   --> src/chunk/wots.rs:295:40
+    |
+295 |         let nibbles = &signature.map(|(sig, digit)| digit)[0..wots256::M_DIGITS as usize];
+    |                                        ^^^ help: if this is intentional, prefix it with an underscore: `_sig`
+
+warning: variable does not need to be mutable
+   --> src/chunk/wots.rs:288:13
+    |
+288 |         let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `rng`
+   --> src/chunk/wots.rs:311:17
+    |
+311 |         let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
+    |                 ^^^ help: if this is intentional, prefix it with an underscore: `_rng`
+
+warning: variable does not need to be mutable
+   --> src/chunk/wots.rs:311:13
+    |
+311 |         let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `fq`
+   --> src/chunk/wots.rs:323:13
+    |
+323 |         let fq = ark_bn254::Fq::rand(&mut rng);
+    |             ^^ help: if this is intentional, prefix it with an underscore: `_fq`
+
+warning: unused variable: `fqb`
+   --> src/chunk/wots.rs:332:13
+    |
+332 |         let fqb = fq.into_bigint().to_bytes_le();
+    |             ^^^ help: if this is intentional, prefix it with an underscore: `_fqb`
+
+warning: unused variable: `sig`
+   --> src/chunk/wots.rs:335:40
+    |
+335 |         let nibbles = &signature.map(|(sig, digit)| digit)[0..wots256::M_DIGITS as usize];
+    |                                        ^^^ help: if this is intentional, prefix it with an underscore: `_sig`
+
+warning: function `rand_bools` is never used
+   --> src/bn254/fq.rs:906:8
+    |
+906 |     fn rand_bools<const SIZE: usize>(seed: u64) -> [bool; SIZE] {
+    |        ^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: field `keyfile_path` is never read
+  --> src/bridge/client/data_store/sftp.rs:25:9
+   |
+21 | struct SftpCredentials {
+   |        --------------- field in this struct
+...
+25 |     pub keyfile_path: String,
+   |         ^^^^^^^^^^^^
+
+warning: function `compute_f` is never used
+    --> src/fflonk/verifier.rs:1886:8
+     |
+1886 |     fn compute_f(
+     |        ^^^^^^^^^
+
+warning: function `compute_e` is never used
+    --> src/fflonk/verifier.rs:1976:8
+     |
+1976 |     fn compute_e(g1x: &str, g1y: &str, g1z: &str) -> Script {
+     |        ^^^^^^^^^
+
+warning: function `compute_j` is never used
+    --> src/fflonk/verifier.rs:1999:8
+     |
+1999 |     fn compute_j(w1x: &str, w1y: &str) -> Script {
+     |        ^^^^^^^^^
+
+warning: function `checkpairing_a1` is never used
+    --> src/fflonk/verifier.rs:2021:8
+     |
+2021 |     fn checkpairing_a1(proof_w2x: &str, proof_w2y: &str) -> Script {
+     |        ^^^^^^^^^^^^^^^
+
+warning: function `digits_to_msg_bytes` is never used
+   --> src/signatures/wots.rs:83:20
+    |
+83  |                 fn digits_to_msg_bytes(digits: [u8; M_DIGITS as usize]) -> [u8; M_DIGITS as usize / 2] {
+    |                    ^^^^^^^^^^^^^^^^^^^
+...
+292 | impl_wots!(32);
+    | -------------- in this macro invocation
+    |
+    = note: this warning originates in the macro `impl_wots` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: function `sign_digit` is never used
+   --> src/signatures/wots.rs:125:20
+    |
+125 |                 fn sign_digit(secret: &str, digit_index: u32, message_digit: u8) -> Script {
+    |                    ^^^^^^^^^^
+...
+292 | impl_wots!(32);
+    | -------------- in this macro invocation
+    |
+    = note: this warning originates in the macro `impl_wots` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: function `digits_to_msg_bytes` is never used
+   --> src/signatures/wots.rs:83:20
+    |
+83  |                 fn digits_to_msg_bytes(digits: [u8; M_DIGITS as usize]) -> [u8; M_DIGITS as usize / 2] {
+    |                    ^^^^^^^^^^^^^^^^^^^
+...
+293 | impl_wots!(128);
+    | --------------- in this macro invocation
+    |
+    = note: this warning originates in the macro `impl_wots` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: function `sign_digit` is never used
+   --> src/signatures/wots.rs:125:20
+    |
+125 |                 fn sign_digit(secret: &str, digit_index: u32, message_digit: u8) -> Script {
+    |                    ^^^^^^^^^^
+...
+293 | impl_wots!(128);
+    | --------------- in this macro invocation
+    |
+    = note: this warning originates in the macro `impl_wots` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: function `digits_to_msg_bytes` is never used
+   --> src/signatures/wots.rs:83:20
+    |
+83  |                 fn digits_to_msg_bytes(digits: [u8; M_DIGITS as usize]) -> [u8; M_DIGITS as usize / 2] {
+    |                    ^^^^^^^^^^^^^^^^^^^
+...
+294 | impl_wots!(160);
+    | --------------- in this macro invocation
+    |
+    = note: this warning originates in the macro `impl_wots` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: function `sign_digit` is never used
+   --> src/signatures/wots.rs:125:20
+    |
+125 |                 fn sign_digit(secret: &str, digit_index: u32, message_digit: u8) -> Script {
+    |                    ^^^^^^^^^^
+...
+294 | impl_wots!(160);
+    | --------------- in this macro invocation
+    |
+    = note: this warning originates in the macro `impl_wots` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: function `digits_to_msg_bytes` is never used
+   --> src/signatures/wots.rs:83:20
+    |
+83  |                 fn digits_to_msg_bytes(digits: [u8; M_DIGITS as usize]) -> [u8; M_DIGITS as usize / 2] {
+    |                    ^^^^^^^^^^^^^^^^^^^
+...
+295 | impl_wots!(256);
+    | --------------- in this macro invocation
+    |
+    = note: this warning originates in the macro `impl_wots` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: function `sign_digit` is never used
+   --> src/signatures/wots.rs:125:20
+    |
+125 |                 fn sign_digit(secret: &str, digit_index: u32, message_digit: u8) -> Script {
+    |                    ^^^^^^^^^^
+...
+295 | impl_wots!(256);
+    | --------------- in this macro invocation
+    |
+    = note: this warning originates in the macro `impl_wots` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: associated functions `from_groth_hc` and `from_grothc` are never used
+   --> src/chunk/hint_models.rs:577:19
+    |
+576 | impl HintInDenseMul0 {
+    | -------------------- associated functions in this implementation
+577 |     pub(crate) fn from_groth_hc(c: HintOutHashC, d: HintOutGrothC) -> Self {
+    |                   ^^^^^^^^^^^^^
+...
+580 |     pub(crate) fn from_grothc(c: HintOutGrothC, d: HintOutGrothC) -> Self {
+    |                   ^^^^^^^^^^^
+
+warning: field `c` is never read
+   --> src/chunk/hint_models.rs:605:16
+    |
+604 | pub(crate) struct HintOutDenseMul0 {
+    |                   ---------------- field in this struct
+605 |     pub(crate) c: ark_bn254::Fq12,
+    |                ^
+    |
+    = note: `HintOutDenseMul0` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: associated functions `from_groth_hc` and `from_grothc` are never used
+   --> src/chunk/hint_models.rs:621:19
+    |
+620 | impl HintInDenseMul1 {
+    | -------------------- associated functions in this implementation
+621 |     pub(crate) fn from_groth_hc(c: HintOutHashC, d: HintOutGrothC) -> Self {
+    |                   ^^^^^^^^^^^^^
+...
+624 |     pub(crate) fn from_grothc(c: HintOutGrothC, d: HintOutGrothC) -> Self {
+    |                   ^^^^^^^^^^^
+
+warning: structure field `ID_expr` should have a snake case name
+   --> src/chunk/config.rs:361:9
+    |
+361 |         ID_expr: &'static str,
+    |         ^^^^^^^ help: convert the identifier to snake case: `id_expr`
+    |
+    = note: `#[warn(non_snake_case)]` on by default
+
+warning: structure field `Deps_expr` should have a snake case name
+   --> src/chunk/config.rs:362:9
+    |
+362 |         Deps_expr: &'static str,
+    |         ^^^^^^^^^ help: convert the identifier to snake case: `deps_expr`
+
+warning: variable `T4_value` should have a snake case name
+   --> src/chunk/config.rs:397:9
+    |
+397 |         T4_value: &str,
+    |         ^^^^^^^^ help: convert the identifier to snake case: `t4_value`
+
+warning: variable `ID_expr` should have a snake case name
+   --> src/chunk/config.rs:404:17
+    |
+404 |             let ID_expr = row.ID_expr;
+    |                 ^^^^^^^ help: convert the identifier to snake case: `id_expr`
+
+warning: variable `ID` should have a snake case name
+   --> src/chunk/config.rs:405:17
+    |
+405 |             let ID = evaluate_expression(ID_expr, start_id);
+    |                 ^^ help: convert the identifier to snake case: `id`
+
+warning: variable `ID_str` should have a snake case name
+   --> src/chunk/config.rs:406:17
+    |
+406 |             let ID_str = format!("S{}", ID);
+    |                 ^^^^^^ help: convert the identifier to snake case: `id_str`
+
+warning: variable `Deps` should have a snake case name
+   --> src/chunk/config.rs:408:17
+    |
+408 |             let Deps = row.Deps_expr;
+    |                 ^^^^ help: convert the identifier to snake case: `deps`
+
+warning: variable `Deps_updated` should have a snake case name
+   --> src/chunk/config.rs:409:21
+    |
+409 |             let mut Deps_updated = String::new();
+    |                     ^^^^^^^^^^^^ help: convert the identifier to snake case: `deps_updated`
+
+warning: variable `dep_ID` should have a snake case name
+   --> src/chunk/config.rs:417:25
+    |
+417 |                     let dep_ID = evaluate_expression(dep, start_id);
+    |                         ^^^^^^ help: convert the identifier to snake case: `dep_id`
+
+warning: variable `T4_value` should have a snake case name
+   --> src/chunk/config.rs:449:17
+    |
+449 |         let mut T4_value = String::from("T4"); // Starting value of T4
+    |                 ^^^^^^^^ help: convert the identifier to snake case: `t4_value`
+
+warning: method `from_initT4` should have a snake case name
+  --> src/chunk/hint_models.rs:41:19
+   |
+41 |     pub(crate) fn from_initT4(it: HintOutInitT4, gpx: ark_bn254::Fq, gpy: ark_bn254::Fq) -> Self {
+   |                   ^^^^^^^^^^^ help: convert the identifier to snake case: `from_init_t4`
+
+warning: method `from_initT4` should have a snake case name
+   --> src/chunk/hint_models.rs:195:19
+    |
+195 |     pub(crate) fn from_initT4(
+    |                   ^^^^^^^^^^^ help: convert the identifier to snake case: `from_init_t4`
+
+warning: structure field `hash_aux_T` should have a snake case name
+   --> src/chunk/hint_models.rs:499:16
+    |
+499 |     pub(crate) hash_aux_T: HashBytes,
+    |                ^^^^^^^^^^ help: convert the identifier to snake case: `hash_aux_t`
+
+warning: function `hint_double_eval_mul_for_fixed_Qs` should have a snake case name
+    --> src/chunk/taps.rs:1336:15
+     |
+1336 | pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `hint_double_eval_mul_for_fixed_qs`
+
+warning: function `tap_double_eval_mul_for_fixed_Qs` should have a snake case name
+    --> src/chunk/taps.rs:1437:15
+     |
+1437 | pub(crate) fn tap_double_eval_mul_for_fixed_Qs(
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `tap_double_eval_mul_for_fixed_qs`
+
+warning: function `bitcom_double_eval_mul_for_fixed_Qs` should have a snake case name
+    --> src/chunk/taps.rs:1531:15
+     |
+1531 | pub(crate) fn bitcom_double_eval_mul_for_fixed_Qs(
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `bitcom_double_eval_mul_for_fixed_qs`
+
+warning: function `hint_add_eval_mul_for_fixed_Qs` should have a snake case name
+    --> src/chunk/taps.rs:1558:15
+     |
+1558 | pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `hint_add_eval_mul_for_fixed_qs`
+
+warning: function `tap_add_eval_mul_for_fixed_Qs` should have a snake case name
+    --> src/chunk/taps.rs:1662:15
+     |
+1662 | pub(crate) fn tap_add_eval_mul_for_fixed_Qs(
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `tap_add_eval_mul_for_fixed_qs`
+
+warning: function `bitcom_add_eval_mul_for_fixed_Qs` should have a snake case name
+    --> src/chunk/taps.rs:1757:15
+     |
+1757 | pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs(
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `bitcom_add_eval_mul_for_fixed_qs`
+
+warning: function `hint_add_eval_mul_for_fixed_Qs_with_frob` should have a snake case name
+    --> src/chunk/taps.rs:1782:15
+     |
+1782 | pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `hint_add_eval_mul_for_fixed_qs_with_frob`
+
+warning: function `tap_add_eval_mul_for_fixed_Qs_with_frob` should have a snake case name
+    --> src/chunk/taps.rs:1933:15
+     |
+1933 | pub(crate) fn tap_add_eval_mul_for_fixed_Qs_with_frob(
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `tap_add_eval_mul_for_fixed_qs_with_frob`
+
+warning: function `bitcom_add_eval_mul_for_fixed_Qs_with_frob` should have a snake case name
+    --> src/chunk/taps.rs:2076:15
+     |
+2076 | pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs_with_frob(
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `bitcom_add_eval_mul_for_fixed_qs_with_frob`
+
+warning: function `tap_precompute_Px` should have a snake case name
+    --> src/chunk/taps.rs:2263:15
+     |
+2263 | pub(crate) fn tap_precompute_Px() -> Script {
+     |               ^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `tap_precompute_px`
+
+warning: function `bitcom_precompute_Px` should have a snake case name
+    --> src/chunk/taps.rs:2301:15
+     |
+2301 | pub(crate) fn bitcom_precompute_Px(
+     |               ^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `bitcom_precompute_px`
+
+warning: function `tap_precompute_Py` should have a snake case name
+    --> src/chunk/taps.rs:2327:15
+     |
+2327 | pub(crate) fn tap_precompute_Py() -> Script {
+     |               ^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `tap_precompute_py`
+
+warning: function `bitcom_precompute_Py` should have a snake case name
+    --> src/chunk/taps.rs:2350:15
+     |
+2350 | pub(crate) fn bitcom_precompute_Py(
+     |               ^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `bitcom_precompute_py`
+
+warning: function `hints_precompute_Px` should have a snake case name
+    --> src/chunk/taps.rs:2367:15
+     |
+2367 | pub(crate) fn hints_precompute_Px(
+     |               ^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `hints_precompute_px`
+
+warning: function `hints_precompute_Py` should have a snake case name
+    --> src/chunk/taps.rs:2412:15
+     |
+2412 | pub(crate) fn hints_precompute_Py(
+     |               ^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `hints_precompute_py`
+
+warning: function `tap_initT4` should have a snake case name
+    --> src/chunk/taps.rs:2451:15
+     |
+2451 | pub(crate) fn tap_initT4() -> Script {
+     |               ^^^^^^^^^^ help: convert the identifier to snake case: `tap_init_t4`
+
+warning: function `bitcom_initT4` should have a snake case name
+    --> src/chunk/taps.rs:2482:15
+     |
+2482 | pub(crate) fn bitcom_initT4(
+     |               ^^^^^^^^^^^^^ help: convert the identifier to snake case: `bitcom_init_t4`
+
+warning: function `hint_init_T4` should have a snake case name
+    --> src/chunk/taps.rs:2507:15
+     |
+2507 | pub(crate) fn hint_init_T4(
+     |               ^^^^^^^^^^^^ help: convert the identifier to snake case: `hint_init_t4`
+
+warning: constant `check_id` should have an upper case name
+   --> src/chunk/taps_mul.rs:918:11
+    |
+918 |     const check_id: u8 = 1;
+    |           ^^^^^^^^ help: convert the identifier to upper case: `CHECK_ID`
+    |
+    = note: `#[warn(non_upper_case_globals)]` on by default
+
+warning: constant `check_id` should have an upper case name
+    --> src/chunk/taps_mul.rs:1063:11
+     |
+1063 |     const check_id: u8 = 1;
+     |           ^^^^^^^^ help: convert the identifier to upper case: `CHECK_ID`
+
+warning: function `test_tap_hash_T4` should have a snake case name
+   --> src/chunk/taps_test.rs:180:8
+    |
+180 |     fn test_tap_hash_T4() {
+    |        ^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `test_tap_hash_t4`
+
+warning: function `test_precompute_Px` should have a snake case name
+   --> src/chunk/taps_test.rs:235:8
+    |
+235 |     fn test_precompute_Px() {
+    |        ^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `test_precompute_px`
+
+warning: function `test_precompute_Py` should have a snake case name
+   --> src/chunk/taps_test.rs:288:8
+    |
+288 |     fn test_precompute_Py() {
+    |        ^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `test_precompute_py`
+
+warning: unused `Result` that must be used
+   --> src/chunk/test_utils.rs:109:5
+    |
+109 |     std::fs::create_dir("chunker_data");
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+    = note: `#[warn(unused_must_use)]` on by default
+help: use `let _ = ...` to ignore the resulting value
+    |
+109 |     let _ = std::fs::create_dir("chunker_data");
+    |     +++++++
+
+warning: `bitvm` (lib test) generated 220 warnings (run `cargo fix --lib -p bitvm --tests` to apply 67 suggestions)
+    Finished `release` profile [optimized] target(s) in 1m 06s
+     Running unittests src/lib.rs (target/release/deps/bitvm-8474549717c9cfcd)
+
+running 1 test
+Start:   Groth16::Generator
+··Start:   Constraint synthesis
+··End:     Constraint synthesis ....................................................86.208µs
+··Start:   Inlining LCs
+··End:     Inlining LCs ............................................................46.750µs
+··Start:   Constructing evaluation domain
+··End:     Constructing evaluation domain ..........................................55.625µs
+··Start:   R1CS to QAP Instance Map with Evaluation
+····Start:   Evaluate Lagrange coefficients
+····End:     Evaluate Lagrange coefficients ........................................534.875µs
+··End:     R1CS to QAP Instance Map with Evaluation ................................638.541µs
+··Start:   Compute G2 table
+··End:     Compute G2 table ........................................................1.384ms
+··Start:   Calculate B G2 of size 6
+··End:     Calculate B G2 of size 6 ................................................438.750µs
+··Start:   Compute G1 window table
+··End:     Compute G1 window table .................................................900.625µs
+··Start:   Generate the R1CS proving key
+····Start:   Calculate A
+····End:     Calculate A ...........................................................214.916µs
+····Start:   Calculate B G1
+····End:     Calculate B G1 ........................................................153.875µs
+····Start:   Calculate H
+····End:     Calculate H ...........................................................304.834µs
+····Start:   Calculate L
+····End:     Calculate L ...........................................................135.500µs
+··End:     Generate the R1CS proving key ...........................................2.207ms
+··Start:   Generate the R1CS verification key
+··End:     Generate the R1CS verification key ......................................725.666µs
+End:     Groth16::Generator ........................................................7.348ms
+compiled circuit
+test groth16::g16::test::test_groth16_tapscripts_size has been running for over 60 seconds
+generated partial disprove scripts
+partial_disprove_scripts = [2128376, 2128376, 2128376, 2128376, 2128376, 2128376, 2128376, 2128376, 2128376, 2128376, 2128376, 2128376, 2128376, 2128376, 2128376, 2128375, 2128375, 2128377, 2128377, 2128377, 2128377, 2128377, 2128377, 2128377, 2128377, 2128377, 2128377, 2128377, 2128377, 2128377, 2128377, 2128377, 739492, 68150, 340330, 68150, 340330, 68150, 340330, 643049, 1424321, 3922033, 3997575, 1424321, 643049, 361735, 3729297, 2787425, 3880655, 3137088, 3922001, 3997541, 3922001, 3997541, 3880655, 3137088, 3922001, 3997541, 3729297, 1599474, 3880655, 3137088, 3922001, 3997541, 3729297, 2787425, 3880655, 3137087, 3922001, 3997541, 3922001, 3997541, 3880655, 3137087, 3922001, 3997541, 3729297, 1599474, 3880655, 3137088, 3922001, 3997541, 3729297, 1599474, 3880655, 3137087, 3922001, 3997541, 3729297, 1599474, 3880655, 3137088, 3922001, 3997541, 3729297, 2787425, 3880655, 3137087, 3922001, 3997541, 3922001, 3997541, 3880655, 3137088, 3922001, 3997541, 3729297, 1599474, 3880655, 3137089, 3922001, 3997541, 3729297, 2787425, 3880655, 3137089, 3922001, 3997541, 3922001, 3997541, 3880655, 3137087, 3922001, 3997541, 3729297, 1599474, 3880655, 3137086, 3922001, 3997541, 3729297, 1599474, 3880655, 3137089, 3922001, 3997541, 3729297, 1599474, 3880655, 3137088, 3922001, 3997541, 3729297, 2787425, 3880655, 3137088, 3922001, 3997541, 3922001, 3997541, 3880655, 3137088, 3922001, 3997541, 3729297, 1599474, 3880655, 3137088, 3922001, 3997541, 3729297, 2787425, 3880655, 3137087, 3922001, 3997541, 3922001, 3997541, 3880655, 3137087, 3922001, 3997541, 3729297, 1599474, 3880655, 3137089, 3922001, 3997541, 3729297, 2787425, 3880655, 3137089, 3922001, 3997541, 3922001, 3997541, 3880655, 3137088, 3922001, 3997541, 3729297, 1599474, 3880655, 3137089, 3922001, 3997541, 3729297, 1599474, 3880655, 3137088, 3922001, 3997541, 3729297, 2787425, 3880655, 3137087, 3922001, 3997541, 3922001, 3997541, 3880655, 3137089, 3922001, 3997541, 3729297, 1599474, 3880655, 3137088, 3922001, 3997541, 3729297, 1599474, 3880655, 3137088, 3922001, 3997541, 3729297, 1599474, 3880655, 3137087, 3922001, 3997541, 3729297, 1599474, 3880655, 3137087, 3922001, 3997541, 3729297, 1599474, 3880655, 3137089, 3922001, 3997541, 3729297, 2787425, 3880655, 3137089, 3922001, 3997541, 3922001, 3997541, 3880655, 3137089, 3922001, 3997541, 3729297, 1599474, 3880655, 3137089, 3922001, 3997541, 3729297, 1599474, 3880655, 3137087, 3922001, 3997541, 3729297, 2787425, 3880655, 3137089, 3922001, 3997541, 3922001, 3997541, 3880655, 3137089, 3922001, 3997541, 3729297, 1599474, 3880655, 3137088, 3922001, 3997541, 3729297, 2787425, 3880655, 3137086, 3922001, 3997541, 3922001, 3997541, 3880655, 3137087, 3922001, 3997541, 3729297, 1599474, 3880655, 3137084, 3922001, 3997541, 3729297, 1599474, 3880655, 3137086, 3922001, 3997541, 3729297, 2787425, 3880655, 3137088, 3922001, 3997541, 3922001, 3997541, 3880655, 3137089, 3922001, 3997541, 3729297, 1599474, 3880655, 3137089, 3922001, 3997541, 3729297, 1599474, 3880655, 3137089, 3922001, 3997541, 3729297, 1599474, 3880655, 3137088, 3922001, 3997541, 3729297, 1599474, 3880655, 3137087, 3922001, 3997541, 3729297, 2787425, 3880655, 3137088, 3922001, 3997541, 3922001, 3997541, 3880655, 3137088, 3922001, 3997541, 3729297, 1599474, 3880655, 3137088, 3922001, 3997541, 3729297, 2787425, 3880655, 3137085, 3922001, 3997541, 3922001, 3997541, 3880655, 3137088, 3922001, 3997541, 3729297, 1599474, 3880655, 3137089, 3922001, 3997541, 3729297, 1599474, 3880655, 3137087, 3922001, 3997541, 3729297, 1599474, 3880655, 3137086, 3922001, 3997541, 3729297, 2787425, 3880655, 3137089, 3922001, 3997541, 3922001, 3997541, 3880655, 3137088, 3922001, 3997541, 3729297, 1599474, 3880655, 3137089, 3922001, 3997541, 3729297, 2787425, 3880655, 3137088, 3922001, 3997541, 3922001, 3997541, 3880655, 3137088, 3922001, 3997541, 3729297, 1599474, 3880655, 3137087, 3922001, 3997541, 3729297, 1599474, 3880655, 3137087, 3922001, 3997541, 3729297, 2787425, 3880655, 3137087, 3922001, 3997541, 3922001, 3997541, 3880655, 3137089, 3922001, 3997541, 3729297, 1599474, 3880655, 3137087, 3922001, 3997541, 3729297, 1599474, 3880655, 3137089, 3922001, 3997541, 3729297, 1599474, 3880655, 3137086, 3922001, 3997541, 3729297, 2787425, 3880655, 3137088, 3922001, 3997541, 3922001, 3997541, 3880655, 3137088, 3922001, 3997541, 3729297, 1599474, 3880655, 3137088, 3922001, 3997541, 3729297, 1599474, 3880655, 3137087, 3922001, 3997541, 3729297, 2787425, 3880655, 3137087, 3922001, 3997541, 3922001, 3997541, 3880655, 3137087, 3922001, 3997541, 3729297, 1599474, 3880655, 3137088, 3922001, 3997541, 3729297, 2787425, 3880655, 3137087, 3922001, 3997541, 3922001, 3997541, 3880655, 3137086, 3922001, 3997541, 3729297, 1599474, 3880655, 3137086, 3922001, 3997541, 3729297, 2787425, 3880655, 3137089, 3922001, 3997541, 3922001, 3997541, 3880655, 3137088, 3922001, 3997541, 3729297, 1599474, 3880655, 3137087, 3922001, 3997541, 3729297, 1599474, 3880655, 3137087, 3922001, 3997541, 3729297, 1599474, 3880655, 3137088, 3922001, 3997541, 3125585, 3125098, 3125593, 3922001, 3997541, 3922001, 3997541, 3922001, 3997541, 3922001, 3997541, 2372393, 3880655, 3137088, 3922001, 3997541, 2372393, 3880655, 3137087, 3922001, 3997541, 3922041, 3997626]
+disprove_scripts = [2144984, 2151656, 2151656, 2151656, 2151656, 2151656, 2151656, 2151656, 2151656, 2151656, 2151656, 2151656, 2151656, 2151656, 2151656, 2151655, 2151655, 2151657, 2151657, 2151657, 2151657, 2151657, 2151657, 2151657, 2151657, 2151657, 2151657, 2151657, 2151657, 2151657, 2151657, 2151657, 785935, 88022, 380092, 88022, 380092, 88022, 380092, 769052, 1437665, 3942049, 4024263, 1437665, 769052, 394951, 3742641, 2860935, 3900671, 3183531, 3942017, 4024229, 3942017, 4024229, 3900671, 3183531, 3942017, 4024229, 3742641, 1632708, 3900671, 3183531, 3942017, 4024229, 3742641, 2860935, 3900671, 3183530, 3942017, 4024229, 3942017, 4024229, 3900671, 3183530, 3942017, 4024229, 3742641, 1632708, 3900671, 3183531, 3942017, 4024229, 3742641, 1632708, 3900671, 3183530, 3942017, 4024229, 3742641, 1632708, 3900671, 3183531, 3942017, 4024229, 3742641, 2860935, 3900671, 3183530, 3942017, 4024229, 3942017, 4024229, 3900671, 3183531, 3942017, 4024229, 3742641, 1632708, 3900671, 3183532, 3942017, 4024229, 3742641, 2860935, 3900671, 3183532, 3942017, 4024229, 3942017, 4024229, 3900671, 3183530, 3942017, 4024229, 3742641, 1632708, 3900671, 3183529, 3942017, 4024229, 3742641, 1632708, 3900671, 3183532, 3942017, 4024229, 3742641, 1632708, 3900671, 3183531, 3942017, 4024229, 3742641, 2860935, 3900671, 3183531, 3942017, 4024229, 3942017, 4024229, 3900671, 3183531, 3942017, 4024229, 3742641, 1632708, 3900671, 3183531, 3942017, 4024229, 3742641, 2860935, 3900671, 3183530, 3942017, 4024229, 3942017, 4024229, 3900671, 3183530, 3942017, 4024229, 3742641, 1632708, 3900671, 3183532, 3942017, 4024229, 3742641, 2860935, 3900671, 3183532, 3942017, 4024229, 3942017, 4024229, 3900671, 3183531, 3942017, 4024229, 3742641, 1632708, 3900671, 3183532, 3942017, 4024229, 3742641, 1632708, 3900671, 3183531, 3942017, 4024229, 3742641, 2860935, 3900671, 3183530, 3942017, 4024229, 3942017, 4024229, 3900671, 3183532, 3942017, 4024229, 3742641, 1632708, 3900671, 3183531, 3942017, 4024229, 3742641, 1632708, 3900671, 3183531, 3942017, 4024229, 3742641, 1632708, 3900671, 3183530, 3942017, 4024229, 3742641, 1632708, 3900671, 3183530, 3942017, 4024229, 3742641, 1632708, 3900671, 3183532, 3942017, 4024229, 3742641, 2860935, 3900671, 3183532, 3942017, 4024229, 3942017, 4024229, 3900671, 3183532, 3942017, 4024229, 3742641, 1632708, 3900671, 3183532, 3942017, 4024229, 3742641, 1632708, 3900671, 3183530, 3942017, 4024229, 3742641, 2860935, 3900671, 3183532, 3942017, 4024229, 3942017, 4024229, 3900671, 3183532, 3942017, 4024229, 3742641, 1632708, 3900671, 3183531, 3942017, 4024229, 3742641, 2860935, 3900671, 3183529, 3942017, 4024229, 3942017, 4024229, 3900671, 3183530, 3942017, 4024229, 3742641, 1632708, 3900671, 3183527, 3942017, 4024229, 3742641, 1632708, 3900671, 3183529, 3942017, 4024229, 3742641, 2860935, 3900671, 3183531, 3942017, 4024229, 3942017, 4024229, 3900671, 3183532, 3942017, 4024229, 3742641, 1632708, 3900671, 3183532, 3942017, 4024229, 3742641, 1632708, 3900671, 3183532, 3942017, 4024229, 3742641, 1632708, 3900671, 3183531, 3942017, 4024229, 3742641, 1632708, 3900671, 3183530, 3942017, 4024229, 3742641, 2860935, 3900671, 3183531, 3942017, 4024229, 3942017, 4024229, 3900671, 3183531, 3942017, 4024229, 3742641, 1632708, 3900671, 3183531, 3942017, 4024229, 3742641, 2860935, 3900671, 3183528, 3942017, 4024229, 3942017, 4024229, 3900671, 3183531, 3942017, 4024229, 3742641, 1632708, 3900671, 3183532, 3942017, 4024229, 3742641, 1632708, 3900671, 3183530, 3942017, 4024229, 3742641, 1632708, 3900671, 3183529, 3942017, 4024229, 3742641, 2860935, 3900671, 3183532, 3942017, 4024229, 3942017, 4024229, 3900671, 3183531, 3942017, 4024229, 3742641, 1632708, 3900671, 3183532, 3942017, 4024229, 3742641, 2860935, 3900671, 3183531, 3942017, 4024229, 3942017, 4024229, 3900671, 3183531, 3942017, 4024229, 3742641, 1632708, 3900671, 3183530, 3942017, 4024229, 3742641, 1632708, 3900671, 3183530, 3942017, 4024229, 3742641, 2860935, 3900671, 3183530, 3942017, 4024229, 3942017, 4024229, 3900671, 3183532, 3942017, 4024229, 3742641, 1632708, 3900671, 3183530, 3942017, 4024229, 3742641, 1632708, 3900671, 3183532, 3942017, 4024229, 3742641, 1632708, 3900671, 3183529, 3942017, 4024229, 3742641, 2860935, 3900671, 3183531, 3942017, 4024229, 3942017, 4024229, 3900671, 3183531, 3942017, 4024229, 3742641, 1632708, 3900671, 3183531, 3942017, 4024229, 3742641, 1632708, 3900671, 3183530, 3942017, 4024229, 3742641, 2860935, 3900671, 3183530, 3942017, 4024229, 3942017, 4024229, 3900671, 3183530, 3942017, 4024229, 3742641, 1632708, 3900671, 3183531, 3942017, 4024229, 3742641, 2860935, 3900671, 3183530, 3942017, 4024229, 3942017, 4024229, 3900671, 3183529, 3942017, 4024229, 3742641, 1632708, 3900671, 3183529, 3942017, 4024229, 3742641, 2860935, 3900671, 3183532, 3942017, 4024229, 3942017, 4024229, 3900671, 3183531, 3942017, 4024229, 3742641, 1632708, 3900671, 3183530, 3942017, 4024229, 3742641, 1632708, 3900671, 3183530, 3942017, 4024229, 3742641, 1632708, 3900671, 3183531, 3942017, 4024229, 3138929, 3138442, 3138937, 3942017, 4024229, 3942017, 4024229, 3942017, 4024229, 3942017, 4024229, 2445407, 3900671, 3183531, 3942017, 4024229, 2445407, 3900671, 3183530, 3942017, 4024229, 3935385, 4017642]
+test groth16::g16::test::test_groth16_tapscripts_size ... ok
+
+successes:
+
+successes:
+    groth16::g16::test::test_groth16_tapscripts_size
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 364 filtered out; finished in 280.38s
+

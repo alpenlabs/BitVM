@@ -424,7 +424,7 @@ pub(crate) fn hint_msm(
     hint_in: HintInMSM,
     msm_tap_index: usize,
     qs: Vec<ark_bn254::G1Affine>,
-) -> (HintOutMSM, Script) {
+) -> (HintOutMSM, Script, bool) {
     const WINDOW_LEN: u8 = 8;
     const MAX_SUPPORTED_PUBS: usize = 3;
 
@@ -526,7 +526,7 @@ pub(crate) fn hint_msm(
     }
     let outhash = emulate_extern_hash_fps(vec![t.x, t.y], true);
     tup.push((sec_out, outhash));
-    let bc_elems = tup_to_scr(sig, tup);
+    let (bc_elems, should_validate) = tup_to_scr(sig, tup);
 
     println!("hints len {:?} {:?} {:?} {:?}", hints_tangent.len(), hints_chord.len(), aux_tangent.len(), aux_chord.len());
     let simulate_stack_input = script! {
@@ -548,13 +548,11 @@ pub(crate) fn hint_msm(
         {fq_push_not_montgomery(hint_in.t.x)}
         {fq_push_not_montgomery(hint_in.t.y)}
 
-        for bc in bc_elems {
-            {bc}
-        }
+        { bc_elems }
     };
     let hint_out = HintOutMSM { t: t, hasht: outhash };
 
-    (hint_out, simulate_stack_input)
+    (hint_out, simulate_stack_input, should_validate)
 }
 
 pub(crate) fn bitcom_msm(
@@ -626,7 +624,7 @@ pub fn try_msm(qs: Vec<ark_bn254::G1Affine>, scalars: Vec<ark_bn254::Fr>) {
         let bitcomms_tapscript = bitcom_msm(&pub_scripts, msec_out, msec_in.clone());
         let msm_ops = tap_msm(window, i, qs.clone());
 
-        let (aux, stack_data) = hint_msm(
+        let (aux, stack_data, maybe_wrong) = hint_msm(
             &mut sig,
             msec_out,
             msec_in.clone(),
@@ -699,7 +697,7 @@ pub(crate) fn tap_hash_p(q: G1Affine) -> Script {
         {fq_push_not_montgomery(q.x)}
         { hinted_add_line.clone() }
 
-        // Altstack:[gpx, gpy, th]
+        // Altstack:[identity, gpx, gpy, th]
         //[ntx, nty, tx, ty]
 
         {Fq2::fromaltstack()}
@@ -708,16 +706,20 @@ pub(crate) fn tap_hash_p(q: G1Affine) -> Script {
         {Fq::equalverify(1, 0)}
         {Fq2::fromaltstack()} {Fq::roll(1)}
         // // [ntx, nty, gpx, gpy]
-        {Fq2::equal()}  OP_NOT 
+        {Fq::fromaltstack()}
+        {fq_push_not_montgomery(ark_bn254::Fq::ZERO)}
+        // [ntx, nty, gpx, gpy, zero, 0]
+        {Fq::equal(1, 0)}
         OP_IF 
-            {Fq::fromaltstack()} // remove zeroelem and exit
-            {Fq::drop()}
+            // equal so, continue verify rest
+            {Fq2::equal()}
+            OP_NOT OP_VERIFY
         OP_ELSE
-            {Fq::fromaltstack()}
-            {fq_push_not_montgomery(ark_bn254::Fq::ZERO)}
-            {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+            // not equal, disproven, so drop and exit
+            {Fq2::drop()}
+            {Fq2::drop()}
+            {1} OP_VERIFY
         OP_ENDIF
-
     };
 
     let sc = script! {
@@ -756,7 +758,7 @@ pub(crate) fn hint_hash_p(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInHashP,
-) -> (HashBytes, Script) {
+) -> (HashBytes, Script, bool) {
     // r (gp3) = t(msm) + q(vk0)
     let (tx, qx, ty, qy) = (hint_in.tx, hint_in.qx, hint_in.ty, hint_in.qy);
     
@@ -771,8 +773,10 @@ pub(crate) fn hint_hash_p(
     tups.push((sec_in[2], emulate_fq_to_nibbles(rx)));
     tups.push((sec_out, zero_nib));
 
-    let bc_elems = tup_to_scr(sig, tups);
-
+    let (bc_elems, mut should_validate) = tup_to_scr(sig, tups);
+    if bc_elems.len() > 0 {
+        should_validate = true;  // intermediate fix to force validate
+    }
     let alpha_chord = (ty - qy) / (tx - qx);
     let bias_minus_chord = alpha_chord * tx - ty;
     assert_eq!(alpha_chord * tx - ty, bias_minus_chord);
@@ -800,11 +804,9 @@ pub(crate) fn hint_hash_p(
         {fq_push_not_montgomery(tx)}
         {fq_push_not_montgomery(ty)}
 
-        for bc in bc_elems {
-            {bc}
-        }
+        { bc_elems }
     };
-    (zero_nib, simulate_stack_input)
+    (zero_nib, simulate_stack_input, should_validate)
 }
 
 
@@ -813,7 +815,7 @@ mod test {
     use std::collections::HashMap;
 
     use crate::{
-        bn254::{fq2::Fq2, utils::fr_push_not_montgomery},
+        bn254::{fq2::Fq2, utils::fr_push_not_montgomery}, chunk::{api::nib_to_byte_array, taps::SigData}, signatures::wots::{wots160, wots256},
     };
 
     use self::mock::{compile_circuit, generate_proof};
@@ -1045,12 +1047,34 @@ mod test {
 
         let r = (t + q).into_affine();
 
+        let thash = emulate_extern_hash_fps(vec![t.x, t.y], false);
+
+        let mut sig_cache: HashMap<u32, SigData> = HashMap::new();
+        let bal: [u8; 32] = nib_to_byte_array(&thash).try_into().unwrap();
+        let bal: [u8; 20] = bal[12..32].try_into().unwrap();
+        sig_cache.insert(sec_in_arr[0].0, SigData::Sig160(wots160::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in_arr[0].0), &bal)));
+
+        let bal = emulate_fq_to_nibbles(r.y);
+        let bal: [u8; 32] = nib_to_byte_array(&bal).try_into().unwrap();
+        sig_cache.insert(sec_in_arr[1].0, SigData::Sig256(wots256::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in_arr[1].0), &bal)));
+
+
+        let bal = emulate_fq_to_nibbles(r.x);
+        let bal: [u8; 32] = nib_to_byte_array(&bal).try_into().unwrap();
+        sig_cache.insert(sec_in_arr[2].0, SigData::Sig256(wots256::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in_arr[2].0), &bal)));
+
+
+        let bal: [u8; 32] = nib_to_byte_array(&[0u8;64]).try_into().unwrap();
+        let bal: [u8; 20] = bal[12..32].try_into().unwrap();
+        sig_cache.insert(sec_out, SigData::Sig160(wots160::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out), &bal)));
+
+
         let hint_in = HintInHashP { tx:t.x, qx: q.x, ty: t.y, qy:  q.y, rx: r.x, ry: r.y };
         let mut sig = Sig {
-            msk: Some(sec_key_for_bitcomms),
-            cache: HashMap::new(),
+            msk: None,
+            cache: sig_cache,
         };
-        let (_, simulate_stack_input) = hint_hash_p(&mut sig, (sec_out, false), sec_in_arr, hint_in);
+        let (_, simulate_stack_input, maybe_wrong) = hint_hash_p(&mut sig, (sec_out, false), sec_in_arr, hint_in);
 
         let tap_len = hash_c_scr.len();
         let script = script! {
@@ -1063,7 +1087,8 @@ mod test {
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
-        assert!(!res.success && res.final_stack.len() == 1);
+        assert!(!res.success);
+        assert!(res.final_stack.len() == 1);
 
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }

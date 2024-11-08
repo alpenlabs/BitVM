@@ -149,26 +149,6 @@ macro_rules! impl_wots {
                     }
                 }
 
-                pub fn get_signature2(secret: &str, msg_digits: [u8; M_DIGITS as usize]) -> Signature {
-                  //  let msg_digits = msg_bytes_to_digits(msg_bytes);
-                    let mut digits = checksum_to_digits(checksum(msg_digits)).to_vec();
-                    digits.append(&mut msg_digits.to_vec());
-                    std::array::from_fn(|i| {
-                        get_digit_signature(secret, i as u32, digits[N_DIGITS as usize - i - 1])
-                    })
-                }
-
-                pub fn sign2(secret: &str, msg_bytes: [u8; M_DIGITS as usize]) -> Vec<Script> {
-                    let signature = get_signature2(secret, msg_bytes);
-                    let mut sigs: Vec<Script> = vec![];
-
-                    for (sig, digit) in signature {
-                        sigs.push(script!({ sig.to_vec() }));
-                        sigs.push(script!({ digit }));
-                    }
-                    sigs
-                }
-
                 pub fn checksig_verify(public_key: PublicKey, drop: bool) -> Script {
                     script! {
                         for i in 0..N_DIGITS {
@@ -230,23 +210,6 @@ macro_rules! impl_wots {
                             }
                         }
                     }
-                    pub fn get_signature2(secret: &str, msg_digits: [u8; M_DIGITS as usize]) -> Signature {
-                        //let msg_digits = msg_bytes_to_digits(msg_bytes);
-                        let mut digits = checksum_to_digits(checksum(msg_digits)).to_vec();
-                        digits.append(&mut msg_digits.to_vec());
-                        std::array::from_fn(|i| {
-                            get_digit_signature(secret, i as u32, digits[N_DIGITS as usize - i - 1]).0
-                        })
-                    }
-
-                      pub fn sign2(secret: &str, msg_bytes: [u8; M_DIGITS as usize]) -> Vec<Script> {
-                          let signature = get_signature2(secret, msg_bytes);
-                          let mut sigs: Vec<Script> = vec![];
-                            for sig in signature {
-                                sigs.push(script!({ sig.to_vec() }));
-                            }
-                            sigs
-                      }
 
                     pub fn checksig_verify(public_key: PublicKey) -> Script {
                         script! {
@@ -296,13 +259,10 @@ impl_wots!(256);
 
 #[cfg(test)]
 mod tests {
-    use bitcoin::opcodes::all::{OP_EQUALVERIFY, OP_FROMALTSTACK, OP_SWAP, OP_TOALTSTACK};
 
     use crate::{
         bigint::U254,
         bn254::{fp254impl::Fp254Impl, fq::Fq},
-        chunk::primitves::fq_from_nibbles,
-        pseudo::NMUL,
     };
 
     use super::*;
@@ -414,11 +374,10 @@ mod tests {
         let script = script! {
             // { wots256::sign(&secret, &msg_bytes) }
             // { wots256::checksig_verify(public_key) }
-            for i in 1..64 { { i } OP_ROLL }
-            { fq_from_nibbles() }
-            { U254::push_hex(Fq::MODULUS) }
-            { U254::greaterthan(0, 1) }
-            OP_VERIFY
+            // for i in 1..64 { { i } OP_ROLL }
+            // { U254::push_hex(Fq::MODULUS) }
+            // { U254::greaterthan(0, 1) }
+            // OP_VERIFY
         };
         println!("script len: {}", script.len());
 
@@ -486,24 +445,24 @@ mod tests {
 
         let (n_256, n_160) = (7, 1);
 
-        let script_256 = script! {
-            for _ in 0..n_256 { { wots256::sign(secret, &msg_256) } }
-            for _ in 0..n_256 {
-                { wots256::checksig_verify(public_key_256, false) }
-                for i in 1..64 { { i } OP_ROLL }
-                { fq_from_nibbles() }
-                { U254::push_hex(Fq::MODULUS) }
-                { U254::greaterthan(0, 1) } OP_VERIFY
-            }
-            OP_TRUE
-        };
-        let script_160 = script! {
-            for _ in 0..n_160 { { wots160::sign(secret, &msg_256) } }
-            for _ in 0..n_160 {
-                { wots160::checksig_verify(public_key_160, true) }
-            }
-            OP_TRUE
-        };
+        // let script_256 = script! {
+        //     for _ in 0..n_256 { { wots256::sign(secret, &msg_256) } }
+        //     for _ in 0..n_256 {
+        //         { wots256::checksig_verify(public_key_256, false) }
+        //         for i in 1..64 { { i } OP_ROLL }
+        //         { fq_from_nibbles() }
+        //         { U254::push_hex(Fq::MODULUS) }
+        //         { U254::greaterthan(0, 1) } OP_VERIFY
+        //     }
+        //     OP_TRUE
+        // };
+        // let script_160 = script! {
+        //     for _ in 0..n_160 { { wots160::sign(secret, &msg_256) } }
+        //     for _ in 0..n_160 {
+        //         { wots160::checksig_verify(public_key_160, true) }
+        //     }
+        //     OP_TRUE
+        // };
         // let script = script! {
         //     for _ in 0..7 {
         //         { script_256.clone() } OP_VERIFY
@@ -513,7 +472,7 @@ mod tests {
         //     // }
         // };
         let script = script! {
-            { script_160.clone() }
+            // { script_160.clone() }
             // OP_VERIFY
 
         };

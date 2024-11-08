@@ -3,12 +3,14 @@
 mod test {
     use std::collections::HashMap;
 
+    use crate::chunk::api::nib_to_byte_array;
     use crate::chunk::hint_models::*;
     use crate::chunk::msm::{bitcom_hash_p, hint_hash_p, tap_hash_p};
     use crate::chunk::taps::*;
     use crate::chunk::primitves::emulate_extern_hash_fps;
     use crate::chunk::taps_mul::*;
     use crate::chunk::wots::{wots_p160_get_pub_key, wots_p256_get_pub_key, WOTSPubKey};
+    use crate::signatures::wots::wots160;
     use ark_ff::{AdditiveGroup, Field};
     use ark_std::UniformRand;
     use rand::SeedableRng;
@@ -36,12 +38,14 @@ mod test {
         let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
 
         let bitcom_scr = bitcom_frob_fp12(&pub_scripts, sec_out, sec_in.clone());
-
+        
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
+        
+        
         let hint_in: HintInFrobFp12 = HintInFrobFp12 { f };
-        let (_, simulate_stack_input) = hints_frob_fp12(
+        let (_, simulate_stack_input, maybe_wrong) = hints_frob_fp12(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -102,7 +106,7 @@ mod test {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input) = hint_hash_c(&mut sig, sec_out, sec_in, hint_in);
+        let (_, simulate_stack_input, maybe_wrong) = hint_hash_c(&mut sig, sec_out, sec_in, hint_in);
 
         let tap_len = hash_c_scr.len();
         let script = script! {
@@ -151,7 +155,7 @@ mod test {
             false,
         );
         let hint_in = HintInHashC { c: f, hashc: fhash };
-        let (_, simulate_stack_input) = hint_hash_c2(
+        let (_, simulate_stack_input, maybe_wrong) = hint_hash_c2(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -205,7 +209,7 @@ mod test {
         let t4 = ark_bn254::G2Affine::rand(&mut prng);
         //t4.y = t4.y + t4.y;
         let hint_in = HintInInitT4 { t4 };
-        let (_, simulate_stack_input) = hint_init_T4(
+        let (_, simulate_stack_input, maybe_wrong) = hint_init_T4(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -258,7 +262,7 @@ mod test {
         let hint_in = HintInPrecomputePx {
             p,
         };
-        let (_, simulate_stack_input) = hints_precompute_Px(
+        let (_, simulate_stack_input, maybe_wrong) = hints_precompute_Px(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -309,7 +313,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let p = ark_bn254::Fq::rand(&mut prng);
         let hint_in = HintInPrecomputePy { p };
-        let (_, simulate_stack_input) = hints_precompute_Py(
+        let (_, simulate_stack_input, maybe_wrong) = hints_precompute_Py(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -375,7 +379,7 @@ mod test {
             hash_aux_T: [3u8; 64],
         };
 
-        let (_, simulate_stack_input) = hint_sparse_dense_mul(
+        let (_, simulate_stack_input, maybe_wrong) = hint_sparse_dense_mul(
             &mut &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -415,17 +419,18 @@ mod test {
         let sec_in = vec![1, 2];
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        let pk = wots_p160_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            let pk = wots_p160_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
             pub_scripts.insert(*i, pk);
         }
 
-        let sec_out = (sec_out, true);
-        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+        let sec_out = (sec_out, false);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, false)).collect();
 
         let bitcom_scr = bitcom_dense_dense_mul0(&pub_scripts, sec_out, sec_in.clone());
+
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -433,12 +438,50 @@ mod test {
         let g = ark_bn254::Fq12::rand(&mut prng); // check_is_identity true
         let h = f * g;
 
+        let hash_f = emulate_extern_hash_fps(
+            vec![
+                f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
+                f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
+            ],
+            true,
+        ); // dense
+        let hash_g = emulate_extern_hash_fps(
+            vec![
+                g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
+                g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
+            ],
+            false,
+        ); // sparse
+        let hash_h = emulate_extern_hash_fps(
+            vec![
+                h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
+            ],
+            true,
+        );
+
+        let mut sig_cache: HashMap<u32, SigData> = HashMap::new();
+        let bal: [u8; 32] = nib_to_byte_array(&hash_f).try_into().unwrap();
+        let bal: [u8; 20] = bal[12..32].try_into().unwrap();
+        sig_cache.insert(sec_in[0].0, SigData::Sig160(wots160::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in[0].0), &bal)));
+
+
+        let bal: [u8; 32] = nib_to_byte_array(&hash_g).try_into().unwrap();
+        let bal: [u8; 20] = bal[12..32].try_into().unwrap();
+        sig_cache.insert(sec_in[1].0, SigData::Sig160(wots160::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in[1].0), &bal)));
+
+
+        let bal: [u8; 32] = nib_to_byte_array(&hash_h).try_into().unwrap();
+        let bal: [u8; 20] = bal[12..32].try_into().unwrap();
+        sig_cache.insert(sec_out.0, SigData::Sig160(wots160::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out.0), &bal)));
+
+
+
         let hint_in = HintInDenseMul0 { a: f, b: g };
 
-        let (_, simulate_stack_input) = hints_dense_dense_mul0(
+        let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul0(
             &mut Sig {
-                msk: Some(sec_key_for_bitcomms),
-                cache: HashMap::new(),
+                msk: None,
+                cache: sig_cache,
             },
             sec_out,
             sec_in,
@@ -452,10 +495,14 @@ mod test {
             { bitcom_scr }
             { dense_dense_mul_script }
         };
-
+        let tap_len = script.len();
         let exec_result = execute_script(script);
         println!("stack len {:?}", exec_result.final_stack.len());
-        assert!(!exec_result.success && exec_result.final_stack.len() == 1);
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:} {:?}", exec_result.final_stack.get(i));
+        }
+        assert!(!exec_result.success);
+        assert!(exec_result.final_stack.len() == 1);
         println!(
             "stack len {:?} script len {:?}",
             exec_result.stats.max_nb_stack_items, tap_len
@@ -472,15 +519,15 @@ mod test {
         let sec_in = vec![1, 2, 3];
 
         let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
+        let pk = wots_p160_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out));
         pub_scripts.insert(sec_out, pk);
         for i in &sec_in {
-            let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
+            let pk = wots_p160_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
             pub_scripts.insert(*i, pk);
         }
 
-        let sec_out = (sec_out, true);
-        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
+        let sec_out = (sec_out, false);
+        let sec_in: Vec<Link> = sec_in.iter().map(|x| (*x, false)).collect();
 
         let bitcom_script = bitcom_dense_dense_mul1(&pub_scripts, sec_out, sec_in.clone());
 
@@ -489,19 +536,71 @@ mod test {
         let f = ark_bn254::Fq12::rand(&mut prng);
         let g = ark_bn254::Fq12::rand(&mut prng);
         let hint_in = HintInDenseMul1 { a: f, b: g };
+        let h = f * g;
 
-        let (_, simulate_stack_input) = hints_dense_dense_mul1(
+        let hash_f = emulate_extern_hash_fps(
+            vec![
+                f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
+                f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
+            ],
+            true,
+        );
+        let hash_g = emulate_extern_hash_fps(
+            vec![
+                g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
+                g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
+            ],
+            false,
+        );
+    
+        let hash_c0 = emulate_extern_hash_fps(
+            vec![
+                h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
+            ],
+            true,
+        );
+        let hash_c = emulate_extern_hash_fps(
+            vec![
+                h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1, h.c1.c0.c0,
+                h.c1.c0.c1, h.c1.c1.c0, h.c1.c1.c1, h.c1.c2.c0, h.c1.c2.c1,
+            ],
+            true,
+        );
+
+        let mut sig_cache: HashMap<u32, SigData> = HashMap::new();
+        let bal: [u8; 32] = nib_to_byte_array(&hash_f).try_into().unwrap();
+        let bal: [u8; 20] = bal[12..32].try_into().unwrap();
+        sig_cache.insert(sec_in[0].0, SigData::Sig160(wots160::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in[0].0), &bal)));
+
+
+        let bal: [u8; 32] = nib_to_byte_array(&hash_g).try_into().unwrap();
+        let bal: [u8; 20] = bal[12..32].try_into().unwrap();
+        sig_cache.insert(sec_in[1].0, SigData::Sig160(wots160::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in[1].0), &bal)));
+
+
+        let bal: [u8; 32] = nib_to_byte_array(&hash_c0).try_into().unwrap();
+        let bal: [u8; 20] = bal[12..32].try_into().unwrap();
+        sig_cache.insert(sec_in[2].0, SigData::Sig160(wots160::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in[2].0), &bal)));
+
+
+        let bal: [u8; 32] = nib_to_byte_array(&hash_c).try_into().unwrap();
+        let bal: [u8; 20] = bal[12..32].try_into().unwrap();
+        sig_cache.insert(sec_out.0, SigData::Sig160(wots160::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out.0), &bal)));
+
+        
+        let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul1(
             &mut Sig {
-                msk: Some(sec_key_for_bitcomms),
-                cache: HashMap::new(),
+                msk: None,
+                cache: sig_cache,
             },
             sec_out,
             sec_in,
             hint_in,
         );
 
-        let tap_len = dense_dense_mul_script.len();
+        let tap_len = dense_dense_mul_script.len() + bitcom_script.len();
 
+        println!("tap len {:?}", tap_len );
         let script = script! {
             { simulate_stack_input }
             { bitcom_script }
@@ -509,7 +608,12 @@ mod test {
         };
 
         let exec_result = execute_script(script);
-        assert!(!exec_result.success && exec_result.final_stack.len() == 1);
+        println!("stack len {:?}", exec_result.final_stack.len());
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:} {:?}", exec_result.final_stack.get(i));
+        }
+        assert!(!exec_result.success);
+        assert!(exec_result.final_stack.len() == 1);
         println!(
             "stack len {:?} script len {:?}",
             exec_result.stats.max_nb_stack_items, tap_len
@@ -552,7 +656,7 @@ mod test {
 
         let hint_in = HintInDenseMul0 { a: f, b: g };
 
-        let (_, simulate_stack_input) = hints_dense_dense_mul0_by_constant(
+        let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul0_by_constant(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -616,7 +720,7 @@ mod test {
 
         let hint_in = HintInDenseMul1 { a: f, b: g };
 
-        let (_, simulate_stack_input) = hints_dense_dense_mul1_by_constant(
+        let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul1_by_constant(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -680,7 +784,7 @@ mod test {
             msk: Some(&msk),
             cache: HashMap::new(),
         };
-        let (_, stack_data) = hint_squaring(&mut sig, sec_out, sec_in, hint_in);
+        let (_, stack_data, maybe_wrong) = hint_squaring(&mut sig, sec_out, sec_in, hint_in);
 
         let tap_len = squaring_tapscript.len();
         let script = script! {
@@ -738,7 +842,7 @@ mod test {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input) = hint_point_ops(&mut sig, sec_out, sec_in, hint_in, ate);
+        let (_, simulate_stack_input, maybe_wrong) = hint_point_ops(&mut sig, sec_out, sec_in, hint_in, ate);
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {
@@ -786,7 +890,7 @@ mod test {
             msk: Some(&sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input) = hint_point_dbl(&mut sig, sec_out, sec_in.clone(), hint_in);
+        let (_, simulate_stack_input, maybe_wrong) = hint_point_dbl(&mut sig, sec_out, sec_in.clone(), hint_in);
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {
@@ -841,7 +945,7 @@ mod test {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input) =
+        let (_, simulate_stack_input, maybe_wrong) =
             hint_point_add_with_frob(&mut sig, sec_out, sec_in, hint_in, ate);
 
         let tap_len = point_ops_tapscript.len();
@@ -900,7 +1004,7 @@ mod test {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input) =
+        let (_, simulate_stack_input, maybe_wrong) =
             hint_double_eval_mul_for_fixed_Qs(&mut sig, sec_out, sec_in, hint_in);
 
         let tap_len = sparse_dbl_tapscript.len();
@@ -968,7 +1072,7 @@ mod test {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input) =
+        let (_, simulate_stack_input, maybe_wrong) =
             hint_add_eval_mul_for_fixed_Qs(&mut sig, sec_out, sec_in, hint_in, ate);
 
         let tap_len = sparse_add_tapscript.len();
@@ -1031,7 +1135,7 @@ mod test {
             q2,
             q3,
         };
-        let (_, simulate_stack_input) = hint_add_eval_mul_for_fixed_Qs_with_frob(
+        let (_, simulate_stack_input, maybe_wrong) = hint_add_eval_mul_for_fixed_Qs_with_frob(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -1099,7 +1203,7 @@ mod test {
 
         let hint_in = HintInDenseMulByHash0 { a: f, bhash: ghash };
 
-        let (_, simulate_stack_input) = hints_dense_dense_mul0_by_hash(
+        let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul0_by_hash(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
@@ -1167,7 +1271,7 @@ mod test {
 
         let hint_in = HintInDenseMulByHash1 { a: f, bhash: hash_g };
 
-        let (_, simulate_stack_input) = hints_dense_dense_mul1_by_hash(
+        let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul1_by_hash(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
                 cache: HashMap::new(),
