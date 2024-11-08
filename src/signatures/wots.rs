@@ -169,7 +169,7 @@ macro_rules! impl_wots {
                     sigs
                 }
 
-                pub fn checksig_verify(public_key: PublicKey) -> Script {
+                pub fn checksig_verify(public_key: PublicKey, drop: bool) -> Script {
                     script! {
                         for i in 0..N_DIGITS {
                             { MAX_DIGIT } OP_MIN
@@ -186,9 +186,11 @@ macro_rules! impl_wots {
                         }
 
                         // compute checksum
-                        OP_FROMALTSTACK OP_DUP OP_NEGATE
+                        OP_FROMALTSTACK if !drop { OP_DUP } OP_NEGATE
                         for _ in 1..M_DIGITS {
-                            OP_FROMALTSTACK OP_TUCK OP_SUB
+                            OP_FROMALTSTACK
+                            if !drop { OP_TUCK }
+                            OP_SUB
                         }
                         { MAX_DIGIT * M_DIGITS }
                         OP_ADD
@@ -294,6 +296,15 @@ impl_wots!(256);
 
 #[cfg(test)]
 mod tests {
+    use bitcoin::opcodes::all::{OP_EQUALVERIFY, OP_FROMALTSTACK, OP_SWAP, OP_TOALTSTACK};
+
+    use crate::{
+        bigint::U254,
+        bn254::{fp254impl::Fp254Impl, fq::Fq},
+        chunk::primitves::fq_from_nibbles,
+        pseudo::NMUL,
+    };
+
     use super::*;
 
     #[test]
@@ -313,7 +324,7 @@ mod tests {
             }
 
             { wots32::sign(&secret, &msg_bytes) }
-            { wots32::checksig_verify(public_key) }
+            { wots32::checksig_verify(public_key, false) }
 
             for _ in 0..8 {
                 OP_FROMALTSTACK OP_EQUALVERIFY
@@ -325,7 +336,7 @@ mod tests {
         println!(
             "wots32: sig={}, csv={}",
             wots32::sign(&secret, &msg_bytes).len(),
-            wots32::checksig_verify(public_key).len()
+            wots32::checksig_verify(public_key, false).len()
         );
 
         println!(
@@ -355,7 +366,7 @@ mod tests {
             }
 
             { wots160::sign(&secret, &msg_bytes) }
-            { wots160::checksig_verify(public_key) }
+            { wots160::checksig_verify(public_key, false) }
 
             for _ in 0..40 {
                 OP_FROMALTSTACK OP_EQUALVERIFY
@@ -367,7 +378,7 @@ mod tests {
         println!(
             "wots160: sig={}, csv={}",
             wots160::sign(&secret, &msg_bytes).len(),
-            wots160::checksig_verify(public_key).len()
+            wots160::checksig_verify(public_key, false).len()
         );
 
         println!(
@@ -399,26 +410,22 @@ mod tests {
         let msg = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         let msg_bytes = hex::decode(&msg).unwrap();
 
-        const MESSAGE: [u8; 64] = [
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7, 1, 2, 3, 4, 5,
-            6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7, 1, 2, 3, 4, 5, 6, 7, 8, 9,
-            0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 7, 7, 7, 7, 7, 1, 2, 3, 4,
-        ];
-
-        let msg_bytes = nib_to_byte_array(&MESSAGE);
-
         println!("msg_bytes {:?}", msg_bytes);
         let script = script! {
-            // { wots256::sign2(&secret, MESSAGE) }
-            { wots256::sign(&secret, &msg_bytes) }
-
-            // OP_TRUE
+            // { wots256::sign(&secret, &msg_bytes) }
+            // { wots256::checksig_verify(public_key) }
+            for i in 1..64 { { i } OP_ROLL }
+            { fq_from_nibbles() }
+            { U254::push_hex(Fq::MODULUS) }
+            { U254::greaterthan(0, 1) }
+            OP_VERIFY
         };
+        println!("script len: {}", script.len());
 
         println!(
             "wots256: sig={}, csv={}",
             wots256::sign(&secret, &msg_bytes).len(),
-            wots256::checksig_verify(public_key).len()
+            wots256::checksig_verify(public_key, false).len()
         );
 
         println!(
@@ -431,7 +438,7 @@ mod tests {
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
-        //assert!(res.success);
+        // assert!(res.success);
     }
 
     #[test]
@@ -466,5 +473,58 @@ mod tests {
         let parsed_data = signature.parse();
 
         assert_eq!(data, parsed_data);
+    }
+
+    #[test]
+    fn test_calculate_tx_sizes() {
+        let secret = "a01b23c45d67e89f";
+        let public_key_256 = wots256::generate_public_key(&secret);
+        let public_key_160 = wots160::generate_public_key(&secret);
+
+        let msg_256: [u8; 32] = std::array::from_fn(|i| 7 * i as u8);
+        let msg_160: [u8; 20] = std::array::from_fn(|i| 12 * i as u8);
+
+        let (n_256, n_160) = (7, 1);
+
+        let script_256 = script! {
+            for _ in 0..n_256 { { wots256::sign(secret, &msg_256) } }
+            for _ in 0..n_256 {
+                { wots256::checksig_verify(public_key_256, false) }
+                for i in 1..64 { { i } OP_ROLL }
+                { fq_from_nibbles() }
+                { U254::push_hex(Fq::MODULUS) }
+                { U254::greaterthan(0, 1) } OP_VERIFY
+            }
+            OP_TRUE
+        };
+        let script_160 = script! {
+            for _ in 0..n_160 { { wots160::sign(secret, &msg_256) } }
+            for _ in 0..n_160 {
+                { wots160::checksig_verify(public_key_160, true) }
+            }
+            OP_TRUE
+        };
+        // let script = script! {
+        //     for _ in 0..7 {
+        //         { script_256.clone() } OP_VERIFY
+        //     }
+        //     // for _ in 0..7 {
+        //     //     { script_160.clone() } OP_VERIFY
+        //     // }
+        // };
+        let script = script! {
+            { script_160.clone() }
+            // OP_VERIFY
+
+        };
+
+        println!("script len: {}", script.len());
+
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        println!("max stack: {}", res.stats.max_nb_stack_items);
+        assert!(res.success);
     }
 }
