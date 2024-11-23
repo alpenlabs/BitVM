@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use std::ops::Neg;
 use std::str::FromStr;
 
-use super::primitves::{emulate_extern_hash_fps, hash_fp12_192};
+use super::primitves::{extern_hash_fps, hash_fp12_192};
 use super::wots::WOTSPubKey;
 use super::{blake3compiled, hint_models::*};
 
@@ -342,20 +342,20 @@ pub(crate) fn hint_point_dbl(
         all_qs.push(hint)
     }
 
-    let pdash_x = emulate_fq_to_nibbles(p.x);
-    let pdash_y = emulate_fq_to_nibbles(p.y);
+    let pdash_x = extern_fq_to_nibbles(p.x);
+    let pdash_y = extern_fq_to_nibbles(p.y);
 
     let hash_new_t =
-        emulate_extern_hash_fps(vec![new_tx.c0, new_tx.c1, new_ty.c0, new_ty.c1], true);
+        extern_hash_fps(vec![new_tx.c0, new_tx.c1, new_ty.c0, new_ty.c1], true);
     let hash_dbl_le =
-        emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
+        extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
     let hash_add_le = [0u8; 64]; // constant
-    let hash_le = emulate_extern_hash_nibbles(vec![hash_dbl_le, hash_add_le]);
-    let hash_root_claim = emulate_extern_hash_nibbles(vec![hash_new_t, hash_le]);
+    let hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
+    let hash_root_claim = extern_hash_nibbles(vec![hash_new_t, hash_le], true);
 
-    let hash_t = emulate_extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
-    let aux_hash_le = emulate_nibbles_to_limbs(hint_in.hash_le_aux); // mock
-    let hash_input = emulate_extern_hash_nibbles(vec![hash_t, hint_in.hash_le_aux]);
+    let hash_t = extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
+    let aux_hash_le = extern_nibbles_to_limbs(hint_in.hash_le_aux); // mock
+    let hash_input = extern_hash_nibbles(vec![hash_t, hint_in.hash_le_aux], true);
 
     let tup = vec![
         (sec_in[2], pdash_x),
@@ -800,24 +800,24 @@ pub(crate) fn hint_point_add_with_frob(
         all_qs.push(hint)
     }
 
-    let pdash_x = emulate_fq_to_nibbles(p.x);
-    let pdash_y = emulate_fq_to_nibbles(p.y);
-    let qdash_x0 = emulate_fq_to_nibbles(q.x.c0);
-    let qdash_x1 = emulate_fq_to_nibbles(q.x.c1);
-    let qdash_y0 = emulate_fq_to_nibbles(q.y.c0);
-    let qdash_y1 = emulate_fq_to_nibbles(q.y.c1);
+    let pdash_x = extern_fq_to_nibbles(p.x);
+    let pdash_y = extern_fq_to_nibbles(p.y);
+    let qdash_x0 = extern_fq_to_nibbles(q.x.c0);
+    let qdash_x1 = extern_fq_to_nibbles(q.x.c1);
+    let qdash_y0 = extern_fq_to_nibbles(q.y.c0);
+    let qdash_y1 = extern_fq_to_nibbles(q.y.c1);
 
     let hash_new_t =
-        emulate_extern_hash_fps(vec![new_tx.c0, new_tx.c1, new_ty.c0, new_ty.c1], true);
+        extern_hash_fps(vec![new_tx.c0, new_tx.c1, new_ty.c0, new_ty.c1], true);
     let hash_dbl_le = [0u8; 64];
     let hash_add_le =
-        emulate_extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
-    let hash_le = emulate_extern_hash_nibbles(vec![hash_dbl_le, hash_add_le]);
-    let hash_root_claim = emulate_extern_hash_nibbles(vec![hash_new_t, hash_le]);
+        extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
+    let hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
+    let hash_root_claim = extern_hash_nibbles(vec![hash_new_t, hash_le], true);
 
-    let hash_t = emulate_extern_hash_fps(vec![tt.x.c0, tt.x.c1, tt.y.c0, tt.y.c1], true);
-    let aux_hash_le = emulate_nibbles_to_limbs(hint_in.hash_le_aux); // mock
-    let hash_input = emulate_extern_hash_nibbles(vec![hash_t, hint_in.hash_le_aux]);
+    let hash_t = extern_hash_fps(vec![tt.x.c0, tt.x.c1, tt.y.c0, tt.y.c1], true);
+    let aux_hash_le = extern_nibbles_to_limbs(hint_in.hash_le_aux); // mock
+    let hash_input = extern_hash_nibbles(vec![hash_t, hint_in.hash_le_aux], true);
 
     let tup = vec![
         (sec_in[6], pdash_x),
@@ -1260,25 +1260,25 @@ pub(crate) fn hint_point_ops(
         all_qs.push(hint)
     }
 
-    let pdash_x = emulate_fq_to_nibbles(p.x);
-    let pdash_y = emulate_fq_to_nibbles(p.y);
-    let qdash_x0 = emulate_fq_to_nibbles(q.x.c0);
-    let qdash_x1 = emulate_fq_to_nibbles(q.x.c1);
-    let qdash_y0 = emulate_fq_to_nibbles(q.y.c0);
-    let qdash_y1 = emulate_fq_to_nibbles(q.y.c1);
+    let pdash_x = extern_fq_to_nibbles(p.x);
+    let pdash_y = extern_fq_to_nibbles(p.y);
+    let qdash_x0 = extern_fq_to_nibbles(q.x.c0);
+    let qdash_x1 = extern_fq_to_nibbles(q.x.c1);
+    let qdash_y0 = extern_fq_to_nibbles(q.y.c0);
+    let qdash_y1 = extern_fq_to_nibbles(q.y.c1);
 
     let hash_new_t =
-        emulate_extern_hash_fps(vec![new_tx.c0, new_tx.c1, new_ty.c0, new_ty.c1], true);
+        extern_hash_fps(vec![new_tx.c0, new_tx.c1, new_ty.c0, new_ty.c1], true);
     let hash_dbl_le =
-        emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
+        extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
     let hash_add_le =
-        emulate_extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
-    let hash_le = emulate_extern_hash_nibbles(vec![hash_dbl_le, hash_add_le]);
-    let hash_root_claim = emulate_extern_hash_nibbles(vec![hash_new_t, hash_le]);
+        extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
+    let hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
+    let hash_root_claim = extern_hash_nibbles(vec![hash_new_t, hash_le], true);
 
-    let hash_t = emulate_extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
-    let aux_hash_le = emulate_nibbles_to_limbs(hint_in.hash_le_aux);
-    let hash_input = emulate_extern_hash_nibbles(vec![hash_t, hint_in.hash_le_aux]);
+    let hash_t = extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
+    let aux_hash_le = extern_nibbles_to_limbs(hint_in.hash_le_aux);
+    let hash_input = extern_hash_nibbles(vec![hash_t, hint_in.hash_le_aux], true);
 
     let tup = vec![
         (sec_in[6], pdash_x),
@@ -1384,17 +1384,17 @@ pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
         hints.push(hint);
     }
 
-    let b_hash = emulate_extern_hash_fps(
+    let b_hash = extern_hash_fps(
         vec![
             b.c0.c0.c0, b.c0.c0.c1, b.c0.c1.c0, b.c0.c1.c1, b.c0.c2.c0, b.c0.c2.c1, b.c1.c0.c0,
             b.c1.c0.c1, b.c1.c1.c0, b.c1.c1.c1, b.c1.c2.c0, b.c1.c2.c1,
         ],
         false,
     );
-    let p2dash_x = emulate_fq_to_nibbles(p2.x);
-    let p2dash_y = emulate_fq_to_nibbles(p2.y);
-    let p3dash_x = emulate_fq_to_nibbles(p3.x);
-    let p3dash_y = emulate_fq_to_nibbles(p3.y);
+    let p2dash_x = extern_fq_to_nibbles(p2.x);
+    let p2dash_y = extern_fq_to_nibbles(p2.y);
+    let p3dash_x = extern_fq_to_nibbles(p3.x);
+    let p3dash_y = extern_fq_to_nibbles(p3.y);
 
     let tup = vec![
         (sec_out, b_hash),
@@ -1608,17 +1608,17 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
         hints.push(hint);
     }
 
-    let b_hash = emulate_extern_hash_fps(
+    let b_hash = extern_hash_fps(
         vec![
             b.c0.c0.c0, b.c0.c0.c1, b.c0.c1.c0, b.c0.c1.c1, b.c0.c2.c0, b.c0.c2.c1, b.c1.c0.c0,
             b.c1.c0.c1, b.c1.c1.c0, b.c1.c1.c1, b.c1.c2.c0, b.c1.c2.c1,
         ],
         false,
     );
-    let p2dash_x = emulate_fq_to_nibbles(p2.x);
-    let p2dash_y = emulate_fq_to_nibbles(p2.y);
-    let p3dash_x = emulate_fq_to_nibbles(p3.x);
-    let p3dash_y = emulate_fq_to_nibbles(p3.y);
+    let p2dash_x = extern_fq_to_nibbles(p2.x);
+    let p2dash_y = extern_fq_to_nibbles(p2.y);
+    let p3dash_x = extern_fq_to_nibbles(p3.x);
+    let p3dash_y = extern_fq_to_nibbles(p3.y);
 
     let tup = vec![
         (sec_out, b_hash),
@@ -1877,17 +1877,17 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
         hints.push(hint);
     }
 
-    let b_hash = emulate_extern_hash_fps(
+    let b_hash = extern_hash_fps(
         vec![
             b.c0.c0.c0, b.c0.c0.c1, b.c0.c1.c0, b.c0.c1.c1, b.c0.c2.c0, b.c0.c2.c1, b.c1.c0.c0,
             b.c1.c0.c1, b.c1.c1.c0, b.c1.c1.c1, b.c1.c2.c0, b.c1.c2.c1,
         ],
         false,
     );
-    let p2dash_x = emulate_fq_to_nibbles(p2.x);
-    let p2dash_y = emulate_fq_to_nibbles(p2.y);
-    let p3dash_x = emulate_fq_to_nibbles(p3.x);
-    let p3dash_y = emulate_fq_to_nibbles(p3.y);
+    let p2dash_x = extern_fq_to_nibbles(p2.x);
+    let p2dash_y = extern_fq_to_nibbles(p2.y);
+    let p3dash_x = extern_fq_to_nibbles(p3.x);
+    let p3dash_y = extern_fq_to_nibbles(p3.y);
 
     let tup = vec![
         (sec_out, b_hash),
@@ -2149,11 +2149,11 @@ pub(crate) fn hint_hash_c(
         f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
         f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
     ];
-    let fhash = emulate_extern_hash_fps(f.clone(), false);
+    let fhash = extern_hash_fps(f.clone(), false);
 
     let mut tups = vec![(sec_out, fhash)];
     for i in 0..12 {
-        tups.push((sec_in[11 - i], emulate_fq_to_nibbles(f[i])));
+        tups.push((sec_in[11 - i], extern_fq_to_nibbles(f[i])));
     }
     let (bc_elems, should_validate) = tup_to_scr(sig, tups);
 
@@ -2222,7 +2222,7 @@ pub(crate) fn hint_hash_c2(
         f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
         f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
     ];
-    let outhash = emulate_extern_hash_fps(f.clone(), true);
+    let outhash = extern_hash_fps(f.clone(), true);
 
     let tups = vec![(sec_out, outhash), (sec_in[0], hint_in.hashc)];
     let (bc_elems, should_validate) = tup_to_scr(sig, tups);
@@ -2364,10 +2364,10 @@ pub(crate) fn hints_precompute_Px(
     let pdx = -p.x * pdy;
     let (_, hints) = { new_hinted_x_from_eval_point(p, pdy) };
 
-    let pdash_x = emulate_fq_to_nibbles(pdx);
-    let pdash_y = emulate_fq_to_nibbles(pdy);
-    let p_x = emulate_fq_to_nibbles(p.x);
-    let p_y = emulate_fq_to_nibbles(p.y);
+    let pdash_x = extern_fq_to_nibbles(pdx);
+    let pdash_y = extern_fq_to_nibbles(pdy);
+    let p_x = extern_fq_to_nibbles(p.x);
+    let p_y = extern_fq_to_nibbles(p.y);
 
     let (_, on_curve_hint) = crate::bn254::curves::G1Affine::hinted_is_on_curve(p.x, p.y);
 
@@ -2407,11 +2407,11 @@ pub(crate) fn hints_precompute_Py(
     } else {
         println!("non-invertible input point");
     }
-    let pdash_y = emulate_fq_to_nibbles(pdy);
+    let pdash_y = extern_fq_to_nibbles(pdy);
 
     let (_, hints) = new_hinted_y_from_eval_point(p, pdy);
 
-    let p_y = emulate_fq_to_nibbles(p);
+    let p_y = extern_fq_to_nibbles(p);
 
     let tups = vec![(sec_out, pdash_y), (sec_in[0], p_y)];
     let (bc_elems, should_validate) = tup_to_scr(sig, tups);
@@ -2493,15 +2493,15 @@ pub(crate) fn hint_init_T4(
 ) -> (HintOutInitT4, Script, bool) {
     assert_eq!(sec_in.len(), 4);
     let t4 = hint_in.t4;
-    let t4hash = emulate_extern_hash_fps(vec![t4.x.c0, t4.x.c1, t4.y.c0, t4.y.c1], false);
-    let t4hash = emulate_extern_hash_nibbles(vec![t4hash, [0u8; 64]]);
+    let t4hash = extern_hash_fps(vec![t4.x.c0, t4.x.c1, t4.y.c0, t4.y.c1], false);
+    let t4hash = extern_hash_nibbles(vec![t4hash, [0u8; 64]], true);
 
     let tups = vec![
         (sec_out, t4hash),
-        (sec_in[3], emulate_fq_to_nibbles(t4.x.c0)),
-        (sec_in[2], emulate_fq_to_nibbles(t4.x.c1)),
-        (sec_in[1], emulate_fq_to_nibbles(t4.y.c0)),
-        (sec_in[0], emulate_fq_to_nibbles(t4.y.c1)),
+        (sec_in[3], extern_fq_to_nibbles(t4.x.c0)),
+        (sec_in[2], extern_fq_to_nibbles(t4.x.c1)),
+        (sec_in[1], extern_fq_to_nibbles(t4.y.c0)),
+        (sec_in[0], extern_fq_to_nibbles(t4.y.c1)),
     ];
     let (bc_elems, should_validate) = tup_to_scr(sig, tups);
 
@@ -2581,14 +2581,14 @@ pub(crate) fn hints_frob_fp12(
 
     let g = f.frobenius_map(power);
 
-    let fhash = emulate_extern_hash_fps(
+    let fhash = extern_hash_fps(
         vec![
             f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
             f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
         ],
         false,
     );
-    let ghash = emulate_extern_hash_fps(
+    let ghash = extern_hash_fps(
         vec![
             g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
             g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,

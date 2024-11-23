@@ -1,7 +1,7 @@
-use crate::chunk::primitves::emulate_extern_hash_nibbles;
+use crate::chunk::primitves::extern_hash_nibbles;
 use ark_bn254::{G1Affine, G2Affine};
 use super::msm::HintOutMSM;
-use super::primitves::emulate_extern_hash_fps;
+use super::primitves::extern_hash_fps;
 use super::taps::HashBytes;
 
 #[derive(Debug, Clone)]
@@ -48,9 +48,9 @@ impl HintInDouble {
     pub(crate) fn from_double(g: HintOutDouble, gpx: ark_bn254::Fq, gpy: ark_bn254::Fq) -> Self {
         let (dbl_le0, dbl_le1) = g.dbl_le;
         let hash_dbl_le =
-            emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
+            extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
         let hash_add_le = g.hash_add_le_aux;
-        let hash_le = emulate_extern_hash_nibbles(vec![hash_dbl_le, hash_add_le]);
+        let hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
         HintInDouble {
             t: g.t,
             p: G1Affine::new_unchecked(gpx, gpy),
@@ -62,10 +62,10 @@ impl HintInDouble {
         let (dbl_le0, dbl_le1) = g.dbl_le;
         let (add_le0, add_le1) = g.add_le;
         let hash_dbl_le =
-            emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
+            extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
         let hash_add_le =
-            emulate_extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
-        let hash_le = emulate_extern_hash_nibbles(vec![hash_dbl_le, hash_add_le]);
+            extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
+        let hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
         HintInDouble {
             t: g.t,
             p: G1Affine::new_unchecked(gpx, gpy),
@@ -108,9 +108,9 @@ impl HintInAdd {
     ) -> Self {
         let (dbl_le0, dbl_le1) = g.dbl_le;
         let hash_dbl_le =
-            emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
+            extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
         let hash_add_le = g.hash_add_le_aux;
-        let hash_le = emulate_extern_hash_nibbles(vec![hash_dbl_le, hash_add_le]);
+        let hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
         HintInAdd {
             t: g.t,
             p: G1Affine::new_unchecked(gpx, gpy),
@@ -127,9 +127,9 @@ impl HintInAdd {
     ) -> Self {
         let (add_le0, add_le1) = g.add_le;
         let hash_add_le =
-            emulate_extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
+            extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
         let hash_dbl_le = g.hash_dbl_le_aux;
-        let hash_le = emulate_extern_hash_nibbles(vec![hash_dbl_le, hash_add_le]);
+        let hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
         HintInAdd {
             t: g.t,
             p: G1Affine::new_unchecked(gpx, gpy),
@@ -147,10 +147,10 @@ impl HintInAdd {
         let (dbl_le0, dbl_le1) = g.dbl_le;
         let (add_le0, add_le1) = g.add_le;
         let hash_dbl_le =
-            emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
+            extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
         let hash_add_le =
-            emulate_extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
-        let hash_le = emulate_extern_hash_nibbles(vec![hash_dbl_le, hash_add_le]);
+            extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
+        let hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
         HintInAdd {
             t: g.t,
             p: G1Affine::new_unchecked(gpx, gpy),
@@ -211,9 +211,9 @@ impl HintInDblAdd {
     ) -> Self {
         let (dbl_le0, dbl_le1) = g.dbl_le;
         let hash_dbl_le =
-            emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
+            extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
         let hash_add_le = g.hash_add_le_aux;
-        let hash_le = emulate_extern_hash_nibbles(vec![hash_dbl_le, hash_add_le]);
+        let hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
         HintInDblAdd {
             t: g.t,
             p: gp,
@@ -230,10 +230,10 @@ impl HintInDblAdd {
         let (dbl_le0, dbl_le1) = g.dbl_le;
         let (add_le0, add_le1) = g.add_le;
         let hash_dbl_le =
-            emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
+            extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
         let hash_add_le =
-            emulate_extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
-        let hash_le = emulate_extern_hash_nibbles(vec![hash_dbl_le, hash_add_le]);
+            extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
+        let hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
         HintInDblAdd {
             t: g.t,
             p: gp,
@@ -382,7 +382,7 @@ impl HintInHashC {
         }
     }
     pub(crate) fn from_points(gs: Vec<ark_bn254::Fq>) -> Self {
-        let hash = emulate_extern_hash_fps(gs.clone(), false);
+        let hash = extern_hash_fps(gs.clone(), false);
         HintInHashC {
             c: ark_bn254::Fq12::new(
                 ark_bn254::Fq6::new(
@@ -515,7 +515,7 @@ impl HintOutSparseDenseMul {
 impl HintInSparseDenseMul {
     pub(crate) fn from_double(g: HintOutDouble, sq: HintOutSquaring) -> Self {
         let t = g.t;
-        let hash_t = emulate_extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
+        let hash_t = extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
         HintInSparseDenseMul {
             a: sq.b,
             le0: g.dbl_le.0,
@@ -527,10 +527,10 @@ impl HintInSparseDenseMul {
 
     pub(crate) fn from_double_add_top(g: HintOutDblAdd, sq: HintOutSquaring) -> Self {
         let t = g.t;
-        let hash_t = emulate_extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
+        let hash_t = extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
         let (add_le0, add_le1) = g.add_le;
         let hash_add_le =
-            emulate_extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
+            extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
         return HintInSparseDenseMul {
             a: sq.b,
             le0: g.dbl_le.0,
@@ -542,10 +542,10 @@ impl HintInSparseDenseMul {
 
     pub(crate) fn from_doubl_add_bottom(g: HintOutDblAdd, dmul: HintOutDenseMul1) -> Self {
         let t = g.t;
-        let hash_t = emulate_extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
+        let hash_t = extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
         let (dbl_le0, dbl_le1) = g.dbl_le;
         let hash_dbl_le =
-            emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
+            extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
         return HintInSparseDenseMul {
             a: dmul.c,
             le0: g.add_le.0,
@@ -556,7 +556,7 @@ impl HintInSparseDenseMul {
     }
     pub(crate) fn from_add(g: HintOutAdd, sq: HintOutDenseMul1) -> Self {
         let t = g.t;
-        let hash_t = emulate_extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
+        let hash_t = extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
         HintInSparseDenseMul {
             a: sq.c,
             le0: g.add_le.0,

@@ -7,7 +7,7 @@ mod test {
     use crate::chunk::hint_models::*;
     use crate::chunk::msm::{bitcom_hash_p, hint_hash_p, tap_hash_p};
     use crate::chunk::taps::*;
-    use crate::chunk::primitves::emulate_extern_hash_fps;
+    use crate::chunk::primitves::extern_hash_fps;
     use crate::chunk::taps_mul::*;
     use crate::chunk::wots::{wots_p160_get_pub_key, wots_p256_get_pub_key, WOTSPubKey};
     use crate::signatures::wots::wots160;
@@ -94,7 +94,7 @@ mod test {
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
-        let fhash = emulate_extern_hash_fps(
+        let fhash = extern_hash_fps(
             vec![
                 f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
                 f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
@@ -147,7 +147,7 @@ mod test {
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
-        let fhash = emulate_extern_hash_fps(
+        let fhash = extern_hash_fps(
             vec![
                 f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
                 f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
@@ -438,21 +438,21 @@ mod test {
         let g = ark_bn254::Fq12::rand(&mut prng); // check_is_identity true
         let h = f * g;
 
-        let hash_f = emulate_extern_hash_fps(
+        let hash_f = extern_hash_fps(
             vec![
                 f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
                 f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
             ],
             true,
         ); // dense
-        let hash_g = emulate_extern_hash_fps(
+        let hash_g = extern_hash_fps(
             vec![
                 g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
                 g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
             ],
             false,
         ); // sparse
-        let hash_h = emulate_extern_hash_fps(
+        let hash_h = extern_hash_fps(
             vec![
                 h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
             ],
@@ -538,14 +538,14 @@ mod test {
         let hint_in = HintInDenseMul1 { a: f, b: g };
         let h = f * g;
 
-        let hash_f = emulate_extern_hash_fps(
+        let hash_f = extern_hash_fps(
             vec![
                 f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
                 f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
             ],
             true,
         );
-        let hash_g = emulate_extern_hash_fps(
+        let hash_g = extern_hash_fps(
             vec![
                 g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
                 g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
@@ -553,13 +553,13 @@ mod test {
             false,
         );
     
-        let hash_c0 = emulate_extern_hash_fps(
+        let hash_c0 = extern_hash_fps(
             vec![
                 h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
             ],
             true,
         );
-        let hash_c = emulate_extern_hash_fps(
+        let hash_c = extern_hash_fps(
             vec![
                 h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1, h.c1.c0.c0,
                 h.c1.c0.c1, h.c1.c1.c0, h.c1.c1.c1, h.c1.c2.c0, h.c1.c2.c1,
@@ -771,7 +771,7 @@ mod test {
         // run time
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let a = ark_bn254::Fq12::rand(&mut prng);
-        let ahash = emulate_extern_hash_fps(
+        let ahash = extern_hash_fps(
             vec![
                 a.c0.c0.c0, a.c0.c0.c1, a.c0.c1.c0, a.c0.c1.c1, a.c0.c2.c0, a.c0.c2.c1, a.c1.c0.c0,
                 a.c1.c0.c1, a.c1.c1.c0, a.c1.c1.c1, a.c1.c2.c0, a.c1.c2.c1,
@@ -1192,7 +1192,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
         let g = f.inverse().unwrap(); // check_is_identity true
-        let ghash = emulate_extern_hash_fps(
+        let ghash = extern_hash_fps(
         vec![
             g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
             g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
@@ -1261,7 +1261,7 @@ mod test {
         let f = ark_bn254::Fq12::rand(&mut prng);
         let g = f.inverse().unwrap();
 
-        let hash_g = emulate_extern_hash_fps(
+        let hash_g = extern_hash_fps(
             vec![
                 g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
                 g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,

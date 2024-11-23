@@ -4,7 +4,7 @@ use crate::bn254::utils::{
 };
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::primitves::{
-    emulate_extern_hash_nibbles,  emulate_nibbles_to_limbs, hash_fp12,
+    extern_hash_nibbles,  extern_nibbles_to_limbs, hash_fp12,
     hash_fp12_with_hints, hash_fp2, hash_fp4, hash_fp6, 
 };
 use crate::chunk::taps::{tup_to_scr, wots_locking_script};
@@ -16,7 +16,7 @@ use ark_ff::{Field, Zero};
 use num_traits::One;
 use std::collections::HashMap;
 
-use super::primitves::{emulate_extern_hash_fps, hash_fp12_192};
+use super::primitves::{extern_hash_fps, hash_fp12_192};
 use super::taps::{HashBytes, Link, Sig};
 use super::wots::WOTSPubKey;
 use super::hint_models::*;
@@ -122,22 +122,22 @@ pub(crate) fn hint_sparse_dense_mul(
     // assumes sparse-dense after doubling block, hashing arrangement changes otherwise
     let hash_new_t = hint_in.hash_aux_T;
     let hash_cur_le =
-        emulate_extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
+        extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
     let hash_other_le = hint_in.hash_other_le;
-    let mut hash_le = emulate_extern_hash_nibbles(vec![hash_cur_le, hash_other_le]);
+    let mut hash_le = extern_hash_nibbles(vec![hash_cur_le, hash_other_le], true);
     if !dbl_blk {
-        hash_le = emulate_extern_hash_nibbles(vec![hash_other_le, hash_cur_le]);
+        hash_le = extern_hash_nibbles(vec![hash_other_le, hash_cur_le], true);
     }
-    let hash_sparse_input = emulate_extern_hash_nibbles(vec![hash_new_t, hash_le]);
+    let hash_sparse_input = extern_hash_nibbles(vec![hash_new_t, hash_le], true);
 
-    let hash_dense_input = emulate_extern_hash_fps(
+    let hash_dense_input = extern_hash_fps(
         vec![
             f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
             f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
         ],
         true,
     );
-    let hash_dense_output = emulate_extern_hash_fps(
+    let hash_dense_output = extern_hash_fps(
         vec![
             f1.c0.c0.c0,
             f1.c0.c0.c1,
@@ -154,8 +154,8 @@ pub(crate) fn hint_sparse_dense_mul(
         ],
         true,
     );
-    let hash_other_le_limbs = emulate_nibbles_to_limbs(hash_other_le);
-    let hash_t_limbs = emulate_nibbles_to_limbs(hash_new_t);
+    let hash_other_le_limbs = extern_nibbles_to_limbs(hash_other_le);
+    let hash_t_limbs = extern_nibbles_to_limbs(hash_new_t);
 
     // data passed to stack in runtime
     let tup = vec![
@@ -278,21 +278,21 @@ pub(crate) fn hints_dense_dense_mul0(
 
     let (_, mul_hints) = Fq12::hinted_mul_first(12, f, 0, g);
 
-    let hash_f = emulate_extern_hash_fps(
+    let hash_f = extern_hash_fps(
         vec![
             f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
             f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
         ],
         true,
     ); // dense
-    let hash_g = emulate_extern_hash_fps(
+    let hash_g = extern_hash_fps(
         vec![
             g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
             g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
         ],
         false,
     ); // sparse
-    let hash_h = emulate_extern_hash_fps(
+    let hash_h = extern_hash_fps(
         vec![
             h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
         ],
@@ -417,14 +417,14 @@ pub(crate) fn hints_dense_dense_mul1(
     let (_, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
     let h = f * g;
 
-    let hash_f = emulate_extern_hash_fps(
+    let hash_f = extern_hash_fps(
         vec![
             f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
             f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
         ],
         true,
     );
-    let hash_g = emulate_extern_hash_fps(
+    let hash_g = extern_hash_fps(
         vec![
             g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
             g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
@@ -432,13 +432,13 @@ pub(crate) fn hints_dense_dense_mul1(
         false,
     );
 
-    let hash_c0 = emulate_extern_hash_fps(
+    let hash_c0 = extern_hash_fps(
         vec![
             h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
         ],
         true,
     );
-    let hash_c = emulate_extern_hash_fps(
+    let hash_c = extern_hash_fps(
         vec![
             h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1, h.c1.c0.c0,
             h.c1.c0.c1, h.c1.c1.c0, h.c1.c1.c1, h.c1.c2.c0, h.c1.c2.c1,
@@ -497,14 +497,14 @@ pub(crate) fn hint_squaring(
     let a = hint_in.a;
     let (_, hints) = Fq12::hinted_square(a);
     let b = a.square();
-    let a_hash = emulate_extern_hash_fps(
+    let a_hash = extern_hash_fps(
         vec![
             a.c0.c0.c0, a.c0.c0.c1, a.c0.c1.c0, a.c0.c1.c1, a.c0.c2.c0, a.c0.c2.c1, a.c1.c0.c0,
             a.c1.c0.c1, a.c1.c1.c0, a.c1.c1.c1, a.c1.c2.c0, a.c1.c2.c1,
         ],
         true,
     );
-    let b_hash = emulate_extern_hash_fps(
+    let b_hash = extern_hash_fps(
         vec![
             b.c0.c0.c0, b.c0.c0.c1, b.c0.c1.c0, b.c0.c1.c1, b.c0.c2.c0, b.c0.c2.c1, b.c1.c0.c0,
             b.c1.c0.c1, b.c1.c1.c0, b.c1.c1.c1, b.c1.c2.c0, b.c1.c2.c1,
@@ -593,9 +593,9 @@ pub(crate) fn tap_squaring() -> Script {
 pub(crate) fn tap_dense_dense_mul0_by_constant(check_is_identity: bool, g: ark_bn254::Fq12) -> Script {
     let (hinted_mul, _) =
         Fq12::hinted_mul_first(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
-    let ghash = emulate_extern_hash_fps(vec![g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
+    let ghash = extern_hash_fps(vec![g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
         g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1], false);
-    let const_hash_limb = emulate_nibbles_to_limbs(ghash);
+    let const_hash_limb = extern_nibbles_to_limbs(ghash);
     let mut check_id = 1;
     if !check_is_identity {
         check_id = 0;
@@ -679,7 +679,7 @@ pub(crate) fn hints_dense_dense_mul0_by_constant(
 
     let (_, mul_hints) = Fq12::hinted_mul_first(12, f, 0, g);
 
-    let hash_f = emulate_extern_hash_fps(
+    let hash_f = extern_hash_fps(
         vec![
             f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
             f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
@@ -693,7 +693,7 @@ pub(crate) fn hints_dense_dense_mul0_by_constant(
     //     ],
     //     false,
     // ); // sparse => constant => bakedin
-    let hash_h = emulate_extern_hash_fps(
+    let hash_h = extern_hash_fps(
         vec![
             h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
         ],
@@ -746,9 +746,9 @@ pub(crate) fn tap_dense_dense_mul1_by_constant(check_is_identity: bool, g: ark_b
     let (hinted_mul, _) =
         Fq12::hinted_mul_second(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
 
-    let ghash = emulate_extern_hash_fps(vec![g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
+    let ghash = extern_hash_fps(vec![g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
         g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1], false);
-    let const_hash_limb = emulate_nibbles_to_limbs(ghash);
+    let const_hash_limb = extern_nibbles_to_limbs(ghash);
 
 
     let hash_scr = script! {
@@ -830,7 +830,7 @@ pub(crate) fn hints_dense_dense_mul1_by_constant(
     let (_, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
     let h = f * g;
 
-    let hash_f = emulate_extern_hash_fps(
+    let hash_f = extern_hash_fps(
         vec![
             f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
             f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
@@ -845,13 +845,13 @@ pub(crate) fn hints_dense_dense_mul1_by_constant(
     //     false,
     // );
 
-    let hash_c0 = emulate_extern_hash_fps(
+    let hash_c0 = extern_hash_fps(
         vec![
             h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
         ],
         true,
     );
-    let hash_c = emulate_extern_hash_fps(
+    let hash_c = extern_hash_fps(
         vec![
             h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1, h.c1.c0.c0,
             h.c1.c0.c1, h.c1.c1.c0, h.c1.c1.c1, h.c1.c2.c0, h.c1.c2.c1,
@@ -994,21 +994,21 @@ pub(crate) fn hints_dense_dense_mul0_by_hash(
 
     let (_, mul_hints) = Fq12::hinted_mul_first(12, f, 0, g);
 
-    let hash_f = emulate_extern_hash_fps(
+    let hash_f = extern_hash_fps(
         vec![
             f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
             f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
         ],
         true,
     ); // dense
-    let hash_g_calc = emulate_extern_hash_fps(
+    let hash_g_calc = extern_hash_fps(
         vec![
             g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
             g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
         ],
         false,
     ); // sparse
-    let hash_h = emulate_extern_hash_fps(
+    let hash_h = extern_hash_fps(
         vec![
             h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
         ],
@@ -1153,7 +1153,7 @@ pub(crate) fn hints_dense_dense_mul1_by_hash(
     let (_, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
 
 
-    let hash_f = emulate_extern_hash_fps(
+    let hash_f = extern_hash_fps(
         vec![
             f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
             f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
@@ -1168,13 +1168,13 @@ pub(crate) fn hints_dense_dense_mul1_by_hash(
     //     false,
     // );
 
-    let hash_c0 = emulate_extern_hash_fps( // dense0 has already assured this value is correct
+    let hash_c0 = extern_hash_fps( // dense0 has already assured this value is correct
         vec![
             h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
         ],
         true,
     );
-    let hash_c = emulate_extern_hash_fps(
+    let hash_c = extern_hash_fps(
         vec![
             h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1, h.c1.c0.c0,
             h.c1.c0.c1, h.c1.c1.c0, h.c1.c1.c1, h.c1.c2.c0, h.c1.c2.c1,

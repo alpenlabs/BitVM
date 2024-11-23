@@ -580,11 +580,14 @@ mod tests {
     pub use bitcoin_script::script;
     //pub use bitcoin::ScriptBuf as Script;
     use bitcoin_script_stack::{script_util::verify_n, stack::StackTracker};
+    use num_traits::ToBytes;
+    use rand::{Rng, SeedableRng};
+    use rand_chacha::ChaCha20Rng;
 
     use super::*;
     use crate::u4::u4_std::u4_hex_to_nibbles;
 
-    fn verify_blake3_hash(result: &str) -> Script {
+    pub fn verify_blake3_hash(result: &str) -> Script {
         script! {
             { u4_hex_to_nibbles(result)}
             for _ in 0..result.len() {
@@ -722,6 +725,62 @@ mod tests {
         //max limit
         let hex_out = "b6c1b3d6b1555e0d20bd5188e4b8b20488c36105fd9c8971ac10dd267e612e4f";
         test_long_blakes(72, hex_out);
+    }
+
+    #[test]
+    fn test_blake32() {
+        let repeat = 32;
+        //let hex_out = "9bd93dd19a93d1d3522c6717d77a2e20e11b8627efa5df80c76d727ca7431892";
+        let mut stack = StackTracker::new();
+
+        let mut prng = ChaCha20Rng::seed_from_u64(13);
+        let nu32_arr: Vec<u32> = (0..repeat).into_iter().map(|_| prng.gen()).collect();
+        let expected_hex_out = blake3::hash(&nu32_arr.iter().flat_map(|i| (i).to_le_bytes()).collect::<Vec<_>>()).to_string();
+
+        let bytes: Vec<u8> = nu32_arr
+        .iter()
+        .flat_map(|&word| word.to_be_bytes())
+        .collect::<Vec<u8>>();
+
+        fn bytes_to_nibbles(byte_array: Vec<u8>) -> Vec<u8> {
+            byte_array
+                .iter()
+                .flat_map(|&byte| vec![(byte >> 4) & 0x0F, byte & 0x0F]) // Extract high and low nibbles
+                .collect()
+        }
+        fn nibbles_to_string(nib_array: Vec<u8>) -> String {
+            nib_array
+                .iter()
+                .map(|&nibble| format!("{:X}", nibble & 0x0F)) // Convert each nibble to a hex string
+                .collect()
+        }
+        let hex_in = nibbles_to_string(bytes_to_nibbles(bytes));
+        println!("input msg {:?}", hex_in);
+
+        stack.custom(
+            script! { { u4_hex_to_nibbles(&hex_in) } },
+            0,
+            false,
+            0,
+            "msg",
+        );
+
+        let start = stack.get_script_len();
+        blake3(&mut stack, repeat * 4, 8);
+        let end = stack.get_script_len();
+        println!("Blake3 size: {} for: {} bytes", end - start, repeat * 4);
+
+        stack.custom(
+            script! { {verify_blake3_hash(&expected_hex_out)}},
+            1,
+            false,
+            0,
+            "verify",
+        );
+
+        stack.op_true();
+
+        assert!(stack.run().success);
     }
 
     #[test]

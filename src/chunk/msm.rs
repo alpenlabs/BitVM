@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::bn254::utils::fq_push_not_montgomery;
 use crate::chunk::primitves::{
-    emulate_extern_hash_fps, emulate_fq_to_nibbles, emulate_fr_to_nibbles, unpack_limbs_to_nibbles
+    extern_hash_fps, extern_fq_to_nibbles, extern_fr_to_nibbles, unpack_limbs_to_nibbles
 };
 use crate::chunk::taps::{tup_to_scr, wots_locking_script};
 use crate::chunk::wots::{wots_p256_get_pub_key, wots_p160_get_pub_key};
@@ -512,7 +512,7 @@ pub(crate) fn hint_msm(
 
     let mut hash_scalars = vec![];
     for i in 0..hint_in.scalars.len() {
-        let tup = (sec_in[i], emulate_fr_to_nibbles(hint_in.scalars[i]));
+        let tup = (sec_in[i], extern_fr_to_nibbles(hint_in.scalars[i]));
         hash_scalars.push(tup);
     }
     tup.extend_from_slice(&hash_scalars);
@@ -521,10 +521,10 @@ pub(crate) fn hint_msm(
         assert!(sec_in.len() == hint_in.scalars.len() + 1);
         tup.push((
             sec_in[sec_in.len() - 1],
-            emulate_extern_hash_fps(vec![hint_in.t.x, hint_in.t.y], true),
+            extern_hash_fps(vec![hint_in.t.x, hint_in.t.y], true),
         ))
     }
-    let outhash = emulate_extern_hash_fps(vec![t.x, t.y], true);
+    let outhash = extern_hash_fps(vec![t.x, t.y], true);
     tup.push((sec_out, outhash));
     let (bc_elems, should_validate) = tup_to_scr(sig, tup);
 
@@ -763,14 +763,14 @@ pub(crate) fn hint_hash_p(
     let (tx, qx, ty, qy) = (hint_in.tx, hint_in.qx, hint_in.ty, hint_in.qy);
     
     let (rx, ry) = (hint_in.rx, hint_in.ry);
-    let thash = emulate_extern_hash_fps(vec![hint_in.tx, hint_in.ty], false);
+    let thash = extern_hash_fps(vec![hint_in.tx, hint_in.ty], false);
 
     let zero_nib = [0u8;64];
 
     let mut tups = vec![];
     tups.push((sec_in[0], thash));
-    tups.push((sec_in[1], emulate_fq_to_nibbles(ry)));
-    tups.push((sec_in[2], emulate_fq_to_nibbles(rx)));
+    tups.push((sec_in[1], extern_fq_to_nibbles(ry)));
+    tups.push((sec_in[2], extern_fq_to_nibbles(rx)));
     tups.push((sec_out, zero_nib));
 
     let (bc_elems, mut should_validate) = tup_to_scr(sig, tups);
@@ -1047,19 +1047,19 @@ mod test {
 
         let r = (t + q).into_affine();
 
-        let thash = emulate_extern_hash_fps(vec![t.x, t.y], false);
+        let thash = extern_hash_fps(vec![t.x, t.y], false);
 
         let mut sig_cache: HashMap<u32, SigData> = HashMap::new();
         let bal: [u8; 32] = nib_to_byte_array(&thash).try_into().unwrap();
         let bal: [u8; 20] = bal[12..32].try_into().unwrap();
         sig_cache.insert(sec_in_arr[0].0, SigData::Sig160(wots160::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in_arr[0].0), &bal)));
 
-        let bal = emulate_fq_to_nibbles(r.y);
+        let bal = extern_fq_to_nibbles(r.y);
         let bal: [u8; 32] = nib_to_byte_array(&bal).try_into().unwrap();
         sig_cache.insert(sec_in_arr[1].0, SigData::Sig256(wots256::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in_arr[1].0), &bal)));
 
 
-        let bal = emulate_fq_to_nibbles(r.x);
+        let bal = extern_fq_to_nibbles(r.x);
         let bal: [u8; 32] = nib_to_byte_array(&bal).try_into().unwrap();
         sig_cache.insert(sec_in_arr[2].0, SigData::Sig256(wots256::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in_arr[2].0), &bal)));
 

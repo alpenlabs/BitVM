@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use crate::chunk::compile::ATE_LOOP_COUNT;
 use crate::chunk::config::miller_config_gen;
 use crate::chunk::msm::{bitcom_hash_p, bitcom_msm, hint_hash_p, hint_msm, tap_hash_p, tap_msm, HintInMSM, HintOutMSM};
-use crate::chunk::primitves::emulate_extern_hash_fps;
+use crate::chunk::primitves::extern_hash_fps;
 use crate::chunk::{taps, taps_mul};
 use crate::chunk::taps::*;
 use crate::chunk::hint_models::*;
@@ -22,7 +22,7 @@ use super::config::{
     assign_link_ids, groth16_config_gen, msm_config_gen, post_miller_config_gen, pre_miller_config_gen, NUM_PUBS, NUM_U160, NUM_U256, PUB_ID
 };
 use super::hint_models::HintOut;
-use super::primitves::{emulate_fq_to_nibbles, emulate_fr_to_nibbles, emulate_nibbles_to_limbs};
+use super::primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_nibbles_to_limbs};
 use super::taps::{tap_hash_c, tap_initT4};
 use super::taps::{Sig};
 use super::wots::WOTSPubKey;
@@ -1279,7 +1279,7 @@ fn evaluate_groth16_params(
     ];
 
     let cvinv = c.inverse().unwrap();
-    let cvinvhash = emulate_extern_hash_fps(
+    let cvinvhash = extern_hash_fps(
         vec![
             cvinv.c0.c0.c0,
             cvinv.c0.c0.c1,
@@ -1902,13 +1902,13 @@ pub(crate) fn evaluate(
             HintOut::DenseMul0(r) => r.out(),
             HintOut::DenseMul1(r) => r.out(),
             HintOut::Double(r) => r.out(),
-            HintOut::FieldElem(f) => emulate_fq_to_nibbles(f),
+            HintOut::FieldElem(f) => extern_fq_to_nibbles(f),
             HintOut::FrobFp12(f) => f.out(),
             HintOut::GrothC(r) => r.out(),
             HintOut::HashC(r) => r.out(),
             HintOut::InitT4(r) => r.out(),
             HintOut::MSM(r) => r.out(),
-            HintOut::ScalarElem(r) => emulate_fr_to_nibbles(r),
+            HintOut::ScalarElem(r) => extern_fr_to_nibbles(r),
             HintOut::SparseAdd(r) => r.out(),
             HintOut::SparseDbl(r) => r.out(),
             HintOut::SparseDenseMul(r) => r.out(),
@@ -1961,7 +1961,7 @@ mod test {
                 let index = link_name_to_id.get(&k).unwrap().0;
                 let x = match v {
                     HintOut::FieldElem(f) => {
-                        let msg_bytes = emulate_fq_to_nibbles(f);
+                        let msg_bytes = extern_fq_to_nibbles(f);
                         let bal: [u8; 32] = nib_to_byte_array(&msg_bytes).try_into().unwrap();
                         let c = wots256::get_signature(&format!("{secret}{:04x}", index), &bal);
                         SigData::Sig256(c)
@@ -1975,7 +1975,7 @@ mod test {
                         SigData::Sig160(c)
                     },
                     HintOut::ScalarElem(f) => {
-                        let msg_bytes = emulate_fr_to_nibbles(f);
+                        let msg_bytes = extern_fr_to_nibbles(f);
                         let bal: [u8; 32] = nib_to_byte_array(&msg_bytes).try_into().unwrap();
                         let c = wots256::get_signature(&format!("{secret}{:04x}", index), &bal);
                         SigData::Sig256(c)

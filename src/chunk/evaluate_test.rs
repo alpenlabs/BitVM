@@ -3,7 +3,7 @@
 mod test {
     use std::{collections::HashMap, io, ops::Neg};
 
-    use crate::chunk::{config::{assign_link_ids, NUM_PUBS, NUM_U160, NUM_U256}, evaluate::*, hint_models::HintOut, primitves::{emulate_fq_to_nibbles, emulate_fr_to_nibbles}, taps::Sig};
+    use crate::chunk::{config::{assign_link_ids, NUM_PUBS, NUM_U160, NUM_U256}, evaluate::*, hint_models::HintOut, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles}, taps::Sig};
     use ark_ec::{AffineRepr, CurveGroup};
     use ark_ff::Field;
 

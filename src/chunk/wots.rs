@@ -184,7 +184,7 @@ mod test {
     use rand::{RngCore, SeedableRng};
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{chunk::primitves::emulate_fq_to_nibbles, signatures::wots::wots256};
+    use crate::{chunk::primitves::extern_fq_to_nibbles, signatures::wots::wots256};
 
 // 0110 0100
 // 0011 1100 0000
@@ -193,7 +193,7 @@ mod test {
         let secret = "a01b23c45d67e89f";
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq::from(100);
-        let mut fb = emulate_fq_to_nibbles(f);
+        let mut fb = extern_fq_to_nibbles(f);
         println!("fb {:?}", fb);
         let sig = wots256::get_signature(secret, &fb);  
         let mut bs = vec![]; 
@@ -250,7 +250,7 @@ mod test {
         let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
         let fq = ark_bn254::Fq::from(280);
         let fq2 = fq.into_bigint().to_bytes_le();
-        let fqs = emulate_fq_to_nibbles(fq);
+        let fqs = extern_fq_to_nibbles(fq);
         println!("fqs {:?}", fqs);
         println!("fqs {:?}", fq2);
     }
@@ -275,7 +275,7 @@ mod test {
         let nibbles = &signature.map(|(sig, digit)| digit)[0..wots256::M_DIGITS as usize];
         println!("fqb {:?}", nibbles);
 
-        let nibs = emulate_fq_to_nibbles(fq);
+        let nibs = extern_fq_to_nibbles(fq);
         println!("nibs {:?}", nibs);
     }
 }
