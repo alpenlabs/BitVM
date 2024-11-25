@@ -782,12 +782,15 @@ mod test {
             arr
         }
     
-        let mut prng = ChaCha20Rng::seed_from_u64(1777);
-        let mut ps = vec![];
-        for _ in 0..12 {
-            let p = ark_bn254::Fq::rand(&mut prng);
-            ps.push(p);
-        }
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let _f = ark_bn254::Fq12::rand(&mut prng);
+        let g = ark_bn254::Fq12::rand(&mut prng);
+
+        let ps = vec![
+            g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1,
+            g.c1.c0.c0, g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
+        ];
+
 
         let res = emulate_extern_hash_fps_scripted(ps.clone(), false);
         let res2 = extern_hash_fps(ps, false);
