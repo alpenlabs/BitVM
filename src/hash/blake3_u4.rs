@@ -682,9 +682,9 @@ mod tests {
             "msg",
         );
 
-        let start = stack.get_script_len();
+        let start = stack.get_script().len();
         blake3(&mut stack, repeat * 4, 8);
-        let end = stack.get_script_len();
+        let end = stack.get_script().len();
         println!("Blake3 size: {} for: {} bytes", end - start, repeat * 4);
 
         stack.custom(
@@ -697,13 +697,22 @@ mod tests {
 
         stack.op_true();
 
+        println!("Max Stack Size: {} for: {} bytes",stack.get_max_stack_size(),repeat*4);
+
         assert!(stack.run().success);
+      
     }
 
     #[test]
     fn test_blake3_long() {
+        let hex_out = "86ca95aefdee3d969af9bcc78b48a5c1115be5d66cafc2fc106bbd982d820e70";
+        test_long_blakes(16, hex_out);
+
         let hex_out = "9bd93dd19a93d1d3522c6717d77a2e20e11b8627efa5df80c76d727ca7431892";
         test_long_blakes(20, hex_out);
+
+        let hex_out = "cfe4e91ae2dd3223f02e8c33d4ee464734d1620b64ed1f08cac7e21f204851b7";
+        test_long_blakes(32, hex_out);
 
         let hex_out = "08729d0161b725b93e83ce79b06c534ce7684d39e21ad05074b67e0ac89ef44a";
         test_long_blakes(40, hex_out);
