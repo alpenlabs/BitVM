@@ -61,15 +61,17 @@ pub fn verify_signed_assertions(
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
+    use std::{collections::HashMap, ops::Neg};
 
-    use ark_ec::CurveGroup;
+    use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
     use ark_ff::Field;
     use rand::Rng;
 
-    use crate::chunk::{api::mock_pubkeys, test_utils::{read_scripts_from_file, write_map_to_file, write_scripts_to_file, write_scripts_to_separate_files}};
+    use crate::{chunk::{api::mock_pubkeys, test_utils::{read_scripts_from_file, write_map_to_file, write_scripts_to_file, write_scripts_to_separate_files}}, groth16::offchain_checker::compute_c_wi};
 
     use crate::chunk::{config::NUM_PUBS, test_utils::read_map_from_file};
+
+    use self::chunk::{acc::{self, Pubs}, evaluate::EvalIns};
 
     use super::*;
 
@@ -426,5 +428,55 @@ mod test {
         }
         let assert3: [[u8; 20]; N_VERIFIER_HASHES] = assert3.try_into().unwrap();
         (assert1, assert2, assert3)
+    }
+
+
+    #[test]
+    fn test_acc() {
+        let (_, vk) = mock::compile_circuit();
+        let (proof, scalars) = mock::generate_proof();
+
+        let mut msm_scalar = scalars.to_vec();
+        msm_scalar.reverse();
+        let mut msm_gs = vk.gamma_abc_g1.clone(); // vk.vk_pubs[0]
+        msm_gs.reverse();
+        let vky0 = msm_gs.pop().unwrap();
+    
+        let mut p3 = vky0 * ark_bn254::Fr::ONE;
+        for i in 0..NUM_PUBS {
+            p3 = p3 + msm_gs[i] * msm_scalar[i];
+        }
+        let p3 = p3.into_affine();
+    
+        let (p2, p1, p4) = (proof.c, vk.alpha_g1, proof.a);
+        let (q3, q2, q1, q4) = (
+            vk.gamma_g2.into_group().neg().into_affine(),
+            vk.delta_g2.into_group().neg().into_affine(),
+            -vk.beta_g2,
+            proof.b,
+        );
+        let f_fixed = Bn254::multi_miller_loop_affine([p1], [q1]).0;
+        let f = Bn254::multi_miller_loop_affine([p1, p2, p3, p4], [q1, q2, q3, q4]).0;
+        let (c, s) = compute_c_wi(f);
+        let eval_ins: EvalIns = EvalIns {
+            p2,
+            p3,
+            p4,
+            q4,
+            c,
+            s,
+            ks: msm_scalar.clone(),
+        };
+    
+        let pubs: Pubs = Pubs {
+            q2, 
+            q3, 
+            fixed_acc: f_fixed, 
+            ks_vks: msm_gs, 
+            vky0
+        };
+
+        acc::groth16(eval_ins, pubs);
+        
     }
 }

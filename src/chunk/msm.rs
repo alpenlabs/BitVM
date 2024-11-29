@@ -528,7 +528,6 @@ pub(crate) fn hint_msm(
     tup.push((sec_out, outhash));
     let (bc_elems, should_validate) = tup_to_scr(sig, tup);
 
-    println!("hints len {:?} {:?} {:?} {:?}", hints_tangent.len(), hints_chord.len(), aux_tangent.len(), aux_chord.len());
     let simulate_stack_input = script! {
         // // tmul hints
         for hint in hints_tangent { // check_tangent then double line
