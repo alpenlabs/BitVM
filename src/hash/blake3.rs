@@ -500,6 +500,9 @@ pub fn blake3_160_hash_equalverify() -> Script {
 mod tests {
     use blake3::Hasher;
     use hex::encode;
+    use num_traits::ToBytes;
+    use rand::{Rng, SeedableRng};
+    use rand_chacha::ChaCha20Rng;
 
     use crate::hash::blake3::*;
     use crate::run;
@@ -559,22 +562,69 @@ mod tests {
 
     #[test]
     fn test_blake3_var_length() {
-        // let hex_out = "11b4167bd0184b9fc8b3474a4c29d08e801cbc1596b63a5ab380ce0fc83a15cd";
-        let hex_out = "cfe4e91ae2dd3223f02e8c33d4ee464734d1620b64ed1f08cac7e21f204851b7";
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+
+        let nu32_arr: Vec<u32> = (0..32_u32).into_iter().map(|_| prng.gen()).collect();
+        let mut u32_arr = nu32_arr.clone();
+        u32_arr.reverse();
+        let inputs2 = u32_arr.iter().flat_map(|i| (i).to_le_bytes()).collect::<Vec<_>>();
+        let hex_out = blake3::hash(&inputs2).to_string();
 
         let script = script! {
-            for _ in 0..32 {
-                {u32_push(1)}
+            for i in nu32_arr {
+                {u32_push(i)}
             }
             { blake3_var_length(32*4) }
-            {push_bytes_hex(hex_out)}
+            {push_bytes_hex(&hex_out) }
             {blake3_hash_equalverify()}
             OP_TRUE
         };
         println!("Blake3_var_length_60 size: {:?} \n", script.len());
 
-        run(script);
+        let exec_result = execute_script(script);
+        assert!(exec_result.success);
     }
+
+    #[test]
+    fn test_blake3_var_length_from_fp() {
+
+        let barr = [20, 91, 229, 35, 123, 98, 32, 102, 146, 81, 250, 85, 158, 72, 201, 166, 92, 203, 90, 221, 204, 188, 239, 83, 233, 32, 171, 205, 175, 35, 68, 169, 44, 125, 237, 24, 70, 222, 127, 231, 49, 130, 15, 180, 69, 209, 193, 114, 219, 250, 70, 71, 113, 207, 56, 107, 125, 161, 30, 43, 253, 71, 41, 206, 57, 46, 205, 9, 18, 5, 188, 233, 224, 18, 156, 170, 120, 91, 97, 167, 251, 23, 119, 213, 50, 234, 196, 96, 129, 229, 85, 41, 63, 247, 49, 69, 170, 76, 191, 0, 57, 187, 85, 45, 10, 173, 205, 175, 251, 252, 153, 112, 92, 53, 92, 79, 180, 210, 205, 163, 69, 184, 117, 237, 159, 41, 138, 25, 183, 47, 244, 4, 75, 249, 209, 64, 142, 12, 47, 88, 251, 136, 137, 114, 122, 57, 249, 57, 32, 82, 80, 184, 255, 138, 254, 186, 77, 85, 40, 211, 145, 164, 78, 10, 138, 84, 193, 155, 119, 177, 218, 53, 73, 164, 149, 222, 106, 29, 236, 197, 43, 92, 133, 95, 109, 104, 18, 33, 43, 218, 55, 123].to_vec();
+        fn byte_array_to_u32_array(byte_array: Vec<u8>) -> Vec<u32> {
+            assert!(byte_array.len() % 4 == 0, "Byte array length must be a multiple of 4");
+            byte_array
+                .chunks(4) // Split the byte array into chunks of 4
+                .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap())) // Convert each chunk to a u32
+                .collect()
+        }
+
+
+        let mut nu32_arr: Vec<u32> = byte_array_to_u32_array(barr);
+        nu32_arr.reverse();
+
+        let mut u32_arr = nu32_arr.clone();
+        u32_arr.reverse();
+        let inputs2 = u32_arr.iter().flat_map(|i| (i).to_le_bytes()).collect::<Vec<_>>();
+        let hex_out = blake3::hash(&inputs2).to_string();
+
+        println!("hex_out {:?}", hex_out);
+        let script = script! {
+            for i in nu32_arr.clone() {
+                {u32_push(i)}
+            }
+            { blake3_var_length(nu32_arr.len()*4) }
+            {push_bytes_hex(&hex_out) }
+            {blake3_hash_equalverify()}
+            OP_TRUE
+        };
+        println!("Blake3_var_length {} size: {:?} \n",nu32_arr.len()*4, script.len());
+
+        let exec_result = execute_script(script);
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:} {:?}", exec_result.final_stack.get(i));
+        }
+        assert!(exec_result.success);
+    }
+
 
     #[test]
     fn test_blake3_160() {
