@@ -332,7 +332,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<HintOut>, eval_ins: EvalIns, pu
     all_output_hints.push(hout);
             
 
-            t4 = t4acc {t4: dbl.t, dbl_le: Some(dbl.dbl_le), add_le: None}; 
+            t4 = t4acc {t4: dbl.t, dbl_le: dbl.dbl_le, add_le: None}; 
 
         } else { 
             let (dbladd, _, _) = taps::hint_point_ops(sig, (0, false), (0..7).map(|i| (i+1, true)).collect(), HintInDblAdd { t: t4.t4, p: p4, q: q4, hash_le_aux: t4.hash_le_aux() }, ate);
@@ -341,7 +341,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<HintOut>, eval_ins: EvalIns, pu
     all_output_hints.push(hout);
             
 
-            t4 = t4acc {t4: dbladd.t, dbl_le: Some(dbladd.dbl_le), add_le: Some(dbladd.add_le)}; 
+            t4 = t4acc {t4: dbladd.t, dbl_le: dbladd.dbl_le, add_le: dbladd.add_le}; 
         }
         // SD1
         let (tmp, _, _) = taps_mul::hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], HintInSparseDenseMul { a: f_acc.0, le0: t4.dbl_le.unwrap().0, le1: t4.dbl_le.unwrap().1,hash_other_le: t4.hash_other_le(true), hash_aux_T: t4.hash_t() },  true);
@@ -526,7 +526,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<HintOut>, eval_ins: EvalIns, pu
     all_output_hints.push(hout);
     
 
-    t4 = t4acc {t4: temp.t, dbl_le: None, add_le: Some(temp.add_le)}; 
+    t4 = t4acc {t4: temp.t, dbl_le: None, add_le: temp.add_le}; 
 
     // SD
     let (temp, _, _) = hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], HintInSparseDenseMul {  a: f_acc.0, le0: t4.add_le.unwrap().0, le1: t4.add_le.unwrap().1, hash_other_le: t4.hash_other_le(false), hash_aux_T: t4.hash_t() }, false);
@@ -567,7 +567,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<HintOut>, eval_ins: EvalIns, pu
     all_output_hints.push(hout);
     
 
-    t4 = t4acc {t4: temp.t, dbl_le: None, add_le: Some(temp.add_le)}; 
+    t4 = t4acc {t4: temp.t, dbl_le: None, add_le: temp.add_le}; 
 
     // SD
     let (temp, _, _) = hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], HintInSparseDenseMul {  a: f_acc.0, le0: t4.add_le.unwrap().0, le1: t4.add_le.unwrap().1, hash_other_le: t4.hash_other_le(false), hash_aux_T: t4.hash_t() }, false);

@@ -299,7 +299,7 @@ pub(crate) fn hint_point_dbl(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInDouble,
-) -> (HintOutDouble, Script, bool) {
+) -> (HintOutG2Point, Script, bool) {
     assert_eq!(sec_in.len(), 3);
     let t = hint_in.t;
     let p = hint_in.p;
@@ -383,11 +383,11 @@ pub(crate) fn hint_point_dbl(
 
         {bc_elems}
     };
-    let hint_out: HintOutDouble = HintOutDouble {
+    let hint_out: HintOutG2Point = HintOutG2Point {
         t: G2Affine::new_unchecked(new_tx, new_ty),
-        dbl_le: (dbl_le0, dbl_le1),
-        hash_add_le_aux: hash_add_le,
-        hash_out: hash_root_claim,
+        dbl_le: Some((dbl_le0, dbl_le1)),
+        add_le: None,
+        hash: hash_root_claim,
     };
     (hint_out, simulate_stack_input, should_validate)
 }
@@ -689,7 +689,7 @@ pub(crate) fn hint_point_add_with_frob(
     sec_in: Vec<Link>,
     hint_in: HintInAdd,
     ate: i8,
-) -> (HintOutAdd, Script, bool) {
+) -> (HintOutG2Point, Script, bool) {
     assert!(ate == 1 || ate == -1);
     assert_eq!(sec_in.len(), 7);
     let (tt, p, q) = (hint_in.t, hint_in.p, hint_in.q);
@@ -850,11 +850,11 @@ pub(crate) fn hint_point_add_with_frob(
         // bit commits raw
         { bc_elems }
     };
-    let hint_out = HintOutAdd {
+    let hint_out = HintOutG2Point {
         t: G2Affine::new_unchecked(new_tx, new_ty),
-        add_le: (add_le0, add_le1),
-        hash_dbl_le_aux: hash_dbl_le,
-        hash_out: hash_root_claim,
+        add_le: Some((add_le0, add_le1)),
+        dbl_le: None,
+        hash: hash_root_claim,
     };
     (hint_out, simulate_stack_input, should_validate)
 }
@@ -1173,7 +1173,7 @@ pub(crate) fn hint_point_ops(
     sec_in: Vec<Link>,
     hint_in: HintInDblAdd,
     ate: i8,
-) -> (HintOutDblAdd, Script, bool) {
+) -> (HintOutG2Point, Script, bool) {
     assert_eq!(sec_in.len(), 7);
     let (t, p, q) = (hint_in.t, hint_in.p, hint_in.q);
 
@@ -1314,10 +1314,10 @@ pub(crate) fn hint_point_ops(
         { bc_elems }
     };
 
-    let hint_out = HintOutDblAdd {
+    let hint_out = HintOutG2Point {
         t: G2Affine::new_unchecked(new_tx, new_ty),
-        add_le: (add_le0, add_le1),
-        dbl_le: (dbl_le0, dbl_le1),
+        add_le: Some((add_le0, add_le1)),
+        dbl_le: Some((dbl_le0, dbl_le1)),
         hash: hash_root_claim,
     };
 

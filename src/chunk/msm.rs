@@ -250,12 +250,12 @@ pub(crate) struct HintInMSM {
 #[derive(Debug, Clone)]
 pub(crate) struct HintOutMSM {
     pub(crate) t: ark_bn254::G1Affine,
-    pub(crate) hasht: HashBytes,
+    pub(crate) hash: HashBytes,
 }
 
 impl HintOutMSM {
     pub(crate) fn out(&self) -> HashBytes {
-        self.hasht
+        self.hash
     }
 }
 
@@ -549,7 +549,7 @@ pub(crate) fn hint_msm(
 
         { bc_elems }
     };
-    let hint_out = HintOutMSM { t: t, hasht: outhash };
+    let hint_out = HintOutMSM { t: t, hash: outhash };
 
     (hint_out, simulate_stack_input, should_validate)
 }
