@@ -71,7 +71,7 @@ mod test {
 
     use crate::chunk::{config::NUM_PUBS, test_utils::read_map_from_file};
 
-    use self::chunk::{acc::{self, Pubs}, evaluate::EvalIns};
+    use self::chunk::{acc::{self, Pubs}, evaluate::EvalIns, hint_models::HintOut};
 
     use super::*;
 
@@ -476,7 +476,10 @@ mod test {
             vky0
         };
 
-        let proof_asserts = acc::groth16(eval_ins, pubs);
+        let mut hout: Vec<HintOut> = vec![];
+
+        acc::groth16(&mut hout, eval_ins, pubs, &mut None);
+        let proof_asserts = acc::hint_to_data(hout);
         write_asserts_to_file(proof_asserts, "chunker_data/assert2.json");
 
     }
