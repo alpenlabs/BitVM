@@ -1,9 +1,7 @@
 use ark_bn254::g2::G2Affine;
 use ark_bn254::{Fq12, G1Affine};
 use ark_ff::{BigInteger, Field, PrimeField};
-use bitcoin::opcodes::OP_TRUE;
 use bitcoin_script::script;
-use num_bigint::BigUint;
 use std::collections::HashMap;
 
 use crate::chunk::compile::ATE_LOOP_COUNT;
@@ -1100,7 +1098,7 @@ fn evaluate_post_miller_circuit(
                 _ => panic!("failed to match"),
             };
 
-            let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul0_by_constant(sig, sec_out, sec_in.clone(), HintInDenseMul0 { a: a.c, b: fixed_acc });
+            let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul0_by_constant(sig, sec_out, sec_in.clone(), HintInDenseMul0 { a: a.f, b: fixed_acc });
             if force_validate || maybe_wrong {
                 let ops_script = tap_dense_dense_mul0_by_constant(true, fixed_acc);
                 let bcs_script =
@@ -1129,7 +1127,7 @@ fn evaluate_post_miller_circuit(
                 HintOut::DenseMul1(r) => r,
                 _ => panic!("failed to match"),
             };
-            let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul1_by_constant(sig, sec_out, sec_in.clone(), HintInDenseMul1 { a: a.c, b: fixed_acc });
+            let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul1_by_constant(sig, sec_out, sec_in.clone(), HintInDenseMul1 { a: a.f, b: fixed_acc });
             if force_validate || maybe_wrong {
                 let ops_script = tap_dense_dense_mul1_by_constant(true, fixed_acc);
                 let bcs_script =
@@ -1220,7 +1218,7 @@ fn evaluate_groth16_params_from_sig(
                 let nibs: [u8; 40] = nibs.try_into().unwrap();
                 let mut padded_nibs = [0u8; 64]; // initialize with zeros
                 padded_nibs[24..64].copy_from_slice(&nibs[0..40]);
-                HintOut::GrothC(HintOutGrothC { c: ark_bn254::Fq12::ONE, chash: padded_nibs })
+                HintOut::GrothC(HintOutFp12 { f: ark_bn254::Fq12::ONE, hash: padded_nibs })
             }
         };
         hout_per_name.insert(item.link_id.clone(), hout);
@@ -1246,7 +1244,7 @@ fn evaluate_groth16_params_from_sig(
     //let chash = emulate_extern_hash_fps(cs.clone(), false);
     let v = hout_per_name.get("cinv").unwrap();
     if let HintOut::GrothC(x) = v {
-        hout_per_name.insert(String::from("cinv"), HintOut::GrothC(HintOutGrothC { c: f, chash: x.chash }));
+        hout_per_name.insert(String::from("cinv"), HintOut::GrothC(HintOutFp12 { f, hash: x.hash }));
     }
     return hout_per_name;
 
@@ -1329,9 +1327,9 @@ fn evaluate_groth16_params(
         HintOut::FieldElem(sv[2]),
         HintOut::FieldElem(sv[1]),
         HintOut::FieldElem(sv[0]),
-        HintOut::GrothC(HintOutGrothC {
-            c: cvinv,
-            chash: cvinvhash,
+        HintOut::GrothC(HintOutFp12 {
+            f: cvinv,
+            hash: cvinvhash,
         }),
         HintOut::FieldElem(q4.y.c1),
         HintOut::FieldElem(q4.y.c0),
@@ -1660,7 +1658,7 @@ fn evaluate_pre_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    HintInDenseMulByHash0 { a: c.c, bhash: d.chash },
+                    HintInDenseMulByHash0 { a: c.f, bhash: d.hash },
                 ),
                 _ => panic!("failed to match"),
             };
@@ -1701,7 +1699,7 @@ fn evaluate_pre_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    HintInDenseMulByHash1 { a: a.c, bhash: b.chash },
+                    HintInDenseMulByHash1 { a: a.f, bhash: b.hash },
                 ),
                 _ => panic!("failed to match"),
             };
@@ -1883,7 +1881,7 @@ pub(crate) fn evaluate(
         let hint = hint.unwrap();
         match hint {
             HintOut::DenseMul1(c) => {
-                assert_eq!(c.c, ark_bn254::Fq12::ONE);
+                assert_eq!(c.f, ark_bn254::Fq12::ONE);
             }
             _ => {}
         }
@@ -1968,7 +1966,7 @@ mod test {
                     },
                     HintOut::GrothC(r) => {
                         // println!("match {:?}", r.chash);
-                        let bal: [u8; 32] = nib_to_byte_array(&r.chash).try_into().unwrap();
+                        let bal: [u8; 32] = nib_to_byte_array(&r.hash).try_into().unwrap();
         
                         let bal: [u8; 20] = bal[12..32].try_into().unwrap();
                         let c = wots160::get_signature(&format!("{secret}{:04x}", index), &bal);
@@ -2021,8 +2019,8 @@ mod test {
                 },
                 HintOut::GrothC(v) => {
                     if let HintOut::GrothC(rs) = r {
-                        assert_eq!(v.c, rs.c);
-                        assert_eq!(v.chash, rs.chash);
+                        assert_eq!(v.f, rs.f);
+                        assert_eq!(v.hash, rs.hash);
                     } 
                 }
                 _ => (),

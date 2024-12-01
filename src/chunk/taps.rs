@@ -1318,7 +1318,7 @@ pub(crate) fn hint_point_ops(
         t: G2Affine::new_unchecked(new_tx, new_ty),
         add_le: (add_le0, add_le1),
         dbl_le: (dbl_le0, dbl_le1),
-        hash_out: hash_root_claim,
+        hash: hash_root_claim,
     };
 
     (hint_out, simulate_stack_input, should_validate)
@@ -1418,8 +1418,7 @@ pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
     let hint_out = HintOutSparseDbl {
         t2: G2Affine::new_unchecked(x2, y2),
         t3: G2Affine::new_unchecked(x3, y3),
-        f: b,
-        fhash: b_hash,
+        f: HintOutFp12 { f: b, hash: b_hash }
     };
 
     (hint_out, simulate_stack_input, should_validate)
@@ -2143,7 +2142,7 @@ pub(crate) fn hint_hash_c(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInHashC,
-) -> (HintOutHashC, Script, bool) {
+) -> (HintOutFp12, Script, bool) {
     let f = hint_in.c;
     let f = vec![
         f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
@@ -2162,9 +2161,9 @@ pub(crate) fn hint_hash_c(
         { bc_elems }
     };
     (
-        HintOutHashC {
-            c: hint_in.c,
-            hash_out: fhash,
+        HintOutFp12 {
+            f: hint_in.c,
+            hash: fhash,
         },
         simulate_stack_input,
         should_validate
@@ -2216,7 +2215,7 @@ pub(crate) fn hint_hash_c2(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInHashC,
-) -> (HintOutHashC, Script, bool) {
+) -> (HintOutFp12, Script, bool) {
     let f = hint_in.c;
     let f = vec![
         f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
@@ -2235,9 +2234,9 @@ pub(crate) fn hint_hash_c2(
         { bc_elems }
     };
     (
-        HintOutHashC {
-            c: hint_in.c,
-            hash_out: outhash,
+        HintOutFp12 {
+            f: hint_in.c,
+            hash: outhash,
         },
         simulate_stack_input,
         should_validate
@@ -2574,7 +2573,7 @@ pub(crate) fn hints_frob_fp12(
     sec_in: Vec<Link>,
     hint_in: HintInFrobFp12,
     power: usize,
-) -> (HintOutFrobFp12, Script, bool) {
+) -> (HintOutFp12, Script, bool) {
     assert_eq!(sec_in.len(), 1);
     let f = hint_in.f;
     let (_, hints_frobenius_map) = Fq12::hinted_frobenius_map(power, f);
@@ -2606,5 +2605,5 @@ pub(crate) fn hints_frob_fp12(
         { fq12_push_not_montgomery(f) }
         { bc_elems }
     };
-    (HintOutFrobFp12 { f: g, fhash: ghash }, simulate_stack_input, should_validate)
+    (HintOutFp12 { f: g, hash: ghash }, simulate_stack_input, should_validate)
 }

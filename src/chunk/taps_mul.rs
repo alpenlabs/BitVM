@@ -112,7 +112,7 @@ pub(crate) fn hint_sparse_dense_mul(
     sec_in: Vec<Link>,
     hint_in: HintInSparseDenseMul,
     dbl_blk: bool,
-) -> (HintOutSparseDenseMul, Script, bool) {
+) -> (HintOutFp12, Script, bool) {
     assert_eq!(sec_in.len(), 2);
     let (f, dbl_le0, dbl_le1) = (hint_in.a, hint_in.le0, hint_in.le1);
     let (_, hints) = Fq12::hinted_mul_by_34(f, dbl_le0, dbl_le1);
@@ -186,9 +186,9 @@ pub(crate) fn hint_sparse_dense_mul(
     };
 
     (
-        HintOutSparseDenseMul {
+        HintOutFp12 {
             f: f1,
-            hash_out: hash_dense_output,
+            hash: hash_dense_output,
         },
         simulate_stack_input,
         should_validate
@@ -271,7 +271,7 @@ pub(crate) fn hints_dense_dense_mul0(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInDenseMul0,
-) -> (HintOutDenseMul0, Script, bool) {
+) -> (HintOutFp12, Script, bool) {
     assert_eq!(sec_in.len(), 2);
     let (f, g) = (hint_in.a, hint_in.b);
     let h = f * g;
@@ -326,9 +326,9 @@ pub(crate) fn hints_dense_dense_mul0(
     };
 
     (
-        HintOutDenseMul0 {
-            c: h,
-            hash_out: hash_h,
+        HintOutFp12 {
+            f: h,
+            hash: hash_h,
         },
         simulate_stack_input,
         should_validate
@@ -412,7 +412,7 @@ pub(crate) fn hints_dense_dense_mul1(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInDenseMul1,
-) -> (HintOutDenseMul1, Script, bool) {
+) -> (HintOutFp12, Script, bool) {
     let (f, g) = (hint_in.a, hint_in.b);
     let (_, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
     let h = f * g;
@@ -475,9 +475,9 @@ pub(crate) fn hints_dense_dense_mul1(
         { bc_elems }
     };
     (
-        HintOutDenseMul1 {
-            c: h,
-            hash_out: hash_c,
+        HintOutFp12 {
+            f: h,
+            hash: hash_c,
         },
         simulate_stack_input,
         should_validate
@@ -492,7 +492,7 @@ pub(crate) fn hint_squaring(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInSquaring,
-) -> (HintOutSquaring, Script, bool) {
+) -> (HintOutFp12, Script, bool) {
     assert_eq!(sec_in.len(), 1);
     let a = hint_in.a;
     let (_, hints) = Fq12::hinted_square(a);
@@ -527,7 +527,7 @@ pub(crate) fn hint_squaring(
 
         {bc_elems}
     };
-    let hint_out = HintOutSquaring { bhash: b_hash, b };
+    let hint_out = HintOutFp12 { hash: b_hash, f: b };
     return (hint_out, simulate_stack_input, should_validate);
 }
 
@@ -672,7 +672,7 @@ pub(crate) fn hints_dense_dense_mul0_by_constant(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInDenseMul0,
-) -> (HintOutDenseMul0, Script, bool) {
+) -> (HintOutFp12, Script, bool) {
     assert_eq!(sec_in.len(), 1);
     let (f, g) = (hint_in.a, hint_in.b);
     let h = f * g;
@@ -727,9 +727,9 @@ pub(crate) fn hints_dense_dense_mul0_by_constant(
     };
 
     (
-        HintOutDenseMul0 {
-            c: h,
-            hash_out: hash_h,
+        HintOutFp12 {
+            f: h,
+            hash: hash_h,
         },
         simulate_stack_input,
         should_validate
@@ -825,7 +825,7 @@ pub(crate) fn hints_dense_dense_mul1_by_constant(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInDenseMul1,
-) -> (HintOutDenseMul1, Script, bool) {
+) -> (HintOutFp12, Script, bool) {
     let (f, g) = (hint_in.a, hint_in.b);
     let (_, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
     let h = f * g;
@@ -888,9 +888,9 @@ pub(crate) fn hints_dense_dense_mul1_by_constant(
         { bc_elems }
     };
     (
-        HintOutDenseMul1 {
-            c: h,
-            hash_out: hash_c,
+        HintOutFp12 {
+            f: h,
+            hash: hash_c,
         },
         simulate_stack_input,
         should_validate
@@ -986,7 +986,7 @@ pub(crate) fn hints_dense_dense_mul0_by_hash(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInDenseMulByHash0,
-) -> (HintOutDenseMul0, Script, bool) {
+) -> (HintOutFp12, Script, bool) {
     assert_eq!(sec_in.len(), 2);
     let (f, hash_g) = (hint_in.a, hint_in.bhash);
     let g = f.inverse().unwrap();
@@ -1045,9 +1045,9 @@ pub(crate) fn hints_dense_dense_mul0_by_hash(
     };
 
     (
-        HintOutDenseMul0 {
-            c: h,
-            hash_out: hash_h,
+        HintOutFp12 {
+            f: h,
+            hash: hash_h,
         },
         simulate_stack_input,
         should_validate
@@ -1145,7 +1145,7 @@ pub(crate) fn hints_dense_dense_mul1_by_hash(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInDenseMulByHash1,
-) -> (HintOutDenseMul1, Script, bool) {
+) -> (HintOutFp12, Script, bool) {
     let (f, hash_g) = (hint_in.a, hint_in.bhash);
     let g = f.inverse().unwrap();
     let h = ark_bn254::Fq12::ONE;
@@ -1211,9 +1211,9 @@ pub(crate) fn hints_dense_dense_mul1_by_hash(
         { bc_elems }
     };
     (
-        HintOutDenseMul1 {
-            c: h,
-            hash_out: hash_c,
+        HintOutFp12 {
+            f: h,
+            hash: hash_c,
         },
         simulate_stack_input,
         should_validate
