@@ -120,7 +120,7 @@ pub(crate) fn hint_sparse_dense_mul(
     f1.mul_by_034(&ark_bn254::Fq2::ONE, &dbl_le0, &dbl_le1);
 
     // assumes sparse-dense after doubling block, hashing arrangement changes otherwise
-    let hash_new_t = hint_in.hash_aux_T;
+    let hash_new_t = hint_in.hash_aux_t;
     let hash_cur_le =
         extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
     let hash_other_le = hint_in.hash_other_le;

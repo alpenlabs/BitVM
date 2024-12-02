@@ -3,13 +3,16 @@ use crate::treepp;
 
 use super::hint_models::HintOut;
 
+#[derive(Debug, Clone)]
 pub struct Segment {
-    pub input_index: Vec<usize>,   
+    pub id: usize,
+    pub input: Vec<Segment>,   
     pub output: (HintOut, treepp::Script, bool),
     pub hints: treepp::Script,
     pub scr_type: ScriptType
 }
 
+#[derive(Debug, Clone, Copy)]
 enum ScriptType {
     PreMillerInitT4,
     PreMillerPrecomputePy,

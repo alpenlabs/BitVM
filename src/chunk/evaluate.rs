@@ -137,7 +137,7 @@ fn evaluate_miller_circuit(
                 let p = G1Affine::new_unchecked(ps[5], ps[4]);
                 let (hintout, hint_script, maybe_wrong) = match hints[0].clone() {
                     HintOut::G2Acc(r) => {
-                        let hint_in = HintInDblAdd::from_g2point(r, p, q);
+                        let hint_in = HintInAdd::from_g2point(r, p, q);
                         taps::hint_point_ops(sig, sec_out, sec_in.clone(), hint_in, *bit)
                     }
                     _ => panic!("failed to match"),
@@ -252,8 +252,8 @@ fn evaluate_miller_circuit(
                 }
                 let p3 = G1Affine::new_unchecked(ps[1], ps[0]);
                 let p2 = G1Affine::new_unchecked(ps[3], ps[2]);
-                let hint_in: HintInSparseDbl =
-                    HintInSparseDbl::from_groth_and_aux(p2, p3, nt2, nt3);
+                let hint_in: HintInSparseEvals =
+                    HintInSparseEvals::from_groth_and_aux(p2, p3, nt2, nt3, None, None);
                 let (hint_out, hint_script, maybe_wrong) =
                     taps::hint_double_eval_mul_for_fixed_Qs(sig, sec_out, sec_in.clone(), hint_in);
                 if force_validate || maybe_wrong {
@@ -481,8 +481,8 @@ fn evaluate_miller_circuit(
                 }
                 let p3 = G1Affine::new_unchecked(ps[1], ps[0]);
                 let p2 = G1Affine::new_unchecked(ps[3], ps[2]);
-                let hint_in: HintInSparseAdd =
-                    HintInSparseAdd::from_groth_and_aux(p2, p3, q2, q3, nt2, nt3);
+                let hint_in: HintInSparseEvals =
+                    HintInSparseEvals::from_groth_and_aux(p2, p3, nt2, nt3,Some(q2), Some(q3));
                 let (hint_out, hint_script, maybe_wrong) = taps::hint_add_eval_mul_for_fixed_Qs(
                     sig,
                     sec_out,
@@ -845,7 +845,7 @@ fn evaluate_post_miller_circuit(
             if row.category == "Add1" {
                 let (hintout, hint_script, maybe_wrong) = match hints_out[0].clone() {
                     HintOut::G2Acc(r) => {
-                        let hint_in = HintInAdd::from_g2point_q(r, p, q);
+                        let hint_in = HintInAdd::from_g2point(r, p, q);
                         taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), hint_in, 1)
                     }
                     _ => panic!("failed to match"),
@@ -875,7 +875,7 @@ fn evaluate_post_miller_circuit(
             } else if row.category == "Add2" {
                 let (hintout, hint_script, maybe_wrong) = match hints_out[0].clone() {
                     HintOut::G2Acc(r) => {
-                        let hint_in = HintInAdd::from_g2point_q(r, p, q);
+                        let hint_in = HintInAdd::from_g2point(r, p, q);
                         taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), hint_in, -1)
                     }
                     _ => panic!("failed to match"),
@@ -951,8 +951,8 @@ fn evaluate_post_miller_circuit(
             }
             let p2 = G1Affine::new_unchecked(ps[3], ps[2]);
             let p3 = G1Affine::new_unchecked(ps[1], ps[0]);
-            let hint_in: HintInSparseAdd =
-                HintInSparseAdd::from_groth_and_aux(p2, p3, q2, q3, nt2, nt3);
+            let hint_in: HintInSparseEvals =
+                HintInSparseEvals::from_groth_and_aux(p2, p3, nt2, nt3,Some(q2), Some(q3));
             if row.category == "SS1" {
                 let (hint_out, hint_script, maybe_wrong) = taps::hint_add_eval_mul_for_fixed_Qs_with_frob(
                     sig,
@@ -1679,8 +1679,7 @@ fn evaluate_pre_miller_circuit(
                 sec_out,
                 sec_in.clone(),
                 HintInHashP {
-                    qx: vky0.x,
-                    qy: vky0.y,
+                    q: vky0,
                     tx: t.t.x,
                     ty: t.t.y,
                     rx: p3x,

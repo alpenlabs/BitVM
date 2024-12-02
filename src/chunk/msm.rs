@@ -758,7 +758,7 @@ pub(crate) fn hint_hash_p(
     hint_in: HintInHashP,
 ) -> (HashBytes, Script, bool) {
     // r (gp3) = t(msm) + q(vk0)
-    let (tx, qx, ty, qy) = (hint_in.tx, hint_in.qx, hint_in.ty, hint_in.qy);
+    let (tx, qx, ty, qy) = (hint_in.tx, hint_in.q.x, hint_in.ty, hint_in.q.y);
     
     let (rx, ry) = (hint_in.rx, hint_in.ry);
     let thash = extern_hash_fps(vec![hint_in.tx, hint_in.ty], false);
@@ -1067,7 +1067,7 @@ mod test {
         sig_cache.insert(sec_out, SigData::Sig160(wots160::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out), &bal)));
 
 
-        let hint_in = HintInHashP { tx:t.x, qx: q.x, ty: t.y, qy:  q.y, rx: r.x, ry: r.y };
+        let hint_in = HintInHashP { tx:t.x, q, ty: t.y, rx: r.x, ry: r.y };
         let mut sig = Sig {
             msk: None,
             cache: sig_cache,

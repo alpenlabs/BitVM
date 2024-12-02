@@ -101,7 +101,7 @@ mod test {
             ],
             false,
         );
-        let hint_in = HintInHashC { c: f, hashc: fhash };
+        let hint_in = HintInHashC { c: f, hash: fhash };
         let mut sig = Sig {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
@@ -154,7 +154,7 @@ mod test {
             ],
             false,
         );
-        let hint_in = HintInHashC { c: f, hashc: fhash };
+        let hint_in = HintInHashC { c: f, hash: fhash };
         let (_, simulate_stack_input, maybe_wrong) = hint_hash_c2(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
@@ -208,7 +208,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let t4 = ark_bn254::G2Affine::rand(&mut prng);
         //t4.y = t4.y + t4.y;
-        let hint_in = HintInInitT4 { t4 };
+        let hint_in = HintInInitT4 { q4x0: t4.x.c0, q4x1: t4.x.c1, q4y0: t4.y.c0, q4y1: t4.y.c1 };
         let (_, simulate_stack_input, maybe_wrong) = hint_init_T4(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
@@ -260,7 +260,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hint_in = HintInPrecomputePx {
-            p,
+            px: p.x, py: p.y,
         };
         let (_, simulate_stack_input, maybe_wrong) = hints_precompute_Px(
             &mut Sig {
@@ -376,7 +376,7 @@ mod test {
             le0: dbl_le0,
             le1: dbl_le1,
             hash_other_le: [2u8; 64],
-            hash_aux_T: [3u8; 64],
+            hash_aux_t: [3u8; 64],
         };
 
         let (_, simulate_stack_input, maybe_wrong) = hint_sparse_dense_mul(
@@ -831,7 +831,7 @@ mod test {
         let q = ark_bn254::G2Affine::rand(&mut prng);
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hash_le_aux = [2u8; 64];
-        let hint_in = HintInDblAdd {
+        let hint_in = HintInAdd {
             t,
             p,
             q,
@@ -992,11 +992,12 @@ mod test {
         // Run time
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
         let p3dash = ark_bn254::g1::G1Affine::rand(&mut prng);
-        let hint_in = HintInSparseDbl {
+        let hint_in = HintInSparseEvals {
             t2,
             t3,
-            p2: p2dash,
-            p3: p3dash,
+            p2x: p2dash.x, p2y: p2dash.y,
+            p3x: p3dash.x, p3y: p3dash.y,
+            q2: None, q3: None,
         };
 
         let mut sig = Sig {
@@ -1058,13 +1059,12 @@ mod test {
         // Run time
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
         let p3dash = ark_bn254::g1::G1Affine::rand(&mut prng);
-        let hint_in = HintInSparseAdd {
+        let hint_in = HintInSparseEvals {
             t2,
             t3,
-            p2: p2dash,
-            p3: p3dash,
-            q2,
-            q3,
+            p2x: p2dash.x, p2y: p2dash.y, p3x: p3dash.x, p3y: p3dash.y,
+            q2: Some(q2),
+            q3: Some(q3),
         };
 
         let mut sig = Sig {
@@ -1126,13 +1126,12 @@ mod test {
         // Run time
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
         let p3dash = ark_bn254::g1::G1Affine::rand(&mut prng);
-        let hint_in = HintInSparseAdd {
+        let hint_in = HintInSparseEvals {
             t2,
             t3,
-            p2: p2dash,
-            p3: p3dash,
-            q2,
-            q3,
+            p2x: p2dash.x, p2y: p2dash.y, p3x: p3dash.x, p3y: p3dash.y,
+            q2: Some(q2),
+            q3: Some(q3),
         };
         let (_, simulate_stack_input, maybe_wrong) = hint_add_eval_mul_for_fixed_Qs_with_frob(
             &mut Sig {

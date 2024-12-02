@@ -43,7 +43,7 @@ pub(crate) struct HintInAdd {
 }
 
 impl HintInAdd {
-    pub(crate) fn from_g2point_q(
+    pub(crate) fn from_g2point(
         g: G2PointAcc,
         gp: ark_bn254::G1Affine,
         q: ark_bn254::G2Affine,
@@ -56,47 +56,36 @@ impl HintInAdd {
     }
 }
 
+pub(crate) struct HintInSparseEvals {
+    pub(crate) p2x: ark_bn254::Fq,
+    pub(crate) p2y: ark_bn254::Fq,
+    pub(crate) p3x: ark_bn254::Fq,
+    pub(crate) p3y: ark_bn254::Fq,
 
-#[derive(Debug, Clone)]
-pub(crate) struct HintInDblAdd {
-    pub(crate) t: G2PointAcc,
-    pub(crate) p: ark_bn254::G1Affine,
-    pub(crate) q: ark_bn254::G2Affine,
-}
-
-impl HintInDblAdd {
-    pub(crate) fn from_g2point(
-        g: G2PointAcc,
-        gp: ark_bn254::G1Affine,
-        gq: ark_bn254::G2Affine,
-    ) -> Self {        
-        HintInDblAdd {
-            t: g,
-            p: gp,
-            q: gq,
-        }
-    }
-}
-
-pub(crate) struct HintInSparseDbl {
     pub(crate) t2: ark_bn254::G2Affine,
     pub(crate) t3: ark_bn254::G2Affine,
-    pub(crate) p2: ark_bn254::G1Affine,
-    pub(crate) p3: ark_bn254::G1Affine,
+    pub(crate) q2: Option<ark_bn254::G2Affine>,
+    pub(crate) q3: Option<ark_bn254::G2Affine>,
 }
 
-impl HintInSparseDbl {
+impl HintInSparseEvals {
     pub(crate) fn from_groth_and_aux(
         p2: ark_bn254::G1Affine,
         p3: ark_bn254::G1Affine,
-        aux_t2: ark_bn254::G2Affine,
-        aux_t3: ark_bn254::G2Affine,
+        t2: ark_bn254::G2Affine,
+        t3: ark_bn254::G2Affine,
+        q2: Option<ark_bn254::G2Affine>,
+        q3: Option<ark_bn254::G2Affine>,
     ) -> Self {
         Self {
-            t2: aux_t2,
-            t3: aux_t3,
-            p2,
-            p3,
+            t2,
+            t3,
+            p2x: p2.x,
+            p2y: p2.y,
+            p3x: p3.x,
+            p3y: p3.y,
+            q2,
+            q3,
         }
     }
 }
@@ -113,58 +102,29 @@ impl SparseEval {
         self.f.hash
     }
 }
-pub(crate) struct HintInSparseAdd {
-    pub(crate) t2: ark_bn254::G2Affine,
-    pub(crate) t3: G2Affine,
-    pub(crate) p2: G1Affine,
-    pub(crate) p3: G1Affine,
-    pub(crate) q2: ark_bn254::G2Affine,
-    pub(crate) q3: G2Affine,
-}
-
-impl HintInSparseAdd {
-    pub(crate) fn from_groth_and_aux(
-        p2: ark_bn254::G1Affine,
-        p3: ark_bn254::G1Affine,
-        pub_q2: ark_bn254::G2Affine,
-        pub_q3: ark_bn254::G2Affine,
-        aux_t2: ark_bn254::G2Affine,
-        aux_t3: ark_bn254::G2Affine,
-    ) -> Self {
-        Self {
-            t2: aux_t2,
-            t3: aux_t3,
-            p2,
-            p3,
-            q2: pub_q2,
-            q3: pub_q3,
-        }
-    }
-}
-
 
 // PREMILLER
 
-pub(crate) struct HintInHashC {
-    pub(crate) c: ark_bn254::Fq12,
-    pub(crate) hashc: HashBytes,
-}
+
 
 pub(crate) struct HintInHashP { // r (gp3) = t(msm) + q(vk0)
     pub(crate) rx: ark_bn254::Fq,
     pub(crate) ry: ark_bn254::Fq,
     pub(crate) tx: ark_bn254::Fq,
-    pub(crate) qx: ark_bn254::Fq,
     pub(crate) ty: ark_bn254::Fq,
-    pub(crate) qy: ark_bn254::Fq,
+    pub(crate) q: ark_bn254::G1Affine,
 }
 
 
+pub(crate) struct HintInHashC {
+    pub(crate) c: ark_bn254::Fq12,
+    pub(crate) hash: HashBytes,
+}
 impl HintInHashC {
     pub(crate) fn from_fp12(g: Fp12Acc) -> Self {
         HintInHashC {
             c: g.f,
-            hashc: g.hash,
+            hash: g.hash,
         }
     }
 
@@ -183,7 +143,7 @@ impl HintInHashC {
                     ark_bn254::Fq2::new(gs[1], gs[0]),
                 ),
             ),
-            hashc: hash,
+            hash,
         }
     }
 }
@@ -199,33 +159,33 @@ impl HintInPrecomputePy {
 }
 
 pub(crate) struct HintInPrecomputePx {
-    pub(crate) p: G1Affine,
+    pub(crate) px: ark_bn254::Fq,
+    pub(crate) py: ark_bn254::Fq,
 }
 
 impl HintInPrecomputePx {
     pub(crate) fn from_points(v: Vec<ark_bn254::Fq>) -> Self {
-        // GP3y,GP3x,P3y
         Self {
-            p: ark_bn254::G1Affine::new_unchecked(v[1], v[0]),
+            px: v[1],
+            py: v[0],
         }
     }
 }
 
 
 pub(crate) struct HintInInitT4 {
-    pub(crate) t4: ark_bn254::G2Affine,
+    pub(crate) q4y1: ark_bn254::Fq,
+    pub(crate) q4y0: ark_bn254::Fq,
+    pub(crate) q4x1: ark_bn254::Fq,
+    pub(crate) q4x0: ark_bn254::Fq,
 }
 
 impl HintInInitT4 {
     pub(crate) fn from_groth_q4(cs: Vec<ark_bn254::Fq>) -> Self {
         assert_eq!(cs.len(), 4);
         //Q4y1,Q4y0,Q4x1,Q4x0
-        Self {
-            t4: ark_bn254::G2Affine::new_unchecked(
-                ark_bn254::Fq2::new(cs[3], cs[2]),
-                ark_bn254::Fq2::new(cs[1], cs[0]),
-            ),
-        }
+        Self { q4y1: cs[0], q4y0: cs[1], q4x1: cs[2], q4x0: cs[3] }
+
     }
 }
 
@@ -245,7 +205,7 @@ pub(crate) struct HintInSparseDenseMul {
     pub(crate) le0: ark_bn254::Fq2,
     pub(crate) le1: ark_bn254::Fq2,
     pub(crate) hash_other_le: HashBytes,
-    pub(crate) hash_aux_T: HashBytes,
+    pub(crate) hash_aux_t: HashBytes,
 }
 
 impl HintInSparseDenseMul {
@@ -263,7 +223,7 @@ impl HintInSparseDenseMul {
             le0: g.dbl_le.unwrap().0,
             le1: g.dbl_le.unwrap().1,
             hash_other_le,
-            hash_aux_T: hash_t,
+            hash_aux_t: hash_t,
         };
     }
 
@@ -280,7 +240,7 @@ impl HintInSparseDenseMul {
             le0: g.add_le.unwrap().0,
             le1: g.add_le.unwrap().1,
             hash_other_le,
-            hash_aux_T: hash_t,
+            hash_aux_t: hash_t,
         };
     }
 }
@@ -339,6 +299,24 @@ pub(crate) struct Fp12Acc {
 impl Fp12Acc {
     pub(crate) fn out(&self) -> HashBytes {
          self.hash
+    }
+
+    pub(crate) fn from_fp12_vec(gs: Vec<ark_bn254::Fq>) -> Self {
+        let hash = extern_hash_fps(gs.clone(), false);
+        let c = 
+            ark_bn254::Fq12::new(
+                ark_bn254::Fq6::new(
+                    ark_bn254::Fq2::new(gs[11], gs[10]),
+                    ark_bn254::Fq2::new(gs[9], gs[8]),
+                    ark_bn254::Fq2::new(gs[7], gs[6]),
+                ),
+                ark_bn254::Fq6::new(
+                    ark_bn254::Fq2::new(gs[5], gs[4]),
+                    ark_bn254::Fq2::new(gs[3], gs[2]),
+                    ark_bn254::Fq2::new(gs[1], gs[0]),
+                ),
+            );
+        Fp12Acc { f: c, hash }
     }
 }
 
