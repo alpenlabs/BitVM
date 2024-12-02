@@ -18,6 +18,66 @@ pub(crate) enum HintOut {
 }
 
 
+
+pub(crate) struct HintInDouble {
+    pub(crate) t: G2PointAcc,
+    pub(crate) p: ark_bn254::G1Affine,
+}
+
+impl HintInDouble {
+    pub(crate) fn from_g2point(g: G2PointAcc, gpx: ark_bn254::Fq, gpy: ark_bn254::Fq) -> Self {
+        HintInDouble {
+            t: g,
+            p: ark_bn254::G1Affine::new_unchecked(gpx, gpy)
+        }
+    }
+}
+
+
+// POINT ADD
+#[derive(Debug, Clone)]
+pub(crate) struct HintInAdd {
+    pub(crate) t: G2PointAcc,
+    pub(crate) p: ark_bn254::G1Affine,
+    pub(crate) q: ark_bn254::G2Affine,
+}
+
+impl HintInAdd {
+    pub(crate) fn from_g2point_q(
+        g: G2PointAcc,
+        gp: ark_bn254::G1Affine,
+        q: ark_bn254::G2Affine,
+    ) -> Self {
+        HintInAdd {
+            t: g,
+            p: gp,
+            q,
+        }
+    }
+}
+
+
+#[derive(Debug, Clone)]
+pub(crate) struct HintInDblAdd {
+    pub(crate) t: G2PointAcc,
+    pub(crate) p: ark_bn254::G1Affine,
+    pub(crate) q: ark_bn254::G2Affine,
+}
+
+impl HintInDblAdd {
+    pub(crate) fn from_g2point(
+        g: G2PointAcc,
+        gp: ark_bn254::G1Affine,
+        gq: ark_bn254::G2Affine,
+    ) -> Self {        
+        HintInDblAdd {
+            t: g,
+            p: gp,
+            q: gq,
+        }
+    }
+}
+
 pub(crate) struct HintInSparseDbl {
     pub(crate) t2: ark_bn254::G2Affine,
     pub(crate) t3: ark_bn254::G2Affine,
@@ -313,6 +373,24 @@ impl G2PointAcc {
             hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
         }
         hash_le
+    }
+
+
+    pub(crate) fn hash_t(&self) -> HashBytes {
+        extern_hash_fps(vec![self.t.x.c0, self.t.x.c1, self.t.y.c0, self.t.y.c1], true)
+    }
+
+    pub(crate) fn hash_other_le(&self, dbl: bool) -> [u8; 64] {
+        if (dbl && self.add_le.is_none()) || (!dbl && self.dbl_le.is_none()) {
+            return [0u8; 64];
+        }
+        let mut le = self.dbl_le.unwrap();
+        if dbl {
+            le = self.add_le.unwrap();
+        }
+        let (le0, le1) = le;
+        let le = extern_hash_fps(vec![le0.c0, le0.c1, le1.c0, le1.c1], true);
+        le
     }
 }
 

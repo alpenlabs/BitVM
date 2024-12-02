@@ -831,17 +831,17 @@ mod test {
         let q = ark_bn254::G2Affine::rand(&mut prng);
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hash_le_aux = [2u8; 64];
-        // let hint_in = HintInAdd {
-        //     t,
-        //     p,
-        //     q,
-        // };
+        let hint_in = HintInDblAdd {
+            t,
+            p,
+            q,
+        };
 
         let mut sig = Sig {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input, maybe_wrong) = hint_point_ops(&mut sig, sec_out, sec_in, (t, p, q), ate);
+        let (_, simulate_stack_input, maybe_wrong) = hint_point_ops(&mut sig, sec_out, sec_in, hint_in, ate);
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {
@@ -883,14 +883,14 @@ mod test {
         let t = ark_bn254::G2Affine::rand(&mut prng);
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hash_le_aux = [2u8; 64]; // mock
-        let t4acc: G2PointAcc = G2PointAcc { t, dbl_le: None, add_le: None };
-        // let hint_in = HintInDouble { t: t4acc, p };
+        let t4acc: G2PointAcc = G2PointAcc { t, dbl_le: None, add_le: None,  };
+        let hint_in = HintInDouble { t: t4acc, p };
 
         let mut sig = Sig {
             msk: Some(&sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input, maybe_wrong) = hint_point_dbl(&mut sig, sec_out, sec_in.clone(), todo!());
+        let (_, simulate_stack_input, maybe_wrong) = hint_point_dbl(&mut sig, sec_out, sec_in.clone(), hint_in);
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {
@@ -934,18 +934,18 @@ mod test {
         let q = ark_bn254::G2Affine::rand(&mut prng);
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hash_le_aux = [2u8; 64];
-        // let hint_in = HintInAdd {
-        //     t,
-        //     p,
-        //     q,
-        // };
+        let hint_in = HintInAdd {
+            t,
+            p,
+            q,
+        };
 
         let mut sig = Sig {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
         let (_, simulate_stack_input, maybe_wrong) =
-            hint_point_add_with_frob(&mut sig, sec_out, sec_in, (t, p, q), ate);
+            hint_point_add_with_frob(&mut sig, sec_out, sec_in, hint_in, ate);
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {

@@ -12,6 +12,6 @@ pub mod taps_mul;
 pub mod taps_test;
 pub mod test_utils;
 pub mod wots;
-// pub mod acc;
+pub mod acc;
 pub mod segment;
 pub mod hints_wrapper;

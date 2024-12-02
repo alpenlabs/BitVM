@@ -298,12 +298,12 @@ pub(crate) fn hint_point_dbl(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: (G2PointAcc, ark_bn254::G1Affine),
+    hint_in: HintInDouble,
 ) -> (G2PointAcc, Script, bool) {
     assert_eq!(sec_in.len(), 3);
-    let t = hint_in.0.t;
-    let p = hint_in.1;
-    let hash_le_aux = hint_in.0.hash_le();
+    let t = hint_in.t.t;
+    let p = hint_in.p;
+    let hash_le_aux = hint_in.t.hash_le();
 
     let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
     let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
@@ -688,14 +688,14 @@ pub(crate) fn hint_point_add_with_frob(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: (G2PointAcc, ark_bn254::G1Affine, ark_bn254::G2Affine),
+    hint_in: HintInAdd,
     ate: i8,
 ) -> (G2PointAcc, Script, bool) {
     assert!(ate == 1 || ate == -1);
     assert_eq!(sec_in.len(), 7);
-    let (tt, p, q, hash_le_aux) = (hint_in.0.t, hint_in.1, hint_in.2, hint_in.0.hash_le());
-
+    let (tt, p, q) = (hint_in.t.t, hint_in.p, hint_in.q);
     let mut qq = q.clone();
+    let hash_le_aux = hint_in.t.hash_le();
 
     let beta_12x = BigUint::from_str(
         "21575463638280843010398324269430826099269044274347216827212613867836435027261",
@@ -1173,11 +1173,11 @@ pub(crate) fn hint_point_ops(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: (G2PointAcc, ark_bn254::G1Affine, ark_bn254::G2Affine),
+    hint_in: HintInDblAdd,
     ate: i8,
 ) -> (G2PointAcc, Script, bool) {
     assert_eq!(sec_in.len(), 7);
-    let (t, p, q, hash_le_aux) = (hint_in.0.t, hint_in.1, hint_in.2, hint_in.0.hash_le());
+    let (t, p, q, hash_le_aux) = (hint_in.t.t, hint_in.p, hint_in.q, hint_in.t.hash_le());
 
     let mut qq = q.clone();
     if ate == -1 {

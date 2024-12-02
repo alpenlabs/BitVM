@@ -6,7 +6,7 @@ use ark_ff::{Field, PrimeField};
 
 use crate::groth16::g16::{Assertions, PublicKeys, Signatures, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS};
 
-use super::{api::nib_to_byte_array, config::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, evaluate::{extract_values_from_hints, EvalIns}, hint_models::*, msm::{hint_hash_p, hint_msm, HintInMSM}, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps, extern_hash_nibbles}, taps::{self, hint_add_eval_mul_for_fixed_Qs_with_frob, hint_hash_c, hint_hash_c2, hint_init_T4, hint_point_add_with_frob, hints_frob_fp12, hints_precompute_Px, hints_precompute_Py, HashBytes, Sig, SigData}, taps_mul::{self, hint_sparse_dense_mul, hints_dense_dense_mul0, hints_dense_dense_mul0_by_constant, hints_dense_dense_mul0_by_hash, hints_dense_dense_mul1, hints_dense_dense_mul1_by_constant, hints_dense_dense_mul1_by_hash}, wots::WOTSPubKey};
+use super::{api::nib_to_byte_array, config::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, evaluate::{EvalIns}, hint_models::*, msm::{hint_hash_p, hint_msm, HintInMSM}, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps, extern_hash_nibbles}, taps::{self, hint_add_eval_mul_for_fixed_Qs_with_frob, hint_hash_c, hint_hash_c2, hint_init_T4, hint_point_add_with_frob, hints_frob_fp12, hints_precompute_Px, hints_precompute_Py, HashBytes, Sig, SigData}, taps_mul::{self, hint_sparse_dense_mul, hints_dense_dense_mul0, hints_dense_dense_mul0_by_constant, hints_dense_dense_mul0_by_hash, hints_dense_dense_mul1, hints_dense_dense_mul1_by_constant, hints_dense_dense_mul1_by_hash}, wots::WOTSPubKey};
 
 
 
@@ -16,60 +16,6 @@ pub struct Pubs {
     pub fixed_acc: ark_bn254::Fq12,
     pub ks_vks: Vec<ark_bn254::G1Affine>,
     pub vky0: ark_bn254::G1Affine,
-}
-
-struct t4acc {
-    t4: ark_bn254::G2Affine,
-    dbl_le: Option<(ark_bn254::Fq2, ark_bn254::Fq2)>,
-    add_le: Option<(ark_bn254::Fq2, ark_bn254::Fq2)>,
-}
-
-impl t4acc {
-    fn hash_le_aux(&self) -> HashBytes {
-        if self.dbl_le.is_none() && self.add_le.is_none() {
-            return [0u8; 64];
-        } else if self.add_le.is_none() {
-            let (dbl_le0, dbl_le1) = self.dbl_le.unwrap();
-            let hash_dbl_le =
-            extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
-            let hash_add_le = [0u8; 64];
-            let hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
-            return hash_le;            
-        } else if self.dbl_le.is_none() {
-            let hash_dbl_le = [0u8; 64];
-            let (add_le0, add_le1) = self.add_le.unwrap();
-            let hash_add_le =
-            extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
-            let hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
-            return hash_le;
-        }
-        let (dbl_le0, dbl_le1) = self.dbl_le.unwrap();
-        let hash_dbl_le =
-        extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
-        let (add_le0, add_le1) = self.add_le.unwrap();
-        let hash_add_le =
-        extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
-        let hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
-        return hash_le;
-    }
-
-    fn hash_t(&self) -> HashBytes {
-        let (new_tx, new_ty) = (self.t4.x, self.t4.y);
-        extern_hash_fps(vec![new_tx.c0, new_tx.c1, new_ty.c0, new_ty.c1], true)
-    }
-
-    fn hash_other_le(&self, dbl: bool) -> [u8; 64] {
-        if (dbl && self.add_le.is_none()) || (!dbl && self.dbl_le.is_none()) {
-            return [0u8; 64];
-        }
-        let mut le = self.dbl_le.unwrap();
-        if dbl {
-            le = self.add_le.unwrap();
-        }
-        let (le0, le1) = le;
-        let le = extern_hash_fps(vec![le0.c0, le0.c1, le1.c0, le1.c1], true);
-        le
-    }
 }
 
 
@@ -94,21 +40,11 @@ fn compare(hint_out: &HintOut, claimed_assertions: &mut Option<Intermediates>) -
     }
     let (x, is_field) = match hint_out {
         HintOut::G2Acc(r) => (r.out(), false),
-        HintOut::G2Acc(r) => (r.out(), false),
         HintOut::Fp12(r) => (r.out(), false),
-        HintOut::Fp12(r) => (r.out(), false),
-        HintOut::G2Acc(r) => (r.out(), false),
         HintOut::FieldElem(f) => (extern_fq_to_nibbles(*f), true),
-        HintOut::Fp12(f) => (f.out(), false),
-        HintOut::Fp12(r) => (r.out(), false),
-        HintOut::Fp12(r) => (r.out(), false),
-        HintOut::G2Acc(r) => (r.out(), false),
         HintOut::MSM(r) => (r.out(), false),
         HintOut::ScalarElem(r) => (extern_fr_to_nibbles(*r), true),
         HintOut::SparseEval(r) => (r.out(), false),
-        HintOut::SparseEval(r) => (r.out(), false),
-        HintOut::Fp12(r) => (r.out(), false),
-        HintOut::Fp12(r) => (r.out(), false),
         HintOut::HashBytes(r) => (*r, false),
     };
     let matches = if is_field {
@@ -118,9 +54,6 @@ fn compare(hint_out: &HintOut, claimed_assertions: &mut Option<Intermediates>) -
         let r = get_hash(claimed_assertions);
         r == x
     };
-    if matches == false {
-        println!("Here");
-    }
     return Some(matches) 
 }
 
@@ -307,22 +240,22 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<HintOut>, eval_ins: EvalIns, pu
     all_output_hints.push(hout);
     
 
-    let mut t4 = t4acc {t4: tmpt4.t, dbl_le: None, add_le: None};
+    let mut t4 = tmpt4;
     let (q2, q3) = (pubs.q2, pubs.q3);
     let (mut t2, mut t3) = (q2, q3);
 
     // miller loop
-    let mut f_acc = (cinv2.f, cinv2.hash);
+    let mut f_acc = cinv2.clone();
 
     for j in (1..ATE_LOOP_COUNT.len()).rev() {
         let ate = ATE_LOOP_COUNT[j-1];
         // Sqr
-        let (sq, _, _) = taps_mul::hint_squaring(sig, (0, false), vec![(1, false)], HintInSquaring { a: f_acc.0, ahash: f_acc.1 });
+        let (sq, _, _) = taps_mul::hint_squaring(sig, (0, false), vec![(1, false)], HintInSquaring { a: f_acc.f, ahash: f_acc.hash });
         let hout = HintOut::Fp12(sq.clone());
         compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
         
-        f_acc = (sq.f, sq.hash);
+        f_acc = sq;
 
         // Dbl or DblAdd
         if ate == 0 {
@@ -332,49 +265,48 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<HintOut>, eval_ins: EvalIns, pu
     all_output_hints.push(hout);
             
 
-            t4 = t4acc {t4: dbl.t, dbl_le: dbl.dbl_le, add_le: None}; 
+            t4 = dbl;
 
         } else { 
-            let (dbladd, _, _) = taps::hint_point_ops(sig, (0, false), (0..7).map(|i| (i+1, true)).collect(), HintInDblAdd { t: t4.t4, p: p4, q: q4, hash_le_aux: t4.hash_le_aux() }, ate);
+            let (dbladd, _, _) = taps::hint_point_ops(sig, (0, false), (0..7).map(|i| (i+1, true)).collect(), HintInDblAdd { t: t4, p: p4, q: q4 }, ate);
             let hout = HintOut::G2Acc(dbladd.clone());
             compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
             
 
-            t4 = t4acc {t4: dbladd.t, dbl_le: dbladd.dbl_le, add_le: dbladd.add_le}; 
+            t4 = dbladd;
         }
         // SD1
-        let (tmp, _, _) = taps_mul::hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], HintInSparseDenseMul { a: f_acc.0, le0: t4.dbl_le.unwrap().0, le1: t4.dbl_le.unwrap().1,hash_other_le: t4.hash_other_le(true), hash_aux_T: t4.hash_t() },  true);
+        let (tmp, _, _) = taps_mul::hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], HintInSparseDenseMul { a: f_acc.f, le0: t4.dbl_le.unwrap().0, le1: t4.dbl_le.unwrap().1,hash_other_le: t4.hash_other_le(true), hash_aux_T: t4.hash_t() },  true);
         let hout = HintOut::Fp12(tmp.clone());
         compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
+        all_output_hints.push(hout);
         
 
-        f_acc = (tmp.f, tmp.hash);
+        f_acc = tmp;
 
 
         // SS1
         let (leval, _, _) = taps::hint_double_eval_mul_for_fixed_Qs(sig, (0, false), (0..4).map(|i| (i+1, true)).collect(), HintInSparseDbl { t2, t3, p2, p3 });
         let hout = HintOut::SparseEval(leval.clone());
         compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-        
-
+        all_output_hints.push(hout);
         (t2, t3) = (leval.t2, leval.t3);
+
         // DD1
-        let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul0 { a: f_acc.0, b: leval.f.f });
+        let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul0 { a: f_acc.f, b: leval.f.f });
         let hout = HintOut::Fp12(dmul0);
         compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
+        all_output_hints.push(hout);
         
 
-        let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], HintInDenseMul1 { a: f_acc.0, b: leval.f.f });
+        let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], HintInDenseMul1 { a: f_acc.f, b: leval.f.f });
         let hout = HintOut::Fp12(dmul1.clone());
         compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
+        all_output_hints.push(hout);
         
 
-        f_acc = (dmul1.f, dmul1.hash);
+        f_acc = dmul1;
 
         if ate == 0 {
             continue;
@@ -388,28 +320,28 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<HintOut>, eval_ins: EvalIns, pu
         } else {
             cvinv
         };
-        let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul0 { a: f_acc.0, b: ctemp });
+        let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul0 { a: f_acc.f, b: ctemp });
         let hout = HintOut::Fp12(dmul0);
         compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
         
 
-        let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], HintInDenseMul1 { a: f_acc.0, b: ctemp });
+        let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], HintInDenseMul1 { a: f_acc.f, b: ctemp });
         let hout = HintOut::Fp12(dmul1.clone());
         compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
+        all_output_hints.push(hout);
         
 
-        f_acc = (dmul1.f, dmul1.hash);
+        f_acc = dmul1;
 
         // SD2
-        let (temp, _, _) = taps_mul::hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], HintInSparseDenseMul { a: f_acc.0, le0: t4.add_le.unwrap().0, le1: t4.add_le.unwrap().1,hash_other_le: t4.hash_other_le(false), hash_aux_T: t4.hash_t() },  false);
+        let (temp, _, _) = taps_mul::hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], HintInSparseDenseMul { a: f_acc.f, le0: t4.add_le.unwrap().0, le1: t4.add_le.unwrap().1,hash_other_le: t4.hash_other_le(false), hash_aux_T: t4.hash_t() },  false);
         let hout = HintOut::Fp12(temp.clone());
         compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
         
 
-        f_acc = (temp.f, temp.hash);
+        f_acc = temp;
 
         // SS2
         let (leval, _, _) = taps::hint_add_eval_mul_for_fixed_Qs(sig, (0, false), (0..4).map(|i| (i+1, true)).collect(), HintInSparseAdd { t2, t3, p2, p3, q2, q3 }, ate);
@@ -421,19 +353,19 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<HintOut>, eval_ins: EvalIns, pu
         (t2, t3) = (leval.t2, leval.t3);
 
         // DD5
-        let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul0 { a: f_acc.0, b: leval.f.f });
+        let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul0 { a: f_acc.f, b: leval.f.f });
         let hout = HintOut::Fp12(dmul0);
         compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
         
 
-        let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], HintInDenseMul1 { a: f_acc.0, b: leval.f.f });
+        let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], HintInDenseMul1 { a: f_acc.f, b: leval.f.f });
         let hout = HintOut::Fp12(dmul1.clone());
         compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
         
 
-        f_acc = (dmul1.f, dmul1.hash);
+        f_acc = dmul1;
     }
 
     // post miller
@@ -460,82 +392,82 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<HintOut>, eval_ins: EvalIns, pu
 
 
     // f_acc = f_acc * f1
-    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul0 { a: f_acc.0, b:  cp.f});
+    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul0 { a: f_acc.f, b:  cp.f});
     let hout = HintOut::Fp12(dmul0);
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], HintInDenseMul1 { a: f_acc.0, b:  cp.f});
+    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], HintInDenseMul1 { a: f_acc.f, b:  cp.f});
     let hout = HintOut::Fp12(dmul1.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    f_acc = (dmul1.f, dmul1.hash);
+    f_acc = dmul1;
 
     // f_acc = f_acc * f2
-    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul0 { a: f_acc.0, b:  cp2.f});
+    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul0 { a: f_acc.f, b:  cp2.f});
     let hout = HintOut::Fp12(dmul0);
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], HintInDenseMul1 { a: f_acc.0, b:  cp2.f});
+    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], HintInDenseMul1 { a: f_acc.f, b:  cp2.f});
     let hout = HintOut::Fp12(dmul1.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    f_acc = (dmul1.f, dmul1.hash);
+    f_acc = dmul1;
 
     // f_acc = f_acc * f3
-    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul0 { a: f_acc.0, b:  cp3.f});
+    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul0 { a: f_acc.f, b:  cp3.f});
     let hout = HintOut::Fp12(dmul0);
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], HintInDenseMul1 { a: f_acc.0, b:  cp3.f});
+    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], HintInDenseMul1 { a: f_acc.f, b:  cp3.f});
     let hout = HintOut::Fp12(dmul1.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    f_acc = (dmul1.f, dmul1.hash);
+    f_acc = dmul1;
 
     // f_acc = f_acc * s
-    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul0 { a: f_acc.0, b:  s.f});
+    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul0 { a: f_acc.f, b:  s.f});
     let hout = HintOut::Fp12(dmul0);
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], HintInDenseMul1 { a: f_acc.0, b:  s.f});
+    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], HintInDenseMul1 { a: f_acc.f, b:  s.f});
     let hout = HintOut::Fp12(dmul1.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    f_acc = (dmul1.f, dmul1.hash);
+    f_acc = dmul1;
 
     // add op Add1
-    let (temp, _, _) = hint_point_add_with_frob(sig, (0, false), (0..7).map(|i| (i+1, true)).collect(), HintInAdd { t: t4.t4, p: p4, q: q4, hash_le_aux: t4.hash_le_aux() }, 1);
+    let (temp, _, _) = hint_point_add_with_frob(sig, (0, false), (0..7).map(|i| (i+1, true)).collect(), HintInAdd { t: t4, p: p4, q: q4 }, 1);
     let hout = HintOut::G2Acc(temp.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    t4 = t4acc {t4: temp.t, dbl_le: None, add_le: temp.add_le}; 
+    t4 = temp; 
 
     // SD
-    let (temp, _, _) = hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], HintInSparseDenseMul {  a: f_acc.0, le0: t4.add_le.unwrap().0, le1: t4.add_le.unwrap().1, hash_other_le: t4.hash_other_le(false), hash_aux_T: t4.hash_t() }, false);
+    let (temp, _, _) = hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], HintInSparseDenseMul {  a: f_acc.f, le0: t4.add_le.unwrap().0, le1: t4.add_le.unwrap().1, hash_other_le: t4.hash_other_le(false), hash_aux_T: t4.hash_t() }, false);
     let hout = HintOut::Fp12(temp.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    f_acc = (temp.f, temp.hash);
+    f_acc = temp;
 
     // sparse eval
     let (le, _, _) = hint_add_eval_mul_for_fixed_Qs_with_frob(sig, (0, false), (0..4).map(|i| (i+1, true)).collect(), HintInSparseAdd { t2, t3, p2, p3, q2, q3 }, 1);
@@ -546,37 +478,37 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<HintOut>, eval_ins: EvalIns, pu
 
     (t2, t3) = (le.t2, le.t3);
     // dense_dense_mul
-    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul0 { a: f_acc.0, b: le.f.f });
+    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul0 { a: f_acc.f, b: le.f.f });
     let hout = HintOut::Fp12(dmul0);
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], HintInDenseMul1 { a: f_acc.0, b: le.f.f });
+    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], HintInDenseMul1 { a: f_acc.f, b: le.f.f });
     let hout = HintOut::Fp12(dmul1.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    f_acc = (dmul1.f, dmul1.hash);
+    f_acc = dmul1;
 
     // add op Add2
-    let (temp, _, _) = hint_point_add_with_frob(sig, (0, false), (0..7).map(|i| (i+1, true)).collect(), HintInAdd { t: t4.t4, p: p4, q: q4, hash_le_aux: t4.hash_le_aux() }, -1);
+    let (temp, _, _) = hint_point_add_with_frob(sig, (0, false), (0..7).map(|i| (i+1, true)).collect(), HintInAdd { t: t4, p: p4, q: q4 }, -1);
     let hout = HintOut::G2Acc(temp.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    t4 = t4acc {t4: temp.t, dbl_le: None, add_le: temp.add_le}; 
+    t4 = G2PointAcc {t: temp.t, dbl_le: None, add_le: temp.add_le}; 
 
     // SD
-    let (temp, _, _) = hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], HintInSparseDenseMul {  a: f_acc.0, le0: t4.add_le.unwrap().0, le1: t4.add_le.unwrap().1, hash_other_le: t4.hash_other_le(false), hash_aux_T: t4.hash_t() }, false);
+    let (temp, _, _) = hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], HintInSparseDenseMul {  a: f_acc.f, le0: t4.add_le.unwrap().0, le1: t4.add_le.unwrap().1, hash_other_le: t4.hash_other_le(false), hash_aux_T: t4.hash_t() }, false);
     let hout = HintOut::Fp12(temp.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    f_acc = (temp.f, temp.hash);
+    f_acc = temp;
 
     // sparse eval
     let (le, _, _) = hint_add_eval_mul_for_fixed_Qs_with_frob(sig, (0, false), (0..4).map(|i| (i+1, true)).collect(), HintInSparseAdd { t2, t3, p2, p3, q2, q3 }, -1);
@@ -587,29 +519,29 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<HintOut>, eval_ins: EvalIns, pu
 
     (t2, t3) = (le.t2, le.t3);
     // dense_dense_mul
-    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul0 { a: f_acc.0, b: le.f.f });
+    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul0 { a: f_acc.f, b: le.f.f });
     let hout = HintOut::Fp12(dmul0);
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], HintInDenseMul1 { a: f_acc.0, b: le.f.f });
+    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], HintInDenseMul1 { a: f_acc.f, b: le.f.f });
     let hout = HintOut::Fp12(dmul1.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    f_acc = (dmul1.f, dmul1.hash);
+    f_acc = dmul1;
 
     // mul0_by_const is identity
-    let (dmul0, _, _) = hints_dense_dense_mul0_by_constant(sig, (0, false), vec![(1, false)], HintInDenseMul0 { a: f_acc.0, b: pubs.fixed_acc });
+    let (dmul0, _, _) = hints_dense_dense_mul0_by_constant(sig, (0, false), vec![(1, false)], HintInDenseMul0 { a: f_acc.f, b: pubs.fixed_acc });
     let hout = HintOut::Fp12(dmul0);
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
     // mul1_by_const is identity
-    let (dmul1, _, _) = hints_dense_dense_mul1_by_constant(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul1 { a: f_acc.0, b: pubs.fixed_acc });
+    let (dmul1, _, _) = hints_dense_dense_mul1_by_constant(sig, (0, false), vec![(1, false), (2, false)], HintInDenseMul1 { a: f_acc.f, b: pubs.fixed_acc });
     let hout = HintOut::Fp12(dmul1.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -626,21 +558,11 @@ pub(crate) fn hint_to_data(segments: Vec<HintOut>) -> Assertions {
     for v in segments {
         let x = match v {
             HintOut::G2Acc(r) => r.out(),
-            HintOut::G2Acc(r) => r.out(),
             HintOut::Fp12(r) => r.out(),
-            HintOut::Fp12(r) => r.out(),
-            HintOut::G2Acc(r) => r.out(),
             HintOut::FieldElem(f) => extern_fq_to_nibbles(f),
-            HintOut::Fp12(f) => f.out(),
-            HintOut::Fp12(r) => r.out(),
-            HintOut::Fp12(r) => r.out(),
-            HintOut::G2Acc(r) => r.out(),
             HintOut::MSM(r) => r.out(),
             HintOut::ScalarElem(r) => extern_fr_to_nibbles(r),
             HintOut::SparseEval(r) => r.out(),
-            HintOut::SparseEval(r) => r.out(),
-            HintOut::Fp12(r) => r.out(),
-            HintOut::Fp12(r) => r.out(),
             HintOut::HashBytes(r) => r,
         };
         vs.push(x);

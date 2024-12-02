@@ -137,8 +137,8 @@ fn evaluate_miller_circuit(
                 let p = G1Affine::new_unchecked(ps[5], ps[4]);
                 let (hintout, hint_script, maybe_wrong) = match hints[0].clone() {
                     HintOut::G2Acc(r) => {
-                        // let hint_in = HintInAdd::from_g2point_q(r, p, q);
-                        taps::hint_point_ops(sig, sec_out, sec_in.clone(), (r, p, q), *bit)
+                        let hint_in = HintInDblAdd::from_g2point(r, p, q);
+                        taps::hint_point_ops(sig, sec_out, sec_in.clone(), hint_in, *bit)
                     }
                     _ => panic!("failed to match"),
                 };
@@ -178,8 +178,8 @@ fn evaluate_miller_circuit(
                 let p = G1Affine::new_unchecked(ps[1], ps[0]);
                 let (hintout, hint_script, maybe_wrong) = match hints[0].clone() {
                     HintOut::G2Acc(r) => {
-                        // let hint_in = HintInDouble::from_g2point(r, p.x, p.y);
-                        taps::hint_point_dbl(sig, sec_out, sec_in.clone(), (r, p))
+                        let hint_in = HintInDouble::from_g2point(r, p.x, p.y);
+                        taps::hint_point_dbl(sig, sec_out, sec_in.clone(), hint_in)
                     }
                     _ => panic!("failed to match"),
                 };
@@ -845,8 +845,8 @@ fn evaluate_post_miller_circuit(
             if row.category == "Add1" {
                 let (hintout, hint_script, maybe_wrong) = match hints_out[0].clone() {
                     HintOut::G2Acc(r) => {
-                        //let hint_in = HintInAdd::from_g2point_q(r, p, q);
-                        taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), (r, p,q), 1)
+                        let hint_in = HintInAdd::from_g2point_q(r, p, q);
+                        taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), hint_in, 1)
                     }
                     _ => panic!("failed to match"),
                 };
@@ -875,8 +875,8 @@ fn evaluate_post_miller_circuit(
             } else if row.category == "Add2" {
                 let (hintout, hint_script, maybe_wrong) = match hints_out[0].clone() {
                     HintOut::G2Acc(r) => {
-                        // let hint_in = HintInAdd::from_g2point_q(r, p, q);
-                        taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), (r, p, q), -1)
+                        let hint_in = HintInAdd::from_g2point_q(r, p, q);
+                        taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), hint_in, -1)
                     }
                     _ => panic!("failed to match"),
                 };
