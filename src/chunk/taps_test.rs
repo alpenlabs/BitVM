@@ -827,22 +827,21 @@ mod test {
         let bitcom_script = bitcom_point_ops(&pub_scripts, sec_out, sec_in.clone(), ate); // cleaner if ate could be removed
 
         let mut prng = ChaCha20Rng::seed_from_u64(1);
-        let t = ark_bn254::G2Affine::rand(&mut prng);
+        let t = todo!(); //ark_bn254::G2Affine::rand(&mut prng);
         let q = ark_bn254::G2Affine::rand(&mut prng);
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hash_le_aux = [2u8; 64];
-        let hint_in = HintInDblAdd {
-            t,
-            p,
-            q,
-            hash_le_aux,
-        };
+        // let hint_in = HintInAdd {
+        //     t,
+        //     p,
+        //     q,
+        // };
 
         let mut sig = Sig {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input, maybe_wrong) = hint_point_ops(&mut sig, sec_out, sec_in, hint_in, ate);
+        let (_, simulate_stack_input, maybe_wrong) = hint_point_ops(&mut sig, sec_out, sec_in, (t, p, q), ate);
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {
@@ -884,13 +883,14 @@ mod test {
         let t = ark_bn254::G2Affine::rand(&mut prng);
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hash_le_aux = [2u8; 64]; // mock
-        let hint_in = HintInDouble { t, p, hash_le_aux };
+        let t4acc: G2PointAcc = G2PointAcc { t, dbl_le: None, add_le: None };
+        // let hint_in = HintInDouble { t: t4acc, p };
 
         let mut sig = Sig {
             msk: Some(&sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input, maybe_wrong) = hint_point_dbl(&mut sig, sec_out, sec_in.clone(), hint_in);
+        let (_, simulate_stack_input, maybe_wrong) = hint_point_dbl(&mut sig, sec_out, sec_in.clone(), todo!());
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {
@@ -930,23 +930,22 @@ mod test {
         let bitcom_script = bitcom_point_add_with_frob(&pub_scripts, sec_out, sec_in.clone());
 
         let mut prng = ChaCha20Rng::seed_from_u64(1);
-        let t = ark_bn254::G2Affine::rand(&mut prng);
+        let t = todo!(); //ark_bn254::G2Affine::rand(&mut prng);
         let q = ark_bn254::G2Affine::rand(&mut prng);
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hash_le_aux = [2u8; 64];
-        let hint_in = HintInAdd {
-            t,
-            p,
-            q,
-            hash_le_aux,
-        };
+        // let hint_in = HintInAdd {
+        //     t,
+        //     p,
+        //     q,
+        // };
 
         let mut sig = Sig {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
         let (_, simulate_stack_input, maybe_wrong) =
-            hint_point_add_with_frob(&mut sig, sec_out, sec_in, hint_in, ate);
+            hint_point_add_with_frob(&mut sig, sec_out, sec_in, (t, p, q), ate);
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {

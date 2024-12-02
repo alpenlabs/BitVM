@@ -3,7 +3,7 @@
 mod test {
     use std::{collections::HashMap, io, ops::Neg};
 
-    use crate::chunk::{config::{assign_link_ids, NUM_PUBS, NUM_U160, NUM_U256}, evaluate::*, hint_models::HintOut, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles}, taps::Sig};
+    use crate::chunk::{ evaluate::*, taps::Sig};
     use ark_ec::{AffineRepr, CurveGroup};
     use ark_ff::Field;
 
@@ -12,7 +12,7 @@ mod test {
             compile::{compile, Vkey},
             config::{get_type_for_link_id, keygen},
             test_utils::{
-                read_pubkey_from_file, read_scripts_from_file, write_map_to_file, write_pubkey_to_file, write_scripts_to_file, write_scripts_to_separate_files
+                read_pubkey_from_file, read_scripts_from_file, write_pubkey_to_file, write_scripts_to_file, write_scripts_to_separate_files
             },
         },
         groth16::offchain_checker::compute_c_wi,

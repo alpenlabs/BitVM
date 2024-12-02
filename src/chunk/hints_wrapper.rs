@@ -116,7 +116,7 @@ fn wrap_hint_hash_c2(inputs: Vec<(usize, HintOut)>) {
     
     let mut indices = vec![];
 
-    if let (index, HintOut::HashC(f)) = &inputs[0] {
+    if let (index, HintOut::Fp12(f)) = &inputs[0] {
         indices.push(*index);
 
         let (c2, _, _) = hint_hash_c2(sig, (0, false), vec![(1, false)], HintInHashC { c: f.f, hashc: f.hash });        
@@ -130,13 +130,13 @@ fn wrap_hints_dense_dense_mul0_by_hash(inputs: Vec<(usize, HintOut)>) {
     let mut indices = vec![];
 
     let mut c2 = ark_bn254::Fq12::ZERO;
-    if let (index, HintOut::HashC(f)) = &inputs[0] {
+    if let (index, HintOut::Fp12(f)) = &inputs[0] {
         c2 = f.f;
         indices.push(*index);
     }
 
     let mut cinvhash = [0u8; 64];
-    if let (index, HintOut::GrothC(f)) = &inputs[1] {
+    if let (index, HintOut::Fp12(f)) = &inputs[1] {
         cinvhash = f.hash;
         indices.push(*index);
     }
@@ -155,13 +155,13 @@ fn wrap_hints_dense_dense_mul1_by_hash(inputs: Vec<(usize, HintOut)>) {
     let mut indices = vec![];
 
     let mut c2 = ark_bn254::Fq12::ZERO;
-    if let (index, HintOut::HashC(f)) = &inputs[0] {
+    if let (index, HintOut::Fp12(f)) = &inputs[0] {
         c2 = f.f;
         indices.push(*index);
     }
 
     let mut cinvhash = [0u8; 64];
-    if let (index, HintOut::GrothC(f)) = &inputs[0] {
+    if let (index, HintOut::Fp12(f)) = &inputs[0] {
         cinvhash = f.hash;
         indices.push(*index);
     }
@@ -192,7 +192,7 @@ fn wrap_hint_squaring(inputs: Vec<(usize, HintOut)>) {
 
     let mut indices = vec![];
 
-    if let (index, HintOut::HashC(f)) = &inputs[0] {
+    if let (index, HintOut::Fp12(f)) = &inputs[0] {
         indices.push(*index);
         let (sq, _, _) = hint_squaring(sig, (0, false), vec![(1, false)], HintInSquaring { a: f.f, ahash: f.hash });
     }

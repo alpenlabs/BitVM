@@ -90,17 +90,11 @@ fn evaluate_miller_circuit(
             if blk_name == "Sqr" {
                 assert_eq!(hints.len(), 1);
                 let (hintout, hint_script, maybe_wrong) = match hints[0].clone() {
-                    HintOut::DenseMul1(r) => taps_mul::hint_squaring(
+                    HintOut::Fp12(r) => taps_mul::hint_squaring(
                         sig,
                         sec_out,
                         sec_in.clone(),
-                        HintInSquaring::from_dmul1(r),
-                    ),
-                    HintOut::HashC(r) => taps_mul::hint_squaring(
-                        sig,
-                        sec_out,
-                        sec_in.clone(),
-                        HintInSquaring::from_hashc(r),
+                        HintInSquaring::from_fp12(r),
                     ),
                     _ => panic!("failed to match"),
                 };
@@ -124,7 +118,7 @@ fn evaluate_miller_circuit(
                     assert!(!exec_result.success);
                     assert!(exec_result.final_stack.len() == 1);
                 }
-                aux_output_per_link.insert(block.link_id.clone(), HintOut::Squaring(hintout));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::Fp12(hintout));
             } else if blk_name == "DblAdd" {
                 assert_eq!(hints.len(), 7);
                 let mut ps: Vec<ark_bn254::Fq> = vec![];
@@ -142,17 +136,9 @@ fn evaluate_miller_circuit(
                 );
                 let p = G1Affine::new_unchecked(ps[5], ps[4]);
                 let (hintout, hint_script, maybe_wrong) = match hints[0].clone() {
-                    HintOut::InitT4(r) => {
-                        let hint_in = HintInDblAdd::from_initT4(r, p, q);
-                        taps::hint_point_ops(sig, sec_out, sec_in.clone(), hint_in, *bit)
-                    }
-                    HintOut::DblAdd(r) => {
-                        let hint_in = HintInDblAdd::from_doubleadd(r, p, q);
-                        taps::hint_point_ops(sig, sec_out, sec_in.clone(), hint_in, *bit)
-                    }
-                    HintOut::Double(r) => {
-                        let hint_in = HintInDblAdd::from_double(r, p, q);
-                        taps::hint_point_ops(sig, sec_out, sec_in.clone(), hint_in, *bit)
+                    HintOut::G2Acc(r) => {
+                        // let hint_in = HintInAdd::from_g2point_q(r, p, q);
+                        taps::hint_point_ops(sig, sec_out, sec_in.clone(), (r, p, q), *bit)
                     }
                     _ => panic!("failed to match"),
                 };
@@ -177,7 +163,7 @@ fn evaluate_miller_circuit(
                     assert!(!exec_result.success);
                     assert!(exec_result.final_stack.len() == 1);
                 }
-                aux_output_per_link.insert(block.link_id.clone(), HintOut::DblAdd(hintout));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::G2Acc(hintout));
             } else if blk_name == "Dbl" {
                 assert_eq!(hints.len(), 3);
                 let mut ps: Vec<ark_bn254::Fq> = vec![];
@@ -191,17 +177,9 @@ fn evaluate_miller_circuit(
                 }
                 let p = G1Affine::new_unchecked(ps[1], ps[0]);
                 let (hintout, hint_script, maybe_wrong) = match hints[0].clone() {
-                    HintOut::InitT4(r) => {
-                        let hint_in = HintInDouble::from_initT4(r, p.x, p.y);
-                        taps::hint_point_dbl(sig, sec_out, sec_in.clone(), hint_in)
-                    }
-                    HintOut::DblAdd(r) => {
-                        let hint_in = HintInDouble::from_doubleadd(r, p.x, p.y);
-                        taps::hint_point_dbl(sig, sec_out, sec_in.clone(), hint_in)
-                    }
-                    HintOut::Double(r) => {
-                        let hint_in = HintInDouble::from_double(r, p.x, p.y);
-                        taps::hint_point_dbl(sig, sec_out, sec_in.clone(), hint_in)
+                    HintOut::G2Acc(r) => {
+                        // let hint_in = HintInDouble::from_g2point(r, p.x, p.y);
+                        taps::hint_point_dbl(sig, sec_out, sec_in.clone(), (r, p))
                     }
                     _ => panic!("failed to match"),
                 };
@@ -225,20 +203,16 @@ fn evaluate_miller_circuit(
                     assert!(!exec_result.success);
                     assert!(exec_result.final_stack.len() == 1);
                 }
-                aux_output_per_link.insert(block.link_id.clone(), HintOut::Double(hintout));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::G2Acc(hintout));
             } else if blk_name == "SD1" {
                 assert_eq!(hints.len(), 2);
                 let dense = match hints[0].clone() {
-                    HintOut::Squaring(f) => f,
+                    HintOut::Fp12(f) => f,
                     _ => panic!(),
                 };
                 let (sd_hint, hint_script, maybe_wrong) = match hints[1].clone() {
-                    HintOut::DblAdd(f) => {
+                    HintOut::G2Acc(f) => {
                         let hint_in = HintInSparseDenseMul::from_double_add_top(f, dense);
-                        taps_mul::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), hint_in, true)
-                    }
-                    HintOut::Double(f) => {
-                        let hint_in = HintInSparseDenseMul::from_double(f, dense);
                         taps_mul::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), hint_in, true)
                     }
                     _ => panic!(),
@@ -264,7 +238,7 @@ fn evaluate_miller_circuit(
                     assert!(!exec_result.success);
                     assert!(exec_result.final_stack.len() == 1);
                 }
-                aux_output_per_link.insert(block.link_id.clone(), HintOut::SparseDenseMul(sd_hint));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::Fp12(sd_hint));
             } else if blk_name == "SS1" {
                 assert_eq!(hints.len(), 4);
                 let mut ps: Vec<ark_bn254::Fq> = vec![];
@@ -308,22 +282,22 @@ fn evaluate_miller_circuit(
                 }
                 nt2 = hint_out.t2;
                 nt3 = hint_out.t3;
-                aux_output_per_link.insert(block.link_id.clone(), HintOut::SparseDbl(hint_out));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::SparseEval(hint_out));
             } else if blk_name == "DD1" {
                 assert!(hints.len() == 2);
                 let c = match hints[0].clone() {
-                    HintOut::SparseDenseMul(r) => r,
+                    HintOut::Fp12(r) => r,
                     _ => panic!("failed to match"),
                 };
                 let d = match hints[1].clone() {
-                    HintOut::SparseDbl(r) => r,
+                    HintOut::SparseEval(r) => r,
                     _ => panic!("failed to match"),
                 };
                 let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul0(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    HintInDenseMul0::from_sparse_dense_dbl(c, d),
+                    HintInDenseMul0::from_fp12_le(c, d),
                 );
                 if force_validate || maybe_wrong {
                     let ops_script = tap_dense_dense_mul0(false);
@@ -346,22 +320,22 @@ fn evaluate_miller_circuit(
                     assert!(!exec_result.success);
                     assert!(exec_result.final_stack.len() == 1);
                 }
-                aux_output_per_link.insert(block.link_id.clone(), HintOut::DenseMul0(hint_out));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::Fp12(hint_out));
             } else if blk_name == "DD2" {
                 assert!(hints.len() == 3);
                 let c = match hints[0].clone() {
-                    HintOut::SparseDenseMul(r) => r,
+                    HintOut::Fp12(r) => r,
                     _ => panic!("failed to match"),
                 };
                 let d = match hints[1].clone() {
-                    HintOut::SparseDbl(r) => r,
+                    HintOut::SparseEval(r) => r,
                     _ => panic!("failed to match"),
                 };
                 let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul1(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    HintInDenseMul1::from_sparse_dense_dbl(c, d),
+                    HintInDenseMul1::from_fp12_le(c, d),
                 );
                 if force_validate || maybe_wrong {
                     let ops_script = tap_dense_dense_mul1(false);
@@ -384,25 +358,19 @@ fn evaluate_miller_circuit(
                     assert!(!exec_result.success);
                     assert!(exec_result.final_stack.len() == 1);
                 }
-                aux_output_per_link.insert(block.link_id.clone(), HintOut::DenseMul1(hint_out));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::Fp12(hint_out));
             } else if blk_name == "DD3" {
                 assert!(hints.len() == 2);
                 let c = match hints[0].clone() {
-                    HintOut::DenseMul1(r) => r,
+                    HintOut::Fp12(r) => r,
                     _ => panic!("failed to match"),
                 };
                 let (hint_out, hint_script, maybe_wrong) = match hints[1].clone() {
-                    HintOut::GrothC(r) => hints_dense_dense_mul0(
+                    HintOut::Fp12(r) => hints_dense_dense_mul0(
                         sig,
                         sec_out,
                         sec_in.clone(),
-                        HintInDenseMul0::from_dense_c(c, r),
-                    ),
-                    HintOut::HashC(r) => hints_dense_dense_mul0(
-                        sig,
-                        sec_out,
-                        sec_in.clone(),
-                        HintInDenseMul0::from_hash_c(c, r),
+                        HintInDenseMul0::from_fp12_fp12(c, r),
                     ),
                     _ => panic!("failed to match"),
                 };
@@ -427,25 +395,19 @@ fn evaluate_miller_circuit(
                     assert!(!exec_result.success);
                     assert!(exec_result.final_stack.len() == 1);
                 }
-                aux_output_per_link.insert(block.link_id.clone(), HintOut::DenseMul0(hint_out));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::Fp12(hint_out));
             } else if blk_name == "DD4" {
                 assert!(hints.len() == 3);
                 let c = match hints[0].clone() {
-                    HintOut::DenseMul1(r) => r,
+                    HintOut::Fp12(r) => r,
                     _ => panic!("failed to match"),
                 };
                 let (hint_out, hint_script, maybe_wrong) = match hints[1].clone() {
-                    HintOut::GrothC(r) => hints_dense_dense_mul1(
+                    HintOut::Fp12(r) => hints_dense_dense_mul1(
                         sig,
                         sec_out,
                         sec_in.clone(),
-                        HintInDenseMul1::from_dense_c(c, r),
-                    ),
-                    HintOut::HashC(r) => hints_dense_dense_mul1(
-                        sig,
-                        sec_out,
-                        sec_in.clone(),
-                        HintInDenseMul1::from_hash_c(c, r),
+                        HintInDenseMul1::from_fp12_fp12(c, r),
                     ),
                     _ => panic!("failed to match"),
                 };
@@ -470,16 +432,16 @@ fn evaluate_miller_circuit(
                     assert!(!exec_result.success);
                     assert!(exec_result.final_stack.len() == 1);
                 }
-                aux_output_per_link.insert(block.link_id.clone(), HintOut::DenseMul1(hint_out));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::Fp12(hint_out));
             } else if blk_name == "SD2" {
                 assert_eq!(hints.len(), 2);
                 let dense = match hints[0].clone() {
-                    HintOut::DenseMul1(f) => f,
+                    HintOut::Fp12(f) => f,
                     _ => panic!(),
                 };
                 let (sd_hint, hint_script, maybe_wrong) = match hints[1].clone() {
-                    HintOut::DblAdd(f) => {
-                        let hint_in = HintInSparseDenseMul::from_doubl_add_bottom(f, dense);
+                    HintOut::G2Acc(f) => {
+                        let hint_in = HintInSparseDenseMul::from_add(f, dense);
                         taps_mul::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), hint_in, false)
                     }
                     _ => panic!(),
@@ -505,7 +467,7 @@ fn evaluate_miller_circuit(
                     assert!(!exec_result.success);
                     assert!(exec_result.final_stack.len() == 1);
                 }
-                aux_output_per_link.insert(block.link_id.clone(), HintOut::SparseDenseMul(sd_hint));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::Fp12(sd_hint));
             } else if blk_name == "SS2" {
                 assert_eq!(hints.len(), 4);
                 let mut ps: Vec<ark_bn254::Fq> = vec![];
@@ -554,22 +516,22 @@ fn evaluate_miller_circuit(
                 }
                 nt2 = hint_out.t2;
                 nt3 = hint_out.t3;
-                aux_output_per_link.insert(block.link_id.clone(), HintOut::SparseAdd(hint_out));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::SparseEval(hint_out));
             } else if blk_name == "DD5" {
                 assert!(hints.len() == 2);
                 let c = match hints[0].clone() {
-                    HintOut::SparseDenseMul(r) => r,
+                    HintOut::Fp12(r) => r,
                     _ => panic!("failed to match"),
                 };
                 let d = match hints[1].clone() {
-                    HintOut::SparseAdd(r) => r,
+                    HintOut::SparseEval(r) => r,
                     _ => panic!("failed to match"),
                 };
                 let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul0(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    HintInDenseMul0::from_sparse_dense_add(c, d),
+                    HintInDenseMul0::from_fp12_le(c, d),
                 );
                 if force_validate || maybe_wrong {
                     let ops_script = tap_dense_dense_mul0(false);
@@ -592,22 +554,22 @@ fn evaluate_miller_circuit(
                     assert!(!exec_result.success);
                     assert!(exec_result.final_stack.len() == 1);
                 }
-                aux_output_per_link.insert(block.link_id.clone(), HintOut::DenseMul0(hint_out));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::Fp12(hint_out));
             } else if blk_name == "DD6" {
                 assert!(hints.len() == 3);
                 let c = match hints[0].clone() {
-                    HintOut::SparseDenseMul(r) => r,
+                    HintOut::Fp12(r) => r,
                     _ => panic!("failed to match"),
                 };
                 let d = match hints[1].clone() {
-                    HintOut::SparseAdd(r) => r,
+                    HintOut::SparseEval(r) => r,
                     _ => panic!("failed to match"),
                 };
                 let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul1(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    HintInDenseMul1::from_sparse_dense_add(c, d),
+                    HintInDenseMul1::from_fp12_le(c, d),
                 );
                 if force_validate || maybe_wrong {
                     let ops_script = tap_dense_dense_mul1(false);
@@ -630,7 +592,7 @@ fn evaluate_miller_circuit(
                     assert!(!exec_result.success);
                     assert!(exec_result.final_stack.len() == 1);
                 }
-                aux_output_per_link.insert(block.link_id.clone(), HintOut::DenseMul1(hint_out));
+                aux_output_per_link.insert(block.link_id.clone(), HintOut::Fp12(hint_out));
             } else {
                 println!("unhandled {:?}", blk_name);
                 panic!();
@@ -677,8 +639,7 @@ fn evaluate_post_miller_circuit(
         if row.category.starts_with("Frob") {
             assert_eq!(hints_out.len(), 1);
             let hint_in = match hints_out[0].clone() {
-                HintOut::GrothC(f) => HintInFrobFp12::from_groth_c(f),
-                HintOut::HashC(f) => HintInFrobFp12::from_hash_c(f),
+                HintOut::Fp12(f) => HintInFrobFp12::from_fp12(f),
                 _ => panic!(),
             };
             let mut power = 1;
@@ -708,35 +669,23 @@ fn evaluate_post_miller_circuit(
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             }
-            aux_output_per_link.insert(row.link_id, HintOut::FrobFp12(h));
+            aux_output_per_link.insert(row.link_id, HintOut::Fp12(h));
         } else if row.category == "DD1" {
             assert!(hints_out.len() == 2);
             let c = match hints_out[0].clone() {
-                HintOut::DenseMul1(r) => r,
+                HintOut::Fp12(r) => r,
                 _ => panic!("failed to match"),
             };
             let ((hint_out, hint_script, maybe_wrong), check_is_id) = match hints_out[1].clone() {
-                HintOut::FrobFp12(d) => (
+                HintOut::Fp12(d) => (
                     hints_dense_dense_mul0(
                         sig,
                         sec_out,
                         sec_in.clone(),
-                        HintInDenseMul0::from_dense_frob(c, d),
+                        HintInDenseMul0::from_fp12_fp12(c, d),
                     ),
                     false,
                 ),
-                HintOut::HashC(d) => {
-                    // s
-                    (
-                        hints_dense_dense_mul0(
-                            sig,
-                            sec_out,
-                            sec_in.clone(),
-                            HintInDenseMul0::from_hash_c(c, d),
-                        ),
-                        false,
-                    )
-                }
                 _ => panic!("failed to match"),
             };
             if force_validate || maybe_wrong {
@@ -760,29 +709,20 @@ fn evaluate_post_miller_circuit(
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             }
-            aux_output_per_link.insert(row.link_id.clone(), HintOut::DenseMul0(hint_out));
+            aux_output_per_link.insert(row.link_id.clone(), HintOut::Fp12(hint_out));
         } else if row.category == "DD2" {
             assert!(hints_out.len() == 3);
             let c = match hints_out[0].clone() {
-                HintOut::DenseMul1(r) => r,
+                HintOut::Fp12(r) => r,
                 _ => panic!("failed to match"),
             };
             let ((hint_out, hint_script, maybe_wrong), check_is_id) = match hints_out[1].clone() {
-                HintOut::FrobFp12(d) => (
+                HintOut::Fp12(d) => (
                     hints_dense_dense_mul1(
                         sig,
                         sec_out,
                         sec_in.clone(),
-                        HintInDenseMul1::from_dense_frob(c, d),
-                    ),
-                    false,
-                ),
-                HintOut::HashC(d) => (
-                    hints_dense_dense_mul1(
-                        sig,
-                        sec_out,
-                        sec_in.clone(),
-                        HintInDenseMul1::from_hash_c(c, d),
+                        HintInDenseMul1::from_fp12_fp12(c, d),
                     ),
                     false,
                 ),
@@ -809,22 +749,22 @@ fn evaluate_post_miller_circuit(
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             }
-            aux_output_per_link.insert(row.link_id.clone(), HintOut::DenseMul1(hint_out));
+            aux_output_per_link.insert(row.link_id.clone(), HintOut::Fp12(hint_out));
         } else if row.category == "DD3" {
             assert!(hints_out.len() == 2);
             let c = match hints_out[0].clone() {
-                HintOut::SparseDenseMul(r) => r,
+                HintOut::Fp12(r) => r,
                 _ => panic!("failed to match"),
             };
             let d = match hints_out[1].clone() {
-                HintOut::SparseAdd(r) => r,
+                HintOut::SparseEval(r) => r,
                 _ => panic!("failed to match"),
             };
             let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul0(
                 sig,
                 sec_out,
                 sec_in.clone(),
-                HintInDenseMul0::from_sparse_dense_add(c, d),
+                HintInDenseMul0::from_fp12_le(c, d),
             );
             if force_validate || maybe_wrong {
                 let ops_script = tap_dense_dense_mul0(false);
@@ -847,22 +787,22 @@ fn evaluate_post_miller_circuit(
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             }
-            aux_output_per_link.insert(row.link_id.clone(), HintOut::DenseMul0(hint_out));
+            aux_output_per_link.insert(row.link_id.clone(), HintOut::Fp12(hint_out));
         } else if row.category == "DD4" {
             assert!(hints_out.len() == 3);
             let c = match hints_out[0].clone() {
-                HintOut::SparseDenseMul(r) => r,
+                HintOut::Fp12(r) => r,
                 _ => panic!("failed to match"),
             };
             let d = match hints_out[1].clone() {
-                HintOut::SparseAdd(r) => r,
+                HintOut::SparseEval(r) => r,
                 _ => panic!("failed to match"),
             };
             let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul1(
                 sig,
                 sec_out,
                 sec_in.clone(),
-                HintInDenseMul1::from_sparse_dense_add(c, d),
+                HintInDenseMul1::from_fp12_le(c, d),
             );
             if force_validate || maybe_wrong {
                 let ops_script = tap_dense_dense_mul1(false);
@@ -885,7 +825,7 @@ fn evaluate_post_miller_circuit(
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             }
-            aux_output_per_link.insert(row.link_id.clone(), HintOut::DenseMul1(hint_out));
+            aux_output_per_link.insert(row.link_id.clone(), HintOut::Fp12(hint_out));
         } else if row.category == "Add1" || row.category == "Add2" {
             assert_eq!(hints_out.len(), 7);
             let mut ps: Vec<ark_bn254::Fq> = vec![];
@@ -904,13 +844,9 @@ fn evaluate_post_miller_circuit(
             );
             if row.category == "Add1" {
                 let (hintout, hint_script, maybe_wrong) = match hints_out[0].clone() {
-                    HintOut::DblAdd(r) => {
-                        let hint_in = HintInAdd::from_doubleadd(r, p.x, p.y, q);
-                        taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), hint_in, 1)
-                    }
-                    HintOut::Double(r) => {
-                        let hint_in = HintInAdd::from_double(r, p.x, p.y, q);
-                        taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), hint_in, 1)
+                    HintOut::G2Acc(r) => {
+                        //let hint_in = HintInAdd::from_g2point_q(r, p, q);
+                        taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), (r, p,q), 1)
                     }
                     _ => panic!("failed to match"),
                 };
@@ -935,12 +871,12 @@ fn evaluate_post_miller_circuit(
                     assert!(!exec_result.success);
                     assert!(exec_result.final_stack.len() == 1);
                 }
-                aux_output_per_link.insert(row.link_id.clone(), HintOut::Add(hintout));
+                aux_output_per_link.insert(row.link_id.clone(), HintOut::G2Acc(hintout));
             } else if row.category == "Add2" {
                 let (hintout, hint_script, maybe_wrong) = match hints_out[0].clone() {
-                    HintOut::Add(r) => {
-                        let hint_in = HintInAdd::from_add(r, p.x, p.y, q);
-                        taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), hint_in, -1)
+                    HintOut::G2Acc(r) => {
+                        // let hint_in = HintInAdd::from_g2point_q(r, p, q);
+                        taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), (r, p, q), -1)
                     }
                     _ => panic!("failed to match"),
                 };
@@ -965,16 +901,16 @@ fn evaluate_post_miller_circuit(
                     assert!(!exec_result.success);
                     assert!(exec_result.final_stack.len() == 1);
                 }
-                aux_output_per_link.insert(row.link_id.clone(), HintOut::Add(hintout));
+                aux_output_per_link.insert(row.link_id.clone(), HintOut::G2Acc(hintout));
             }
         } else if row.category == "SD" {
             assert_eq!(hints_out.len(), 2);
             let dense = match hints_out[0].clone() {
-                HintOut::DenseMul1(f) => f,
+                HintOut::Fp12(f) => f,
                 _ => panic!(),
             };
             let (sd_hint, hint_script, maybe_wrong) = match hints_out[1].clone() {
-                HintOut::Add(f) => {
+                HintOut::G2Acc(f) => {
                     let hint_in = HintInSparseDenseMul::from_add(f, dense);
                     taps_mul::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), hint_in, false)
                 }
@@ -1001,7 +937,7 @@ fn evaluate_post_miller_circuit(
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             }
-            aux_output_per_link.insert(row.link_id.clone(), HintOut::SparseDenseMul(sd_hint));
+            aux_output_per_link.insert(row.link_id.clone(), HintOut::Fp12(sd_hint));
         } else if row.category == "SS1" || row.category == "SS2" {
             assert_eq!(hints_out.len(), 4);
             let mut ps: Vec<ark_bn254::Fq> = vec![];
@@ -1052,7 +988,7 @@ fn evaluate_post_miller_circuit(
                 }
                 nt2 = hint_out.t2;
                 nt3 = hint_out.t3;
-                aux_output_per_link.insert(row.link_id.clone(), HintOut::SparseAdd(hint_out));
+                aux_output_per_link.insert(row.link_id.clone(), HintOut::SparseEval(hint_out));
             } else if row.category == "SS2" {
                 let (hint_out, hint_script, maybe_wrong) = taps::hint_add_eval_mul_for_fixed_Qs_with_frob(
                     sig,
@@ -1088,13 +1024,13 @@ fn evaluate_post_miller_circuit(
                 }
                 nt2 = hint_out.t2;
                 nt3 = hint_out.t3;
-                aux_output_per_link.insert(row.link_id.clone(), HintOut::SparseAdd(hint_out));
+                aux_output_per_link.insert(row.link_id.clone(), HintOut::SparseEval(hint_out));
             } 
         
         } else if row.category == "DK1" {
             assert!(hints_out.len() == 1);
             let a = match hints_out[0].clone() {
-                HintOut::DenseMul1(r) => r,
+                HintOut::Fp12(r) => r,
                 _ => panic!("failed to match"),
             };
 
@@ -1120,11 +1056,11 @@ fn evaluate_post_miller_circuit(
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             }
-            aux_output_per_link.insert(row.link_id.clone(), HintOut::DenseMul0(hint_out));
+            aux_output_per_link.insert(row.link_id.clone(), HintOut::Fp12(hint_out));
         } else if row.category == "DK2" {
             assert!(hints_out.len() == 2);
             let a = match hints_out[0].clone() {
-                HintOut::DenseMul1(r) => r,
+                HintOut::Fp12(r) => r,
                 _ => panic!("failed to match"),
             };
             let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul1_by_constant(sig, sec_out, sec_in.clone(), HintInDenseMul1 { a: a.f, b: fixed_acc });
@@ -1149,7 +1085,7 @@ fn evaluate_post_miller_circuit(
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             }
-            aux_output_per_link.insert(row.link_id.clone(), HintOut::DenseMul1(hint_out));
+            aux_output_per_link.insert(row.link_id.clone(), HintOut::Fp12(hint_out));
         } else {
             panic!();
         } 
@@ -1218,7 +1154,7 @@ fn evaluate_groth16_params_from_sig(
                 let nibs: [u8; 40] = nibs.try_into().unwrap();
                 let mut padded_nibs = [0u8; 64]; // initialize with zeros
                 padded_nibs[24..64].copy_from_slice(&nibs[0..40]);
-                HintOut::GrothC(HintOutFp12 { f: ark_bn254::Fq12::ONE, hash: padded_nibs })
+                HintOut::Fp12(Fp12Acc { f: ark_bn254::Fq12::ONE, hash: padded_nibs })
             }
         };
         hout_per_name.insert(item.link_id.clone(), hout);
@@ -1243,8 +1179,8 @@ fn evaluate_groth16_params_from_sig(
     // ];
     //let chash = emulate_extern_hash_fps(cs.clone(), false);
     let v = hout_per_name.get("cinv").unwrap();
-    if let HintOut::GrothC(x) = v {
-        hout_per_name.insert(String::from("cinv"), HintOut::GrothC(HintOutFp12 { f, hash: x.hash }));
+    if let HintOut::Fp12(x) = v {
+        hout_per_name.insert(String::from("cinv"), HintOut::Fp12(Fp12Acc { f, hash: x.hash }));
     }
     return hout_per_name;
 
@@ -1327,7 +1263,7 @@ fn evaluate_groth16_params(
         HintOut::FieldElem(sv[2]),
         HintOut::FieldElem(sv[1]),
         HintOut::FieldElem(sv[0]),
-        HintOut::GrothC(HintOutFp12 {
+        HintOut::Fp12(Fp12Acc {
             f: cvinv,
             hash: cvinvhash,
         }),
@@ -1505,7 +1441,7 @@ fn evaluate_pre_miller_circuit(
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             }
-            aux_output_per_link.insert(row.link_id, HintOut::InitT4(hint_res));
+            aux_output_per_link.insert(row.link_id, HintOut::G2Acc(hint_res));
         } else if row.category == "PrePy" {
             assert!(hints.len() == 1);
             let pt = match hints[0] {
@@ -1589,7 +1525,7 @@ fn evaluate_pre_miller_circuit(
                 xs.push(x);
             }
             let (hout, hint_script, maybe_wrong) =
-                hint_hash_c(sig, sec_out, sec_in.clone(), HintInHashC::from_points(xs));
+                hint_hash_c(sig, sec_out, sec_in.clone(), HintInHashC::from_fp12_vec(xs));
             if force_validate || maybe_wrong {
                 let ops_script = tap_hash_c();
                 let bcs_script = bitcom_hash_c(pub_scripts_per_link_id, sec_out, sec_in.clone());
@@ -1610,12 +1546,11 @@ fn evaluate_pre_miller_circuit(
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             }
-            aux_output_per_link.insert(row.link_id, HintOut::HashC(hout));
+            aux_output_per_link.insert(row.link_id, HintOut::Fp12(hout));
         } else if row.category == "HashC2" {
             assert!(hints.len() == 1);
             let hint_in_hashc2 = match hints[0].clone() {
-                HintOut::HashC(r) => HintInHashC::from_hashc(r), // c->c2
-                HintOut::GrothC(r) => HintInHashC::from_grothc(r), // cinv -> cinv2
+                HintOut::Fp12(r) => HintInHashC::from_fp12(r), // c->c2
                 _ => panic!("failed to match"),
             };
             let (hout, hint_script, maybe_wrong) = hint_hash_c2(
@@ -1645,16 +1580,16 @@ fn evaluate_pre_miller_circuit(
                 assert!(exec_result.final_stack.len() == 1);
             }
             if !aux_output_per_link.contains_key(&row.link_id) {
-                aux_output_per_link.insert(row.link_id, HintOut::HashC(hout));
+                aux_output_per_link.insert(row.link_id, HintOut::Fp12(hout));
             }
         } else if row.category == "DD1" {
             assert!(hints.len() == 2);
             let d = match hints[1].clone() {
-                HintOut::GrothC(r) => r,
+                HintOut::Fp12(r) => r,
                 _ => panic!("failed to match"),
             };
             let (c, hint_script, maybe_wrong) = match hints[0].clone() {
-                HintOut::HashC(c) => hints_dense_dense_mul0_by_hash(
+                HintOut::Fp12(c) => hints_dense_dense_mul0_by_hash(
                     sig,
                     sec_out,
                     sec_in.clone(),
@@ -1683,11 +1618,11 @@ fn evaluate_pre_miller_circuit(
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             }
-            aux_output_per_link.insert(row.link_id, HintOut::DenseMul0(c));
+            aux_output_per_link.insert(row.link_id, HintOut::Fp12(c));
         } else if row.category == "DD2" {
             assert!(hints.len() == 3);
             let b = match hints[1].clone() {
-                HintOut::GrothC(r) => r,
+                HintOut::Fp12(r) => r,
                 _ => panic!("failed to match"),
             };
             // let c0 = match hints[2].clone() {
@@ -1695,7 +1630,7 @@ fn evaluate_pre_miller_circuit(
             //     _ => panic!("failed to match"),
             // };
             let (hout, hint_script, maybe_wrong) = match hints[0].clone() {
-                HintOut::HashC(a) => hints_dense_dense_mul1_by_hash(
+                HintOut::Fp12(a) => hints_dense_dense_mul1_by_hash(
                     sig,
                     sec_out,
                     sec_in.clone(),
@@ -1724,7 +1659,7 @@ fn evaluate_pre_miller_circuit(
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             }
-            aux_output_per_link.insert(row.link_id, HintOut::DenseMul1(hout));
+            aux_output_per_link.insert(row.link_id, HintOut::Fp12(hout));
         } else if row.category == "P3Hash" {
             assert!(hints.len() == 3);
             let t = match hints[0].clone() {
@@ -1880,7 +1815,7 @@ pub(crate) fn evaluate(
     } else {
         let hint = hint.unwrap();
         match hint {
-            HintOut::DenseMul1(c) => {
+            HintOut::Fp12(c) => {
                 assert_eq!(c.f, ark_bn254::Fq12::ONE);
             }
             _ => {}
@@ -1895,22 +1830,22 @@ pub(crate) fn evaluate(
 
     for (k, v) in aux_out_per_link {
         let x = match v {
-            HintOut::Add(r) => r.out(),
-            HintOut::DblAdd(r) => r.out(),
-            HintOut::DenseMul0(r) => r.out(),
-            HintOut::DenseMul1(r) => r.out(),
-            HintOut::Double(r) => r.out(),
+            HintOut::G2Acc(r) => r.out(),
+            HintOut::G2Acc(r) => r.out(),
+            HintOut::Fp12(r) => r.out(),
+            HintOut::Fp12(r) => r.out(),
+            HintOut::G2Acc(r) => r.out(),
             HintOut::FieldElem(f) => extern_fq_to_nibbles(f),
-            HintOut::FrobFp12(f) => f.out(),
-            HintOut::GrothC(r) => r.out(),
-            HintOut::HashC(r) => r.out(),
-            HintOut::InitT4(r) => r.out(),
+            HintOut::Fp12(f) => f.out(),
+            HintOut::Fp12(r) => r.out(),
+            HintOut::Fp12(r) => r.out(),
+            HintOut::G2Acc(r) => r.out(),
             HintOut::MSM(r) => r.out(),
             HintOut::ScalarElem(r) => extern_fr_to_nibbles(r),
-            HintOut::SparseAdd(r) => r.out(),
-            HintOut::SparseDbl(r) => r.out(),
-            HintOut::SparseDenseMul(r) => r.out(),
-            HintOut::Squaring(r) => r.out(),
+            HintOut::SparseEval(r) => r.out(),
+            HintOut::SparseEval(r) => r.out(),
+            HintOut::Fp12(r) => r.out(),
+            HintOut::Fp12(r) => r.out(),
             HintOut::HashBytes(r) => r,
         };
         let index = link_name_to_id.get(&k).unwrap().0;
@@ -1964,7 +1899,7 @@ mod test {
                         let c = wots256::get_signature(&format!("{secret}{:04x}", index), &bal);
                         SigData::Sig256(c)
                     },
-                    HintOut::GrothC(r) => {
+                    HintOut::Fp12(r) => {
                         // println!("match {:?}", r.chash);
                         let bal: [u8; 32] = nib_to_byte_array(&r.hash).try_into().unwrap();
         
@@ -2017,8 +1952,8 @@ mod test {
                         assert_eq!(v, rs);
                     }
                 },
-                HintOut::GrothC(v) => {
-                    if let HintOut::GrothC(rs) = r {
+                HintOut::Fp12(v) => {
+                    if let HintOut::Fp12(rs) = r {
                         assert_eq!(v.f, rs.f);
                         assert_eq!(v.hash, rs.hash);
                     } 

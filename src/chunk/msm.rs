@@ -13,7 +13,6 @@ use crate::{
 use ark_bn254::G1Affine;
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
-use bitcoin::opcodes::all::OP_ENDIF;
 use num_traits::One;
 
 use super::hint_models::HintInHashP;
