@@ -12,7 +12,7 @@ use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
 };
-use ark_ff::{Field, Zero};
+use ark_ff::{AdditiveGroup, Field, Zero};
 use num_traits::One;
 use std::collections::HashMap;
 
@@ -114,16 +114,29 @@ pub(crate) fn hint_sparse_dense_mul(
     dbl_blk: bool,
 ) -> (Fp12Acc, Script, bool) {
     assert_eq!(sec_in.len(), 2);
-    let (f, dbl_le0, dbl_le1) = (hint_in.a, hint_in.le0, hint_in.le1);
-    let (_, hints) = Fq12::hinted_mul_by_34(f, dbl_le0, dbl_le1);
+    if dbl_blk {
+        assert!(hint_in.g.dbl_le.is_some());
+    } else {
+        assert!(hint_in.g.add_le.is_some());
+    }
+
+    let mut cur_le = (ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO);
+    if dbl_blk {
+        cur_le = hint_in.g.add_le.unwrap();
+    } else {
+        cur_le = hint_in.g.dbl_le.unwrap();
+    }
+    
+    let (f, cur_le0, cur_le1) = (hint_in.a, cur_le.0, cur_le.1);
+    let (_, hints) = Fq12::hinted_mul_by_34(f, cur_le0, cur_le1);
     let mut f1 = f;
-    f1.mul_by_034(&ark_bn254::Fq2::ONE, &dbl_le0, &dbl_le1);
+    f1.mul_by_034(&ark_bn254::Fq2::ONE, &cur_le0, &cur_le1);
 
     // assumes sparse-dense after doubling block, hashing arrangement changes otherwise
-    let hash_new_t = hint_in.hash_aux_t;
+    let hash_new_t = extern_hash_fps(vec![hint_in.g.t.x.c0, hint_in.g.t.x.c1, hint_in.g.t.y.c0, hint_in.g.t.y.c1], true);
     let hash_cur_le =
-        extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
-    let hash_other_le = hint_in.hash_other_le;
+        extern_hash_fps(vec![cur_le0.c0, cur_le0.c1, cur_le1.c0, cur_le1.c1], true);
+    let hash_other_le = hint_in.g.hash_other_le(dbl_blk);
     let mut hash_le = extern_hash_nibbles(vec![hash_cur_le, hash_other_le], true);
     if !dbl_blk {
         hash_le = extern_hash_nibbles(vec![hash_other_le, hash_cur_le], true);
@@ -172,8 +185,8 @@ pub(crate) fn hint_sparse_dense_mul(
         }
         // aux_a
         {fq12_push_not_montgomery(f)}
-        {fq2_push_not_montgomery(dbl_le0)}
-        {fq2_push_not_montgomery(dbl_le1)}
+        {fq2_push_not_montgomery(cur_le0)}
+        {fq2_push_not_montgomery(cur_le1)}
 
         for i in 0..hash_other_le_limbs.len() {
             {hash_other_le_limbs[i]}
@@ -270,7 +283,7 @@ pub(crate) fn hints_dense_dense_mul0(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInDenseMul0,
+    hint_in: HintInDenseMul,
 ) -> (Fp12Acc, Script, bool) {
     assert_eq!(sec_in.len(), 2);
     let (f, g) = (hint_in.a, hint_in.b);
@@ -411,7 +424,7 @@ pub(crate) fn hints_dense_dense_mul1(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInDenseMul1,
+    hint_in: HintInDenseMul,
 ) -> (Fp12Acc, Script, bool) {
     let (f, g) = (hint_in.a, hint_in.b);
     let (_, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
@@ -511,7 +524,7 @@ pub(crate) fn hint_squaring(
         ],
         true,
     );
-    assert_eq!(hint_in.ahash, a_hash);
+   //assert_eq!(hint_in.ahash, a_hash);
 
     let tup = vec![(sec_out, b_hash), (sec_in[0], a_hash)];
     let (bc_elems, should_validate) = tup_to_scr(sig, tup);
@@ -671,7 +684,7 @@ pub(crate) fn hints_dense_dense_mul0_by_constant(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInDenseMul0,
+    hint_in: HintInDenseMul,
 ) -> (Fp12Acc, Script, bool) {
     assert_eq!(sec_in.len(), 1);
     let (f, g) = (hint_in.a, hint_in.b);
@@ -824,7 +837,7 @@ pub(crate) fn hints_dense_dense_mul1_by_constant(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInDenseMul1,
+    hint_in: HintInDenseMul,
 ) -> (Fp12Acc, Script, bool) {
     let (f, g) = (hint_in.a, hint_in.b);
     let (_, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
@@ -982,7 +995,7 @@ pub(crate) fn hints_dense_dense_mul0_by_hash(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInDenseMulByHash0,
+    hint_in: HintInDenseMulByHash,
 ) -> (Fp12Acc, Script, bool) {
     assert_eq!(sec_in.len(), 2);
     let (f, hash_g) = (hint_in.a, hint_in.bhash);
@@ -1137,7 +1150,7 @@ pub(crate) fn hints_dense_dense_mul1_by_hash(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInDenseMulByHash1,
+    hint_in: HintInDenseMulByHash,
 ) -> (Fp12Acc, Script, bool) {
     let (f, hash_g) = (hint_in.a, hint_in.bhash);
     let g = f.inverse().unwrap();

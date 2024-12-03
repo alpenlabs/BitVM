@@ -101,7 +101,7 @@ mod test {
             ],
             false,
         );
-        let hint_in = HintInHashC { c: f, hash: fhash };
+        let hint_in = HintInHashC { c: f };
         let mut sig = Sig {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
@@ -154,7 +154,7 @@ mod test {
             ],
             false,
         );
-        let hint_in = HintInHashC { c: f, hash: fhash };
+        let hint_in = HintInHashC { c: f };
         let (_, simulate_stack_input, maybe_wrong) = hint_hash_c2(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
@@ -373,10 +373,7 @@ mod test {
         let dbl_le1 = ark_bn254::Fq2::rand(&mut prng);
         let hint_in = HintInSparseDenseMul {
             a: f,
-            le0: dbl_le0,
-            le1: dbl_le1,
-            hash_other_le: [2u8; 64],
-            hash_aux_t: [3u8; 64],
+            g: todo!()
         };
 
         let (_, simulate_stack_input, maybe_wrong) = hint_sparse_dense_mul(
@@ -476,7 +473,7 @@ mod test {
 
 
 
-        let hint_in = HintInDenseMul0 { a: f, b: g };
+        let hint_in = HintInDenseMul { a: f, b: g };
 
         let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul0(
             &mut Sig {
@@ -535,7 +532,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(17);
         let f = ark_bn254::Fq12::rand(&mut prng);
         let g = ark_bn254::Fq12::rand(&mut prng);
-        let hint_in = HintInDenseMul1 { a: f, b: g };
+        let hint_in = HintInDenseMul { a: f, b: g };
         let h = f * g;
 
         let hash_f = extern_hash_fps(
@@ -654,7 +651,7 @@ mod test {
 
         let h = f * g;
 
-        let hint_in = HintInDenseMul0 { a: f, b: g };
+        let hint_in = HintInDenseMul { a: f, b: g };
 
         let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul0_by_constant(
             &mut Sig {
@@ -718,7 +715,7 @@ mod test {
         // runtime
         let f = ark_bn254::Fq12::rand(&mut prng);
 
-        let hint_in = HintInDenseMul1 { a: f, b: g };
+        let hint_in = HintInDenseMul { a: f, b: g };
 
         let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul1_by_constant(
             &mut Sig {
@@ -778,7 +775,7 @@ mod test {
             ],
             true,
         );
-        let hint_in: HintInSquaring = HintInSquaring { a, ahash };
+        let hint_in: HintInSquaring = HintInSquaring { a };
 
         let mut sig = Sig {
             msk: Some(&msk),
@@ -831,10 +828,10 @@ mod test {
         let q = ark_bn254::G2Affine::rand(&mut prng);
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hash_le_aux = [2u8; 64];
-        let hint_in = HintInAdd {
+        let hint_in = HintInG2PointOp {
             t,
-            p,
-            q,
+            px: p.x, py: p.y,
+            q: Some(q),
         };
 
         let mut sig = Sig {
@@ -884,7 +881,7 @@ mod test {
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hash_le_aux = [2u8; 64]; // mock
         let t4acc: G2PointAcc = G2PointAcc { t, dbl_le: None, add_le: None,  };
-        let hint_in = HintInDouble { t: t4acc, p };
+        let hint_in = HintInG2PointOp { t: t4acc, px: p.x, py: p.y, q: None };
 
         let mut sig = Sig {
             msk: Some(&sec_key_for_bitcomms),
@@ -934,10 +931,10 @@ mod test {
         let q = ark_bn254::G2Affine::rand(&mut prng);
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hash_le_aux = [2u8; 64];
-        let hint_in = HintInAdd {
+        let hint_in = HintInG2PointOp {
             t,
-            p,
-            q,
+            px: p.x, py: p.y,
+            q: Some(q),
         };
 
         let mut sig = Sig {
@@ -1199,7 +1196,7 @@ mod test {
         ); // sparse
         //let h = ark_bn254::Fq12::ONE;
 
-        let hint_in = HintInDenseMulByHash0 { a: f, bhash: ghash };
+        let hint_in = HintInDenseMulByHash { a: f, bhash: ghash };
 
         let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul0_by_hash(
             &mut Sig {
@@ -1267,7 +1264,7 @@ mod test {
             false,
         );
 
-        let hint_in = HintInDenseMulByHash1 { a: f, bhash: hash_g };
+        let hint_in = HintInDenseMulByHash { a: f, bhash: hash_g };
 
         let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul1_by_hash(
             &mut Sig {

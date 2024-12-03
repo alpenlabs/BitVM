@@ -137,7 +137,7 @@ fn evaluate_miller_circuit(
                 let p = G1Affine::new_unchecked(ps[5], ps[4]);
                 let (hintout, hint_script, maybe_wrong) = match hints[0].clone() {
                     HintOut::G2Acc(r) => {
-                        let hint_in = HintInAdd::from_g2point(r, p, q);
+                        let hint_in = HintInG2PointOp::from_g2point(r, p, Some(q));
                         taps::hint_point_ops(sig, sec_out, sec_in.clone(), hint_in, *bit)
                     }
                     _ => panic!("failed to match"),
@@ -178,7 +178,7 @@ fn evaluate_miller_circuit(
                 let p = G1Affine::new_unchecked(ps[1], ps[0]);
                 let (hintout, hint_script, maybe_wrong) = match hints[0].clone() {
                     HintOut::G2Acc(r) => {
-                        let hint_in = HintInDouble::from_g2point(r, p.x, p.y);
+                        let hint_in = HintInG2PointOp::from_g2point(r, p, None);
                         taps::hint_point_dbl(sig, sec_out, sec_in.clone(), hint_in)
                     }
                     _ => panic!("failed to match"),
@@ -211,9 +211,10 @@ fn evaluate_miller_circuit(
                     _ => panic!(),
                 };
                 let (sd_hint, hint_script, maybe_wrong) = match hints[1].clone() {
-                    HintOut::G2Acc(f) => {
-                        let hint_in = HintInSparseDenseMul::from_double_add_top(f, dense);
-                        taps_mul::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), hint_in, true)
+                    HintOut::G2Acc(t) => {
+                        let is_dbl_blk = true;
+                        let hint_in = HintInSparseDenseMul {g: t, a: dense.f};
+                        taps_mul::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), hint_in, is_dbl_blk)
                     }
                     _ => panic!(),
                 };
@@ -297,7 +298,7 @@ fn evaluate_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    HintInDenseMul0::from_fp12_le(c, d),
+                    HintInDenseMul::from_fp12_le(c, d),
                 );
                 if force_validate || maybe_wrong {
                     let ops_script = tap_dense_dense_mul0(false);
@@ -335,7 +336,7 @@ fn evaluate_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    HintInDenseMul1::from_fp12_le(c, d),
+                    HintInDenseMul::from_fp12_le(c, d),
                 );
                 if force_validate || maybe_wrong {
                     let ops_script = tap_dense_dense_mul1(false);
@@ -370,7 +371,7 @@ fn evaluate_miller_circuit(
                         sig,
                         sec_out,
                         sec_in.clone(),
-                        HintInDenseMul0::from_fp12_fp12(c, r),
+                        HintInDenseMul::from_fp12_fp12(c, r),
                     ),
                     _ => panic!("failed to match"),
                 };
@@ -407,7 +408,7 @@ fn evaluate_miller_circuit(
                         sig,
                         sec_out,
                         sec_in.clone(),
-                        HintInDenseMul1::from_fp12_fp12(c, r),
+                        HintInDenseMul::from_fp12_fp12(c, r),
                     ),
                     _ => panic!("failed to match"),
                 };
@@ -440,9 +441,10 @@ fn evaluate_miller_circuit(
                     _ => panic!(),
                 };
                 let (sd_hint, hint_script, maybe_wrong) = match hints[1].clone() {
-                    HintOut::G2Acc(f) => {
-                        let hint_in = HintInSparseDenseMul::from_add(f, dense);
-                        taps_mul::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), hint_in, false)
+                    HintOut::G2Acc(t) => {
+                        let is_dbl_blk = false;
+                        let hint_in = HintInSparseDenseMul {g: t, a: dense.f};
+                        taps_mul::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), hint_in, is_dbl_blk)
                     }
                     _ => panic!(),
                 };
@@ -531,7 +533,7 @@ fn evaluate_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    HintInDenseMul0::from_fp12_le(c, d),
+                    HintInDenseMul::from_fp12_le(c, d),
                 );
                 if force_validate || maybe_wrong {
                     let ops_script = tap_dense_dense_mul0(false);
@@ -569,7 +571,7 @@ fn evaluate_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    HintInDenseMul1::from_fp12_le(c, d),
+                    HintInDenseMul::from_fp12_le(c, d),
                 );
                 if force_validate || maybe_wrong {
                     let ops_script = tap_dense_dense_mul1(false);
@@ -682,7 +684,7 @@ fn evaluate_post_miller_circuit(
                         sig,
                         sec_out,
                         sec_in.clone(),
-                        HintInDenseMul0::from_fp12_fp12(c, d),
+                        HintInDenseMul::from_fp12_fp12(c, d),
                     ),
                     false,
                 ),
@@ -722,7 +724,7 @@ fn evaluate_post_miller_circuit(
                         sig,
                         sec_out,
                         sec_in.clone(),
-                        HintInDenseMul1::from_fp12_fp12(c, d),
+                        HintInDenseMul::from_fp12_fp12(c, d),
                     ),
                     false,
                 ),
@@ -764,7 +766,7 @@ fn evaluate_post_miller_circuit(
                 sig,
                 sec_out,
                 sec_in.clone(),
-                HintInDenseMul0::from_fp12_le(c, d),
+                HintInDenseMul::from_fp12_le(c, d),
             );
             if force_validate || maybe_wrong {
                 let ops_script = tap_dense_dense_mul0(false);
@@ -802,7 +804,7 @@ fn evaluate_post_miller_circuit(
                 sig,
                 sec_out,
                 sec_in.clone(),
-                HintInDenseMul1::from_fp12_le(c, d),
+                HintInDenseMul::from_fp12_le(c, d),
             );
             if force_validate || maybe_wrong {
                 let ops_script = tap_dense_dense_mul1(false);
@@ -845,7 +847,7 @@ fn evaluate_post_miller_circuit(
             if row.category == "Add1" {
                 let (hintout, hint_script, maybe_wrong) = match hints_out[0].clone() {
                     HintOut::G2Acc(r) => {
-                        let hint_in = HintInAdd::from_g2point(r, p, q);
+                        let hint_in = HintInG2PointOp::from_g2point(r, p, Some(q));
                         taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), hint_in, 1)
                     }
                     _ => panic!("failed to match"),
@@ -875,7 +877,7 @@ fn evaluate_post_miller_circuit(
             } else if row.category == "Add2" {
                 let (hintout, hint_script, maybe_wrong) = match hints_out[0].clone() {
                     HintOut::G2Acc(r) => {
-                        let hint_in = HintInAdd::from_g2point(r, p, q);
+                        let hint_in = HintInG2PointOp::from_g2point(r, p, Some(q));
                         taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), hint_in, -1)
                     }
                     _ => panic!("failed to match"),
@@ -910,9 +912,10 @@ fn evaluate_post_miller_circuit(
                 _ => panic!(),
             };
             let (sd_hint, hint_script, maybe_wrong) = match hints_out[1].clone() {
-                HintOut::G2Acc(f) => {
-                    let hint_in = HintInSparseDenseMul::from_add(f, dense);
-                    taps_mul::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), hint_in, false)
+                HintOut::G2Acc(t) => {
+                    let is_dbl_blk = false;
+                    let hint_in = HintInSparseDenseMul {g: t, a: dense.f};
+                    taps_mul::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), hint_in, is_dbl_blk)
                 }
                 _ => panic!(),
             };
@@ -1034,7 +1037,7 @@ fn evaluate_post_miller_circuit(
                 _ => panic!("failed to match"),
             };
 
-            let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul0_by_constant(sig, sec_out, sec_in.clone(), HintInDenseMul0 { a: a.f, b: fixed_acc });
+            let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul0_by_constant(sig, sec_out, sec_in.clone(), HintInDenseMul { a: a.f, b: fixed_acc });
             if force_validate || maybe_wrong {
                 let ops_script = tap_dense_dense_mul0_by_constant(true, fixed_acc);
                 let bcs_script =
@@ -1063,7 +1066,7 @@ fn evaluate_post_miller_circuit(
                 HintOut::Fp12(r) => r,
                 _ => panic!("failed to match"),
             };
-            let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul1_by_constant(sig, sec_out, sec_in.clone(), HintInDenseMul1 { a: a.f, b: fixed_acc });
+            let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul1_by_constant(sig, sec_out, sec_in.clone(), HintInDenseMul { a: a.f, b: fixed_acc });
             if force_validate || maybe_wrong {
                 let ops_script = tap_dense_dense_mul1_by_constant(true, fixed_acc);
                 let bcs_script =
@@ -1593,7 +1596,7 @@ fn evaluate_pre_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    HintInDenseMulByHash0 { a: c.f, bhash: d.hash },
+                    HintInDenseMulByHash { a: c.f, bhash: d.hash },
                 ),
                 _ => panic!("failed to match"),
             };
@@ -1634,7 +1637,7 @@ fn evaluate_pre_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    HintInDenseMulByHash1 { a: a.f, bhash: b.hash },
+                    HintInDenseMulByHash { a: a.f, bhash: b.hash },
                 ),
                 _ => panic!("failed to match"),
             };

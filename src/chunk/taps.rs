@@ -298,11 +298,11 @@ pub(crate) fn hint_point_dbl(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInDouble,
+    hint_in: HintInG2PointOp,
 ) -> (G2PointAcc, Script, bool) {
     assert_eq!(sec_in.len(), 3);
     let t = hint_in.t.t;
-    let p = hint_in.p;
+    let p = ark_bn254::G1Affine::new_unchecked(hint_in.px, hint_in.py);
     let hash_le_aux = hint_in.t.hash_le();
 
     let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
@@ -688,12 +688,12 @@ pub(crate) fn hint_point_add_with_frob(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInAdd,
+    hint_in: HintInG2PointOp,
     ate: i8,
 ) -> (G2PointAcc, Script, bool) {
     assert!(ate == 1 || ate == -1);
     assert_eq!(sec_in.len(), 7);
-    let (tt, p, q) = (hint_in.t.t, hint_in.p, hint_in.q);
+    let (tt, p, q) = (hint_in.t.t, ark_bn254::G1Affine::new_unchecked(hint_in.px, hint_in.py), hint_in.q.unwrap());
     let mut qq = q.clone();
     let hash_le_aux = hint_in.t.hash_le();
 
@@ -1173,11 +1173,11 @@ pub(crate) fn hint_point_ops(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInAdd,
+    hint_in: HintInG2PointOp,
     ate: i8,
 ) -> (G2PointAcc, Script, bool) {
     assert_eq!(sec_in.len(), 7);
-    let (t, p, q, hash_le_aux) = (hint_in.t.t, hint_in.p, hint_in.q, hint_in.t.hash_le());
+    let (t, p, q, hash_le_aux) = (hint_in.t.t, ark_bn254::G1Affine::new_unchecked(hint_in.px, hint_in.py), hint_in.q.unwrap(), hint_in.t.hash_le());
 
     let mut qq = q.clone();
     if ate == -1 {
@@ -2226,9 +2226,10 @@ pub(crate) fn hint_hash_c2(
         f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
         f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
     ];
+    let inhash = extern_hash_fps(f.clone(), false);
     let outhash = extern_hash_fps(f.clone(), true);
 
-    let tups = vec![(sec_out, outhash), (sec_in[0], hint_in.hash)];
+    let tups = vec![(sec_out, outhash), (sec_in[0], inhash)];
     let (bc_elems, should_validate) = tup_to_scr(sig, tups);
 
     let simulate_stack_input = script! {
