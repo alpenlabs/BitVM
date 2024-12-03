@@ -1559,7 +1559,7 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
     let (t2, t3, qq2, qq3) = (
         hint_in.t2, hint_in.t3,  hint_in.q2.unwrap(), hint_in.q3.unwrap(),
     );
-    let (p2, p3) = (ark_bn254::G1Affine::new_unchecked(hint_in.p2x, hint_in.p2y), ark_bn254::G1Affine::new_unchecked(hint_in.p3x, hint_in.p2y));
+    let (p2, p3) = (ark_bn254::G1Affine::new_unchecked(hint_in.p2x, hint_in.p2y), ark_bn254::G1Affine::new_unchecked(hint_in.p3x, hint_in.p3y));
     
     let mut q2 = qq2.clone();
     if ate == -1 {
