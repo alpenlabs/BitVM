@@ -299,7 +299,7 @@ pub(crate) fn hint_point_dbl(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInG2PointOp,
-) -> (G2PointAcc, Script, bool) {
+) -> (ElemG2PointAcc, Script, bool) {
     assert_eq!(sec_in.len(), 3);
     let t = hint_in.t.t;
     let p = ark_bn254::G1Affine::new_unchecked(hint_in.px, hint_in.py);
@@ -384,7 +384,7 @@ pub(crate) fn hint_point_dbl(
 
         {bc_elems}
     };
-    let hint_out: G2PointAcc = G2PointAcc {
+    let hint_out: ElemG2PointAcc = ElemG2PointAcc {
         t: G2Affine::new_unchecked(new_tx, new_ty),
         dbl_le: Some((dbl_le0, dbl_le1)),
         add_le: None,
@@ -690,7 +690,7 @@ pub(crate) fn hint_point_add_with_frob(
     sec_in: Vec<Link>,
     hint_in: HintInG2PointOp,
     ate: i8,
-) -> (G2PointAcc, Script, bool) {
+) -> (ElemG2PointAcc, Script, bool) {
     assert!(ate == 1 || ate == -1);
     assert_eq!(sec_in.len(), 7);
     let (tt, p, q) = (hint_in.t.t, ark_bn254::G1Affine::new_unchecked(hint_in.px, hint_in.py), hint_in.q.unwrap());
@@ -852,7 +852,7 @@ pub(crate) fn hint_point_add_with_frob(
         // bit commits raw
         { bc_elems }
     };
-    let hint_out = G2PointAcc {
+    let hint_out = ElemG2PointAcc {
         t: G2Affine::new_unchecked(new_tx, new_ty),
         add_le: Some((add_le0, add_le1)),
         dbl_le: None,
@@ -1175,7 +1175,7 @@ pub(crate) fn hint_point_ops(
     sec_in: Vec<Link>,
     hint_in: HintInG2PointOp,
     ate: i8,
-) -> (G2PointAcc, Script, bool) {
+) -> (ElemG2PointAcc, Script, bool) {
     assert_eq!(sec_in.len(), 7);
     let (t, p, q, hash_le_aux) = (hint_in.t.t, ark_bn254::G1Affine::new_unchecked(hint_in.px, hint_in.py), hint_in.q.unwrap(), hint_in.t.hash_le());
 
@@ -1316,7 +1316,7 @@ pub(crate) fn hint_point_ops(
         { bc_elems }
     };
 
-    let hint_out = G2PointAcc {
+    let hint_out = ElemG2PointAcc {
         t: G2Affine::new_unchecked(new_tx, new_ty),
         add_le: Some((add_le0, add_le1)),
         dbl_le: Some((dbl_le0, dbl_le1)),
@@ -1333,7 +1333,7 @@ pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInSparseEvals,
-) -> (SparseEval, Script, bool) {
+) -> (ElemSparseEval, Script, bool) {
     assert_eq!(sec_in.len(), 4);
     let (t2, t3) = (hint_in.t2, hint_in.t3);
     let (p2, p3) = (ark_bn254::G1Affine::new_unchecked(hint_in.p2x, hint_in.p2y), ark_bn254::G1Affine::new_unchecked(hint_in.p3x, hint_in.p3y));
@@ -1418,10 +1418,10 @@ pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
 
     };
 
-    let hint_out = SparseEval {
+    let hint_out = ElemSparseEval {
         t2: G2Affine::new_unchecked(x2, y2),
         t3: G2Affine::new_unchecked(x3, y3),
-        f: Fp12Acc { f: b, hash: b_hash }
+        f: ElemFp12Acc { f: b, hash: b_hash }
     };
 
     (hint_out, simulate_stack_input, should_validate)
@@ -1554,7 +1554,7 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
     sec_in: Vec<Link>,
     hint_in: HintInSparseEvals,
     ate: i8,
-) -> (SparseEval, Script, bool) {
+) -> (ElemSparseEval, Script, bool) {
     assert_eq!(sec_in.len(), 4);
     let (t2, t3, qq2, qq3) = (
         hint_in.t2, hint_in.t3,  hint_in.q2.unwrap(), hint_in.q3.unwrap(),
@@ -1642,10 +1642,10 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
         { bc_elems }
     };
 
-    let hint_out = SparseEval {
+    let hint_out = ElemSparseEval {
         t2: G2Affine::new_unchecked(x2, y2),
         t3: G2Affine::new_unchecked(x3, y3),
-        f: Fp12Acc { f: b, hash: b_hash }
+        f: ElemFp12Acc { f: b, hash: b_hash }
     };
 
     (hint_out, simulate_stack_input, should_validate)
@@ -1777,7 +1777,7 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
     sec_in: Vec<Link>,
     hint_in: HintInSparseEvals,
     ate: i8,
-) -> (SparseEval, Script, bool) {
+) -> (ElemSparseEval, Script, bool) {
     assert_eq!(sec_in.len(), 4);
 
     let (t2, t3, qq2, qq3) = (
@@ -1912,10 +1912,10 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
         { bc_elems }
     };
 
-    let hint_out = SparseEval {
+    let hint_out = ElemSparseEval {
         t2: G2Affine::new_unchecked(x2, y2),
         t3: G2Affine::new_unchecked(x3, y3),
-        f: Fp12Acc { f: b, hash: b_hash }
+        f: ElemFp12Acc { f: b, hash: b_hash }
     };
 
     (hint_out, simulate_stack_input, should_validate)
@@ -2147,7 +2147,7 @@ pub(crate) fn hint_hash_c(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInHashC,
-) -> (Fp12Acc, Script, bool) {
+) -> (ElemFp12Acc, Script, bool) {
     let f = hint_in.c;
     let f = vec![
         f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
@@ -2166,7 +2166,7 @@ pub(crate) fn hint_hash_c(
         { bc_elems }
     };
     (
-        Fp12Acc {
+        ElemFp12Acc {
             f: hint_in.c,
             hash: fhash,
         },
@@ -2220,7 +2220,7 @@ pub(crate) fn hint_hash_c2(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInHashC,
-) -> (Fp12Acc, Script, bool) {
+) -> (ElemFp12Acc, Script, bool) {
     let f = hint_in.c;
     let f = vec![
         f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
@@ -2240,7 +2240,7 @@ pub(crate) fn hint_hash_c2(
         { bc_elems }
     };
     (
-        Fp12Acc {
+        ElemFp12Acc {
             f: hint_in.c,
             hash: outhash,
         },
@@ -2495,7 +2495,7 @@ pub(crate) fn hint_init_T4(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInInitT4,
-) -> (G2PointAcc, Script, bool) {
+) -> (ElemG2PointAcc, Script, bool) {
     assert_eq!(sec_in.len(), 4);
     let t4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_in.q4x0, hint_in.q4x1), ark_bn254::Fq2::new(hint_in.q4y0, hint_in.q4y1));
     let t4hash = extern_hash_fps(vec![t4.x.c0, t4.x.c1, t4.y.c0, t4.y.c1], false);
@@ -2519,7 +2519,7 @@ pub(crate) fn hint_init_T4(
         }
         { bc_elems }
     };
-    let hint_out: G2PointAcc = G2PointAcc {
+    let hint_out: ElemG2PointAcc = ElemG2PointAcc {
         t: t4,
         dbl_le: None,
         add_le: None,
@@ -2580,7 +2580,7 @@ pub(crate) fn hints_frob_fp12(
     sec_in: Vec<Link>,
     hint_in: HintInFrobFp12,
     power: usize,
-) -> (Fp12Acc, Script, bool) {
+) -> (ElemFp12Acc, Script, bool) {
     assert_eq!(sec_in.len(), 1);
     let f = hint_in.f;
     let (_, hints_frobenius_map) = Fq12::hinted_frobenius_map(power, f);
@@ -2612,5 +2612,5 @@ pub(crate) fn hints_frob_fp12(
         { fq12_push_not_montgomery(f) }
         { bc_elems }
     };
-    (Fp12Acc { f: g, hash: ghash }, simulate_stack_input, should_validate)
+    (ElemFp12Acc { f: g, hash: ghash }, simulate_stack_input, should_validate)
 }

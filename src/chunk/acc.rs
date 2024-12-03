@@ -131,7 +131,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<HintOut>, eval_ins: EvalIns, pu
     all_output_hints.push(HintOut::FieldElem(eval_ins.q4.x.c0));
     
     let cvinv = eval_ins.c.inverse().unwrap();
-    let gcinv: Fp12Acc = Fp12Acc { f: cvinv, hash: extern_hash_fps(
+    let gcinv: ElemFp12Acc = ElemFp12Acc { f: cvinv, hash: extern_hash_fps(
         vec![
             cvinv.c0.c0.c0,
             cvinv.c0.c0.c1,
@@ -179,12 +179,12 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<HintOut>, eval_ins: EvalIns, pu
     
     // pre miller checks
 
-    let gc: Fp12Acc = Fp12Acc { f: eval_ins.c, hash: extern_hash_fps(vec![
+    let gc: ElemFp12Acc = ElemFp12Acc { f: eval_ins.c, hash: extern_hash_fps(vec![
         eval_ins.c.c0.c0.c0, eval_ins.c.c0.c0.c1, eval_ins.c.c0.c1.c0, eval_ins.c.c0.c1.c1, eval_ins.c.c0.c2.c0, eval_ins.c.c0.c2.c1, eval_ins.c.c1.c0.c0,
         eval_ins.c.c1.c0.c1, eval_ins.c.c1.c1.c0, eval_ins.c.c1.c1.c1, eval_ins.c.c1.c2.c0, eval_ins.c.c1.c2.c1,
     ], true) };
 
-    let gs: Fp12Acc = Fp12Acc { f: eval_ins.s, hash: extern_hash_fps(vec![
+    let gs: ElemFp12Acc = ElemFp12Acc { f: eval_ins.s, hash: extern_hash_fps(vec![
         eval_ins.s.c0.c0.c0, eval_ins.s.c0.c0.c1, eval_ins.s.c0.c1.c0, eval_ins.s.c0.c1.c1, eval_ins.s.c0.c2.c0, eval_ins.s.c0.c2.c1, eval_ins.s.c1.c0.c0,
         eval_ins.s.c1.c0.c1, eval_ins.s.c1.c1.c0, eval_ins.s.c1.c1.c1, eval_ins.s.c1.c2.c0, eval_ins.s.c1.c2.c1,
     ], true) };
@@ -499,7 +499,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<HintOut>, eval_ins: EvalIns, pu
     all_output_hints.push(hout);
     
 
-    t4 = G2PointAcc {t: temp.t, dbl_le: None, add_le: temp.add_le}; 
+    t4 = ElemG2PointAcc {t: temp.t, dbl_le: None, add_le: temp.add_le}; 
 
     // SD
     let (temp, _, _) = hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], HintInSparseDenseMul {  a: f_acc.f,  g: t4 }, false);

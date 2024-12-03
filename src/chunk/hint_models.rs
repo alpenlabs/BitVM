@@ -7,9 +7,9 @@ use super::taps::HashBytes;
 
 #[derive(Debug, Clone)]
 pub(crate) enum HintOut {
-    Fp12(Fp12Acc),
-    G2Acc(G2PointAcc),
-    SparseEval(SparseEval),
+    Fp12(ElemFp12Acc),
+    G2Acc(ElemG2PointAcc),
+    SparseEval(ElemSparseEval),
 
     FieldElem(ark_bn254::Fq),
     ScalarElem(ark_bn254::Fr),
@@ -19,14 +19,14 @@ pub(crate) enum HintOut {
 }
 
 pub(crate) struct HintInG2PointOp {
-    pub(crate) t: G2PointAcc,
+    pub(crate) t: ElemG2PointAcc,
     pub(crate) px: ark_bn254::Fq,
     pub(crate) py: ark_bn254::Fq,
     pub(crate) q: Option<ark_bn254::G2Affine>,
 }
 
 impl HintInG2PointOp {
-    pub(crate) fn from_g2point(g: G2PointAcc, gp: ark_bn254::G1Affine, q: Option<ark_bn254::G2Affine>) -> Self {
+    pub(crate) fn from_g2point(g: ElemG2PointAcc, gp: ark_bn254::G1Affine, q: Option<ark_bn254::G2Affine>) -> Self {
         HintInG2PointOp {
             t: g,
             px: gp.x,
@@ -89,7 +89,7 @@ pub(crate) struct HintInHashC {
 }
 
 impl HintInHashC {
-    pub(crate) fn from_fp12(g: Fp12Acc) -> Self {
+    pub(crate) fn from_fp12(g: ElemFp12Acc) -> Self {
         HintInHashC {
             c: g.f,
         }
@@ -159,7 +159,7 @@ pub(crate) struct HintInFrobFp12 {
 }
 
 impl HintInFrobFp12 {
-    pub(crate) fn from_fp12(g: Fp12Acc) -> Self {
+    pub(crate) fn from_fp12(g: ElemFp12Acc) -> Self {
         Self { f: g.f }
     }
 }
@@ -167,7 +167,7 @@ impl HintInFrobFp12 {
 
 pub(crate) struct HintInSparseDenseMul {
     pub(crate) a: ark_bn254::Fq12,
-    pub(crate) g: G2PointAcc,
+    pub(crate) g: ElemG2PointAcc,
 }
 
 
@@ -177,10 +177,10 @@ pub(crate) struct HintInDenseMul {
 }
 
 impl HintInDenseMul {
-    pub(crate) fn from_fp12_le(c: Fp12Acc, d: SparseEval) -> Self {
+    pub(crate) fn from_fp12_le(c: ElemFp12Acc, d: ElemSparseEval) -> Self {
         Self { a: c.f, b: d.f.f }
     }
-    pub(crate) fn from_fp12_fp12(c: Fp12Acc, d: Fp12Acc) -> Self {
+    pub(crate) fn from_fp12_fp12(c: ElemFp12Acc, d: ElemFp12Acc) -> Self {
         Self { a: c.f, b: d.f }
     }
 }
@@ -190,7 +190,7 @@ pub(crate) struct HintInSquaring {
 }
 
 impl HintInSquaring {
-    pub(crate) fn from_fp12(g: Fp12Acc) -> Self {
+    pub(crate) fn from_fp12(g: ElemFp12Acc) -> Self {
         HintInSquaring {
             a: g.f,
         }
@@ -199,25 +199,25 @@ impl HintInSquaring {
 
 
 #[derive(Debug, Clone)]
-pub(crate) struct Fp12Acc {
+pub(crate) struct ElemFp12Acc {
     pub(crate) f: ark_bn254::Fq12,
     pub(crate) hash: HashBytes,
 }
 
-impl Fp12Acc {
+impl ElemFp12Acc {
     pub(crate) fn out(&self) -> HashBytes {
          self.hash
     }
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct G2PointAcc {
+pub(crate) struct ElemG2PointAcc {
     pub(crate) t: ark_bn254::G2Affine,
     pub(crate) dbl_le: Option<(ark_bn254::Fq2, ark_bn254::Fq2)>,
     pub(crate) add_le: Option<(ark_bn254::Fq2, ark_bn254::Fq2)>,
 }
 
-impl G2PointAcc {
+impl ElemG2PointAcc {
     pub(crate) fn out(&self) -> HashBytes {
         let hash_t = extern_hash_fps(vec![self.t.x.c0, self.t.x.c1, self.t.y.c0, self.t.y.c1], true);
         let hash_le = self.hash_le();
@@ -243,11 +243,6 @@ impl G2PointAcc {
         hash_le
     }
 
-
-    pub(crate) fn hash_t(&self) -> HashBytes {
-        extern_hash_fps(vec![self.t.x.c0, self.t.x.c1, self.t.y.c0, self.t.y.c1], true)
-    }
-
     pub(crate) fn hash_other_le(&self, dbl: bool) -> [u8; 64] {
         if (dbl && self.add_le.is_none()) || (!dbl && self.dbl_le.is_none()) {
             return [0u8; 64];
@@ -265,13 +260,13 @@ impl G2PointAcc {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct SparseEval {
+pub(crate) struct ElemSparseEval {
     pub(crate) t2: ark_bn254::G2Affine,
     pub(crate) t3: ark_bn254::G2Affine,
-    pub(crate) f: Fp12Acc,
+    pub(crate) f: ElemFp12Acc,
 }
 
-impl SparseEval {
+impl ElemSparseEval {
    pub(crate) fn out(&self) -> HashBytes {
         self.f.hash
     }

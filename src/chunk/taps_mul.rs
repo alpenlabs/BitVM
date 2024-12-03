@@ -112,7 +112,7 @@ pub(crate) fn hint_sparse_dense_mul(
     sec_in: Vec<Link>,
     hint_in: HintInSparseDenseMul,
     dbl_blk: bool,
-) -> (Fp12Acc, Script, bool) {
+) -> (ElemFp12Acc, Script, bool) {
     assert_eq!(sec_in.len(), 2);
     if dbl_blk {
         assert!(hint_in.g.dbl_le.is_some());
@@ -122,9 +122,9 @@ pub(crate) fn hint_sparse_dense_mul(
 
     let mut cur_le = (ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO);
     if dbl_blk {
-        cur_le = hint_in.g.add_le.unwrap();
-    } else {
         cur_le = hint_in.g.dbl_le.unwrap();
+    } else {
+        cur_le = hint_in.g.add_le.unwrap();
     }
     
     let (f, cur_le0, cur_le1) = (hint_in.a, cur_le.0, cur_le.1);
@@ -199,7 +199,7 @@ pub(crate) fn hint_sparse_dense_mul(
     };
 
     (
-        Fp12Acc {
+        ElemFp12Acc {
             f: f1,
             hash: hash_dense_output,
         },
@@ -284,7 +284,7 @@ pub(crate) fn hints_dense_dense_mul0(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInDenseMul,
-) -> (Fp12Acc, Script, bool) {
+) -> (ElemFp12Acc, Script, bool) {
     assert_eq!(sec_in.len(), 2);
     let (f, g) = (hint_in.a, hint_in.b);
     let h = f * g;
@@ -339,7 +339,7 @@ pub(crate) fn hints_dense_dense_mul0(
     };
 
     (
-        Fp12Acc {
+        ElemFp12Acc {
             f: h,
             hash: hash_h,
         },
@@ -425,7 +425,7 @@ pub(crate) fn hints_dense_dense_mul1(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInDenseMul,
-) -> (Fp12Acc, Script, bool) {
+) -> (ElemFp12Acc, Script, bool) {
     let (f, g) = (hint_in.a, hint_in.b);
     let (_, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
     let h = f * g;
@@ -488,7 +488,7 @@ pub(crate) fn hints_dense_dense_mul1(
         { bc_elems }
     };
     (
-        Fp12Acc {
+        ElemFp12Acc {
             f: h,
             hash: hash_c,
         },
@@ -505,7 +505,7 @@ pub(crate) fn hint_squaring(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInSquaring,
-) -> (Fp12Acc, Script, bool) {
+) -> (ElemFp12Acc, Script, bool) {
     assert_eq!(sec_in.len(), 1);
     let a = hint_in.a;
     let (_, hints) = Fq12::hinted_square(a);
@@ -540,7 +540,7 @@ pub(crate) fn hint_squaring(
 
         {bc_elems}
     };
-    let hint_out = Fp12Acc { hash: b_hash, f: b };
+    let hint_out = ElemFp12Acc { hash: b_hash, f: b };
     return (hint_out, simulate_stack_input, should_validate);
 }
 
@@ -586,19 +586,6 @@ pub(crate) fn tap_squaring() -> Script {
     };
     sc
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 // DENSE DENSE MUL BY CONSTANT
@@ -685,7 +672,7 @@ pub(crate) fn hints_dense_dense_mul0_by_constant(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInDenseMul,
-) -> (Fp12Acc, Script, bool) {
+) -> (ElemFp12Acc, Script, bool) {
     assert_eq!(sec_in.len(), 1);
     let (f, g) = (hint_in.a, hint_in.b);
     let h = f * g;
@@ -740,7 +727,7 @@ pub(crate) fn hints_dense_dense_mul0_by_constant(
     };
 
     (
-        Fp12Acc {
+        ElemFp12Acc {
             f: h,
             hash: hash_h,
         },
@@ -838,7 +825,7 @@ pub(crate) fn hints_dense_dense_mul1_by_constant(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInDenseMul,
-) -> (Fp12Acc, Script, bool) {
+) -> (ElemFp12Acc, Script, bool) {
     let (f, g) = (hint_in.a, hint_in.b);
     let (_, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
     let h = f * g;
@@ -850,13 +837,6 @@ pub(crate) fn hints_dense_dense_mul1_by_constant(
         ],
         true,
     );
-    // let hash_g = emulate_extern_hash_fps(
-    //     vec![
-    //         g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-    //         g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
-    //     ],
-    //     false,
-    // );
 
     let hash_c0 = extern_hash_fps(
         vec![
@@ -901,7 +881,7 @@ pub(crate) fn hints_dense_dense_mul1_by_constant(
         { bc_elems }
     };
     (
-        Fp12Acc {
+        ElemFp12Acc {
             f: h,
             hash: hash_c,
         },
@@ -996,7 +976,7 @@ pub(crate) fn hints_dense_dense_mul0_by_hash(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInDenseMulByHash,
-) -> (Fp12Acc, Script, bool) {
+) -> (ElemFp12Acc, Script, bool) {
     assert_eq!(sec_in.len(), 2);
     let (f, hash_g) = (hint_in.a, hint_in.bhash);
     let g = f.inverse().unwrap();
@@ -1055,7 +1035,7 @@ pub(crate) fn hints_dense_dense_mul0_by_hash(
     };
 
     (
-        Fp12Acc {
+        ElemFp12Acc {
             f: h,
             hash: hash_h,
         },
@@ -1151,7 +1131,7 @@ pub(crate) fn hints_dense_dense_mul1_by_hash(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in: HintInDenseMulByHash,
-) -> (Fp12Acc, Script, bool) {
+) -> (ElemFp12Acc, Script, bool) {
     let (f, hash_g) = (hint_in.a, hint_in.bhash);
     let g = f.inverse().unwrap();
     let h = ark_bn254::Fq12::ONE;
@@ -1217,7 +1197,7 @@ pub(crate) fn hints_dense_dense_mul1_by_hash(
         { bc_elems }
     };
     (
-        Fp12Acc {
+        ElemFp12Acc {
             f: h,
             hash: hash_c,
         },

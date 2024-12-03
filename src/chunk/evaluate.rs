@@ -1157,7 +1157,7 @@ fn evaluate_groth16_params_from_sig(
                 let nibs: [u8; 40] = nibs.try_into().unwrap();
                 let mut padded_nibs = [0u8; 64]; // initialize with zeros
                 padded_nibs[24..64].copy_from_slice(&nibs[0..40]);
-                HintOut::Fp12(Fp12Acc { f: ark_bn254::Fq12::ONE, hash: padded_nibs })
+                HintOut::Fp12(ElemFp12Acc { f: ark_bn254::Fq12::ONE, hash: padded_nibs })
             }
         };
         hout_per_name.insert(item.link_id.clone(), hout);
@@ -1183,7 +1183,7 @@ fn evaluate_groth16_params_from_sig(
     //let chash = emulate_extern_hash_fps(cs.clone(), false);
     let v = hout_per_name.get("cinv").unwrap();
     if let HintOut::Fp12(x) = v {
-        hout_per_name.insert(String::from("cinv"), HintOut::Fp12(Fp12Acc { f, hash: x.hash }));
+        hout_per_name.insert(String::from("cinv"), HintOut::Fp12(ElemFp12Acc { f, hash: x.hash }));
     }
     return hout_per_name;
 
@@ -1266,7 +1266,7 @@ fn evaluate_groth16_params(
         HintOut::FieldElem(sv[2]),
         HintOut::FieldElem(sv[1]),
         HintOut::FieldElem(sv[0]),
-        HintOut::Fp12(Fp12Acc {
+        HintOut::Fp12(ElemFp12Acc {
             f: cvinv,
             hash: cvinvhash,
         }),

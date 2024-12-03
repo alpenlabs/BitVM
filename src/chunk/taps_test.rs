@@ -880,7 +880,7 @@ mod test {
         let t = ark_bn254::G2Affine::rand(&mut prng);
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hash_le_aux = [2u8; 64]; // mock
-        let t4acc: G2PointAcc = G2PointAcc { t, dbl_le: None, add_le: None,  };
+        let t4acc: ElemG2PointAcc = ElemG2PointAcc { t, dbl_le: None, add_le: None,  };
         let hint_in = HintInG2PointOp { t: t4acc, px: p.x, py: p.y, q: None };
 
         let mut sig = Sig {
