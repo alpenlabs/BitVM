@@ -25,7 +25,7 @@ tokio = { version = "1.37.0", features = ["full"] }
 esplora-client = { git = "https://github.com/BitVM/rust-esplora-client" }
 serde_json = "1.0.116"
 lazy_static = "1.4.0"
-bitcoin-script-stack = { git = "https://github.com/BitVM/rust-bitcoin-script-stack", branch = "bitvm" }
+bitcoin-script-stack = { git = "https://github.com/BitVM/rust-bitcoin-script-stack", branch = "bitvm" , features = ["interactive"]}
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 once_cell = "1.19.0"
@@ -77,3 +77,4 @@ ark-crypto-primitives = { git = "https://github.com/arkworks-rs/crypto-primitive
 ark-relations = { git = "https://github.com/arkworks-rs/snark/" }
 ark-snark = { git = "https://github.com/arkworks-rs/snark/" }
 ark-groth16 = { git = "https://github.com/arkworks-rs/groth16" }
+
