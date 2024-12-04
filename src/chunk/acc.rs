@@ -6,7 +6,7 @@ use ark_ff::{Field, PrimeField};
 
 use crate::groth16::g16::{Assertions, PublicKeys, Signatures, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS};
 
-use super::{api::nib_to_byte_array, config::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, evaluate::{EvalIns}, hint_models::*, msm::{hint_hash_p, hint_msm, HintInMSM}, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps, extern_hash_nibbles}, taps::{self, hint_add_eval_mul_for_fixed_Qs_with_frob, hint_hash_c, hint_hash_c2, hint_init_T4, hint_point_add_with_frob, hints_frob_fp12, hints_precompute_Px, hints_precompute_Py, HashBytes, Sig, SigData}, taps_mul::{self, hint_sparse_dense_mul, hints_dense_dense_mul0, hints_dense_dense_mul0_by_constant, hints_dense_dense_mul0_by_hash, hints_dense_dense_mul1, hints_dense_dense_mul1_by_constant, hints_dense_dense_mul1_by_hash}, wots::WOTSPubKey};
+use super::{api::nib_to_byte_array, config::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, evaluate::{EvalIns}, hint_models::*, msm::{hint_hash_p, hint_msm}, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps, extern_hash_nibbles}, taps::{self, hint_add_eval_mul_for_fixed_Qs_with_frob, hint_hash_c, hint_hash_c2, hint_init_T4, hint_point_add_with_frob, hints_frob_fp12, hints_precompute_Px, hints_precompute_Py, HashBytes, Sig, SigData}, taps_mul::{self, hint_sparse_dense_mul, hints_dense_dense_mul0, hints_dense_dense_mul0_by_constant, hints_dense_dense_mul0_by_hash, hints_dense_dense_mul1, hints_dense_dense_mul1_by_constant, hints_dense_dense_mul1_by_hash}, wots::WOTSPubKey};
 
 
 
@@ -42,7 +42,7 @@ fn compare(hint_out: &Element, claimed_assertions: &mut Option<Intermediates>) -
         Element::G2Acc(r) => (r.out(), false),
         Element::Fp12(r) => (r.out(), false),
         Element::FieldElem(f) => (extern_fq_to_nibbles(*f), true),
-        Element::MSM(r) => (r.out(), false),
+        Element::MSMG1(r) => (r.out(), false),
         Element::ScalarElem(r) => (extern_fr_to_nibbles(*r), true),
         Element::SparseEval(r) => (r.out(), false),
         Element::HashBytes(r) => (*r, false),
@@ -148,6 +148,23 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
         ],
         false,
     ) }; 
+    let fixedacc: ElemFp12Acc = ElemFp12Acc { f: pubs.fixed_acc, hash: extern_hash_fps(
+        vec![
+            pubs.fixed_acc.c0.c0.c0,
+            pubs.fixed_acc.c0.c0.c1,
+            pubs.fixed_acc.c0.c1.c0,
+            pubs.fixed_acc.c0.c1.c1,
+            pubs.fixed_acc.c0.c2.c0,
+            pubs.fixed_acc.c0.c2.c1,
+            pubs.fixed_acc.c1.c0.c0,
+            pubs.fixed_acc.c1.c0.c1,
+            pubs.fixed_acc.c1.c1.c0,
+            pubs.fixed_acc.c1.c1.c1,
+            pubs.fixed_acc.c1.c2.c0,
+            pubs.fixed_acc.c1.c2.c1,
+        ],
+        false,
+    )};
     let hout = Element::Fp12(gcinv.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -159,18 +176,18 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
     // groth16 proof
 
     let acc = ark_bn254::G1Affine::identity();
-    let (temp, _, _) = hint_msm(sig, (0, false), vec![(1, true), (0, false)], HintInMSM { t: acc, scalars: pub_scalars.clone() }, 0, vky.clone());
+    let (temp, _, _) = hint_msm(sig, (0, false), vec![(1, true), (0, false)], acc, pub_scalars.clone(), 0, vky.clone());
     let mut hout_msm = temp;
-    compare(&Element::MSM(hout_msm.clone()), claimed_assertions);
-    all_output_hints.push(Element::MSM(hout_msm.clone()));
+    compare(&Element::MSMG1(hout_msm.clone()), claimed_assertions);
+    all_output_hints.push(Element::MSMG1(hout_msm.clone()));
     for i in 1..32 {
-        let (temp, _, _) = hint_msm(sig, (0, false), vec![(1, true), (0, false)], HintInMSM { t: hout_msm.t, scalars: pub_scalars.clone() }, i, vky.clone());
+        let (temp, _, _) = hint_msm(sig, (0, false), vec![(1, true), (0, false)], hout_msm ,pub_scalars.clone(), i, vky.clone());
         hout_msm = temp;
-        compare(&Element::MSM(hout_msm.clone()), claimed_assertions);
-        all_output_hints.push(Element::MSM(hout_msm.clone()));
+        compare(&Element::MSMG1(hout_msm.clone()), claimed_assertions);
+        all_output_hints.push(Element::MSMG1(hout_msm.clone()));
     }
     // send off to get signed
-    let (in_rx, in_ry, in_tx, in_ty, in_q) =  (gp3x, gp3y, hout_msm.t.x, hout_msm.t.y, vky0); 
+    let (in_rx, in_ry, in_tx, in_ty, in_q) =  (gp3x, gp3y, hout_msm.x, hout_msm.y, vky0); 
     // validate gp3 = t + q
     let (h, _, _) = hint_hash_p(sig, (0, false), vec![(1, false), (2, true), (3, true)], in_rx, in_ry, in_tx, in_ty, in_q);
     compare(&Element::HashBytes(h.clone()), claimed_assertions);
@@ -198,37 +215,37 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
     let p3 = G1Affine::new_unchecked(p3x, p3y);
     let p4 = G1Affine::new_unchecked(p4x, p4y);
     
-    let (c, _, _) = hint_hash_c(sig, (0, false), (0..12).map(|i| (i+1, true)).collect(), gc.f);
+    let (c, _, _) = hint_hash_c(sig, (0, false), (0..12).map(|i| (i+1, true)).collect(), gc);
     let hout = Element::Fp12(c.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    let (s, _, _) = hint_hash_c(sig, (0, false), (0..12).map(|i| (i+1, true)).collect(), gs.f);
+    let (s, _, _) = hint_hash_c(sig, (0, false), (0..12).map(|i| (i+1, true)).collect(), gs);
     let hout = Element::Fp12(s.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    let (c2, _, _) = hint_hash_c2(sig, (0, false), vec![(1, false)], c.f);
+    let (c2, _, _) = hint_hash_c2(sig, (0, false), vec![(1, false)], c.clone());
     let hout = Element::Fp12(c2.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
     
-    let (dmul0, _, _) = hints_dense_dense_mul0_by_hash(sig, (0, false), vec![(1, false), (2, false)], c2.f, gcinv.hash);
+    let (dmul0, _, _) = hints_dense_dense_mul0_by_hash(sig, (0, false), vec![(1, false), (2, false)], c2.clone(), gcinv.hash);
     let hout = Element::Fp12(dmul0);
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    let (dmul1, _, _) = hints_dense_dense_mul1_by_hash(sig, (0, false), vec![(1, false), (2, false), (3, false)], c2.f, gcinv.hash);
+    let (dmul1, _, _) = hints_dense_dense_mul1_by_hash(sig, (0, false), vec![(1, false), (2, false), (3, false)], c2, gcinv.hash);
    let hout = Element::Fp12(dmul1);
    compare(&hout, claimed_assertions);
    all_output_hints.push(hout);
     
 
-    let (cinv2, _, _) = hint_hash_c2(sig, (0, false), vec![(1, false)], gcinv.f);
+    let (cinv2, _, _) = hint_hash_c2(sig, (0, false), vec![(1, false)], gcinv.clone());
     let hout = Element::Fp12(cinv2.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -250,7 +267,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
     for j in (1..ATE_LOOP_COUNT.len()).rev() {
         let ate = ATE_LOOP_COUNT[j-1];
         // Sqr
-        let (sq, _, _) = taps_mul::hint_squaring(sig, (0, false), vec![(1, false)], f_acc.f);
+        let (sq, _, _) = taps_mul::hint_squaring(sig, (0, false), vec![(1, false)], f_acc);
         let hout = Element::Fp12(sq.clone());
         compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -259,7 +276,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
 
         // Dbl or DblAdd
         if ate == 0 {
-            let (dbl, _, _) = taps::hint_point_dbl(sig, (0, false), vec![(1, true), (2, true), (3, true)], t4, p4.x, p4.y, None);
+            let (dbl, _, _) = taps::hint_point_dbl(sig, (0, false), vec![(1, true), (2, true), (3, true)], t4, p4.x, p4.y);
             let hout = Element::G2Acc(dbl.clone());
             compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -268,7 +285,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
             t4 = dbl;
 
         } else { 
-            let (dbladd, _, _) = taps::hint_point_ops(sig, (0, false), (0..7).map(|i| (i+1, true)).collect(), t4,p4.x, p4.y, Some(q4), ate);
+            let (dbladd, _, _) = taps::hint_point_ops(sig, (0, false), (0..7).map(|i| (i+1, true)).collect(), t4,p4.x, p4.y, q4.x.c0, q4.x.c1, q4.y.c0, q4.y.c1, ate);
             let hout = Element::G2Acc(dbladd.clone());
             compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -277,7 +294,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
             t4 = dbladd;
         }
         // SD1
-        let (tmp, _, _) = taps_mul::hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], f_acc.f, t4.clone(),  true);
+        let (tmp, _, _) = taps_mul::hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], f_acc, t4.clone(),  true);
         let hout = Element::Fp12(tmp.clone());
         compare(&hout, claimed_assertions);
         all_output_hints.push(hout);
@@ -287,20 +304,20 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
 
 
         // SS1
-        let (leval, _, _) = taps::hint_double_eval_mul_for_fixed_Qs(sig, (0, false), (0..4).map(|i| (i+1, true)).collect(),p2.x, p2.y, p3.x, p3.y, t2, t3, None, None);
+        let (leval, _, _) = taps::hint_double_eval_mul_for_fixed_Qs(sig, (0, false), (0..4).map(|i| (i+1, true)).collect(),p2.x, p2.y, p3.x, p3.y, t2, t3);
         let hout = Element::SparseEval(leval.clone());
         compare(&hout, claimed_assertions);
         all_output_hints.push(hout);
         (t2, t3) = (leval.t2, leval.t3);
 
         // DD1
-        let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc.f, leval.f.f);
+        let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc.clone(), leval.f.clone());
         let hout = Element::Fp12(dmul0);
         compare(&hout, claimed_assertions);
         all_output_hints.push(hout);
         
 
-        let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc.f, leval.f.f);
+        let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc, leval.f);
         let hout = Element::Fp12(dmul1.clone());
         compare(&hout, claimed_assertions);
         all_output_hints.push(hout);
@@ -316,17 +333,17 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
         // mul by cinv if ate == 1
         // let multiplier = c or c inv if ate == -1 or 1
         let ctemp = if ate == -1 {
-            c.f
+            c
         } else {
-            cvinv
+            gcinv
         };
-        let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc.f, ctemp);
+        let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc.clone(), ctemp.clone());
         let hout = Element::Fp12(dmul0);
         compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
         
 
-        let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc.f, ctemp);
+        let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc.clone(), ctemp);
         let hout = Element::Fp12(dmul1.clone());
         compare(&hout, claimed_assertions);
         all_output_hints.push(hout);
@@ -335,7 +352,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
         f_acc = dmul1;
 
         // SD2
-        let (temp, _, _) = taps_mul::hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], f_acc.f, t4.clone(),  false);
+        let (temp, _, _) = taps_mul::hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], f_acc, t4.clone(),  false);
         let hout = Element::Fp12(temp.clone());
         compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -345,7 +362,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
 
         // SS2
         
-        let (leval, _, _) = taps::hint_add_eval_mul_for_fixed_Qs(sig, (0, false), (0..4).map(|i| (i+1, true)).collect(), p2.x, p2.y, p3.x, p3.y, t2, t3, Some(q2), Some(q3), ate);
+        let (leval, _, _) = taps::hint_add_eval_mul_for_fixed_Qs(sig, (0, false), (0..4).map(|i| (i+1, true)).collect(), p2.x, p2.y, p3.x, p3.y, t2, t3, q2, q3, ate);
         let hout = Element::SparseEval(leval.clone());
         compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -354,13 +371,13 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
         (t2, t3) = (leval.t2, leval.t3);
 
         // DD5
-        let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc.f, leval.f.f);
+        let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc, leval.f);
         let hout = Element::Fp12(dmul0);
         compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
         
 
-        let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc.f, leval.f.f);
+        let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc, leval.f);
         let hout = Element::Fp12(dmul1.clone());
         compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -371,21 +388,21 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
 
     // post miller
     // f1 = frob1
-    let (cp, _, _) = hints_frob_fp12(sig, (0, false), vec![(1, false)], gcinv.f, 1);
+    let (cp, _, _) = hints_frob_fp12(sig, (0, false), vec![(1, false)], gcinv, 1);
     let hout = Element::Fp12(cp.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
     // f2 = frob2
-    let (cp2, _, _) = hints_frob_fp12(sig, (0, false), vec![(1, false)], c.f, 2);
+    let (cp2, _, _) = hints_frob_fp12(sig, (0, false), vec![(1, false)], c, 2);
     let hout = Element::Fp12(cp2.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
     
     // f3 = frob3
-    let (cp3, _, _) = hints_frob_fp12(sig, (0, false), vec![(1, false)], gcinv.f, 3);
+    let (cp3, _, _) = hints_frob_fp12(sig, (0, false), vec![(1, false)], gcinv, 3);
     let hout = Element::Fp12(cp3.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -393,13 +410,13 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
 
 
     // f_acc = f_acc * f1
-    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc.f, cp.f);
+    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc, cp);
     let hout = Element::Fp12(dmul0);
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc.f, cp.f);
+    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc, cp);
     let hout = Element::Fp12(dmul1.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -408,13 +425,13 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
     f_acc = dmul1;
 
     // f_acc = f_acc * f2
-    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc.f, cp2.f);
+    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc, cp2);
     let hout = Element::Fp12(dmul0);
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc.f, cp2.f);
+    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc, cp2);
     let hout = Element::Fp12(dmul1.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -423,13 +440,13 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
     f_acc = dmul1;
 
     // f_acc = f_acc * f3
-    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc.f, cp3.f);
+    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc, cp3);
     let hout = Element::Fp12(dmul0);
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc.f, cp3.f);
+    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc, cp3);
     let hout = Element::Fp12(dmul1.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -438,13 +455,13 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
     f_acc = dmul1;
 
     // f_acc = f_acc * s
-    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc.f, s.f);
+    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc, s);
     let hout = Element::Fp12(dmul0);
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc.f, s.f);
+    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc, s);
     let hout = Element::Fp12(dmul1.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -453,7 +470,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
     f_acc = dmul1;
 
     // add op Add1
-    let (temp, _, _) = hint_point_add_with_frob(sig, (0, false), (0..7).map(|i| (i+1, true)).collect(), t4.clone(), p4.x, p4.y, Some(q4), 1);
+    let (temp, _, _) = hint_point_add_with_frob(sig, (0, false), (0..7).map(|i| (i+1, true)).collect(), t4.clone(), p4.x, p4.y, q4.x.c0, q4.x.c1, q4.y.c0, q4.y.c1, 1);
     let hout = Element::G2Acc(temp.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -462,7 +479,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
     t4 = temp; 
 
     // SD
-    let (temp, _, _) = hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], f_acc.f, t4.clone(), false);
+    let (temp, _, _) = hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], f_acc, t4.clone(), false);
     let hout = Element::Fp12(temp.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -471,7 +488,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
     f_acc = temp;
 
     // sparse eval
-    let (le, _, _) = hint_add_eval_mul_for_fixed_Qs_with_frob(sig, (0, false), (0..4).map(|i| (i+1, true)).collect(), p2.x, p2.y, p3.x, p3.y, t2, t3, Some(q2), Some(q3), 1);
+    let (le, _, _) = hint_add_eval_mul_for_fixed_Qs_with_frob(sig, (0, false), (0..4).map(|i| (i+1, true)).collect(), p2.x, p2.y, p3.x, p3.y, t2, t3, q2, q3, 1);
     let hout = Element::SparseEval(le.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -479,13 +496,13 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
 
     (t2, t3) = (le.t2, le.t3);
     // dense_dense_mul
-    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc.f, le.f.f);
+    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc, le.f);
     let hout = Element::Fp12(dmul0);
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc.f, le.f.f);
+    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc, le.f);
     let hout = Element::Fp12(dmul1.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -494,7 +511,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
     f_acc = dmul1;
 
     // add op Add2
-    let (temp, _, _) = hint_point_add_with_frob(sig, (0, false), (0..7).map(|i| (i+1, true)).collect(), t4, p4.x, p4.y, Some(q4), -1);
+    let (temp, _, _) = hint_point_add_with_frob(sig, (0, false), (0..7).map(|i| (i+1, true)).collect(), t4, p4.x, p4.y, q4.x.c0, q4.x.c1, q4.y.c0, q4.y.c1, -1);
     let hout = Element::G2Acc(temp.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -503,7 +520,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
     t4 = ElemG2PointAcc {t: temp.t, dbl_le: None, add_le: temp.add_le}; 
 
     // SD
-    let (temp, _, _) = hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], f_acc.f, t4.clone(), false);
+    let (temp, _, _) = hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], f_acc, t4.clone(), false);
     let hout = Element::Fp12(temp.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -512,7 +529,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
     f_acc = temp;
 
     // sparse eval
-    let (le, _, _) = hint_add_eval_mul_for_fixed_Qs_with_frob(sig, (0, false), (0..4).map(|i| (i+1, true)).collect(), p2.x, p2.y, p3.x, p3.y, t2, t3, Some(q2), Some(q3), -1);
+    let (le, _, _) = hint_add_eval_mul_for_fixed_Qs_with_frob(sig, (0, false), (0..4).map(|i| (i+1, true)).collect(), p2.x, p2.y, p3.x, p3.y, t2, t3, q2, q3, -1);
     let hout = Element::SparseEval(le.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -520,13 +537,13 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
 
     (t2, t3) = (le.t2, le.t3);
     // dense_dense_mul
-    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc.f, le.f.f);
+    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc, le.f);
     let hout = Element::Fp12(dmul0);
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
-    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc.f, le.f.f);
+    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc, le.f);
     let hout = Element::Fp12(dmul1.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -535,14 +552,14 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
     f_acc = dmul1;
 
     // mul0_by_const is identity
-    let (dmul0, _, _) = hints_dense_dense_mul0_by_constant(sig, (0, false), vec![(1, false)], f_acc.f, pubs.fixed_acc);
+    let (dmul0, _, _) = hints_dense_dense_mul0_by_constant(sig, (0, false), vec![(1, false)], f_acc, fixedacc);
     let hout = Element::Fp12(dmul0);
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
     
 
     // mul1_by_const is identity
-    let (dmul1, _, _) = hints_dense_dense_mul1_by_constant(sig, (0, false), vec![(1, false), (2, false)], f_acc.f, pubs.fixed_acc);
+    let (dmul1, _, _) = hints_dense_dense_mul1_by_constant(sig, (0, false), vec![(1, false), (2, false)], f_acc, fixedacc);
     let hout = Element::Fp12(dmul1.clone());
     compare(&hout, claimed_assertions);
     all_output_hints.push(hout);
@@ -561,7 +578,7 @@ pub(crate) fn hint_to_data(segments: Vec<Element>) -> Assertions {
             Element::G2Acc(r) => r.out(),
             Element::Fp12(r) => r.out(),
             Element::FieldElem(f) => extern_fq_to_nibbles(f),
-            Element::MSM(r) => r.out(),
+            Element::MSMG1(r) => r.out(),
             Element::ScalarElem(r) => extern_fr_to_nibbles(r),
             Element::SparseEval(r) => r.out(),
             Element::HashBytes(r) => r,

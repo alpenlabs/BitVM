@@ -4,7 +4,7 @@ use ark_ff::AdditiveGroup;
 use super::primitves::extern_hash_fps;
 use super::taps::HashBytes;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) enum Element {
     Fp12(ElemFp12Acc),
     G2Acc(ElemG2PointAcc),
@@ -12,14 +12,77 @@ pub(crate) enum Element {
     FieldElem(ElemFq),
     ScalarElem(ElemFr),
     HashBytes(ElemHashBytes),
-    MSM(ElemG1Point),
+    MSMG1(ElemG1Point),
+}
+
+impl From<Element> for ElemG2PointAcc {
+    fn from(value: Element) -> Self {
+        match value {
+            Element::G2Acc(v) => v,
+            _ => panic!("Cannot convert Element into ElemG2PointAcc"),
+        }
+    }
+}
+
+impl From<Element> for ElemFp12Acc {
+    fn from(value: Element) -> Self {
+        match value {
+            Element::Fp12(v) => v,
+            _ => panic!("Cannot convert Element into ElemFp12Acc"),
+        }
+    }
+}
+
+impl From<Element> for ElemSparseEval {
+    fn from(value: Element) -> Self {
+        match value {
+            Element::SparseEval(v) => v,
+            _ => panic!("Cannot convert Element into ElemSparseEval"),
+        }
+    }
+}
+
+impl From<Element> for ElemFq {
+    fn from(value: Element) -> Self {
+        match value {
+            Element::FieldElem(v) => v,
+            _ => panic!("Cannot convert Element into ElemFq"),
+        }
+    }
+}
+
+impl From<Element> for ElemFr {
+    fn from(value: Element) -> Self {
+        match value {
+            Element::ScalarElem(v) => v,
+            _ => panic!("Cannot convert Element into ElemFr"),
+        }
+    }
+}
+
+impl From<Element> for ElemHashBytes {
+    fn from(value: Element) -> Self {
+        match value {
+            Element::HashBytes(v) => v,
+            _ => panic!("Cannot convert Element into ElemHashBytes"),
+        }
+    }
+}
+
+impl From<Element> for ElemG1Point {
+    fn from(value: Element) -> Self {
+        match value {
+            Element::MSMG1(v) => v,
+            _ => panic!("Cannot convert Element into ElemG1Point"),
+        }
+    }
 }
 
 pub type ElemFq = ark_bn254::Fq;
 pub type ElemFr = ark_bn254::Fr;
 pub type ElemHashBytes = HashBytes;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct ElemFp12Acc {
     pub(crate) f: ark_bn254::Fq12,
     pub(crate) hash: HashBytes,
@@ -31,7 +94,7 @@ impl ElemFp12Acc {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct ElemG2PointAcc {
     pub(crate) t: ark_bn254::G2Affine,
     pub(crate) dbl_le: Option<(ark_bn254::Fq2, ark_bn254::Fq2)>,
@@ -80,7 +143,7 @@ impl ElemG2PointAcc {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct ElemSparseEval {
     pub(crate) t2: ark_bn254::G2Affine,
     pub(crate) t3: ark_bn254::G2Affine,
@@ -93,13 +156,29 @@ impl ElemSparseEval {
     }
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct ElemG1Point {
-    pub(crate) t: ark_bn254::G1Affine,
+// #[derive(Debug, Clone)]
+// pub(crate) struct ElemG1Point {
+//     pub(crate) t: ark_bn254::G1Affine,
+// }
+
+// impl ElemG1Point {
+//     pub(crate) fn out(&self) -> HashBytes {
+//         extern_hash_fps(vec![self.t.x, self.t.y], true)
+//     }
+// }
+
+
+// Define the type alias
+pub type ElemG1Point = ark_bn254::G1Affine;
+
+// Define a trait to extend the functionality
+pub trait G1PointExt {
+    fn out(&self) -> HashBytes;
 }
 
-impl ElemG1Point {
-    pub(crate) fn out(&self) -> HashBytes {
-        extern_hash_fps(vec![self.t.x, self.t.y], true)
+// Implement the trait for ark_bn254::G1Affine
+impl G1PointExt for ElemG1Point {
+    fn out(&self) -> HashBytes {
+        extern_hash_fps(vec![self.x, self.y], true)
     }
 }

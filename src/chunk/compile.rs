@@ -141,7 +141,7 @@ fn compile_miller_circuit(
                 if collect_bitcom {
                     sc = bitcom_dense_dense_mul0(link_ids, sec_out, deps_indices);
                 } else {
-                    sc = tap_dense_dense_mul0(false);
+                    sc = tap_dense_dense_mul0();
                 }
                 scripts.push((sec_out.0, sc));
             } else if blk_name == "DD2" || blk_name == "DD4" || blk_name == "DD6" {
@@ -149,7 +149,7 @@ fn compile_miller_circuit(
                 if collect_bitcom {
                     sc = bitcom_dense_dense_mul1(link_ids, sec_out, deps_indices);
                 } else {
-                    sc = tap_dense_dense_mul1(false);
+                    sc = tap_dense_dense_mul1();
                 }
                 scripts.push((sec_out.0, sc));
             } else if blk_name == "SS2" {
@@ -310,7 +310,7 @@ fn compile_post_miller_circuit(
             if collect_bitcom {
                 sc = bitcom_dense_dense_mul0(link_ids, sec_out, sec_in);
             } else {
-                sc = tap_dense_dense_mul0(false);
+                sc = tap_dense_dense_mul0();
             }
             scripts.push((sec_out.0, sc));
         } else if row.category == "DD2" || row.category == "DD4" {
@@ -318,7 +318,7 @@ fn compile_post_miller_circuit(
             if collect_bitcom {
                 sc = bitcom_dense_dense_mul1(link_ids, sec_out, sec_in);
             } else {
-                sc = tap_dense_dense_mul1(false);
+                sc = tap_dense_dense_mul1();
             }
             scripts.push((sec_out.0, sc));
         } else if row.category == "Add1" || row.category == "Add2" {

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use crate::chunk::compile::ATE_LOOP_COUNT;
 use crate::chunk::config::miller_config_gen;
-use crate::chunk::msm::{bitcom_hash_p, bitcom_msm, hint_hash_p, hint_msm, tap_hash_p, tap_msm, HintInMSM};
+use crate::chunk::msm::{bitcom_hash_p, bitcom_msm, hint_hash_p, hint_msm, tap_hash_p, tap_msm};
 use crate::chunk::primitves::extern_hash_fps;
 use crate::chunk::{taps, taps_mul};
 use crate::chunk::taps::*;
@@ -94,7 +94,7 @@ fn evaluate_miller_circuit(
                         sig,
                         sec_out,
                         sec_in.clone(),
-                        r.f,
+                        r,
                     ),
                     _ => panic!("failed to match"),
                 };
@@ -137,7 +137,7 @@ fn evaluate_miller_circuit(
                 let p = G1Affine::new_unchecked(ps[5], ps[4]);
                 let (hintout, hint_script, maybe_wrong) = match hints[0].clone() {
                     Element::G2Acc(r) => {
-                        taps::hint_point_ops(sig, sec_out, sec_in.clone(), r, p.x, p.y, Some(q), *bit)
+                        taps::hint_point_ops(sig, sec_out, sec_in.clone(), r, p.x, p.y, q.x.c0, q.x.c1, q.y.c0, q.y.c1, *bit)
                     }
                     _ => panic!("failed to match"),
                 };
@@ -177,7 +177,7 @@ fn evaluate_miller_circuit(
                 let p = G1Affine::new_unchecked(ps[1], ps[0]);
                 let (hintout, hint_script, maybe_wrong) = match hints[0].clone() {
                     Element::G2Acc(r) => {
-                        taps::hint_point_dbl(sig, sec_out, sec_in.clone(), r, p.x, p.y, None)
+                        taps::hint_point_dbl(sig, sec_out, sec_in.clone(), r, p.x, p.y)
                     }
                     _ => panic!("failed to match"),
                 };
@@ -211,7 +211,7 @@ fn evaluate_miller_circuit(
                 let (sd_hint, hint_script, maybe_wrong) = match hints[1].clone() {
                     Element::G2Acc(t) => {
                         let is_dbl_blk = true;
-                        taps_mul::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), dense.f, t, is_dbl_blk)
+                        taps_mul::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), dense, t, is_dbl_blk)
                     }
                     _ => panic!(),
                 };
@@ -253,7 +253,7 @@ fn evaluate_miller_circuit(
                 // let hint_in: HintInSparseEvals =
                 //     HintInSparseEvals::from_groth_and_aux(p2, p3, nt2, nt3, None, None);
                 let (hint_out, hint_script, maybe_wrong) =
-                    taps::hint_double_eval_mul_for_fixed_Qs(sig, sec_out, sec_in.clone(), p2.x, p2.y, p3.x, p3.y, nt2, nt3, None, None);
+                    taps::hint_double_eval_mul_for_fixed_Qs(sig, sec_out, sec_in.clone(), p2.x, p2.y, p3.x, p3.y, nt2, nt3);
                 if force_validate || maybe_wrong {
                     let (ops_script, _, _) = tap_double_eval_mul_for_fixed_Qs(nt2, nt3);
                     let bcs_script = bitcom_double_eval_mul_for_fixed_Qs(
@@ -295,10 +295,10 @@ fn evaluate_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    c.f, d.f.f,
+                    c, d.f,
                 );
                 if force_validate || maybe_wrong {
-                    let ops_script = tap_dense_dense_mul0(false);
+                    let ops_script = tap_dense_dense_mul0();
                     let bcs_script =
                         bitcom_dense_dense_mul0(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script! {
@@ -333,10 +333,10 @@ fn evaluate_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    c.f, d.f.f,
+                    c, d.f,
                 );
                 if force_validate || maybe_wrong {
-                    let ops_script = tap_dense_dense_mul1(false);
+                    let ops_script = tap_dense_dense_mul1();
                     let bcs_script =
                         bitcom_dense_dense_mul1(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script! {
@@ -368,12 +368,12 @@ fn evaluate_miller_circuit(
                         sig,
                         sec_out,
                         sec_in.clone(),
-                        c.f, r.f,
+                        c, r,
                     ),
                     _ => panic!("failed to match"),
                 };
                 if force_validate || maybe_wrong {
-                    let ops_script = tap_dense_dense_mul0(false);
+                    let ops_script = tap_dense_dense_mul0();
                     let bcs_script =
                         bitcom_dense_dense_mul0(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script! {
@@ -405,12 +405,12 @@ fn evaluate_miller_circuit(
                         sig,
                         sec_out,
                         sec_in.clone(),
-                        c.f, r.f,
+                        c, r,
                     ),
                     _ => panic!("failed to match"),
                 };
                 if force_validate || maybe_wrong {
-                    let ops_script = tap_dense_dense_mul1(false);
+                    let ops_script = tap_dense_dense_mul1();
                     let bcs_script =
                         bitcom_dense_dense_mul1(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script! {
@@ -440,7 +440,7 @@ fn evaluate_miller_circuit(
                 let (sd_hint, hint_script, maybe_wrong) = match hints[1].clone() {
                     Element::G2Acc(t) => {
                         let is_dbl_blk = false;
-                        taps_mul::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), dense.f, t, is_dbl_blk)
+                        taps_mul::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), dense, t, is_dbl_blk)
                     }
                     _ => panic!(),
                 };
@@ -485,7 +485,7 @@ fn evaluate_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    p2.x, p2.y, p3.x, p3.y, nt2, nt3, Some(q2), Some(q3),
+                    p2.x, p2.y, p3.x, p3.y, nt2, nt3, q2, q3,
                     *bit,
                 );
                 if force_validate || maybe_wrong {
@@ -529,10 +529,10 @@ fn evaluate_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    c.f, d.f.f,
+                    c, d.f,
                 );
                 if force_validate || maybe_wrong {
-                    let ops_script = tap_dense_dense_mul0(false);
+                    let ops_script = tap_dense_dense_mul0();
                     let bcs_script =
                         bitcom_dense_dense_mul0(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script! {
@@ -567,10 +567,10 @@ fn evaluate_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    c.f, d.f.f,
+                    c, d.f,
                 );
                 if force_validate || maybe_wrong {
-                    let ops_script = tap_dense_dense_mul1(false);
+                    let ops_script = tap_dense_dense_mul1();
                     let bcs_script =
                         bitcom_dense_dense_mul1(pub_scripts_per_link_id, sec_out, sec_in.clone());
                     let script = script! {
@@ -617,6 +617,23 @@ fn evaluate_post_miller_circuit(
 ) -> Option<(u32, Script)> {
     let tables = post_miller_config_gen(facc, tacc);
 
+    let fixed_acc: ElemFp12Acc = ElemFp12Acc { f: fixed_acc, hash: extern_hash_fps(
+        vec![
+            fixed_acc.c0.c0.c0,
+            fixed_acc.c0.c0.c1,
+            fixed_acc.c0.c1.c0,
+            fixed_acc.c0.c1.c1,
+            fixed_acc.c0.c2.c0,
+            fixed_acc.c0.c2.c1,
+            fixed_acc.c1.c0.c0,
+            fixed_acc.c1.c0.c1,
+            fixed_acc.c1.c1.c0,
+            fixed_acc.c1.c1.c1,
+            fixed_acc.c1.c2.c0,
+            fixed_acc.c1.c2.c1,
+        ],
+        false,
+    ) };
     let mut nt2 = t2;
     let mut nt3 = t3;
     for row in tables {
@@ -646,7 +663,7 @@ fn evaluate_post_miller_circuit(
             } else if row.category == "Frob3" {
                 power = 3;
             }
-            let (h, hint_script, maybe_wrong) = hints_frob_fp12(sig, sec_out, sec_in.clone(), hint_in.f, power);
+            let (h, hint_script, maybe_wrong) = hints_frob_fp12(sig, sec_out, sec_in.clone(), hint_in, power);
             if force_validate || maybe_wrong {
                 let ops_script = tap_frob_fp12(power);
                 let bcs_script = bitcom_frob_fp12(pub_scripts_per_link_id, sec_out, sec_in.clone());
@@ -680,14 +697,14 @@ fn evaluate_post_miller_circuit(
                         sig,
                         sec_out,
                         sec_in.clone(),
-                        c.f, d.f,
+                        c, d,
                     ),
                     false,
                 ),
                 _ => panic!("failed to match"),
             };
             if force_validate || maybe_wrong {
-                let ops_script = tap_dense_dense_mul0(check_is_id);
+                let ops_script = tap_dense_dense_mul0();
                 let bcs_script =
                     bitcom_dense_dense_mul0(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script! {
@@ -720,14 +737,14 @@ fn evaluate_post_miller_circuit(
                         sig,
                         sec_out,
                         sec_in.clone(),
-                        c.f, d.f,
+                        c, d,
                     ),
                     false,
                 ),
                 _ => panic!("failed to match"),
             };
             if force_validate || maybe_wrong {
-                let ops_script = tap_dense_dense_mul1(check_is_id);
+                let ops_script = tap_dense_dense_mul1();
                 let bcs_script =
                     bitcom_dense_dense_mul1(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script! {
@@ -762,10 +779,10 @@ fn evaluate_post_miller_circuit(
                 sig,
                 sec_out,
                 sec_in.clone(),
-                c.f, d.f.f,
+                c, d.f,
             );
             if force_validate || maybe_wrong {
-                let ops_script = tap_dense_dense_mul0(false);
+                let ops_script = tap_dense_dense_mul0();
                 let bcs_script =
                     bitcom_dense_dense_mul0(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script! {
@@ -800,10 +817,10 @@ fn evaluate_post_miller_circuit(
                 sig,
                 sec_out,
                 sec_in.clone(),
-                c.f, d.f.f,
+                c, d.f,
             );
             if force_validate || maybe_wrong {
-                let ops_script = tap_dense_dense_mul1(false);
+                let ops_script = tap_dense_dense_mul1();
                 let bcs_script =
                     bitcom_dense_dense_mul1(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script! {
@@ -843,7 +860,7 @@ fn evaluate_post_miller_circuit(
             if row.category == "Add1" {
                 let (hintout, hint_script, maybe_wrong) = match hints_out[0].clone() {
                     Element::G2Acc(r) => {
-                        taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), r, p.x, p.y, Some(q), 1)
+                        taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), r, p.x, p.y, q.x.c0, q.x.c1, q.y.c0, q.y.c1, 1)
                     }
                     _ => panic!("failed to match"),
                 };
@@ -872,7 +889,7 @@ fn evaluate_post_miller_circuit(
             } else if row.category == "Add2" {
                 let (hintout, hint_script, maybe_wrong) = match hints_out[0].clone() {
                     Element::G2Acc(r) => {
-                        taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), r, p.x, p.y, Some(q), -1)
+                        taps::hint_point_add_with_frob(sig, sec_out, sec_in.clone(), r, p.x, p.y, q.x.c0, q.x.c1, q.y.c0, q.y.c1, -1)
                     }
                     _ => panic!("failed to match"),
                 };
@@ -908,7 +925,7 @@ fn evaluate_post_miller_circuit(
             let (sd_hint, hint_script, maybe_wrong) = match hints_out[1].clone() {
                 Element::G2Acc(t) => {
                     let is_dbl_blk = false;
-                    taps_mul::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), dense.f, t, is_dbl_blk)
+                    taps_mul::hint_sparse_dense_mul(sig, sec_out, sec_in.clone(), dense, t, is_dbl_blk)
                 }
                 _ => panic!(),
             };
@@ -954,7 +971,7 @@ fn evaluate_post_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    p2.x, p2.y, p3.x, p3.y, nt2, nt3, Some(q2), Some(q3),
+                    p2.x, p2.y, p3.x, p3.y, nt2, nt3, q2, q3,
                     1,
                 );
                 if force_validate || maybe_wrong {
@@ -990,7 +1007,7 @@ fn evaluate_post_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    p2.x, p2.y, p3.x, p3.y, nt2, nt3, Some(q2), Some(q3),
+                    p2.x, p2.y, p3.x, p3.y, nt2, nt3, q2, q3,
                     -1,
                 );
                 if force_validate || maybe_wrong {
@@ -1030,9 +1047,9 @@ fn evaluate_post_miller_circuit(
                 _ => panic!("failed to match"),
             };
 
-            let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul0_by_constant(sig, sec_out, sec_in.clone(), a.f, fixed_acc);
+            let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul0_by_constant(sig, sec_out, sec_in.clone(), a, fixed_acc);
             if force_validate || maybe_wrong {
-                let ops_script = tap_dense_dense_mul0_by_constant(true, fixed_acc);
+                let ops_script = tap_dense_dense_mul0_by_constant(true, fixed_acc.f);
                 let bcs_script =
                     bitcom_dense_dense_mul0_by_constant(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script! {
@@ -1059,9 +1076,9 @@ fn evaluate_post_miller_circuit(
                 Element::Fp12(r) => r,
                 _ => panic!("failed to match"),
             };
-            let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul1_by_constant(sig, sec_out, sec_in.clone(), a.f, fixed_acc);
+            let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul1_by_constant(sig, sec_out, sec_in.clone(), a, fixed_acc);
             if force_validate || maybe_wrong {
-                let ops_script = tap_dense_dense_mul1_by_constant(true, fixed_acc);
+                let ops_script = tap_dense_dense_mul1_by_constant(true, fixed_acc.f);
                 let bcs_script =
                     bitcom_dense_dense_mul1_by_constant(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script! {
@@ -1332,16 +1349,17 @@ fn evaluate_msm(
             let mut acc = ark_bn254::G1Affine::identity();
             for i in pub_ins..hints.len() {
                 let x = match &hints[i] {
-                    Element::MSM(r) => r,
+                    Element::MSMG1(r) => r,
                     _ => panic!("failed to match"),
                 };
-                acc = x.t;
+                acc = x.clone();
             }
             let (hint_res, hint_script, maybe_wrong) = hint_msm(
                 sig,
                 sec_out,
                 sec_in.clone(),
-                HintInMSM { t: acc, scalars },
+                acc, 
+                scalars,
                 msm_tap_index,
                 qs.clone(),
             );
@@ -1365,7 +1383,7 @@ fn evaluate_msm(
                 assert!(!exec_result.success);
                 assert!(exec_result.final_stack.len() == 1);
             }
-            aux_output_per_link.insert(row.link_id, Element::MSM(hint_res));
+            aux_output_per_link.insert(row.link_id, Element::MSMG1(hint_res));
         }
         msm_tap_index += 1;
     }
@@ -1415,7 +1433,7 @@ fn evaluate_pre_miller_circuit(
                 sig,
                 sec_out,
                 sec_in.clone(),
-                cs[0], cs[1], cs[2], cs[3]
+                cs[3], cs[2], cs[1], cs[0]
             );
             if force_validate || maybe_wrong {
                 let ops_script = tap_initT4();
@@ -1520,19 +1538,21 @@ fn evaluate_pre_miller_circuit(
                 };
                 gs.push(x);
             }
+            let gsf = ark_bn254::Fq12::new(
+                ark_bn254::Fq6::new(
+                    ark_bn254::Fq2::new(gs[11], gs[10]),
+                    ark_bn254::Fq2::new(gs[9], gs[8]),
+                    ark_bn254::Fq2::new(gs[7], gs[6]),
+                ),
+                ark_bn254::Fq6::new(
+                    ark_bn254::Fq2::new(gs[5], gs[4]),
+                    ark_bn254::Fq2::new(gs[3], gs[2]),
+                    ark_bn254::Fq2::new(gs[1], gs[0]),
+                ),
+            );
+            gs.reverse();
             let (hout, hint_script, maybe_wrong) =
-                hint_hash_c(sig, sec_out, sec_in.clone(),ark_bn254::Fq12::new(
-                    ark_bn254::Fq6::new(
-                        ark_bn254::Fq2::new(gs[11], gs[10]),
-                        ark_bn254::Fq2::new(gs[9], gs[8]),
-                        ark_bn254::Fq2::new(gs[7], gs[6]),
-                    ),
-                    ark_bn254::Fq6::new(
-                        ark_bn254::Fq2::new(gs[5], gs[4]),
-                        ark_bn254::Fq2::new(gs[3], gs[2]),
-                        ark_bn254::Fq2::new(gs[1], gs[0]),
-                    ),
-                ));
+                hint_hash_c(sig, sec_out, sec_in.clone(), ElemFp12Acc { f: gsf, hash: extern_hash_fps(gs, true) });
             if force_validate || maybe_wrong {
                 let ops_script = tap_hash_c();
                 let bcs_script = bitcom_hash_c(pub_scripts_per_link_id, sec_out, sec_in.clone());
@@ -1557,7 +1577,7 @@ fn evaluate_pre_miller_circuit(
         } else if row.category == "HashC2" {
             assert!(hints.len() == 1);
             let hint_in_hashc2 = match hints[0].clone() {
-                Element::Fp12(r) => r.f, // c->c2
+                Element::Fp12(r) => r, // c->c2
                 _ => panic!("failed to match"),
             };
             let (hout, hint_script, maybe_wrong) = hint_hash_c2(
@@ -1600,7 +1620,7 @@ fn evaluate_pre_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    c.f, d.hash,
+                    c, d.hash,
                 ),
                 _ => panic!("failed to match"),
             };
@@ -1641,7 +1661,7 @@ fn evaluate_pre_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    a.f, b.hash,
+                    a, b.hash,
                 ),
                 _ => panic!("failed to match"),
             };
@@ -1670,7 +1690,7 @@ fn evaluate_pre_miller_circuit(
         } else if row.category == "P3Hash" {
             assert!(hints.len() == 3);
             let t = match hints[0].clone() {
-                Element::MSM(r) => r,
+                Element::MSMG1(r) => r,
                 _ => panic!("failed to match"),
             };
             let p3y = match hints[1].clone() {
@@ -1686,7 +1706,7 @@ fn evaluate_pre_miller_circuit(
                 sig,
                 sec_out,
                 sec_in.clone(),
-                p3x, p3y, t.t.x, t.t.y, vky0
+                p3x, p3y, t.x, t.y, vky0
             );
             if force_validate || maybe_wrong {
                 let ops_script = tap_hash_p(vky0);
@@ -1841,7 +1861,7 @@ pub(crate) fn evaluate(
             Element::Fp12(r) => r.out(),
             Element::Fp12(r) => r.out(),
             Element::G2Acc(r) => r.out(),
-            Element::MSM(r) => r.out(),
+            Element::MSMG1(r) => r.out(),
             Element::ScalarElem(r) => extern_fr_to_nibbles(r),
             Element::SparseEval(r) => r.out(),
             Element::SparseEval(r) => r.out(),

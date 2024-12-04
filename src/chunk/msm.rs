@@ -15,7 +15,7 @@ use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
 use num_traits::One;
 
-use super::hint_models::{ElemG1Point};
+use super::hint_models::{ElemFq, ElemFr, ElemG1Point};
 use super::primitves::hash_fp2;
 use super::taps::{HashBytes, Link, Sig};
 use super::wots::WOTSPubKey;
@@ -239,12 +239,12 @@ fn tap_extract_window_segment_from_scalar(index: usize) -> Script {
     }
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct HintInMSM {
-    pub(crate) t: ark_bn254::G1Affine,
-    pub(crate) scalars: Vec<ark_bn254::Fr>,
-    //hash_in: HashBytes, // in = Hash([Hash(T), Hash_le_aux])
-}
+// #[derive(Debug, Clone)]
+// pub(crate) struct HintInMSM {
+//     pub(crate) t: ark_bn254::G1Affine,
+//     pub(crate) scalars: Vec<ark_bn254::Fr>,
+//     //hash_in: HashBytes, // in = Hash([Hash(T), Hash_le_aux])
+// }
 
 
 
@@ -410,7 +410,8 @@ pub(crate) fn hint_msm(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInMSM,
+    hint_in_t: ElemG1Point,
+    hint_in_scalars: Vec<ElemFr>,
     msm_tap_index: usize,
     qs: Vec<ark_bn254::G1Affine>,
 ) -> (ElemG1Point, Script, bool) {
@@ -418,9 +419,9 @@ pub(crate) fn hint_msm(
     const MAX_SUPPORTED_PUBS: usize = 3;
 
     // hint_in
-    let mut t = hint_in.t.clone();
+    let mut t = hint_in_t.clone();
     assert!(qs.len() <= MAX_SUPPORTED_PUBS);
-    assert_eq!(qs.len(), hint_in.scalars.len());
+    assert_eq!(qs.len(), hint_in_scalars.len());
 
     // constants
     let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
@@ -461,7 +462,7 @@ pub(crate) fn hint_msm(
     let mut aux_chord = vec![];
     let mut q = ark_bn254::G1Affine::identity();
     for (qi, qq) in qs.iter().enumerate() {
-        q = get_byte_mul_g1(hint_in.scalars[qi], WINDOW_LEN, msm_tap_index, *qq);
+        q = get_byte_mul_g1(hint_in_scalars[qi], WINDOW_LEN, msm_tap_index, *qq);
         if t.y == ark_bn254::Fq::ZERO {
             t = q.clone();
             continue;
@@ -500,17 +501,17 @@ pub(crate) fn hint_msm(
     let mut tup = vec![];
 
     let mut hash_scalars = vec![];
-    for i in 0..hint_in.scalars.len() {
-        let tup = (sec_in[i], extern_fr_to_nibbles(hint_in.scalars[i]));
+    for i in 0..hint_in_scalars.len() {
+        let tup = (sec_in[i], extern_fr_to_nibbles(hint_in_scalars[i]));
         hash_scalars.push(tup);
     }
     tup.extend_from_slice(&hash_scalars);
 
     if msm_tap_index != 0 {
-        assert!(sec_in.len() == hint_in.scalars.len() + 1);
+        assert!(sec_in.len() == hint_in_scalars.len() + 1);
         tup.push((
             sec_in[sec_in.len() - 1],
-            extern_hash_fps(vec![hint_in.t.x, hint_in.t.y], true),
+            extern_hash_fps(vec![hint_in_t.x, hint_in_t.y], true),
         ))
     }
     let outhash = extern_hash_fps(vec![t.x, t.y], true);
@@ -533,12 +534,12 @@ pub(crate) fn hint_msm(
         }
 
         // accumulator
-        {fq_push_not_montgomery(hint_in.t.x)}
-        {fq_push_not_montgomery(hint_in.t.y)}
+        {fq_push_not_montgomery(hint_in_t.x)}
+        {fq_push_not_montgomery(hint_in_t.y)}
 
         { bc_elems }
     };
-    let hint_out = ElemG1Point { t};
+    let hint_out = t;
 
     (hint_out, simulate_stack_input, should_validate)
 }
@@ -576,10 +577,8 @@ pub fn try_msm(qs: Vec<ark_bn254::G1Affine>, scalars: Vec<ark_bn254::Fr>) {
     };
     let qs: Vec<G1Affine> = qs;
     // run time
-    let mut hint_in = HintInMSM {
-        t: G1Affine::identity(),
-        scalars: scalars,
-    };
+    let mut hint_in_t =  G1Affine::identity();
+    let mut hint_in_scalars = scalars;
 
     for i in 0..num_bits / window {
         println!("index {:?}", i);
@@ -616,7 +615,8 @@ pub fn try_msm(qs: Vec<ark_bn254::G1Affine>, scalars: Vec<ark_bn254::Fr>) {
             &mut sig,
             msec_out,
             msec_in.clone(),
-            hint_in.clone(),
+            hint_in_t.clone(),
+            hint_in_scalars.clone(),
             i as usize,
             qs.clone(),
         );
@@ -627,7 +627,7 @@ pub fn try_msm(qs: Vec<ark_bn254::G1Affine>, scalars: Vec<ark_bn254::Fr>) {
             {msm_ops}
         };
         println!("script len {:?}", script.len());
-        hint_in.t = aux.t;
+        hint_in_t = aux.clone();
         let exec_result = execute_script(script);
         for i in 0..exec_result.final_stack.len() {
             println!("{i:} {:?}", exec_result.final_stack.get(i));
@@ -637,7 +637,7 @@ pub fn try_msm(qs: Vec<ark_bn254::G1Affine>, scalars: Vec<ark_bn254::Fr>) {
         if i == num_bits / window - 1 {
             println!(
                 "check valid {:?}",
-                qs[0] * hint_in.scalars[0] + qs[1] * hint_in.scalars[1] == aux.t
+                qs[0] * hint_in_scalars[0] + qs[1] * hint_in_scalars[1] == aux
             );
         }
     }
@@ -745,10 +745,10 @@ pub(crate) fn hint_hash_p(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in_rx: ark_bn254::Fq,
-    hint_in_ry: ark_bn254::Fq,
-    hint_in_tx: ark_bn254::Fq,
-    hint_in_ty: ark_bn254::Fq,
+    hint_in_rx: ElemFq,
+    hint_in_ry: ElemFq,
+    hint_in_tx: ElemFq,
+    hint_in_ty: ElemFq,
     hint_in_q: ark_bn254::G1Affine,
 ) -> (HashBytes, Script, bool) {
     // r (gp3) = t(msm) + q(vk0)
@@ -818,8 +818,6 @@ mod test {
     use bitcoin::opcodes::{all::OP_EQUALVERIFY, OP_TRUE};
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
-
-    use super::HintInMSM;
 
     #[test]
     fn test_try_msm() {

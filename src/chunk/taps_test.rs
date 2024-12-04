@@ -45,6 +45,13 @@ mod test {
         
         
         let hint_in = f;
+        let fhash = extern_hash_fps(
+            vec![
+                f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
+                f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
+            ],
+            false,
+        );
         let (_, simulate_stack_input, maybe_wrong) = hints_frob_fp12(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
@@ -52,7 +59,7 @@ mod test {
             },
             sec_out,
             sec_in.clone(),
-            hint_in,
+            ElemFp12Acc { f, hash: fhash },
             power,
         );
 
@@ -106,7 +113,7 @@ mod test {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input, maybe_wrong) = hint_hash_c(&mut sig, sec_out, sec_in, hint_in);
+        let (_, simulate_stack_input, maybe_wrong) = hint_hash_c(&mut sig, sec_out, sec_in, ElemFp12Acc { f, hash: fhash });
 
         let tap_len = hash_c_scr.len();
         let script = script! {
@@ -162,7 +169,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            hint_in,
+            ElemFp12Acc { f, hash: fhash },
         );
 
         let tap_len = hash_c_scr.len();
@@ -379,7 +386,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            f,
+            todo!(),
             todo!(),
             dbl_blk,
         );
@@ -407,7 +414,7 @@ mod test {
     fn test_hinited_dense_dense_mul0() {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let dense_dense_mul_script = tap_dense_dense_mul0(false);
+        let dense_dense_mul_script = tap_dense_dense_mul0();
 
         let sec_out = 0;
         let sec_in = vec![1, 2];
@@ -479,7 +486,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            f, g,
+            ElemFp12Acc { f, hash: hash_f }, ElemFp12Acc { f: g, hash: hash_g },
         );
 
         let tap_len = dense_dense_mul_script.len();
@@ -507,7 +514,7 @@ mod test {
     fn test_hinited_dense_dense_mul1() {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let dense_dense_mul_script = tap_dense_dense_mul1(false);
+        let dense_dense_mul_script = tap_dense_dense_mul1();
 
         let sec_out = 0;
         let sec_in = vec![1, 2, 3];
@@ -589,7 +596,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            f, g,
+            ElemFp12Acc { f: f, hash: hash_f }, ElemFp12Acc { f: g, hash: hash_g }
         );
 
         let tap_len = dense_dense_mul_script.len() + bitcom_script.len();
@@ -657,7 +664,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            f, g,
+            ElemFp12Acc { f: f, hash: todo!() }, ElemFp12Acc { f: g, hash: todo!() }
         );
 
         let tap_len = dense_dense_mul_script.len();
@@ -721,7 +728,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            f, g,
+            ElemFp12Acc { f: f, hash: todo!() }, ElemFp12Acc { f: g, hash: todo!() }
         );
 
         let tap_len = dense_dense_mul_script.len();
@@ -778,7 +785,7 @@ mod test {
             msk: Some(&msk),
             cache: HashMap::new(),
         };
-        let (_, stack_data, maybe_wrong) = hint_squaring(&mut sig, sec_out, sec_in, a);
+        let (_, stack_data, maybe_wrong) = hint_squaring(&mut sig, sec_out, sec_in, ElemFp12Acc { f: a, hash: ahash });
 
         let tap_len = squaring_tapscript.len();
         let script = script! {
@@ -835,7 +842,7 @@ mod test {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input, maybe_wrong) = hint_point_ops(&mut sig, sec_out, sec_in, t, p.x, p.y, Some(q), ate);
+        let (_, simulate_stack_input, maybe_wrong) = hint_point_ops(&mut sig, sec_out, sec_in, t, p.x, p.y, q.x.c0, q.x.c1, q.y.c0, q.y.c1, ate);
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {
@@ -883,7 +890,7 @@ mod test {
             msk: Some(&sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input, maybe_wrong) = hint_point_dbl(&mut sig, sec_out, sec_in.clone(), t4acc, p.x, p.y, None);
+        let (_, simulate_stack_input, maybe_wrong) = hint_point_dbl(&mut sig, sec_out, sec_in.clone(), t4acc, p.x, p.y);
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {
@@ -938,7 +945,7 @@ mod test {
             cache: HashMap::new(),
         };
         let (_, simulate_stack_input, maybe_wrong) =
-            hint_point_add_with_frob(&mut sig, sec_out, sec_in, t, p.x, p.y, Some(q), ate);
+            hint_point_add_with_frob(&mut sig, sec_out, sec_in, t, p.x, p.y, q.x.c0, q.x.c1, q.y.c0, q.y.c1, ate);
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {
@@ -998,7 +1005,7 @@ mod test {
             cache: HashMap::new(),
         };
         let (_, simulate_stack_input, maybe_wrong) =
-            hint_double_eval_mul_for_fixed_Qs(&mut sig, sec_out, sec_in, p2dash.x, p2dash.y, p3dash.x, p3dash.y, t2, t3, None, None);
+            hint_double_eval_mul_for_fixed_Qs(&mut sig, sec_out, sec_in, p2dash.x, p2dash.y, p3dash.x, p3dash.y, t2, t3);
 
         let tap_len = sparse_dbl_tapscript.len();
 
@@ -1065,7 +1072,7 @@ mod test {
             cache: HashMap::new(),
         };
         let (_, simulate_stack_input, maybe_wrong) =
-            hint_add_eval_mul_for_fixed_Qs(&mut sig, sec_out, sec_in, p2dash.x, p2dash.y, p3dash.x, p3dash.y, t2, t3, Some(q2), Some(q3), ate);
+            hint_add_eval_mul_for_fixed_Qs(&mut sig, sec_out, sec_in, p2dash.x, p2dash.y, p3dash.x, p3dash.y, t2, t3, q2, q3, ate);
 
         let tap_len = sparse_add_tapscript.len();
 
@@ -1133,7 +1140,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            p2dash.x, p2dash.y, p3dash.x, p3dash.y, t2, t3, Some(q2), Some(q3),
+            p2dash.x, p2dash.y, p3dash.x, p3dash.y, t2, t3, q2, q3,
             1,
         );
 
@@ -1201,7 +1208,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            f, ghash,
+            ElemFp12Acc { f: f, hash: todo!() }, ghash
         );
 
         let tap_len = dense_dense_mul_script.len();
@@ -1228,7 +1235,7 @@ mod test {
     fn test_hinited_dense_dense_mul1_by_hash() {
         // compile time
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let dense_dense_mul_script = tap_dense_dense_mul1(false);
+        let dense_dense_mul_script = tap_dense_dense_mul1();
 
         let sec_out = 0;
         let sec_in = vec![1, 2, 3];
@@ -1269,7 +1276,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            f, hash_g,
+            ElemFp12Acc { f: f, hash: todo!() }, hash_g,
         );
 
         let tap_len = dense_dense_mul_script.len();
