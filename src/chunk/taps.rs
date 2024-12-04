@@ -298,12 +298,15 @@ pub(crate) fn hint_point_dbl(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInG2PointOp,
+    hint_t: ElemG2PointAcc,
+    hint_px: ark_bn254::Fq,
+    hint_py: ark_bn254::Fq,
+    _hint_q: Option<ark_bn254::G2Affine>,
 ) -> (ElemG2PointAcc, Script, bool) {
     assert_eq!(sec_in.len(), 3);
-    let t = hint_in.t.t;
-    let p = ark_bn254::G1Affine::new_unchecked(hint_in.px, hint_in.py);
-    let hash_le_aux = hint_in.t.hash_le();
+    let t = hint_t.t;
+    let p = ark_bn254::G1Affine::new_unchecked(hint_px, hint_py);
+    let hash_le_aux = hint_t.hash_le();
 
     let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
     let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
@@ -688,14 +691,17 @@ pub(crate) fn hint_point_add_with_frob(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInG2PointOp,
+    hint_t: ElemG2PointAcc,
+    hint_px: ark_bn254::Fq,
+    hint_py: ark_bn254::Fq,
+    hint_q: Option<ark_bn254::G2Affine>,
     ate: i8,
 ) -> (ElemG2PointAcc, Script, bool) {
     assert!(ate == 1 || ate == -1);
     assert_eq!(sec_in.len(), 7);
-    let (tt, p, q) = (hint_in.t.t, ark_bn254::G1Affine::new_unchecked(hint_in.px, hint_in.py), hint_in.q.unwrap());
+    let (tt, p, q) = (hint_t.t, ark_bn254::G1Affine::new_unchecked(hint_px, hint_py), hint_q.unwrap());
     let mut qq = q.clone();
-    let hash_le_aux = hint_in.t.hash_le();
+    let hash_le_aux = hint_t.hash_le();
 
     let beta_12x = BigUint::from_str(
         "21575463638280843010398324269430826099269044274347216827212613867836435027261",
@@ -1173,11 +1179,14 @@ pub(crate) fn hint_point_ops(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInG2PointOp,
+    hint_t: ElemG2PointAcc,
+    hint_px: ark_bn254::Fq,
+    hint_py: ark_bn254::Fq,
+    hint_q: Option<ark_bn254::G2Affine>,
     ate: i8,
 ) -> (ElemG2PointAcc, Script, bool) {
     assert_eq!(sec_in.len(), 7);
-    let (t, p, q, hash_le_aux) = (hint_in.t.t, ark_bn254::G1Affine::new_unchecked(hint_in.px, hint_in.py), hint_in.q.unwrap(), hint_in.t.hash_le());
+    let (t, p, q, hash_le_aux) = (hint_t.t, ark_bn254::G1Affine::new_unchecked(hint_px, hint_py), hint_q.unwrap(), hint_t.hash_le());
 
     let mut qq = q.clone();
     if ate == -1 {
@@ -1332,11 +1341,19 @@ pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInSparseEvals,
+    hint_in_p2x: ark_bn254::Fq,
+    hint_in_p2y: ark_bn254::Fq,
+    hint_in_p3x: ark_bn254::Fq,
+    hint_in_p3y: ark_bn254::Fq,
+    
+    hint_in_t2: ark_bn254::G2Affine,
+    hint_in_t3: ark_bn254::G2Affine,
+    hint_in_q2: Option<ark_bn254::G2Affine>,
+    hint_in_q3: Option<ark_bn254::G2Affine>,
 ) -> (ElemSparseEval, Script, bool) {
     assert_eq!(sec_in.len(), 4);
-    let (t2, t3) = (hint_in.t2, hint_in.t3);
-    let (p2, p3) = (ark_bn254::G1Affine::new_unchecked(hint_in.p2x, hint_in.p2y), ark_bn254::G1Affine::new_unchecked(hint_in.p3x, hint_in.p3y));
+    let (t2, t3) = (hint_in_t2, hint_in_t3);
+    let (p2, p3) = (ark_bn254::G1Affine::new_unchecked(hint_in_p2x, hint_in_p2y), ark_bn254::G1Affine::new_unchecked(hint_in_p3x, hint_in_p3y));
     // First
     let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
     let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
@@ -1552,14 +1569,22 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInSparseEvals,
+    hint_in_p2x: ark_bn254::Fq,
+    hint_in_p2y: ark_bn254::Fq,
+    hint_in_p3x: ark_bn254::Fq,
+    hint_in_p3y: ark_bn254::Fq,
+    
+    hint_in_t2: ark_bn254::G2Affine,
+    hint_in_t3: ark_bn254::G2Affine,
+    hint_in_q2: Option<ark_bn254::G2Affine>,
+    hint_in_q3: Option<ark_bn254::G2Affine>,
     ate: i8,
 ) -> (ElemSparseEval, Script, bool) {
     assert_eq!(sec_in.len(), 4);
     let (t2, t3, qq2, qq3) = (
-        hint_in.t2, hint_in.t3,  hint_in.q2.unwrap(), hint_in.q3.unwrap(),
+        hint_in_t2, hint_in_t3,  hint_in_q2.unwrap(), hint_in_q3.unwrap(),
     );
-    let (p2, p3) = (ark_bn254::G1Affine::new_unchecked(hint_in.p2x, hint_in.p2y), ark_bn254::G1Affine::new_unchecked(hint_in.p3x, hint_in.p3y));
+    let (p2, p3) = (ark_bn254::G1Affine::new_unchecked(hint_in_p2x, hint_in_p2y), ark_bn254::G1Affine::new_unchecked(hint_in_p3x, hint_in_p3y));
     
     let mut q2 = qq2.clone();
     if ate == -1 {
@@ -1775,15 +1800,23 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInSparseEvals,
+    hint_in_p2x: ark_bn254::Fq,
+    hint_in_p2y: ark_bn254::Fq,
+    hint_in_p3x: ark_bn254::Fq,
+    hint_in_p3y: ark_bn254::Fq,
+    
+    hint_in_t2: ark_bn254::G2Affine,
+    hint_in_t3: ark_bn254::G2Affine,
+    hint_in_q2: Option<ark_bn254::G2Affine>,
+    hint_in_q3: Option<ark_bn254::G2Affine>,
     ate: i8,
 ) -> (ElemSparseEval, Script, bool) {
     assert_eq!(sec_in.len(), 4);
 
     let (t2, t3, qq2, qq3) = (
-        hint_in.t2, hint_in.t3,  hint_in.q2.unwrap(), hint_in.q3.unwrap(),
+        hint_in_t2, hint_in_t3,  hint_in_q2.unwrap(), hint_in_q3.unwrap(),
     );
-    let (p2, p3) = (ark_bn254::G1Affine::new_unchecked(hint_in.p2x, hint_in.p2y), ark_bn254::G1Affine::new_unchecked(hint_in.p3x, hint_in.p3y));
+    let (p2, p3) = (ark_bn254::G1Affine::new_unchecked(hint_in_p2x, hint_in_p2y), ark_bn254::G1Affine::new_unchecked(hint_in_p3x, hint_in_p3y));
 
     let beta_12x = BigUint::from_str(
         "21575463638280843010398324269430826099269044274347216827212613867836435027261",
@@ -2146,9 +2179,9 @@ pub(crate) fn hint_hash_c(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInHashC,
+    hint_in_c: ark_bn254::Fq12,
 ) -> (ElemFp12Acc, Script, bool) {
-    let f = hint_in.c;
+    let f = hint_in_c;
     let f = vec![
         f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
         f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
@@ -2167,7 +2200,7 @@ pub(crate) fn hint_hash_c(
     };
     (
         ElemFp12Acc {
-            f: hint_in.c,
+            f: hint_in_c,
             hash: fhash,
         },
         simulate_stack_input,
@@ -2219,9 +2252,9 @@ pub(crate) fn hint_hash_c2(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInHashC,
+    hint_in_c: ark_bn254::Fq12,
 ) -> (ElemFp12Acc, Script, bool) {
-    let f = hint_in.c;
+    let f = hint_in_c;
     let f = vec![
         f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
         f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
@@ -2234,14 +2267,14 @@ pub(crate) fn hint_hash_c2(
 
     let simulate_stack_input = script! {
         // bit commits raw
-        {fq12_push_not_montgomery(hint_in.c)}
+        {fq12_push_not_montgomery(hint_in_c)}
         // hash
         // hash192
         { bc_elems }
     };
     (
         ElemFp12Acc {
-            f: hint_in.c,
+            f: hint_in_c,
             hash: outhash,
         },
         simulate_stack_input,
@@ -2358,10 +2391,11 @@ pub(crate) fn hints_precompute_Px(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInPrecomputePx,
+    hint_in_px: ark_bn254::Fq,
+    hint_in_py: ark_bn254::Fq,
 ) -> (ark_bn254::Fq, Script, bool) {
     assert_eq!(sec_in.len(), 3);
-    let p =  ark_bn254::G1Affine::new_unchecked(hint_in.px, hint_in.py);
+    let p =  ark_bn254::G1Affine::new_unchecked(hint_in_px, hint_in_py);
     let mut pdy = ark_bn254::Fq::ONE;
     if p.y.inverse().is_some() {
         pdy = p.y.inverse().unwrap();
@@ -2401,10 +2435,10 @@ pub(crate) fn hints_precompute_Py(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInPrecomputePy,
+    hint_in_p: ark_bn254::Fq,
 ) -> (ark_bn254::Fq, Script, bool) {
     assert_eq!(sec_in.len(), 1);
-    let p = hint_in.p.clone();
+    let p = hint_in_p.clone();
 
     let mut pdy = ark_bn254::Fq::ONE;
     if p.inverse().is_some() {
@@ -2494,10 +2528,13 @@ pub(crate) fn hint_init_T4(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInInitT4,
+    hint_q4y1: ark_bn254::Fq,
+    hint_q4y0: ark_bn254::Fq,
+    hint_q4x1: ark_bn254::Fq,
+    hint_q4x0: ark_bn254::Fq,
 ) -> (ElemG2PointAcc, Script, bool) {
     assert_eq!(sec_in.len(), 4);
-    let t4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_in.q4x0, hint_in.q4x1), ark_bn254::Fq2::new(hint_in.q4y0, hint_in.q4y1));
+    let t4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0, hint_q4x1), ark_bn254::Fq2::new(hint_q4y0, hint_q4y1));
     let t4hash = extern_hash_fps(vec![t4.x.c0, t4.x.c1, t4.y.c0, t4.y.c1], false);
     let t4hash = extern_hash_nibbles(vec![t4hash, [0u8; 64]], true);
 
@@ -2578,11 +2615,11 @@ pub(crate) fn hints_frob_fp12(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInFrobFp12,
+    hint_in_f: ark_bn254::Fq12,
     power: usize,
 ) -> (ElemFp12Acc, Script, bool) {
     assert_eq!(sec_in.len(), 1);
-    let f = hint_in.f;
+    let f = hint_in_f;
     let (_, hints_frobenius_map) = Fq12::hinted_frobenius_map(power, f);
 
     let g = f.frobenius_map(power);

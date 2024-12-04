@@ -15,7 +15,7 @@ use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
 use num_traits::One;
 
-use super::hint_models::HintInHashP;
+use super::hint_models::{ElemG1Point};
 use super::primitves::hash_fp2;
 use super::taps::{HashBytes, Link, Sig};
 use super::wots::WOTSPubKey;
@@ -246,17 +246,7 @@ pub(crate) struct HintInMSM {
     //hash_in: HashBytes, // in = Hash([Hash(T), Hash_le_aux])
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct HintOutMSM {
-    pub(crate) t: ark_bn254::G1Affine,
-    pub(crate) hash: HashBytes,
-}
 
-impl HintOutMSM {
-    pub(crate) fn out(&self) -> HashBytes {
-        self.hash
-    }
-}
 
 fn hinted_affine_add_line_g1(
     tx: ark_bn254::Fq,
@@ -423,7 +413,7 @@ pub(crate) fn hint_msm(
     hint_in: HintInMSM,
     msm_tap_index: usize,
     qs: Vec<ark_bn254::G1Affine>,
-) -> (HintOutMSM, Script, bool) {
+) -> (ElemG1Point, Script, bool) {
     const WINDOW_LEN: u8 = 8;
     const MAX_SUPPORTED_PUBS: usize = 3;
 
@@ -548,7 +538,7 @@ pub(crate) fn hint_msm(
 
         { bc_elems }
     };
-    let hint_out = HintOutMSM { t: t, hash: outhash };
+    let hint_out = ElemG1Point { t};
 
     (hint_out, simulate_stack_input, should_validate)
 }
@@ -755,13 +745,17 @@ pub(crate) fn hint_hash_p(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInHashP,
+    hint_in_rx: ark_bn254::Fq,
+    hint_in_ry: ark_bn254::Fq,
+    hint_in_tx: ark_bn254::Fq,
+    hint_in_ty: ark_bn254::Fq,
+    hint_in_q: ark_bn254::G1Affine,
 ) -> (HashBytes, Script, bool) {
     // r (gp3) = t(msm) + q(vk0)
-    let (tx, qx, ty, qy) = (hint_in.tx, hint_in.q.x, hint_in.ty, hint_in.q.y);
+    let (tx, qx, ty, qy) = (hint_in_tx, hint_in_q.x, hint_in_ty, hint_in_q.y);
     
-    let (rx, ry) = (hint_in.rx, hint_in.ry);
-    let thash = extern_hash_fps(vec![hint_in.tx, hint_in.ty], false);
+    let (rx, ry) = (hint_in_rx, hint_in_ry);
+    let thash = extern_hash_fps(vec![hint_in_tx, hint_in_ty], false);
 
     let zero_nib = [0u8;64];
 
@@ -1067,12 +1061,11 @@ mod test {
         sig_cache.insert(sec_out, SigData::Sig160(wots160::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out), &bal)));
 
 
-        let hint_in = HintInHashP { tx:t.x, q, ty: t.y, rx: r.x, ry: r.y };
         let mut sig = Sig {
             msk: None,
             cache: sig_cache,
         };
-        let (_, simulate_stack_input, maybe_wrong) = hint_hash_p(&mut sig, (sec_out, false), sec_in_arr, hint_in);
+        let (_, simulate_stack_input, maybe_wrong) = hint_hash_p(&mut sig, (sec_out, false), sec_in_arr, r.x, r.y, t.x, t.y, q);
 
         let tap_len = hash_c_scr.len();
         let script = script! {

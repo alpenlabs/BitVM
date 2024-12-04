@@ -44,7 +44,7 @@ mod test {
         let f = ark_bn254::Fq12::rand(&mut prng);
         
         
-        let hint_in: HintInFrobFp12 = HintInFrobFp12 { f };
+        let hint_in = f;
         let (_, simulate_stack_input, maybe_wrong) = hints_frob_fp12(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
@@ -101,7 +101,7 @@ mod test {
             ],
             false,
         );
-        let hint_in = HintInHashC { c: f };
+        let hint_in = f;
         let mut sig = Sig {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
@@ -154,7 +154,7 @@ mod test {
             ],
             false,
         );
-        let hint_in = HintInHashC { c: f };
+        let hint_in = f;
         let (_, simulate_stack_input, maybe_wrong) = hint_hash_c2(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
@@ -208,7 +208,6 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let t4 = ark_bn254::G2Affine::rand(&mut prng);
         //t4.y = t4.y + t4.y;
-        let hint_in = HintInInitT4 { q4x0: t4.x.c0, q4x1: t4.x.c1, q4y0: t4.y.c0, q4y1: t4.y.c1 };
         let (_, simulate_stack_input, maybe_wrong) = hint_init_T4(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
@@ -216,7 +215,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            hint_in,
+            t4.x.c0, t4.x.c1, t4.y.c0, t4.y.c1,
         );
 
         let tap_len = hash_c_scr.len();
@@ -259,9 +258,9 @@ mod test {
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
-        let hint_in = HintInPrecomputePx {
-            px: p.x, py: p.y,
-        };
+        // let hint_in = HintInPrecomputePx {
+        //     px: p.x, py: p.y,
+        // };
         let (_, simulate_stack_input, maybe_wrong) = hints_precompute_Px(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
@@ -269,7 +268,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            hint_in,
+            p.x, p.y,
         );
 
         let tap_len = precompute_p.len();
@@ -312,7 +311,7 @@ mod test {
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let p = ark_bn254::Fq::rand(&mut prng);
-        let hint_in = HintInPrecomputePy { p };
+        let hint_in = p;
         let (_, simulate_stack_input, maybe_wrong) = hints_precompute_Py(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
@@ -371,10 +370,7 @@ mod test {
         let f = ark_bn254::Fq12::rand(&mut prng);
         let dbl_le0 = ark_bn254::Fq2::rand(&mut prng);
         let dbl_le1 = ark_bn254::Fq2::rand(&mut prng);
-        let hint_in = HintInSparseDenseMul {
-            a: f,
-            g: todo!()
-        };
+
 
         let (_, simulate_stack_input, maybe_wrong) = hint_sparse_dense_mul(
             &mut &mut Sig {
@@ -383,7 +379,8 @@ mod test {
             },
             sec_out,
             sec_in,
-            hint_in,
+            f,
+            todo!(),
             dbl_blk,
         );
 
@@ -473,7 +470,7 @@ mod test {
 
 
 
-        let hint_in = HintInDenseMul { a: f, b: g };
+       // let hint_in = HintInDenseMul { a: f, b: g };
 
         let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul0(
             &mut Sig {
@@ -482,7 +479,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            hint_in,
+            f, g,
         );
 
         let tap_len = dense_dense_mul_script.len();
@@ -532,7 +529,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(17);
         let f = ark_bn254::Fq12::rand(&mut prng);
         let g = ark_bn254::Fq12::rand(&mut prng);
-        let hint_in = HintInDenseMul { a: f, b: g };
+        //let hint_in = HintInDenseMul { a: f, b: g };
         let h = f * g;
 
         let hash_f = extern_hash_fps(
@@ -592,7 +589,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            hint_in,
+            f, g,
         );
 
         let tap_len = dense_dense_mul_script.len() + bitcom_script.len();
@@ -651,7 +648,7 @@ mod test {
 
         let h = f * g;
 
-        let hint_in = HintInDenseMul { a: f, b: g };
+        //let hint_in = HintInDenseMul { a: f, b: g };
 
         let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul0_by_constant(
             &mut Sig {
@@ -660,7 +657,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            hint_in,
+            f, g,
         );
 
         let tap_len = dense_dense_mul_script.len();
@@ -715,7 +712,7 @@ mod test {
         // runtime
         let f = ark_bn254::Fq12::rand(&mut prng);
 
-        let hint_in = HintInDenseMul { a: f, b: g };
+        //let hint_in = HintInDenseMul { a: f, b: g };
 
         let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul1_by_constant(
             &mut Sig {
@@ -724,7 +721,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            hint_in,
+            f, g,
         );
 
         let tap_len = dense_dense_mul_script.len();
@@ -775,13 +772,13 @@ mod test {
             ],
             true,
         );
-        let hint_in: HintInSquaring = HintInSquaring { a };
+        // let hint_in: HintInSquaring = HintInSquaring { a };
 
         let mut sig = Sig {
             msk: Some(&msk),
             cache: HashMap::new(),
         };
-        let (_, stack_data, maybe_wrong) = hint_squaring(&mut sig, sec_out, sec_in, hint_in);
+        let (_, stack_data, maybe_wrong) = hint_squaring(&mut sig, sec_out, sec_in, a);
 
         let tap_len = squaring_tapscript.len();
         let script = script! {
@@ -828,17 +825,17 @@ mod test {
         let q = ark_bn254::G2Affine::rand(&mut prng);
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hash_le_aux = [2u8; 64];
-        let hint_in = HintInG2PointOp {
-            t,
-            px: p.x, py: p.y,
-            q: Some(q),
-        };
+        // let hint_in = HintInG2PointOp {
+        //     t,
+        //     px: p.x, py: p.y,
+        //     q: Some(q),
+        // };
 
         let mut sig = Sig {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input, maybe_wrong) = hint_point_ops(&mut sig, sec_out, sec_in, hint_in, ate);
+        let (_, simulate_stack_input, maybe_wrong) = hint_point_ops(&mut sig, sec_out, sec_in, t, p.x, p.y, Some(q), ate);
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {
@@ -881,13 +878,12 @@ mod test {
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hash_le_aux = [2u8; 64]; // mock
         let t4acc: ElemG2PointAcc = ElemG2PointAcc { t, dbl_le: None, add_le: None,  };
-        let hint_in = HintInG2PointOp { t: t4acc, px: p.x, py: p.y, q: None };
 
         let mut sig = Sig {
             msk: Some(&sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input, maybe_wrong) = hint_point_dbl(&mut sig, sec_out, sec_in.clone(), hint_in);
+        let (_, simulate_stack_input, maybe_wrong) = hint_point_dbl(&mut sig, sec_out, sec_in.clone(), t4acc, p.x, p.y, None);
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {
@@ -931,18 +927,18 @@ mod test {
         let q = ark_bn254::G2Affine::rand(&mut prng);
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let hash_le_aux = [2u8; 64];
-        let hint_in = HintInG2PointOp {
-            t,
-            px: p.x, py: p.y,
-            q: Some(q),
-        };
+        // let hint_in = HintInG2PointOp {
+        //     t,
+        //     px: p.x, py: p.y,
+        //     q: Some(q),
+        // };
 
         let mut sig = Sig {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
         let (_, simulate_stack_input, maybe_wrong) =
-            hint_point_add_with_frob(&mut sig, sec_out, sec_in, hint_in, ate);
+            hint_point_add_with_frob(&mut sig, sec_out, sec_in, t, p.x, p.y, Some(q), ate);
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {
@@ -989,20 +985,20 @@ mod test {
         // Run time
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
         let p3dash = ark_bn254::g1::G1Affine::rand(&mut prng);
-        let hint_in = HintInSparseEvals {
-            t2,
-            t3,
-            p2x: p2dash.x, p2y: p2dash.y,
-            p3x: p3dash.x, p3y: p3dash.y,
-            q2: None, q3: None,
-        };
+        // let hint_in = HintInSparseEvals {
+        //     t2,
+        //     t3,
+        //     p2x: p2dash.x, p2y: p2dash.y,
+        //     p3x: p3dash.x, p3y: p3dash.y,
+        //     q2: None, q3: None,
+        // };
 
         let mut sig = Sig {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
         let (_, simulate_stack_input, maybe_wrong) =
-            hint_double_eval_mul_for_fixed_Qs(&mut sig, sec_out, sec_in, hint_in);
+            hint_double_eval_mul_for_fixed_Qs(&mut sig, sec_out, sec_in, p2dash.x, p2dash.y, p3dash.x, p3dash.y, t2, t3, None, None);
 
         let tap_len = sparse_dbl_tapscript.len();
 
@@ -1056,20 +1052,20 @@ mod test {
         // Run time
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
         let p3dash = ark_bn254::g1::G1Affine::rand(&mut prng);
-        let hint_in = HintInSparseEvals {
-            t2,
-            t3,
-            p2x: p2dash.x, p2y: p2dash.y, p3x: p3dash.x, p3y: p3dash.y,
-            q2: Some(q2),
-            q3: Some(q3),
-        };
+        // let hint_in = HintInSparseEvals {
+        //     t2,
+        //     t3,
+        //     p2x: p2dash.x, p2y: p2dash.y, p3x: p3dash.x, p3y: p3dash.y,
+        //     q2: Some(q2),
+        //     q3: Some(q3),
+        // };
 
         let mut sig = Sig {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
         let (_, simulate_stack_input, maybe_wrong) =
-            hint_add_eval_mul_for_fixed_Qs(&mut sig, sec_out, sec_in, hint_in, ate);
+            hint_add_eval_mul_for_fixed_Qs(&mut sig, sec_out, sec_in, p2dash.x, p2dash.y, p3dash.x, p3dash.y, t2, t3, Some(q2), Some(q3), ate);
 
         let tap_len = sparse_add_tapscript.len();
 
@@ -1123,13 +1119,13 @@ mod test {
         // Run time
         let p2dash = ark_bn254::g1::G1Affine::rand(&mut prng);
         let p3dash = ark_bn254::g1::G1Affine::rand(&mut prng);
-        let hint_in = HintInSparseEvals {
-            t2,
-            t3,
-            p2x: p2dash.x, p2y: p2dash.y, p3x: p3dash.x, p3y: p3dash.y,
-            q2: Some(q2),
-            q3: Some(q3),
-        };
+        // let hint_in = HintInSparseEvals {
+        //     t2,
+        //     t3,
+        //     p2x: p2dash.x, p2y: p2dash.y, p3x: p3dash.x, p3y: p3dash.y,
+        //     q2: Some(q2),
+        //     q3: Some(q3),
+        // };
         let (_, simulate_stack_input, maybe_wrong) = hint_add_eval_mul_for_fixed_Qs_with_frob(
             &mut Sig {
                 msk: Some(sec_key_for_bitcomms),
@@ -1137,7 +1133,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            hint_in,
+            p2dash.x, p2dash.y, p3dash.x, p3dash.y, t2, t3, Some(q2), Some(q3),
             1,
         );
 
@@ -1196,7 +1192,7 @@ mod test {
         ); // sparse
         //let h = ark_bn254::Fq12::ONE;
 
-        let hint_in = HintInDenseMulByHash { a: f, bhash: ghash };
+        // let hint_in = HintInDenseMulByHash { a: f, bhash: ghash };
 
         let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul0_by_hash(
             &mut Sig {
@@ -1205,7 +1201,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            hint_in,
+            f, ghash,
         );
 
         let tap_len = dense_dense_mul_script.len();
@@ -1264,7 +1260,7 @@ mod test {
             false,
         );
 
-        let hint_in = HintInDenseMulByHash { a: f, bhash: hash_g };
+        // let hint_in = HintInDenseMulByHash { a: f, bhash: hash_g };
 
         let (_, simulate_stack_input, maybe_wrong) = hints_dense_dense_mul1_by_hash(
             &mut Sig {
@@ -1273,7 +1269,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            hint_in,
+            f, hash_g,
         );
 
         let tap_len = dense_dense_mul_script.len();

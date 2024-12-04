@@ -110,33 +110,34 @@ pub(crate) fn hint_sparse_dense_mul(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInSparseDenseMul,
+    hint_in_a: ark_bn254::Fq12,
+    hint_in_g: ElemG2PointAcc,
     dbl_blk: bool,
 ) -> (ElemFp12Acc, Script, bool) {
     assert_eq!(sec_in.len(), 2);
     if dbl_blk {
-        assert!(hint_in.g.dbl_le.is_some());
+        assert!(hint_in_g.dbl_le.is_some());
     } else {
-        assert!(hint_in.g.add_le.is_some());
+        assert!(hint_in_g.add_le.is_some());
     }
 
     let mut cur_le = (ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO);
     if dbl_blk {
-        cur_le = hint_in.g.dbl_le.unwrap();
+        cur_le = hint_in_g.dbl_le.unwrap();
     } else {
-        cur_le = hint_in.g.add_le.unwrap();
+        cur_le = hint_in_g.add_le.unwrap();
     }
     
-    let (f, cur_le0, cur_le1) = (hint_in.a, cur_le.0, cur_le.1);
+    let (f, cur_le0, cur_le1) = (hint_in_a, cur_le.0, cur_le.1);
     let (_, hints) = Fq12::hinted_mul_by_34(f, cur_le0, cur_le1);
     let mut f1 = f;
     f1.mul_by_034(&ark_bn254::Fq2::ONE, &cur_le0, &cur_le1);
 
     // assumes sparse-dense after doubling block, hashing arrangement changes otherwise
-    let hash_new_t = extern_hash_fps(vec![hint_in.g.t.x.c0, hint_in.g.t.x.c1, hint_in.g.t.y.c0, hint_in.g.t.y.c1], true);
+    let hash_new_t = extern_hash_fps(vec![hint_in_g.t.x.c0, hint_in_g.t.x.c1, hint_in_g.t.y.c0, hint_in_g.t.y.c1], true);
     let hash_cur_le =
         extern_hash_fps(vec![cur_le0.c0, cur_le0.c1, cur_le1.c0, cur_le1.c1], true);
-    let hash_other_le = hint_in.g.hash_other_le(dbl_blk);
+    let hash_other_le = hint_in_g.hash_other_le(dbl_blk);
     let mut hash_le = extern_hash_nibbles(vec![hash_cur_le, hash_other_le], true);
     if !dbl_blk {
         hash_le = extern_hash_nibbles(vec![hash_other_le, hash_cur_le], true);
@@ -283,10 +284,11 @@ pub(crate) fn hints_dense_dense_mul0(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInDenseMul,
+    hint_in_a: ark_bn254::Fq12,
+    hint_in_b: ark_bn254::Fq12,
 ) -> (ElemFp12Acc, Script, bool) {
     assert_eq!(sec_in.len(), 2);
-    let (f, g) = (hint_in.a, hint_in.b);
+    let (f, g) = (hint_in_a, hint_in_b);
     let h = f * g;
 
     let (_, mul_hints) = Fq12::hinted_mul_first(12, f, 0, g);
@@ -424,9 +426,10 @@ pub(crate) fn hints_dense_dense_mul1(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInDenseMul,
+    hint_in_a: ark_bn254::Fq12,
+    hint_in_b: ark_bn254::Fq12,
 ) -> (ElemFp12Acc, Script, bool) {
-    let (f, g) = (hint_in.a, hint_in.b);
+    let (f, g) = (hint_in_a, hint_in_b);
     let (_, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
     let h = f * g;
 
@@ -504,10 +507,10 @@ pub(crate) fn hint_squaring(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInSquaring,
+    hint_in_a: ark_bn254::Fq12,
 ) -> (ElemFp12Acc, Script, bool) {
     assert_eq!(sec_in.len(), 1);
-    let a = hint_in.a;
+    let a = hint_in_a;
     let (_, hints) = Fq12::hinted_square(a);
     let b = a.square();
     let a_hash = extern_hash_fps(
@@ -671,10 +674,11 @@ pub(crate) fn hints_dense_dense_mul0_by_constant(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInDenseMul,
+    hint_in_a: ark_bn254::Fq12,
+    hint_in_b: ark_bn254::Fq12,
 ) -> (ElemFp12Acc, Script, bool) {
     assert_eq!(sec_in.len(), 1);
-    let (f, g) = (hint_in.a, hint_in.b);
+    let (f, g) = (hint_in_a, hint_in_b);
     let h = f * g;
 
     let (_, mul_hints) = Fq12::hinted_mul_first(12, f, 0, g);
@@ -824,9 +828,10 @@ pub(crate) fn hints_dense_dense_mul1_by_constant(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInDenseMul,
+    hint_in_a: ark_bn254::Fq12,
+    hint_in_b: ark_bn254::Fq12,
 ) -> (ElemFp12Acc, Script, bool) {
-    let (f, g) = (hint_in.a, hint_in.b);
+    let (f, g) = (hint_in_a, hint_in_b);
     let (_, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
     let h = f * g;
 
@@ -975,10 +980,11 @@ pub(crate) fn hints_dense_dense_mul0_by_hash(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInDenseMulByHash,
+    hint_in_a: ark_bn254::Fq12,
+    hint_in_bhash: HashBytes,
 ) -> (ElemFp12Acc, Script, bool) {
     assert_eq!(sec_in.len(), 2);
-    let (f, hash_g) = (hint_in.a, hint_in.bhash);
+    let (f, hash_g) = (hint_in_a, hint_in_bhash);
     let g = f.inverse().unwrap();
     let h = ark_bn254::Fq12::ONE;
 
@@ -1130,9 +1136,10 @@ pub(crate) fn hints_dense_dense_mul1_by_hash(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in: HintInDenseMulByHash,
+    hint_in_a: ark_bn254::Fq12,
+    hint_in_bhash: HashBytes,
 ) -> (ElemFp12Acc, Script, bool) {
-    let (f, hash_g) = (hint_in.a, hint_in.bhash);
+    let (f, hash_g) = (hint_in_a, hint_in_bhash);
     let g = f.inverse().unwrap();
     let h = ark_bn254::Fq12::ONE;
 
