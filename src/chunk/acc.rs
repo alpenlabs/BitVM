@@ -1,11 +1,11 @@
-use std::{ops::Neg};
+use std::{collections::HashMap, ops::Neg};
 
 use ark_bn254::{Bn254};
 use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::{Field, PrimeField};
 use bitcoin_script::script;
 
-use crate::{chunk::segment::*, groth16::g16::{Assertions, PublicKeys, Signatures, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}};
+use crate::{chunk::{segment::*, taps::{tup_to_scr, Sig, SigData}}, groth16::g16::{Assertions, PublicKeys, Signatures, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}};
 
 use super::{api::nib_to_byte_array, config::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, evaluate::{EvalIns}, hint_models::*, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps}, taps::{HashBytes}, wots::WOTSPubKey};
 
@@ -477,6 +477,20 @@ type TypedAssertions = (
     [HashBytes; N_VERIFIER_HASHES],
 );
 
+fn assertions_to_nibbles(tass: TypedAssertions) -> Vec<[u8;64]> {
+    let mut nibvec: Vec<[u8;64]> = vec![];
+    for fq in tass.0 {
+        nibvec.push(extern_fr_to_nibbles(fq));
+    }
+    for fq in tass.1 {
+        nibvec.push(extern_fq_to_nibbles(fq));
+    }
+    for fq in tass.2 {
+        nibvec.push(fq);
+    }
+    nibvec
+}
+
 type Intermediates = (
     Vec<ark_bn254::Fq>,
     Vec<HashBytes>,
@@ -614,4 +628,76 @@ pub fn validate(
     let mut hout: Vec<Segment> = vec![];
     groth16(&mut hout, eval_ins, get_pubs(vk), &mut Some(intermediates));
     hint_to_data(hout)
+}
+
+
+pub fn full_exec(
+    segments: Vec<Segment>,
+    signed_asserts: Signatures,
+) {
+    let mut sigcache: HashMap<u32, SigData> = HashMap::new();
+
+    assert_eq!(signed_asserts.0.len(), NUM_PUBS);
+
+    for i in 0..NUM_PUBS {
+        sigcache.insert(i as u32, SigData::Sig256(signed_asserts.0[i]));
+    }
+
+    for i in 0..N_VERIFIER_FQS {
+        sigcache.insert((NUM_PUBS + i) as u32, SigData::Sig256(signed_asserts.1[i]));
+    }
+
+    for i in 0..N_VERIFIER_HASHES {
+        sigcache.insert((NUM_PUBS + N_VERIFIER_FQS + i) as u32, SigData::Sig160(signed_asserts.2[i]));
+    }
+
+    assert_eq!(segments.len(), sigcache.len());
+
+    let mut sig = Sig {
+        msk: None,
+        cache: sigcache,
+    };
+
+    let assertions = assertions_to_nibbles(get_assertions(signed_asserts));
+
+    for i in 0..segments.len() {
+        let seg = &segments[i];
+        let out_first: bool = match seg.scr_type {
+            ScriptType::MSM(_) => false,
+            ScriptType::PreMillerHashP(_) => false,
+            ScriptType::PreMillerInitT4 => true,
+            ScriptType::PreMillerPrecomputePy => true,
+            ScriptType::PreMillerPrecomputePx => true,
+            ScriptType::PreMillerHashC => true,
+            ScriptType::PreMillerHashC2 => true,
+            ScriptType::PostMillerDenseDenseMulByConst0(_) => false,
+            ScriptType::PostMillerDenseDenseMulByConst1(_) => false,
+            ScriptType::PreMillerDenseDenseMulByHash0 => false,
+            ScriptType::PreMillerDenseDenseMulByHash1 => false,
+            ScriptType::MillerSquaring => true,
+            ScriptType::SparseDenseMul(_) => false,
+            ScriptType::DenseDenseMul0() => false,
+            ScriptType::DenseDenseMul1() => false,
+            ScriptType::PostMillerFrobFp12(_) => false,
+            ScriptType::MillerDoubleAdd(_) => false,
+            ScriptType::MillerDouble => false,
+            ScriptType::PostMillerAddWithFrob(_) => false,
+            ScriptType::MillerSparseSparseDbl(_) => true,
+            ScriptType::MillerSparseSparseAdd(_) => true,
+            ScriptType::PostMillerSparseAddWithFrob(_) => true,
+            _ => true,
+        };
+        let sec_out = ((seg.id, seg.output_type), assertions[seg.id as usize]);
+        let sec_in: Vec<((u32, bool), [u8; 64])> = seg.inputs.iter().map(|(k, v)| ((*k, *v), assertions[*k as usize])).collect();
+        let mut tot: Vec<((u32, bool), [u8;64])> = vec![];
+        if out_first {
+            tot.push(sec_out);
+            tot.extend_from_slice(&sec_in);
+        } else {
+            tot.extend_from_slice(&sec_in);
+            tot.push(sec_out);
+        }
+        let (bcelems, should_validate) = tup_to_scr(&mut sig, tot);
+        println!("index {:?} bcelems len {:?}  should_validate {}",i, bcelems.len(), should_validate);
+    }
 }

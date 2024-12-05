@@ -71,7 +71,7 @@ mod test {
 
     use crate::chunk::{config::NUM_PUBS, test_utils::read_map_from_file};
 
-    use self::chunk::{ acc::{self, Pubs}, evaluate::EvalIns, hint_models::Element, segment::Segment};
+    use self::chunk::{ acc::{self, full_exec, Pubs}, evaluate::EvalIns, hint_models::Element, segment::Segment};
 
     use super::*;
 
@@ -476,11 +476,13 @@ mod test {
             vky0
         };
 
-        let mut hout: Vec<Segment> = vec![];
+        let mut segments: Vec<Segment> = vec![];
 
-        acc::groth16(&mut hout, eval_ins, pubs, &mut None);
-        let proof_asserts = acc::hint_to_data(hout);
-        write_asserts_to_file(proof_asserts, "chunker_data/assert2.json");
+        acc::groth16(&mut segments, eval_ins, pubs, &mut None);
+        let proof_asserts = acc::hint_to_data(segments.clone());
+        let signed_asserts = sign_assertions(proof_asserts);
+        full_exec(segments, signed_asserts);
+        // write_asserts_to_file(proof_asserts, "chunker_data/assert2.json");
 
     }
 

@@ -1034,6 +1034,7 @@ pub(crate) fn bitcom_scripts_from_segments(segments: Vec<Segment>, pubkeys: Vec<
                 bitcom_add_eval_mul_for_fixed_Qs_with_frob(&pubkeys_map, sec_out, sec_in);
             },
         }
+    
     }
 }
 
