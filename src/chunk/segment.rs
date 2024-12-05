@@ -63,13 +63,8 @@ pub(crate) fn wrap_hint_msm(
     pub_vky: Vec<ark_bn254::G1Affine>,
 ) -> Segment {
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
-
-    let mut acc = ark_bn254::G1Affine::identity();
-    if prev_msm.is_some() {
-        let prev_msm = prev_msm.unwrap();
-        acc = prev_msm.output.into();
-        input_segment_info.push((prev_msm.id, prev_msm.output_type));
-    }
+    let sig = &mut Sig { msk: None, cache: HashMap::new() };
+    let output_type = false;
 
     let hint_scalars: Vec<ark_bn254::Fr> = scalars
     .iter()
@@ -79,8 +74,13 @@ pub(crate) fn wrap_hint_msm(
     })
     .collect();
 
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
-    let output_type = false;
+    let mut acc = ark_bn254::G1Affine::identity();
+    if prev_msm.is_some() {
+        let prev_msm = prev_msm.unwrap();
+        acc = prev_msm.output.into();
+        input_segment_info.push((prev_msm.id, prev_msm.output_type));
+    }
+
     let (hout_msm, hint_script, _) = hint_msm(sig, (segment_id as u32, output_type), input_segment_info.clone(), acc, hint_scalars, msm_chain_index, pub_vky.clone());
 
     Segment { id: segment_id as u32 as u32, output_type, inputs: input_segment_info, output: Element::MSMG1(hout_msm), hint_script, scr_type: ScriptType::MSM((msm_chain_index, pub_vky)) }
@@ -96,9 +96,9 @@ pub(crate) fn wrap_hint_hash_p(
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
-    input_segment_info.push((hint_in_rx.id, hint_in_rx.output_type));
-    input_segment_info.push((hint_in_ry.id, hint_in_ry.output_type));
     input_segment_info.push((hint_in_t.id, hint_in_t.output_type));
+    input_segment_info.push((hint_in_ry.id, hint_in_ry.output_type));
+    input_segment_info.push((hint_in_rx.id, hint_in_rx.output_type));
 
     let (h, hint_script, _) = hint_hash_p(sig, (segment_id as u32, output_type), input_segment_info.clone(), hint_in_rx.output.into(), hint_in_ry.output.into(), hint_in_t.output.into(), pub_vky0.clone());
     Segment { id: segment_id as u32, output_type, inputs: input_segment_info, output: Element::HashBytes(h), hint_script, scr_type: ScriptType::PreMillerHashP(pub_vky0) }
@@ -113,6 +113,7 @@ pub(crate) fn wrap_hint_hash_c(
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     let fqvec: Vec<ElemFq> = hint_in_c
     .iter()
+    .rev()
     .map(|f| {
         input_segment_info.push((f.id, f.output_type));
         f.output.into()
@@ -132,8 +133,8 @@ pub(crate) fn wrap_hints_precompute_Px(
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = true;
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
-    input_segment_info.push((hint_in_px.id, hint_in_px.output_type));
     input_segment_info.push((hint_in_py.id, hint_in_py.output_type));
+    input_segment_info.push((hint_in_px.id, hint_in_px.output_type));
     input_segment_info.push((hint_in_pdy.id, hint_in_pdy.output_type));
 
     let (p4x, hint_script, _) = hints_precompute_Px(sig, (segment_id as u32, output_type), input_segment_info.clone(), hint_in_px.output.into(), hint_in_py.output.into(), hint_in_pdy.output.into());
@@ -161,6 +162,7 @@ pub(crate) fn wrap_hint_hash_c2(
     let output_type = false;
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     input_segment_info.push((hint_in_c.id, hint_in_c.output_type));
+
     let (c2, hint_script, _) = hint_hash_c2(sig, (segment_id as u32, output_type), input_segment_info.clone(), hint_in_c.output.into());
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(c2), hint_script, scr_type: ScriptType::PreMillerHashC2 }
 }
@@ -204,10 +206,10 @@ pub(crate) fn wrap_hint_init_T4(
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
     let input_segment_info = vec![
-        (hint_in_q4_x_c0.id, hint_in_q4_x_c0.output_type),
-        (hint_in_q4_x_c1.id, hint_in_q4_x_c1.output_type),
-        (hint_in_q4_y_c0.id, hint_in_q4_y_c0.output_type),
         (hint_in_q4_y_c1.id, hint_in_q4_y_c1.output_type),
+        (hint_in_q4_y_c0.id, hint_in_q4_y_c0.output_type),
+        (hint_in_q4_x_c1.id, hint_in_q4_x_c1.output_type),
+        (hint_in_q4_x_c0.id, hint_in_q4_x_c0.output_type),
     ];
 
     let q4_x_c0: ark_bn254::Fq = hint_in_q4_x_c0.output.into();
@@ -272,8 +274,8 @@ pub(crate) fn wrap_hint_point_dbl(
     let output_type = false;
     let input_segment_info = vec![
         (hint_in_t4.id, hint_in_t4.output_type),
-        (hint_in_p4x.id, hint_in_p4x.output_type),
         (hint_in_p4y.id, hint_in_p4y.output_type),
+        (hint_in_p4x.id, hint_in_p4x.output_type),
     ];
 
     let t4: ElemG2PointAcc = hint_in_t4.output.into();
@@ -314,13 +316,12 @@ pub(crate) fn wrap_hint_point_ops(
     let output_type = false;
     let input_segment_info = vec![
         (hint_in_t4.id, hint_in_t4.output_type),
-        (hint_in_p4x.id, hint_in_p4x.output_type),
-        (hint_in_p4y.id, hint_in_p4y.output_type),
-
-        (hint_in_q4_x_c0.id, hint_in_q4_x_c0.output_type),
-        (hint_in_q4_x_c1.id, hint_in_q4_x_c1.output_type),
-        (hint_in_q4_y_c0.id, hint_in_q4_y_c0.output_type),
         (hint_in_q4_y_c1.id, hint_in_q4_y_c1.output_type),
+        (hint_in_q4_y_c0.id, hint_in_q4_y_c0.output_type),
+        (hint_in_q4_x_c1.id, hint_in_q4_x_c1.output_type),
+        (hint_in_q4_x_c0.id, hint_in_q4_x_c0.output_type),
+        (hint_in_p4y.id, hint_in_p4y.output_type),
+        (hint_in_p4x.id, hint_in_p4x.output_type),
     ];
 
     let t4: ElemG2PointAcc = hint_in_t4.output.into();
@@ -400,10 +401,10 @@ pub(crate) fn wrap_hint_double_eval_mul_for_fixed_Qs(
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
     let input_segment_info = vec![
-        (hint_in_p2x.id, hint_in_p2x.output_type),
-        (hint_in_p2y.id, hint_in_p2y.output_type),
-        (hint_in_p3x.id, hint_in_p3x.output_type),
         (hint_in_p3y.id, hint_in_p3y.output_type),
+        (hint_in_p3x.id, hint_in_p3x.output_type),
+        (hint_in_p2y.id, hint_in_p2y.output_type),
+        (hint_in_p2x.id, hint_in_p2x.output_type),
     ];
 
     let p2x: ark_bn254::Fq = hint_in_p2x.output.into();
@@ -594,10 +595,10 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs(
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
     let input_segment_info = vec![
-        (hint_in_p2x.id, hint_in_p2x.output_type),
-        (hint_in_p2y.id, hint_in_p2y.output_type),
-        (hint_in_p3x.id, hint_in_p3x.output_type),
         (hint_in_p3y.id, hint_in_p3y.output_type),
+        (hint_in_p3x.id, hint_in_p3x.output_type),
+        (hint_in_p2y.id, hint_in_p2y.output_type),
+        (hint_in_p2x.id, hint_in_p2x.output_type),
     ];
 
     let p2x: ark_bn254::Fq = hint_in_p2x.output.into();
@@ -674,12 +675,12 @@ pub(crate) fn wrap_hint_point_add_with_frob(
     let output_type = false;
     let input_segment_info = vec![
         (hint_in_t4.id, hint_in_t4.output_type),
-        (hint_in_p4x.id, hint_in_p4x.output_type),
-        (hint_in_p4y.id, hint_in_p4y.output_type),
-        (hint_in_q4_x_c0.id, hint_in_q4_x_c0.output_type),
-        (hint_in_q4_x_c1.id, hint_in_q4_x_c1.output_type),
-        (hint_in_q4_y_c0.id, hint_in_q4_y_c0.output_type),
         (hint_in_q4_y_c1.id, hint_in_q4_y_c1.output_type),
+        (hint_in_q4_y_c0.id, hint_in_q4_y_c0.output_type),
+        (hint_in_q4_x_c1.id, hint_in_q4_x_c1.output_type),
+        (hint_in_q4_x_c0.id, hint_in_q4_x_c0.output_type),
+        (hint_in_p4y.id, hint_in_p4y.output_type),
+        (hint_in_p4x.id, hint_in_p4x.output_type),
     ];
 
     let t4: ElemG2PointAcc = hint_in_t4.output.into();
@@ -728,10 +729,10 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
     let input_segment_info = vec![
-        (hint_in_p2x.id, hint_in_p2x.output_type),
-        (hint_in_p2y.id, hint_in_p2y.output_type),
-        (hint_in_p3x.id, hint_in_p3x.output_type),
         (hint_in_p3y.id, hint_in_p3y.output_type),
+        (hint_in_p3x.id, hint_in_p3x.output_type),
+        (hint_in_p2y.id, hint_in_p2y.output_type),
+        (hint_in_p2x.id, hint_in_p2x.output_type),
     ];
 
     let p2x: ark_bn254::Fq = hint_in_p2x.output.into();
