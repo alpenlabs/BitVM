@@ -983,10 +983,10 @@ pub(crate) fn hints_dense_dense_mul0_by_hash(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in_a: ElemFp12Acc,
-    hint_in_bhash: HashBytes,
+    hint_in_bhash: ElemFp12Acc,
 ) -> (ElemFp12Acc, Script, bool) {
     assert_eq!(sec_in.len(), 2);
-    let (f, hash_g) = (hint_in_a.f, hint_in_bhash);
+    let (f, hash_g) = (hint_in_a.f, hint_in_bhash.hash);
     let g = f.inverse().unwrap();
     let h = ark_bn254::Fq12::ONE;
 
@@ -1139,9 +1139,9 @@ pub(crate) fn hints_dense_dense_mul1_by_hash(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in_a: ElemFp12Acc,
-    hint_in_bhash: HashBytes,
+    hint_in_bhash: ElemFp12Acc,
 ) -> (ElemFp12Acc, Script, bool) {
-    let (f, hash_g) = (hint_in_a.f, hint_in_bhash);
+    let (f, hash_g) = (hint_in_a.f, hint_in_bhash.hash);
     let g = f.inverse().unwrap();
     let h = ark_bn254::Fq12::ONE;
 

@@ -1206,7 +1206,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            ElemFp12Acc { f: f, hash: todo!() }, ghash
+            ElemFp12Acc { f: f, hash: todo!() }, todo!()
         );
 
         let tap_len = dense_dense_mul_script.len();
@@ -1274,7 +1274,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            ElemFp12Acc { f: f, hash: todo!() }, hash_g,
+            ElemFp12Acc { f: f, hash: todo!() }, todo!(),
         );
 
         let tap_len = dense_dense_mul_script.len();

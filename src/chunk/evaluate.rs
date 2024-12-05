@@ -1620,7 +1620,7 @@ fn evaluate_pre_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    c, d.hash,
+                    c, d,
                 ),
                 _ => panic!("failed to match"),
             };
@@ -1661,7 +1661,7 @@ fn evaluate_pre_miller_circuit(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    a, b.hash,
+                    a, b,
                 ),
                 _ => panic!("failed to match"),
             };

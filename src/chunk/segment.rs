@@ -183,7 +183,7 @@ pub(crate) fn wrap_hints_dense_dense_mul1_by_hash(
     input_segment_info.push((hint_in_a.id, hint_in_a.output_type));
     input_segment_info.push((hint_in_bhash.id, hint_in_bhash.output_type));
 
-    let (dmul1, hint_script, _) = hints_dense_dense_mul1_by_hash(sig, (0, false), vec![(1, false), (2, false)], hint_in_a.output.into(), hint_in_bhash.output.into());
+    let (dmul1, hint_script, _) = hints_dense_dense_mul1_by_hash(sig, (0, false), vec![(1, false), (2, false), (3, false)], hint_in_a.output.into(), hint_in_bhash.output.into());
     Segment { id:  segment_id, output_type: false, inputs: input_segment_info, output: Element::Fp12(dmul1), hint_script, scr_type: ScriptType::PreMillerDenseDenseMulByHash1 }
 }
 
@@ -488,6 +488,74 @@ pub(crate) fn wrap_hints_dense_dense_mul1(
         scr_type: ScriptType::MillerDenseDenseMul1(),
     }
 }
+
+
+pub(crate) fn wrap_hints_dense_le_mul0(
+    segment_id: usize,
+    hint_in_a: &Segment,
+    hint_in_b: &Segment,
+) -> Segment {
+    let sig = &mut Sig { msk: None, cache: HashMap::new() };
+
+    let input_segment_info = vec![
+        (hint_in_a.id, hint_in_a.output_type),
+        (hint_in_b.id, hint_in_b.output_type),
+    ];
+
+    let a: ElemFp12Acc = hint_in_a.output.into();
+    let b: ElemSparseEval = hint_in_b.output.into();
+
+    let (dmul0, hint_script, _) = hints_dense_dense_mul0(
+        sig,
+        (0, false),
+        vec![(1, false), (2, false)],
+        a.clone(),
+        b.f.clone(),
+    );
+
+    Segment {
+        id: segment_id,
+        output_type: false,
+        inputs: input_segment_info,
+        output: Element::Fp12(dmul0),
+        hint_script,
+        scr_type: ScriptType::MillerDenseDenseMul0(),
+    }
+}
+
+pub(crate) fn wrap_hints_dense_le_mul1(
+    segment_id: usize,
+    hint_in_a: &Segment,
+    hint_in_b: &Segment,
+) -> Segment {
+    let sig = &mut Sig { msk: None, cache: HashMap::new() };
+
+    let input_segment_info = vec![
+        (hint_in_a.id, hint_in_a.output_type),
+        (hint_in_b.id, hint_in_b.output_type),
+    ];
+
+    let a: ElemFp12Acc = hint_in_a.output.into();
+    let b: ElemSparseEval = hint_in_b.output.into();
+
+    let (dmul1, hint_script, _) = hints_dense_dense_mul1(
+        sig,
+        (0, false),
+        vec![(1, false), (2, false), (3, false)],
+        a.clone(),
+        b.f.clone(),
+    );
+
+    Segment {
+        id: segment_id,
+        output_type: false,
+        inputs: input_segment_info,
+        output: Element::Fp12(dmul1),
+        hint_script,
+        scr_type: ScriptType::MillerDenseDenseMul1(),
+    }
+}
+
 
 
 pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs(

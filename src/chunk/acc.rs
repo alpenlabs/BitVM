@@ -1,13 +1,13 @@
-use std::{collections::HashMap, ops::Neg};
+use std::{ops::Neg};
 
-use ark_bn254::{Bn254, G1Affine};
+use ark_bn254::{Bn254};
 use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::{Field, PrimeField};
 use bitcoin_script::script;
 
-use crate::{bigint::add, chunk::segment::*, groth16::g16::{Assertions, PublicKeys, Signatures, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}};
+use crate::{chunk::segment::*, groth16::g16::{Assertions, PublicKeys, Signatures, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}};
 
-use super::{api::nib_to_byte_array, config::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, evaluate::{EvalIns}, hint_models::*, msm::{hint_hash_p, hint_msm}, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps, extern_hash_nibbles}, taps::{self, hint_add_eval_mul_for_fixed_Qs_with_frob, hint_hash_c, hint_hash_c2, hint_init_T4, hint_point_add_with_frob, hints_frob_fp12, hints_precompute_Px, hints_precompute_Py, HashBytes, Sig, SigData}, taps_mul::{self, hint_sparse_dense_mul, hints_dense_dense_mul0, hints_dense_dense_mul0_by_constant, hints_dense_dense_mul0_by_hash, hints_dense_dense_mul1, hints_dense_dense_mul1_by_constant, hints_dense_dense_mul1_by_hash}, wots::WOTSPubKey};
+use super::{api::nib_to_byte_array, config::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, evaluate::{EvalIns}, hint_models::*, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps}, taps::{HashBytes}, wots::WOTSPubKey};
 
 
 
@@ -238,11 +238,11 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
         (t2, t3) = (le.t2, le.t3);
 
         // DD1
-        let dmul0 = wrap_hints_dense_dense_mul0(all_output_hints.len(), &f_acc, &leval);
+        let dmul0 = wrap_hints_dense_le_mul0(all_output_hints.len(), &f_acc, &leval);
         compare(&dmul0.output, claimed_assertions);
         all_output_hints.push(dmul0);
 
-        let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &leval);
+        let dmul1 = wrap_hints_dense_le_mul1(all_output_hints.len(), &f_acc, &leval);
         compare(&dmul1.output, claimed_assertions);
         all_output_hints.push(dmul1.clone());
         f_acc = dmul1;
@@ -281,11 +281,11 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
         (t2, t3) = (le.t2, le.t3);
 
         // DD5 DD6
-        let dmul0 = wrap_hints_dense_dense_mul0(all_output_hints.len(), &f_acc, &leval);
+        let dmul0 = wrap_hints_dense_le_mul0(all_output_hints.len(), &f_acc, &leval);
         compare(&dmul0.output, claimed_assertions);
         all_output_hints.push(dmul0);
 
-        let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &leval);
+        let dmul1 = wrap_hints_dense_le_mul1(all_output_hints.len(), &f_acc, &leval);
         compare(&dmul1.output, claimed_assertions);
         all_output_hints.push(dmul1.clone());
         f_acc = dmul1;
@@ -368,11 +368,11 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
     (t2, t3) = (le.t2, le.t3);
 
     // dense_dense_mul
-    let dmul0 = wrap_hints_dense_dense_mul0(all_output_hints.len(), &f_acc, &leval);
+    let dmul0 = wrap_hints_dense_le_mul0(all_output_hints.len(), &f_acc, &leval);
     compare(&dmul0.output, claimed_assertions);
     all_output_hints.push(dmul0);
 
-    let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &leval);
+    let dmul1 = wrap_hints_dense_le_mul1(all_output_hints.len(), &f_acc, &leval);
     compare(&dmul1.output, claimed_assertions);
     all_output_hints.push(dmul1.clone());
     f_acc = dmul1;
@@ -398,11 +398,11 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
 
 
     // dense_dense_mul
-    let dmul0 = wrap_hints_dense_dense_mul0(all_output_hints.len(), &f_acc, &leval);
+    let dmul0 = wrap_hints_dense_le_mul0(all_output_hints.len(), &f_acc, &leval);
     compare(&dmul0.output, claimed_assertions);
     all_output_hints.push(dmul0);
 
-    let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &leval);
+    let dmul1 = wrap_hints_dense_le_mul1(all_output_hints.len(), &f_acc, &leval);
     compare(&dmul1.output, claimed_assertions);
     all_output_hints.push(dmul1.clone());
     f_acc = dmul1;
