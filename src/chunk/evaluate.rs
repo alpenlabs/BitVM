@@ -1758,6 +1758,7 @@ fn evaluate_pre_miller_circuit(
     None
 }
 
+#[derive(Debug)]
 pub(crate) struct EvalIns {
     pub(crate) p2: G1Affine,
     pub(crate) p3: G1Affine,

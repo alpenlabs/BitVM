@@ -113,12 +113,17 @@ pub(crate) fn wrap_hint_hash_c(
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     let fqvec: Vec<ElemFq> = hint_in_c
     .iter()
-    .rev()
     .map(|f| {
-        input_segment_info.push((f.id, f.output_type));
         f.output.into()
     })
     .collect();
+
+    hint_in_c
+    .iter()
+    .rev()
+    .for_each(|f| {
+        input_segment_info.push((f.id, f.output_type));
+    });
 
     let (c, hint_script, _) = hint_hash_c(sig, (segment_id as u32, output_type), input_segment_info.clone(), fqvec);
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(c), hint_script, scr_type: ScriptType::PreMillerHashC }
@@ -948,8 +953,6 @@ pub(crate) fn op_scripts_from_segments(segments: Vec<Segment>) {
         }
     }
 }
-
-
 
 pub(crate) fn bitcom_scripts_from_segments(segments: Vec<Segment>, pubkeys: Vec<WOTSPubKey>) {
     let pubkeys_map: HashMap<u32, WOTSPubKey> = pubkeys

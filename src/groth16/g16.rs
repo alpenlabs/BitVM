@@ -484,14 +484,14 @@ mod test {
 
     }
 
-    // #[test]
-    // fn test_read_and_validate_acc() {
-    //     let proof_asserts = read_asserts_from_file("chunker_data/assert2.json");
-    //     let signed_asserts = sign_assertions(proof_asserts);
-    //     let (_, vk) = mock::compile_circuit();
+    #[test]
+    fn test_read_and_validate_acc() {
+        let proof_asserts = read_asserts_from_file("chunker_data/assert2.json");
+        let signed_asserts = sign_assertions(proof_asserts);
+        let (_, vk) = mock::compile_circuit();
 
-    //     let mock_pubks = mock_pubkeys(MOCK_SECRET);
-    //     let new_proof_asserts = acc::validate(&vk, signed_asserts, mock_pubks);
-    //     assert_eq!(proof_asserts, new_proof_asserts);
-    // }
+        let mock_pubks = mock_pubkeys(MOCK_SECRET);
+        let new_proof_asserts = acc::validate(&vk, signed_asserts, mock_pubks);
+        assert_eq!(proof_asserts, new_proof_asserts);
+    }
 }

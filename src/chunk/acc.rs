@@ -492,32 +492,32 @@ fn get_proof(asserts: &TypedAssertions) -> EvalIns { // EvalIns
     let step = next + skip;
     let c = ark_bn254::Fq12::new(
         ark_bn254::Fq6::new(
-            ark_bn254::Fq2::new(numfqs[step+11], numfqs[step+10]),
-            ark_bn254::Fq2::new(numfqs[step+9], numfqs[step+8]),
-            ark_bn254::Fq2::new(numfqs[step+7], numfqs[step+6]),
+            ark_bn254::Fq2::new(numfqs[step+0], numfqs[step+1]),
+            ark_bn254::Fq2::new(numfqs[step+2], numfqs[step+3]),
+            ark_bn254::Fq2::new(numfqs[step+4], numfqs[step+5]),
         ),
         ark_bn254::Fq6::new(
-            ark_bn254::Fq2::new(numfqs[step+5], numfqs[step+4]),
-            ark_bn254::Fq2::new(numfqs[step+3], numfqs[step+2]),
-            ark_bn254::Fq2::new(numfqs[step+1], numfqs[step+0]),
+            ark_bn254::Fq2::new(numfqs[step+6], numfqs[step+7]),
+            ark_bn254::Fq2::new(numfqs[step+8], numfqs[step+9]),
+            ark_bn254::Fq2::new(numfqs[step+10], numfqs[step+11]),
         ),
     );
     let step = step + 12;
     let s = ark_bn254::Fq12::new(
         ark_bn254::Fq6::new(
-            ark_bn254::Fq2::new(numfqs[step+11], numfqs[step+10]),
-            ark_bn254::Fq2::new(numfqs[step+9], numfqs[step+8]),
-            ark_bn254::Fq2::new(numfqs[step+7], numfqs[step+6]),
+            ark_bn254::Fq2::new(numfqs[step+0], numfqs[step+1]),
+            ark_bn254::Fq2::new(numfqs[step+2], numfqs[step+3]),
+            ark_bn254::Fq2::new(numfqs[step+4], numfqs[step+5]),
         ),
         ark_bn254::Fq6::new(
-            ark_bn254::Fq2::new(numfqs[step+5], numfqs[step+4]),
-            ark_bn254::Fq2::new(numfqs[step+3], numfqs[step+2]),
-            ark_bn254::Fq2::new(numfqs[step+1], numfqs[step+0]),
+            ark_bn254::Fq2::new(numfqs[step+6], numfqs[step+7]),
+            ark_bn254::Fq2::new(numfqs[step+8], numfqs[step+9]),
+            ark_bn254::Fq2::new(numfqs[step+10], numfqs[step+11]),
         ),
     );
 
     let step = step + 12;
-    let q4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(numfqs[step + 3], numfqs[step + 2]), ark_bn254::Fq2::new(numfqs[step + 1], numfqs[step + 0]));
+    let q4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(numfqs[step + 0], numfqs[step + 1]), ark_bn254::Fq2::new(numfqs[step + 2], numfqs[step + 3]));
 
     let eval_ins: EvalIns = EvalIns { p2, p3, p4, q4, c, s, ks: asserts.0.to_vec() };
     eval_ins
@@ -608,6 +608,7 @@ pub fn validate(
 
     let asserts = get_assertions(signed_asserts);
     let eval_ins = get_proof(&asserts);
+
     let intermediates = get_intermediates(&asserts);
 
     let mut hout: Vec<Segment> = vec![];
