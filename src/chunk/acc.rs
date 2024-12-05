@@ -61,10 +61,10 @@ fn compare(hint_out: &Element, claimed_assertions: &mut Option<Intermediates>) -
 pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pubs: Pubs, claimed_assertions: &mut Option<Intermediates>)  {
 
     // let mut all_output_hints: Vec<HintOut> = vec![];
-    let pub_scalars: Vec<Segment> = eval_ins.ks.iter().enumerate().map(|(idx, f)| Segment { id: all_output_hints.len()+idx, output_type: true, inputs: vec![], output: Element::ScalarElem(*f), hint_script: script!(), scr_type: ScriptType::NonDeterministic}).collect();
+    let pub_scalars: Vec<Segment> = eval_ins.ks.iter().enumerate().map(|(idx, f)| Segment { id: ((all_output_hints.len()+idx) as u32) as u32, output_type: true, inputs: vec![], output: Element::ScalarElem(*f), hint_script: script!(), scr_type: ScriptType::NonDeterministic}).collect();
     all_output_hints.extend_from_slice(&pub_scalars);
 
-    let p4vec: Vec<Segment> = vec![eval_ins.p4.y, eval_ins.p4.x, eval_ins.p3.y, eval_ins.p3.x, eval_ins.p2.y, eval_ins.p2.x].iter().enumerate().map(|(idx, f)| Segment { id: all_output_hints.len()+idx, output_type: true, inputs: vec![], output: Element::FieldElem(*f), hint_script: script!(), scr_type: ScriptType::NonDeterministic}).collect();
+    let p4vec: Vec<Segment> = vec![eval_ins.p4.y, eval_ins.p4.x, eval_ins.p3.y, eval_ins.p3.x, eval_ins.p2.y, eval_ins.p2.x].iter().enumerate().map(|(idx, f)| Segment { id: ((all_output_hints.len()+idx) as u32) as u32, output_type: true, inputs: vec![], output: Element::FieldElem(*f), hint_script: script!(), scr_type: ScriptType::NonDeterministic}).collect();
     all_output_hints.extend_from_slice(&p4vec);
     let (gp4y, gp4x,gp3y, gp3x, gp2y, gp2x) = (&p4vec[0], &p4vec[1], &p4vec[2], &p4vec[3], &p4vec[4], &p4vec[5]);
 
@@ -75,7 +75,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
     all_output_hints.push(p4y.clone());
     
 
-    let p4x = wrap_hints_precompute_Px(all_output_hints.len(), &gp4x, &gp4y);
+    let p4x = wrap_hints_precompute_Px(all_output_hints.len(), &gp4x, &gp4y, &p4y);
     compare(&p4x.output, claimed_assertions);
     all_output_hints.push(p4x.clone());
     
@@ -85,7 +85,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
     all_output_hints.push(p3y.clone());
     
 
-    let p3x = wrap_hints_precompute_Px(all_output_hints.len(), &gp3x, &gp3y);
+    let p3x = wrap_hints_precompute_Px(all_output_hints.len(), &gp3x, &gp3y, &p3y);
     compare(&p3x.output, claimed_assertions);
     all_output_hints.push(p3x.clone());
     
@@ -95,7 +95,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
     all_output_hints.push(p2y.clone());
     
 
-    let p2x = wrap_hints_precompute_Px(all_output_hints.len(), &gp2x, &gp2y);
+    let p2x = wrap_hints_precompute_Px(all_output_hints.len(), &gp2x, &gp2y, &p2y);
     compare(&p2x.output, claimed_assertions);
     all_output_hints.push(p2x.clone());
     
@@ -104,18 +104,18 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
     let gc: Vec<Segment> = vec![
         eval_ins.c.c0.c0.c0, eval_ins.c.c0.c0.c1, eval_ins.c.c0.c1.c0, eval_ins.c.c0.c1.c1, eval_ins.c.c0.c2.c0, eval_ins.c.c0.c2.c1, eval_ins.c.c1.c0.c0,
         eval_ins.c.c1.c0.c1, eval_ins.c.c1.c1.c0, eval_ins.c.c1.c1.c1, eval_ins.c.c1.c2.c0, eval_ins.c.c1.c2.c1,
-    ].iter().enumerate().map(|(idx, f)| Segment { id: all_output_hints.len()+idx, output_type: true, inputs: vec![], output: Element::FieldElem(*f), hint_script: script!(), scr_type: ScriptType::NonDeterministic}).collect();
+    ].iter().enumerate().map(|(idx, f)| Segment { id: (all_output_hints.len()+idx) as u32, output_type: true, inputs: vec![], output: Element::FieldElem(*f), hint_script: script!(), scr_type: ScriptType::NonDeterministic}).collect();
     all_output_hints.extend_from_slice(&gc);
 
 
     let gs: Vec<Segment> = vec![
         eval_ins.s.c0.c0.c0, eval_ins.s.c0.c0.c1, eval_ins.s.c0.c1.c0, eval_ins.s.c0.c1.c1, eval_ins.s.c0.c2.c0, eval_ins.s.c0.c2.c1, eval_ins.s.c1.c0.c0,
         eval_ins.s.c1.c0.c1, eval_ins.s.c1.c1.c0, eval_ins.s.c1.c1.c1, eval_ins.s.c1.c2.c0, eval_ins.s.c1.c2.c1,
-    ].iter().enumerate().map(|(idx, f)| Segment { id: all_output_hints.len()+idx, output_type: true, inputs: vec![], output: Element::FieldElem(*f), hint_script: script!(), scr_type: ScriptType::NonDeterministic}).collect();
+    ].iter().enumerate().map(|(idx, f)| Segment { id: (all_output_hints.len()+idx) as u32, output_type: true, inputs: vec![], output: Element::FieldElem(*f), hint_script: script!(), scr_type: ScriptType::NonDeterministic}).collect();
     all_output_hints.extend_from_slice(&gs);
 
 
-    let temp_q4: Vec<Segment> = vec![eval_ins.q4.x.c0, eval_ins.q4.x.c1, eval_ins.q4.y.c0, eval_ins.q4.y.c1].iter().enumerate().map(|(idx, f)| Segment { id: all_output_hints.len()+idx, output_type: true, inputs: vec![], output: Element::FieldElem(*f), hint_script: script!(), scr_type: ScriptType::NonDeterministic}).collect();
+    let temp_q4: Vec<Segment> = vec![eval_ins.q4.x.c0, eval_ins.q4.x.c1, eval_ins.q4.y.c0, eval_ins.q4.y.c1].iter().enumerate().map(|(idx, f)| Segment { id: ((all_output_hints.len()+idx) as u32) as u32, output_type: true, inputs: vec![], output: Element::FieldElem(*f), hint_script: script!(), scr_type: ScriptType::NonDeterministic}).collect();
     all_output_hints.extend_from_slice(&temp_q4);
     let (q4xc0, q4xc1, q4yc0, q4yc1) = (&temp_q4[0], &temp_q4[1], &temp_q4[2], &temp_q4[3]);
     
@@ -139,7 +139,7 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
         ],
         false,
     ) }; 
-    let gcinv = Segment { id: all_output_hints.len(), output_type: false, inputs: vec![], output: Element::Fp12(tmp_cvinv), hint_script: script!(), scr_type: ScriptType::NonDeterministic};
+    let gcinv = Segment { id: all_output_hints.len() as u32, output_type: false, inputs: vec![], output: Element::Fp12(tmp_cvinv), hint_script: script!(), scr_type: ScriptType::NonDeterministic};
     compare(&gcinv.output, claimed_assertions);
     all_output_hints.push(gcinv.clone());
     
@@ -181,10 +181,10 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
     
     let dmul0 = wrap_hints_dense_dense_mul0_by_hash(all_output_hints.len(), &c2, &gcinv);
     compare(&dmul0.output, claimed_assertions);
-    all_output_hints.push(dmul0);
+    all_output_hints.push(dmul0.clone());
     
 
-    let dmul1 = wrap_hints_dense_dense_mul1_by_hash(all_output_hints.len(), &c2, &gcinv);
+    let dmul1 = wrap_hints_dense_dense_mul1_by_hash(all_output_hints.len(), &c2, &gcinv, &dmul0);
    compare(&dmul1.output, claimed_assertions);
    all_output_hints.push(dmul1);
     
@@ -240,9 +240,9 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
         // DD1
         let dmul0 = wrap_hints_dense_le_mul0(all_output_hints.len(), &f_acc, &leval);
         compare(&dmul0.output, claimed_assertions);
-        all_output_hints.push(dmul0);
+        all_output_hints.push(dmul0.clone());
 
-        let dmul1 = wrap_hints_dense_le_mul1(all_output_hints.len(), &f_acc, &leval);
+        let dmul1 = wrap_hints_dense_le_mul1(all_output_hints.len(), &f_acc, &leval, &dmul0);
         compare(&dmul1.output, claimed_assertions);
         all_output_hints.push(dmul1.clone());
         f_acc = dmul1;
@@ -260,9 +260,9 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
         };
         let dmul0 = wrap_hints_dense_dense_mul0(all_output_hints.len(), &f_acc, &c_or_cinv);
         compare(&dmul0.output, claimed_assertions);
-        all_output_hints.push(dmul0);
+        all_output_hints.push(dmul0.clone());
 
-        let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &c_or_cinv);
+        let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &c_or_cinv, &dmul0);
         compare(&dmul1.output, claimed_assertions);
         all_output_hints.push(dmul1.clone());
         f_acc = dmul1;
@@ -283,9 +283,9 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
         // DD5 DD6
         let dmul0 = wrap_hints_dense_le_mul0(all_output_hints.len(), &f_acc, &leval);
         compare(&dmul0.output, claimed_assertions);
-        all_output_hints.push(dmul0);
+        all_output_hints.push(dmul0.clone());
 
-        let dmul1 = wrap_hints_dense_le_mul1(all_output_hints.len(), &f_acc, &leval);
+        let dmul1 = wrap_hints_dense_le_mul1(all_output_hints.len(), &f_acc, &leval, &dmul0);
         compare(&dmul1.output, claimed_assertions);
         all_output_hints.push(dmul1.clone());
         f_acc = dmul1;
@@ -310,9 +310,9 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
     // f_acc = f_acc * f1
     let dmul0 = wrap_hints_dense_dense_mul0(all_output_hints.len(), &f_acc, &cp);
     compare(&dmul0.output, claimed_assertions);
-    all_output_hints.push(dmul0);
+    all_output_hints.push(dmul0.clone());
 
-    let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &cp);
+    let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &cp, &dmul0);
     compare(&dmul1.output, claimed_assertions);
     all_output_hints.push(dmul1.clone());
     f_acc = dmul1;
@@ -320,9 +320,9 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
     // f_acc = f_acc * f2
     let dmul0 = wrap_hints_dense_dense_mul0(all_output_hints.len(), &f_acc, &cp2);
     compare(&dmul0.output, claimed_assertions);
-    all_output_hints.push(dmul0);
+    all_output_hints.push(dmul0.clone());
 
-    let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &cp2);
+    let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &cp2, &dmul0);
     compare(&dmul1.output, claimed_assertions);
     all_output_hints.push(dmul1.clone());
     f_acc = dmul1;
@@ -331,9 +331,9 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
     // f_acc = f_acc * f3
     let dmul0 = wrap_hints_dense_dense_mul0(all_output_hints.len(), &f_acc, &cp3);
     compare(&dmul0.output, claimed_assertions);
-    all_output_hints.push(dmul0);
+    all_output_hints.push(dmul0.clone());
 
-    let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &cp3);
+    let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &cp3, &dmul0);
     compare(&dmul1.output, claimed_assertions);
     all_output_hints.push(dmul1.clone());
     f_acc = dmul1;
@@ -341,9 +341,9 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
     // f_acc = f_acc * s
     let dmul0 = wrap_hints_dense_dense_mul0(all_output_hints.len(), &f_acc, &s);
     compare(&dmul0.output, claimed_assertions);
-    all_output_hints.push(dmul0);
+    all_output_hints.push(dmul0.clone());
 
-    let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &s);
+    let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &s, &dmul0);
     compare(&dmul1.output, claimed_assertions);
     all_output_hints.push(dmul1.clone());
     f_acc = dmul1;
@@ -370,9 +370,9 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
     // dense_dense_mul
     let dmul0 = wrap_hints_dense_le_mul0(all_output_hints.len(), &f_acc, &leval);
     compare(&dmul0.output, claimed_assertions);
-    all_output_hints.push(dmul0);
+    all_output_hints.push(dmul0.clone());
 
-    let dmul1 = wrap_hints_dense_le_mul1(all_output_hints.len(), &f_acc, &leval);
+    let dmul1 = wrap_hints_dense_le_mul1(all_output_hints.len(), &f_acc, &leval, &dmul0);
     compare(&dmul1.output, claimed_assertions);
     all_output_hints.push(dmul1.clone());
     f_acc = dmul1;
@@ -400,9 +400,9 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
     // dense_dense_mul
     let dmul0 = wrap_hints_dense_le_mul0(all_output_hints.len(), &f_acc, &leval);
     compare(&dmul0.output, claimed_assertions);
-    all_output_hints.push(dmul0);
+    all_output_hints.push(dmul0.clone());
 
-    let dmul1 = wrap_hints_dense_le_mul1(all_output_hints.len(), &f_acc, &leval);
+    let dmul1 = wrap_hints_dense_le_mul1(all_output_hints.len(), &f_acc, &leval, &dmul0);
     compare(&dmul1.output, claimed_assertions);
     all_output_hints.push(dmul1.clone());
     f_acc = dmul1;
@@ -411,11 +411,11 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pu
     // mul0_by_const is identity
     let dmul0 = wrap_hints_dense_dense_mul0_by_constant(all_output_hints.len(), &f_acc, pubs.fixed_acc);
     compare(&dmul0.output, claimed_assertions);
-    all_output_hints.push(dmul0);
+    all_output_hints.push(dmul0.clone());
     
 
     // mul1_by_const is identity
-    let dmul1 = wrap_hints_dense_dense_mul1_by_constant(all_output_hints.len(), &f_acc, pubs.fixed_acc);
+    let dmul1 = wrap_hints_dense_dense_mul1_by_constant(all_output_hints.len(), &f_acc, &dmul0, pubs.fixed_acc);
     compare(&dmul1.output, claimed_assertions);
     all_output_hints.push(dmul1.clone());
     f_acc = dmul1;

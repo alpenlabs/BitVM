@@ -1,9 +1,9 @@
 
 use crate::treepp;
 
-use super::{hint_models::Element};
+use super::{hint_models::Element, msm::{bitcom_hash_p, bitcom_msm, tap_hash_p, tap_msm}, wots::WOTSPubKey};
 
-pub type SegmentID = usize;
+pub type SegmentID = u32;
 pub type SegmentOutputType = bool;
 
 #[derive(Debug, Clone)]
@@ -16,10 +16,10 @@ pub struct Segment {
     pub scr_type: ScriptType,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum ScriptType {
     NonDeterministic,
-    MSM,
+    MSM((usize, Vec<ark_bn254::G1Affine>)),
 
     PreMillerInitT4,
     PreMillerPrecomputePy,
@@ -28,22 +28,19 @@ pub enum ScriptType {
     PreMillerHashC2,
     PreMillerDenseDenseMulByHash0,
     PreMillerDenseDenseMulByHash1,
-    PreMillerHashP,
+    PreMillerHashP(ark_bn254::G1Affine),
 
     MillerSquaring,
     MillerDoubleAdd(i8),
     MillerDouble,
-    MillerSparseDenseMul,
+    SparseDenseMul(bool),
     MillerSparseSparseDbl((ark_bn254::G2Affine, ark_bn254::G2Affine)),
-    MillerDenseDenseMul0(),
-    MillerDenseDenseMul1(),
+    DenseDenseMul0(),
+    DenseDenseMul1(),
     MillerSparseSparseAdd(([ark_bn254::G2Affine; 4], i8)),
 
     PostMillerFrobFp12(u8),
-    PostMillerDenseDenseMul0(bool),
-    PostMillerDenseDenseMul1(bool),
     PostMillerAddWithFrob(i8),
-    PostMillerSparseDenseMul,
     PostMillerSparseAddWithFrob(([ark_bn254::G2Affine;4], i8)),
     PostMillerDenseDenseMulByConst0(ark_bn254::Fq12),
     PostMillerDenseDenseMulByConst1(ark_bn254::Fq12),
@@ -53,6 +50,7 @@ pub enum ScriptType {
 use std::collections::HashMap;
 
 use ark_ff::{AdditiveGroup, Field};
+use bitcoin_script::script;
 
 use super::{hint_models::*, msm::{hint_hash_p, hint_msm}, primitves::extern_hash_fps,  taps::*, taps_mul::*};
 
@@ -82,10 +80,10 @@ pub(crate) fn wrap_hint_msm(
     .collect();
 
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
+    let output_type = false;
+    let (hout_msm, hint_script, _) = hint_msm(sig, (segment_id as u32, output_type), input_segment_info.clone(), acc, hint_scalars, msm_chain_index, pub_vky.clone());
 
-    let (hout_msm, hint_script, _) = hint_msm(sig, (0, false), vec![(1, true), (0, false)], acc, hint_scalars, msm_chain_index, pub_vky);
-
-    Segment { id: segment_id, output_type: false, inputs: input_segment_info, output: Element::MSMG1(hout_msm), hint_script, scr_type: ScriptType::MSM }
+    Segment { id: segment_id as u32 as u32, output_type, inputs: input_segment_info, output: Element::MSMG1(hout_msm), hint_script, scr_type: ScriptType::MSM((msm_chain_index, pub_vky)) }
 
 }
 
@@ -97,12 +95,13 @@ pub(crate) fn wrap_hint_hash_p(
 
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
+    let output_type = false;
     input_segment_info.push((hint_in_rx.id, hint_in_rx.output_type));
     input_segment_info.push((hint_in_ry.id, hint_in_ry.output_type));
     input_segment_info.push((hint_in_t.id, hint_in_t.output_type));
 
-    let (h, hint_script, _) = hint_hash_p(sig, (0, false), vec![(1, false), (2, true), (3, true)], hint_in_rx.output.into(), hint_in_ry.output.into(), hint_in_t.output.into(), pub_vky0);
-    Segment { id: segment_id, output_type: false, inputs: input_segment_info, output: Element::HashBytes(h), hint_script, scr_type: ScriptType::PreMillerHashP }
+    let (h, hint_script, _) = hint_hash_p(sig, (segment_id as u32, output_type), input_segment_info.clone(), hint_in_rx.output.into(), hint_in_ry.output.into(), hint_in_t.output.into(), pub_vky0.clone());
+    Segment { id: segment_id as u32, output_type, inputs: input_segment_info, output: Element::HashBytes(h), hint_script, scr_type: ScriptType::PreMillerHashP(pub_vky0) }
 }
 
 pub(crate) fn wrap_hint_hash_c(    
@@ -110,6 +109,7 @@ pub(crate) fn wrap_hint_hash_c(
     hint_in_c: Vec<Segment>,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
+    let output_type = false;
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     let fqvec: Vec<ElemFq> = hint_in_c
     .iter()
@@ -119,23 +119,25 @@ pub(crate) fn wrap_hint_hash_c(
     })
     .collect();
 
-    let (c, hint_script, _) = hint_hash_c(sig, (0, false), (0..12).map(|i| (i+1, true)).collect(), fqvec);
-    Segment { id:  segment_id, output_type: false, inputs: input_segment_info, output: Element::Fp12(c), hint_script, scr_type: ScriptType::PreMillerHashC }
+    let (c, hint_script, _) = hint_hash_c(sig, (segment_id as u32, output_type), input_segment_info.clone(), fqvec);
+    Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(c), hint_script, scr_type: ScriptType::PreMillerHashC }
 }
 
 
 
 pub(crate) fn wrap_hints_precompute_Px(
     segment_id: usize,
-    hint_in_px: &Segment, hint_in_py: &Segment,
+    hint_in_px: &Segment, hint_in_py: &Segment, hint_in_pdy: &Segment,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
+    let output_type = true;
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     input_segment_info.push((hint_in_px.id, hint_in_px.output_type));
     input_segment_info.push((hint_in_py.id, hint_in_py.output_type));
+    input_segment_info.push((hint_in_pdy.id, hint_in_pdy.output_type));
 
-    let (p4x, hint_script, _) = hints_precompute_Px(sig, (0, true), vec![(1, true), (2, true), (3, true)], hint_in_px.output.into(), hint_in_py.output.into());
-    Segment { id:  segment_id, output_type: true, inputs: input_segment_info, output: Element::FieldElem(p4x), hint_script, scr_type: ScriptType::PreMillerPrecomputePx }
+    let (p4x, hint_script, _) = hints_precompute_Px(sig, (segment_id as u32, output_type), input_segment_info.clone(), hint_in_px.output.into(), hint_in_py.output.into(), hint_in_pdy.output.into());
+    Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::FieldElem(p4x), hint_script, scr_type: ScriptType::PreMillerPrecomputePx }
 }
 
 pub(crate) fn wrap_hints_precompute_Py(
@@ -143,11 +145,12 @@ pub(crate) fn wrap_hints_precompute_Py(
     hint_in_p: &Segment,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
+    let output_type = true;
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     input_segment_info.push((hint_in_p.id, hint_in_p.output_type));
 
-    let (p3y, hint_script, _) = hints_precompute_Py(sig, (0, true), vec![(1, true)], hint_in_p.output.into());
-    Segment { id:  segment_id, output_type: true, inputs: input_segment_info, output: Element::FieldElem(p3y), hint_script, scr_type: ScriptType::PreMillerPrecomputePy }
+    let (p3y, hint_script, _) = hints_precompute_Py(sig, (segment_id as u32, output_type), input_segment_info.clone(), hint_in_p.output.into());
+    Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::FieldElem(p3y), hint_script, scr_type: ScriptType::PreMillerPrecomputePy }
 }
 
 pub(crate) fn wrap_hint_hash_c2(
@@ -155,10 +158,11 @@ pub(crate) fn wrap_hint_hash_c2(
     hint_in_c: &Segment
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
+    let output_type = false;
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     input_segment_info.push((hint_in_c.id, hint_in_c.output_type));
-    let (c2, hint_script, _) = hint_hash_c2(sig, (0, false), vec![(1, false)], hint_in_c.output.into());
-    Segment { id:  segment_id, output_type: false, inputs: input_segment_info, output: Element::Fp12(c2), hint_script, scr_type: ScriptType::PreMillerHashC2 }
+    let (c2, hint_script, _) = hint_hash_c2(sig, (segment_id as u32, output_type), input_segment_info.clone(), hint_in_c.output.into());
+    Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(c2), hint_script, scr_type: ScriptType::PreMillerHashC2 }
 }
 
 pub(crate) fn wrap_hints_dense_dense_mul0_by_hash(
@@ -166,25 +170,28 @@ pub(crate) fn wrap_hints_dense_dense_mul0_by_hash(
     hint_in_a: &Segment, hint_in_bhash: &Segment
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
+    let output_type = false;
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     input_segment_info.push((hint_in_a.id, hint_in_a.output_type));
     input_segment_info.push((hint_in_bhash.id, hint_in_bhash.output_type));
 
-    let (dmul0, hint_script, _) = hints_dense_dense_mul0_by_hash(sig, (0, false), vec![(1, false), (2, false)], hint_in_a.output.into(), hint_in_bhash.output.into());
-    Segment { id:  segment_id, output_type: false, inputs: input_segment_info, output: Element::Fp12(dmul0), hint_script, scr_type: ScriptType::PreMillerDenseDenseMulByHash0 }
+    let (dmul0, hint_script, _) = hints_dense_dense_mul0_by_hash(sig, (segment_id as u32, output_type), input_segment_info.clone(), hint_in_a.output.into(), hint_in_bhash.output.into());
+    Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(dmul0), hint_script, scr_type: ScriptType::PreMillerDenseDenseMulByHash0 }
 }
 
 pub(crate) fn wrap_hints_dense_dense_mul1_by_hash(
     segment_id: usize,
-    hint_in_a: &Segment, hint_in_bhash: &Segment
+    hint_in_a: &Segment, hint_in_bhash: &Segment, hint_in_c0: &Segment,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
+    let output_type = false;
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     input_segment_info.push((hint_in_a.id, hint_in_a.output_type));
     input_segment_info.push((hint_in_bhash.id, hint_in_bhash.output_type));
+    input_segment_info.push((hint_in_c0.id, hint_in_c0.output_type));
 
-    let (dmul1, hint_script, _) = hints_dense_dense_mul1_by_hash(sig, (0, false), vec![(1, false), (2, false), (3, false)], hint_in_a.output.into(), hint_in_bhash.output.into());
-    Segment { id:  segment_id, output_type: false, inputs: input_segment_info, output: Element::Fp12(dmul1), hint_script, scr_type: ScriptType::PreMillerDenseDenseMulByHash1 }
+    let (dmul1, hint_script, _) = hints_dense_dense_mul1_by_hash(sig, (segment_id as u32, output_type), input_segment_info.clone(), hint_in_a.output.into(), hint_in_bhash.output.into(), hint_in_c0.output.into());
+    Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(dmul1), hint_script, scr_type: ScriptType::PreMillerDenseDenseMulByHash1 }
 }
 
 pub(crate) fn wrap_hint_init_T4(
@@ -195,6 +202,7 @@ pub(crate) fn wrap_hint_init_T4(
     hint_in_q4_y_c1: &Segment,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
+    let output_type = false;
     let input_segment_info = vec![
         (hint_in_q4_x_c0.id, hint_in_q4_x_c0.output_type),
         (hint_in_q4_x_c1.id, hint_in_q4_x_c1.output_type),
@@ -209,8 +217,8 @@ pub(crate) fn wrap_hint_init_T4(
 
     let (tmpt4, hint_script, _) = hint_init_T4(
         sig,
-        (0, false),
-        vec![(1, true), (2, true), (3, true), (4, true)],
+        (segment_id as u32, output_type),
+        input_segment_info.clone(),
         q4_x_c0,
         q4_x_c1,
         q4_y_c0,
@@ -218,8 +226,8 @@ pub(crate) fn wrap_hint_init_T4(
     );
 
     Segment {
-        id: segment_id,
-        output_type: false,
+        id: segment_id as u32,
+        output_type,
         inputs: input_segment_info,
         output: Element::G2Acc(tmpt4),
         hint_script,
@@ -232,20 +240,21 @@ pub(crate) fn wrap_hint_squaring(
     hint_in_a: &Segment,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
+    let output_type = false;
     let input_segment_info = vec![(hint_in_a.id, hint_in_a.output_type)];
 
     let f_acc: ElemFp12Acc = hint_in_a.output.into();
 
     let (sq, hint_script, _) = hint_squaring(
-        sig,
-        (0, false),
-        vec![(1, false)],
+        sig, 
+        (segment_id as u32, output_type),
+        input_segment_info.clone(),
         f_acc,
     );
 
     Segment {
-        id: segment_id,
-        output_type: false,
+        id: segment_id as u32,
+        output_type,
         inputs: input_segment_info,
         output: Element::Fp12(sq),
         hint_script,
@@ -260,6 +269,7 @@ pub(crate) fn wrap_hint_point_dbl(
     hint_in_p4y: &Segment,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
+    let output_type = false;
     let input_segment_info = vec![
         (hint_in_t4.id, hint_in_t4.output_type),
         (hint_in_p4x.id, hint_in_p4x.output_type),
@@ -271,17 +281,16 @@ pub(crate) fn wrap_hint_point_dbl(
     let p4y: ark_bn254::Fq = hint_in_p4y.output.into();
 
     let (dbl, hint_script, _) = hint_point_dbl(
-        sig,
-        (0, false),
-        vec![(1, true), (2, true), (3, true)],
+        sig, (segment_id as u32, output_type),
+        input_segment_info.clone(),
         t4,
         p4x,
         p4y,
     );
 
     Segment {
-        id: segment_id,
-        output_type: false,
+        id: segment_id as u32,
+        output_type,
         inputs: input_segment_info,
         output: Element::G2Acc(dbl),
         hint_script,
@@ -302,6 +311,7 @@ pub(crate) fn wrap_hint_point_ops(
     ate: i8,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
+    let output_type = false;
     let input_segment_info = vec![
         (hint_in_t4.id, hint_in_t4.output_type),
         (hint_in_p4x.id, hint_in_p4x.output_type),
@@ -322,9 +332,8 @@ pub(crate) fn wrap_hint_point_ops(
     let q4_y_c1: ark_bn254::Fq = hint_in_q4_y_c1.output.into();
 
     let (dbladd, hint_script, _) = hint_point_ops(
-        sig,
-        (0, false),
-        (0..7).map(|i| (i + 1, true)).collect(),
+        sig, (segment_id as u32, output_type),
+        input_segment_info.clone(),
         t4,
         p4x,
         p4y,
@@ -336,8 +345,8 @@ pub(crate) fn wrap_hint_point_ops(
     );
 
     Segment {
-        id: segment_id,
-        output_type: false,
+        id: segment_id as u32,
+        output_type,
         inputs: input_segment_info,
         output: Element::G2Acc(dbladd),
         hint_script,
@@ -352,6 +361,7 @@ pub(crate) fn wrap_hint_sparse_dense_mul(
     is_dbl_blk: bool,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
+    let output_type = false;
     let input_segment_info = vec![
         (hint_in_a.id, hint_in_a.output_type),
         (hint_in_g.id, hint_in_g.output_type),
@@ -361,21 +371,20 @@ pub(crate) fn wrap_hint_sparse_dense_mul(
     let t4: ElemG2PointAcc = hint_in_g.output.into();
 
     let (temp, hint_script, _) = hint_sparse_dense_mul(
-        sig,
-        (0, false),
-        vec![(1, false), (2, false)],
+        sig, (segment_id as u32, output_type),
+        input_segment_info.clone(),
         f_acc,
         t4,
         is_dbl_blk,
     );
 
     Segment {
-        id: segment_id,
-        output_type: false,
+        id: segment_id as u32,
+        output_type,
         inputs: input_segment_info,
         output: Element::Fp12(temp),
         hint_script,
-        scr_type: ScriptType::MillerSparseDenseMul,
+        scr_type: ScriptType::SparseDenseMul(is_dbl_blk),
     }
 }
 
@@ -389,6 +398,7 @@ pub(crate) fn wrap_hint_double_eval_mul_for_fixed_Qs(
     hint_in_t3: ark_bn254::G2Affine,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
+    let output_type = false;
     let input_segment_info = vec![
         (hint_in_p2x.id, hint_in_p2x.output_type),
         (hint_in_p2y.id, hint_in_p2y.output_type),
@@ -402,9 +412,8 @@ pub(crate) fn wrap_hint_double_eval_mul_for_fixed_Qs(
     let p3y: ark_bn254::Fq = hint_in_p3y.output.into();
 
     let (leval, hint_script, _) = hint_double_eval_mul_for_fixed_Qs(
-        sig,
-        (0, false),
-        (0..4).map(|i| (i + 1, true)).collect(),
+        sig,(segment_id as u32, output_type),
+        input_segment_info.clone(),
         p2x,
         p2y,
         p3x,
@@ -414,8 +423,8 @@ pub(crate) fn wrap_hint_double_eval_mul_for_fixed_Qs(
     );
 
     Segment {
-        id: segment_id,
-        output_type: false,
+        id: segment_id as u32,
+        output_type,
         inputs: input_segment_info,
         output: Element::SparseEval(leval),
         hint_script,
@@ -438,21 +447,21 @@ pub(crate) fn wrap_hints_dense_dense_mul0(
     let a: ElemFp12Acc = hint_in_a.output.into();
     let b: ElemFp12Acc = hint_in_b.output.into();
 
+    let output_type = false;
     let (dmul0, hint_script, _) = hints_dense_dense_mul0(
-        sig,
-        (0, false),
-        vec![(1, false), (2, false)],
+        sig, (segment_id as u32, output_type),
+        input_segment_info.clone(),
         a.clone(),
         b.clone(),
     );
 
     Segment {
-        id: segment_id,
-        output_type: false,
+        id: segment_id as u32,
+        output_type,
         inputs: input_segment_info,
         output: Element::Fp12(dmul0),
         hint_script,
-        scr_type: ScriptType::MillerDenseDenseMul0(),
+        scr_type: ScriptType::DenseDenseMul0(),
     }
 }
 
@@ -460,32 +469,38 @@ pub(crate) fn wrap_hints_dense_dense_mul1(
     segment_id: usize,
     hint_in_a: &Segment,
     hint_in_b: &Segment,
+    hint_in_c: &Segment,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
 
     let input_segment_info = vec![
         (hint_in_a.id, hint_in_a.output_type),
         (hint_in_b.id, hint_in_b.output_type),
+        (hint_in_c.id, hint_in_c.output_type),
     ];
 
     let a: ElemFp12Acc = hint_in_a.output.into();
     let b: ElemFp12Acc = hint_in_b.output.into();
+    let c: ElemFp12Acc = hint_in_c.output.into();
+
+    let output_type = false;
 
     let (dmul1, hint_script, _) = hints_dense_dense_mul1(
         sig,
-        (0, false),
-        vec![(1, false), (2, false), (3, false)],
+        (segment_id as u32, output_type),
+        input_segment_info.clone(),
         a.clone(),
         b.clone(),
+        c.clone(),
     );
 
     Segment {
-        id: segment_id,
-        output_type: false,
+        id: segment_id as u32,
+        output_type,
         inputs: input_segment_info,
         output: Element::Fp12(dmul1),
         hint_script,
-        scr_type: ScriptType::MillerDenseDenseMul1(),
+        scr_type: ScriptType::DenseDenseMul1(),
     }
 }
 
@@ -505,21 +520,22 @@ pub(crate) fn wrap_hints_dense_le_mul0(
     let a: ElemFp12Acc = hint_in_a.output.into();
     let b: ElemSparseEval = hint_in_b.output.into();
 
+    let output_type = false;
+
     let (dmul0, hint_script, _) = hints_dense_dense_mul0(
-        sig,
-        (0, false),
-        vec![(1, false), (2, false)],
+        sig, (segment_id as u32, output_type),
+        input_segment_info.clone(),
         a.clone(),
         b.f.clone(),
     );
 
     Segment {
-        id: segment_id,
-        output_type: false,
+        id: segment_id as u32,
+        output_type,
         inputs: input_segment_info,
         output: Element::Fp12(dmul0),
         hint_script,
-        scr_type: ScriptType::MillerDenseDenseMul0(),
+        scr_type: ScriptType::DenseDenseMul0(),
     }
 }
 
@@ -527,32 +543,37 @@ pub(crate) fn wrap_hints_dense_le_mul1(
     segment_id: usize,
     hint_in_a: &Segment,
     hint_in_b: &Segment,
+    hint_in_c: &Segment,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
 
     let input_segment_info = vec![
         (hint_in_a.id, hint_in_a.output_type),
         (hint_in_b.id, hint_in_b.output_type),
+        (hint_in_c.id, hint_in_c.output_type),
     ];
 
     let a: ElemFp12Acc = hint_in_a.output.into();
     let b: ElemSparseEval = hint_in_b.output.into();
+    let c: ElemFp12Acc = hint_in_c.output.into();
+
+    let output_type = false;
 
     let (dmul1, hint_script, _) = hints_dense_dense_mul1(
-        sig,
-        (0, false),
-        vec![(1, false), (2, false), (3, false)],
+        sig, (segment_id as u32, output_type),
+        input_segment_info.clone(),
         a.clone(),
         b.f.clone(),
+        c.clone(),
     );
 
     Segment {
-        id: segment_id,
-        output_type: false,
+        id: segment_id as u32,
+        output_type,
         inputs: input_segment_info,
         output: Element::Fp12(dmul1),
         hint_script,
-        scr_type: ScriptType::MillerDenseDenseMul1(),
+        scr_type: ScriptType::DenseDenseMul1(),
     }
 }
 
@@ -571,6 +592,7 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs(
     ate: i8,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
+    let output_type = false;
     let input_segment_info = vec![
         (hint_in_p2x.id, hint_in_p2x.output_type),
         (hint_in_p2y.id, hint_in_p2y.output_type),
@@ -584,9 +606,8 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs(
     let p3y: ark_bn254::Fq = hint_in_p3y.output.into();
 
     let (leval, hint_script, _) = hint_add_eval_mul_for_fixed_Qs(
-        sig,
-        (0, false),
-        (0..4).map(|i| (i + 1, true)).collect(),
+        sig, (segment_id as u32, output_type),
+        input_segment_info.clone(),
         p2x,
         p2y,
         p3x,
@@ -599,8 +620,8 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs(
     );
 
     Segment {
-        id: segment_id,
-        output_type: false,
+        id: segment_id as u32,
+        output_type,
         inputs: input_segment_info,
         output: Element::SparseEval(leval),
         hint_script,
@@ -619,17 +640,18 @@ pub(crate) fn wrap_hints_frob_fp12(
 
     let f = hint_in_f.output.into();
 
+    let output_type = false;
+
     let (cp, hint_script, _) = hints_frob_fp12(
-        sig,
-        (0, false),
-        vec![(1, false)],
+        sig, (segment_id as u32, output_type),
+        input_segment_info.clone(),
         f,
         power,
     );
 
     Segment {
-        id: segment_id,
-        output_type: false,
+        id: segment_id as u32,
+        output_type,
         inputs: input_segment_info,
         output: Element::Fp12(cp),
         hint_script,
@@ -649,6 +671,7 @@ pub(crate) fn wrap_hint_point_add_with_frob(
     power: i8,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
+    let output_type = false;
     let input_segment_info = vec![
         (hint_in_t4.id, hint_in_t4.output_type),
         (hint_in_p4x.id, hint_in_p4x.output_type),
@@ -668,9 +691,8 @@ pub(crate) fn wrap_hint_point_add_with_frob(
     let q4_y_c1: ark_bn254::Fq = hint_in_q4_y_c1.output.into();
 
     let (temp, hint_script, _) = hint_point_add_with_frob(
-        sig,
-        (0, false),
-        (0..7).map(|i| (i + 1, true)).collect(),
+        sig, (segment_id as u32, output_type),
+        input_segment_info.clone(),
         t4,
         p4x,
         p4y,
@@ -682,8 +704,8 @@ pub(crate) fn wrap_hint_point_add_with_frob(
     );
 
     Segment {
-        id: segment_id,
-        output_type: false,
+        id: segment_id as u32,
+        output_type,
         inputs: input_segment_info,
         output: Element::G2Acc(temp),
         hint_script,
@@ -704,7 +726,8 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(
     power: i8,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
-    let mut input_segment_info = vec![
+    let output_type = false;
+    let input_segment_info = vec![
         (hint_in_p2x.id, hint_in_p2x.output_type),
         (hint_in_p2y.id, hint_in_p2y.output_type),
         (hint_in_p3x.id, hint_in_p3x.output_type),
@@ -717,9 +740,8 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(
     let p3y: ark_bn254::Fq = hint_in_p3y.output.into();
 
     let (leval, hint_script, _) = hint_add_eval_mul_for_fixed_Qs_with_frob(
-        sig,
-        (0, false),
-        (0..4).map(|i| (i + 1, true)).collect(),
+        sig, (segment_id as u32, output_type),
+        input_segment_info.clone(),
         p2x,
         p2y,
         p3x,
@@ -732,8 +754,8 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(
     );
 
     Segment {
-        id: segment_id,
-        output_type: false,
+        id: segment_id as u32,
+        output_type,
         inputs: input_segment_info,
         output: Element::SparseEval(leval),
         hint_script,
@@ -773,17 +795,19 @@ pub(crate) fn wrap_hints_dense_dense_mul0_by_constant(
         ),
     };
 
+    let output_type = false;
+
+
     let (dmul0, hint_script, _) = hints_dense_dense_mul0_by_constant(
-        sig,
-        (0, false),
-        vec![(1, false)],
+        sig, (segment_id as u32, output_type),
+        input_segment_info.clone(),
         a.clone(),
         fixedacc,
     );
 
     Segment {
-        id: segment_id,
-        output_type: false,
+        id: segment_id as u32,
+        output_type,
         inputs: input_segment_info,
         output: Element::Fp12(dmul0),
         hint_script,
@@ -793,12 +817,15 @@ pub(crate) fn wrap_hints_dense_dense_mul0_by_constant(
 
 pub(crate) fn wrap_hints_dense_dense_mul1_by_constant(
     segment_id: usize,
-    hint_in_a: &Segment,
+    hint_in_a: &Segment, hint_in_c0: &Segment,
     constant: ark_bn254::Fq12,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
 
-    let input_segment_info = vec![(hint_in_a.id, hint_in_a.output_type)];
+    let input_segment_info = vec![
+        (hint_in_a.id, hint_in_a.output_type),
+        (hint_in_c0.id, hint_in_c0.output_type)
+    ];
 
     let a: ElemFp12Acc = hint_in_a.output.into();
     let fixedacc = ElemFp12Acc {
@@ -822,20 +849,190 @@ pub(crate) fn wrap_hints_dense_dense_mul1_by_constant(
         ),
     };
 
+    let output_type = false;
+
+
     let (dmul1, hint_script, _) = hints_dense_dense_mul1_by_constant(
-        sig,
-        (0, false),
-        vec![(1, false), (2, false)],
+        sig, (segment_id as u32, output_type),
+        input_segment_info.clone(),
         a.clone(),
+        hint_in_c0.output.into(),
         fixedacc,
     );
 
     Segment {
-        id: segment_id,
-        output_type: false,
+        id: segment_id as u32,
+        output_type,
         inputs: input_segment_info,
         output: Element::Fp12(dmul1),
         hint_script,
         scr_type: ScriptType::PostMillerDenseDenseMulByConst1(constant),
     }
 }
+
+
+pub(crate) fn op_scripts_from_segments(segments: Vec<Segment>) {
+    let msm_window = 8;
+    for seg in segments {
+        match seg.scr_type {
+            ScriptType::NonDeterministic => {
+                script!();
+            },
+            ScriptType::MSM(inp) => {
+                tap_msm(msm_window, inp.0, inp.1 );
+            },
+            ScriptType::PreMillerInitT4 => {
+                tap_initT4();
+            },
+            ScriptType::PreMillerPrecomputePy => {
+                tap_precompute_Py();
+            },
+            ScriptType::PreMillerPrecomputePx => {
+                tap_precompute_Px();
+            },
+            ScriptType::PreMillerHashC => {
+                tap_hash_c();
+            },
+            ScriptType::PreMillerHashC2 => {
+                tap_hash_c2();
+            },
+            ScriptType::PreMillerDenseDenseMulByHash0 => {
+                tap_dense_dense_mul0_by_hash();
+            },
+            ScriptType::PreMillerDenseDenseMulByHash1 => {
+                tap_dense_dense_mul1_by_hash();
+            },
+            ScriptType::PreMillerHashP(inp) => {
+                tap_hash_p(inp);
+            },
+            ScriptType::MillerSquaring => {
+                tap_squaring();
+            },
+            ScriptType::MillerDoubleAdd(a) => {
+                tap_point_ops(a);
+            },
+            ScriptType::MillerDouble => {
+                tap_point_dbl();
+            },
+            ScriptType::SparseDenseMul(dbl_blk) => {
+                tap_sparse_dense_mul(dbl_blk);
+            },
+            ScriptType::DenseDenseMul0() => {
+                tap_dense_dense_mul0();
+            },
+            ScriptType::DenseDenseMul1() => {
+                tap_dense_dense_mul1();
+            },
+            ScriptType::PostMillerFrobFp12(power) => {
+                tap_frob_fp12(power as usize);
+            },
+            ScriptType::PostMillerAddWithFrob(ate) => {
+                tap_point_add_with_frob(ate);
+            },
+            ScriptType::PostMillerDenseDenseMulByConst0(inp) => {
+                tap_dense_dense_mul0_by_constant(inp);
+            },
+            ScriptType::PostMillerDenseDenseMulByConst1(inp) => {
+                tap_dense_dense_mul1_by_constant(inp);
+            },
+            ScriptType::MillerSparseSparseDbl(inp) => {
+                tap_double_eval_mul_for_fixed_Qs(inp.0, inp.1);
+            },
+            ScriptType::MillerSparseSparseAdd(inp) => {
+                tap_add_eval_mul_for_fixed_Qs(inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1);
+            },
+            ScriptType::PostMillerSparseAddWithFrob(inp) => {
+                tap_add_eval_mul_for_fixed_Qs_with_frob(inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1);
+            },
+        }
+    }
+}
+
+
+
+pub(crate) fn bitcom_scripts_from_segments(segments: Vec<Segment>, pubkeys: Vec<WOTSPubKey>) {
+    let pubkeys_map: HashMap<u32, WOTSPubKey> = pubkeys
+        .into_iter()
+        .enumerate()
+        .map(|(i, pk)| (i as u32, pk))
+        .collect();
+    for seg in segments {
+        let sec_out = (seg.id as u32, seg.output_type);
+        let sec_in = seg.inputs.iter().map(|f| (f.0 as u32, f.1)).collect();
+        match seg.scr_type {
+            ScriptType::NonDeterministic => {
+                script!();
+            },
+            ScriptType::MSM(_) => {
+                bitcom_msm(&pubkeys_map, sec_out, sec_in);
+            },
+            ScriptType::PreMillerInitT4 => {
+                bitcom_initT4(&pubkeys_map, sec_out, sec_in);
+            },
+            ScriptType::PreMillerPrecomputePy => {
+                bitcom_precompute_Py(&pubkeys_map, sec_out, sec_in);
+            },
+            ScriptType::PreMillerPrecomputePx => {
+                bitcom_precompute_Px(&pubkeys_map, sec_out, sec_in);
+            },
+            ScriptType::PreMillerHashC => {
+                bitcom_hash_c(&pubkeys_map, sec_out, sec_in);
+            },
+            ScriptType::PreMillerHashC2 => {
+                bitcom_hash_c2(&pubkeys_map, sec_out, sec_in);
+            },
+            ScriptType::PreMillerDenseDenseMulByHash0 => {
+                bitcom_dense_dense_mul0_by_hash(&pubkeys_map, sec_out, sec_in);
+            },
+            ScriptType::PreMillerDenseDenseMulByHash1 => {
+                bitcom_dense_dense_mul1_by_hash(&pubkeys_map, sec_out, sec_in);
+            },
+            ScriptType::PreMillerHashP(_) => {
+                bitcom_hash_p(&pubkeys_map, sec_out, sec_in);
+            },
+            ScriptType::MillerSquaring => {
+                bitcom_squaring(&pubkeys_map, sec_out, sec_in);
+            },
+            ScriptType::MillerDoubleAdd(ate) => {
+                bitcom_point_ops(&pubkeys_map, sec_out, sec_in, ate);
+            },
+            ScriptType::MillerDouble => {
+                bitcom_point_dbl(&pubkeys_map, sec_out, sec_in);
+            },
+            ScriptType::SparseDenseMul(_) => {
+                bitcom_sparse_dense_mul(&pubkeys_map, sec_out, sec_in);
+            },
+            ScriptType::DenseDenseMul0() => {
+                bitcom_dense_dense_mul0(&pubkeys_map, sec_out, sec_in);
+            },
+            ScriptType::DenseDenseMul1() => {
+                bitcom_dense_dense_mul1(&pubkeys_map, sec_out, sec_in);
+            },
+            ScriptType::PostMillerFrobFp12(_) => {
+                bitcom_frob_fp12(&pubkeys_map, sec_out, sec_in);;
+            },
+            ScriptType::PostMillerAddWithFrob(_) => {
+                bitcom_point_add_with_frob(&pubkeys_map, sec_out, sec_in);;
+            },
+            ScriptType::PostMillerDenseDenseMulByConst0(_) => {
+                bitcom_dense_dense_mul0_by_constant(&pubkeys_map, sec_out, sec_in);
+            },
+            ScriptType::PostMillerDenseDenseMulByConst1(_) => {
+                bitcom_dense_dense_mul1_by_constant(&pubkeys_map, sec_out, sec_in);
+            },
+            ScriptType::MillerSparseSparseDbl(_) => {
+                bitcom_double_eval_mul_for_fixed_Qs(&pubkeys_map, sec_out, sec_in);
+            },
+            ScriptType::MillerSparseSparseAdd(_) => {
+                bitcom_add_eval_mul_for_fixed_Qs(&pubkeys_map, sec_out, sec_in);
+            },
+            ScriptType::PostMillerSparseAddWithFrob(_) => {
+                bitcom_add_eval_mul_for_fixed_Qs_with_frob(&pubkeys_map, sec_out, sec_in);
+            },
+        }
+    }
+}
+
+
+
+

@@ -430,6 +430,7 @@ pub(crate) fn hints_dense_dense_mul1(
     sec_in: Vec<Link>,
     hint_in_a: ElemFp12Acc,
     hint_in_b: ElemFp12Acc,
+    hint_in_c0: ElemFp12Acc,
 ) -> (ElemFp12Acc, Script, bool) {
     let (f, g) = (hint_in_a.f, hint_in_b.f);
     let (_, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
@@ -450,12 +451,12 @@ pub(crate) fn hints_dense_dense_mul1(
         false,
     );
 
-    let hash_c0 = extern_hash_fps(
-        vec![
-            h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
-        ],
-        true,
-    );
+    // let hash_c0 = extern_hash_fps(
+    //     vec![
+    //         h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
+    //     ],
+    //     true,
+    // );
     let hash_c = extern_hash_fps(
         vec![
             h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1, h.c1.c0.c0,
@@ -465,7 +466,7 @@ pub(crate) fn hints_dense_dense_mul1(
     );
 
     let tup = vec![
-        (sec_in[2], hash_c0),
+        (sec_in[2], hint_in_c0.hash),
         (sec_in[1], hash_g),
         (sec_in[0], hash_f),
         (sec_out, hash_c),
@@ -595,7 +596,8 @@ pub(crate) fn tap_squaring() -> Script {
 
 // DENSE DENSE MUL BY CONSTANT
 
-pub(crate) fn tap_dense_dense_mul0_by_constant(check_is_identity: bool, g: ark_bn254::Fq12) -> Script {
+pub(crate) fn tap_dense_dense_mul0_by_constant(g: ark_bn254::Fq12) -> Script {
+    let check_is_identity: bool = true;
     let (hinted_mul, _) =
         Fq12::hinted_mul_first(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
     let ghash = extern_hash_fps(vec![g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
@@ -744,7 +746,8 @@ pub(crate) fn hints_dense_dense_mul0_by_constant(
 
 // DENSE DENSE MUL ONE
 
-pub(crate) fn tap_dense_dense_mul1_by_constant(check_is_identity: bool, g: ark_bn254::Fq12) -> Script {
+pub(crate) fn tap_dense_dense_mul1_by_constant(g: ark_bn254::Fq12) -> Script {
+    let check_is_identity: bool = true;
     let mut check_id = 1;
     if !check_is_identity {
         check_id = 0;
@@ -831,6 +834,7 @@ pub(crate) fn hints_dense_dense_mul1_by_constant(
     sec_out: Link,
     sec_in: Vec<Link>,
     hint_in_a: ElemFp12Acc,
+    hint_in_c0: ElemFp12Acc,
     hint_in_b: ElemFp12Acc,
 ) -> (ElemFp12Acc, Script, bool) {
     let (f, g) = (hint_in_a.f, hint_in_b.f);
@@ -845,12 +849,12 @@ pub(crate) fn hints_dense_dense_mul1_by_constant(
         true,
     );
 
-    let hash_c0 = extern_hash_fps(
-        vec![
-            h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
-        ],
-        true,
-    );
+    // let hash_c0 = extern_hash_fps(
+    //     vec![
+    //         h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
+    //     ],
+    //     true,
+    // );
     let hash_c = extern_hash_fps(
         vec![
             h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1, h.c1.c0.c0,
@@ -860,7 +864,7 @@ pub(crate) fn hints_dense_dense_mul1_by_constant(
     );
 
     let tup = vec![
-        (sec_in[1], hash_c0),
+        (sec_in[1], hint_in_c0.hash),
         // (sec_in[1], hash_g),
         (sec_in[0], hash_f),
         (sec_out, hash_c),
@@ -1140,6 +1144,7 @@ pub(crate) fn hints_dense_dense_mul1_by_hash(
     sec_in: Vec<Link>,
     hint_in_a: ElemFp12Acc,
     hint_in_bhash: ElemFp12Acc,
+    hint_in_c0: ElemFp12Acc,
 ) -> (ElemFp12Acc, Script, bool) {
     let (f, hash_g) = (hint_in_a.f, hint_in_bhash.hash);
     let g = f.inverse().unwrap();
@@ -1163,12 +1168,12 @@ pub(crate) fn hints_dense_dense_mul1_by_hash(
     //     false,
     // );
 
-    let hash_c0 = extern_hash_fps( // dense0 has already assured this value is correct
-        vec![
-            h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
-        ],
-        true,
-    );
+    // let hash_c0 = extern_hash_fps( // dense0 has already assured this value is correct
+    //     vec![
+    //         h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
+    //     ],
+    //     true,
+    // );
     let hash_c = extern_hash_fps(
         vec![
             h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1, h.c1.c0.c0,
@@ -1178,7 +1183,7 @@ pub(crate) fn hints_dense_dense_mul1_by_hash(
     );
 
     let tup = vec![
-        (sec_in[2], hash_c0),
+        (sec_in[2], hint_in_c0.hash),
         (sec_in[1], hash_g),
         (sec_in[0], hash_f),
         (sec_out, hash_c),

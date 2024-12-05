@@ -2405,13 +2405,14 @@ pub(crate) fn hints_precompute_Px(
     sec_in: Vec<Link>,
     hint_in_px: ark_bn254::Fq,
     hint_in_py: ark_bn254::Fq,
+    hint_in_pdy: ark_bn254::Fq,
 ) -> (ark_bn254::Fq, Script, bool) {
     assert_eq!(sec_in.len(), 3);
     let p =  ark_bn254::G1Affine::new_unchecked(hint_in_px, hint_in_py);
-    let mut pdy = ark_bn254::Fq::ONE;
-    if p.y.inverse().is_some() {
-        pdy = p.y.inverse().unwrap();
-    }
+    let pdy = hint_in_pdy;
+    // if p.y.inverse().is_some() {
+    //     pdy = p.y.inverse().unwrap();
+    // }
     let pdx = -p.x * pdy;
     let (_, hints) = { new_hinted_x_from_eval_point(p, pdy) };
 

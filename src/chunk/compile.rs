@@ -361,7 +361,7 @@ fn compile_post_miller_circuit(
             if collect_bitcom {
                 sc = bitcom_dense_dense_mul0_by_constant(link_ids, sec_out, sec_in);
             } else {
-                sc = tap_dense_dense_mul0_by_constant(true, p1q1);
+                sc = tap_dense_dense_mul0_by_constant(p1q1);
             }
             scripts.push((sec_out.0, sc));
         } else if row.category == "DK2" {
@@ -369,7 +369,7 @@ fn compile_post_miller_circuit(
             if collect_bitcom {
                 sc = bitcom_dense_dense_mul1_by_constant(link_ids, sec_out, sec_in);
             } else {
-                sc = tap_dense_dense_mul1_by_constant(true, p1q1);
+                sc = tap_dense_dense_mul1_by_constant(p1q1);
             }
             scripts.push((sec_out.0, sc));
         }

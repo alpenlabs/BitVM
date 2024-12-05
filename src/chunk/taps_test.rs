@@ -273,7 +273,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            p.x, p.y,
+            p.x, p.y, p.y.inverse().unwrap(),
         );
 
         let tap_len = precompute_p.len();
@@ -594,7 +594,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            ElemFp12Acc { f: f, hash: hash_f }, ElemFp12Acc { f: g, hash: hash_g }
+            ElemFp12Acc { f: f, hash: hash_f }, ElemFp12Acc { f: g, hash: hash_g }, todo!()
         );
 
         let tap_len = dense_dense_mul_script.len() + bitcom_script.len();
@@ -629,7 +629,7 @@ mod test {
         //     g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1], false);
 
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let dense_dense_mul_script = tap_dense_dense_mul0_by_constant(true, g);
+        let dense_dense_mul_script = tap_dense_dense_mul0_by_constant(g);
 
         let sec_out = 0;
         let sec_in = vec![1];
@@ -696,7 +696,7 @@ mod test {
         // let ghash = emulate_extern_hash_fps(vec![g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
         //     g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1], false);
         let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let dense_dense_mul_script = tap_dense_dense_mul1_by_constant(false, g);
+        let dense_dense_mul_script = tap_dense_dense_mul1_by_constant(g);
 
         let sec_out = 0;
         let sec_in = vec![1, 2];
@@ -726,7 +726,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            ElemFp12Acc { f: f, hash: todo!() }, ElemFp12Acc { f: g, hash: todo!() }
+            ElemFp12Acc { f: f, hash: todo!() }, ElemFp12Acc { f: g, hash: todo!() }, todo!(),
         );
 
         let tap_len = dense_dense_mul_script.len();
@@ -1274,7 +1274,7 @@ mod test {
             },
             sec_out,
             sec_in,
-            ElemFp12Acc { f: f, hash: todo!() }, todo!(),
+            ElemFp12Acc { f: f, hash: todo!() }, todo!(), todo!(),
         );
 
         let tap_len = dense_dense_mul_script.len();

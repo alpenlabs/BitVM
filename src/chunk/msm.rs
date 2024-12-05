@@ -1092,7 +1092,6 @@ mod test {
         use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
         use ark_std::test_rng;
         use rand::{RngCore, SeedableRng};
-        use super::*;
 
         #[derive(Clone)]
         pub struct DummyCircuit {

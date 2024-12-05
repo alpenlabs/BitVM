@@ -329,11 +329,15 @@ fn evaluate_miller_circuit(
                     Element::SparseEval(r) => r,
                     _ => panic!("failed to match"),
                 };
+                let c0 = match hints[2].clone() {
+                    Element::Fp12(r) => r,
+                    _ => panic!("failed to match"),
+                };
                 let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul1(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    c, d.f,
+                    c, d.f, c0,
                 );
                 if force_validate || maybe_wrong {
                     let ops_script = tap_dense_dense_mul1();
@@ -400,12 +404,16 @@ fn evaluate_miller_circuit(
                     Element::Fp12(r) => r,
                     _ => panic!("failed to match"),
                 };
+                let c0 = match hints[2].clone() {
+                    Element::Fp12(r) => r,
+                    _ => panic!("failed to match"),
+                };
                 let (hint_out, hint_script, maybe_wrong) = match hints[1].clone() {
                     Element::Fp12(r) => hints_dense_dense_mul1(
                         sig,
                         sec_out,
                         sec_in.clone(),
-                        c, r,
+                        c, r, c0,
                     ),
                     _ => panic!("failed to match"),
                 };
@@ -563,11 +571,15 @@ fn evaluate_miller_circuit(
                     Element::SparseEval(r) => r,
                     _ => panic!("failed to match"),
                 };
+                let c0 = match hints[2].clone() {
+                    Element::Fp12(r) => r,
+                    _ => panic!("failed to match"),
+                };
                 let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul1(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    c, d.f,
+                    c, d.f, c0,
                 );
                 if force_validate || maybe_wrong {
                     let ops_script = tap_dense_dense_mul1();
@@ -731,13 +743,17 @@ fn evaluate_post_miller_circuit(
                 Element::Fp12(r) => r,
                 _ => panic!("failed to match"),
             };
+            let c0 = match hints_out[2].clone() {
+                Element::Fp12(r) => r,
+                _ => panic!("failed to match"),
+            };
             let ((hint_out, hint_script, maybe_wrong), check_is_id) = match hints_out[1].clone() {
                 Element::Fp12(d) => (
                     hints_dense_dense_mul1(
                         sig,
                         sec_out,
                         sec_in.clone(),
-                        c, d,
+                        c, d, c0,
                     ),
                     false,
                 ),
@@ -813,11 +829,15 @@ fn evaluate_post_miller_circuit(
                 Element::SparseEval(r) => r,
                 _ => panic!("failed to match"),
             };
+            let c0 = match hints_out[2].clone() {
+                Element::Fp12(r) => r,
+                _ => panic!("failed to match"),
+            };
             let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul1(
                 sig,
                 sec_out,
                 sec_in.clone(),
-                c, d.f,
+                c, d.f, c0,
             );
             if force_validate || maybe_wrong {
                 let ops_script = tap_dense_dense_mul1();
@@ -1049,7 +1069,7 @@ fn evaluate_post_miller_circuit(
 
             let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul0_by_constant(sig, sec_out, sec_in.clone(), a, fixed_acc);
             if force_validate || maybe_wrong {
-                let ops_script = tap_dense_dense_mul0_by_constant(true, fixed_acc.f);
+                let ops_script = tap_dense_dense_mul0_by_constant(fixed_acc.f);
                 let bcs_script =
                     bitcom_dense_dense_mul0_by_constant(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script! {
@@ -1076,9 +1096,13 @@ fn evaluate_post_miller_circuit(
                 Element::Fp12(r) => r,
                 _ => panic!("failed to match"),
             };
-            let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul1_by_constant(sig, sec_out, sec_in.clone(), a, fixed_acc);
+            let c0 = match hints_out[1].clone() {
+                Element::Fp12(r) => r,
+                _ => panic!("failed to match"),
+            };
+            let (hint_out, hint_script, maybe_wrong) = hints_dense_dense_mul1_by_constant(sig, sec_out, sec_in.clone(), a, c0, fixed_acc);
             if force_validate || maybe_wrong {
-                let ops_script = tap_dense_dense_mul1_by_constant(true, fixed_acc.f);
+                let ops_script = tap_dense_dense_mul1_by_constant(fixed_acc.f);
                 let bcs_script =
                     bitcom_dense_dense_mul1_by_constant(pub_scripts_per_link_id, sec_out, sec_in.clone());
                 let script = script! {
@@ -1500,12 +1524,12 @@ fn evaluate_pre_miller_circuit(
                     _ => panic!("failed to match"),
                 };
                 xs.push(x);
-            }
+            } //GP3y,GP3x,P3y
             let (pxd, hint_script, maybe_wrong) = hints_precompute_Px(
                 sig,
                 sec_out,
                 sec_in.clone(),
-                xs[1], xs[0]
+                xs[1], xs[0], xs[2],
             );
             if force_validate || maybe_wrong {
                 let ops_script = tap_precompute_Px();
@@ -1652,16 +1676,16 @@ fn evaluate_pre_miller_circuit(
                 Element::Fp12(r) => r,
                 _ => panic!("failed to match"),
             };
-            // let c0 = match hints[2].clone() {
-            //     HintOut::GrothC(r) => r,
-            //     _ => panic!("failed to match"),
-            // };
+            let c0 = match hints[2].clone() {
+                Element::Fp12(r) => r,
+                _ => panic!("failed to match"),
+            };
             let (hout, hint_script, maybe_wrong) = match hints[0].clone() {
                 Element::Fp12(a) => hints_dense_dense_mul1_by_hash(
                     sig,
                     sec_out,
                     sec_in.clone(),
-                    a, b,
+                    a, b, c0,
                 ),
                 _ => panic!("failed to match"),
             };
