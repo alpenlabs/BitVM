@@ -3,8 +3,9 @@ use std::{collections::HashMap, ops::Neg};
 use ark_bn254::{Bn254, G1Affine};
 use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::{Field, PrimeField};
+use bitcoin_script::script;
 
-use crate::groth16::g16::{Assertions, PublicKeys, Signatures, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS};
+use crate::{bigint::add, chunk::segment::*, groth16::g16::{Assertions, PublicKeys, Signatures, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}};
 
 use super::{api::nib_to_byte_array, config::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, evaluate::{EvalIns}, hint_models::*, msm::{hint_hash_p, hint_msm}, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps, extern_hash_nibbles}, taps::{self, hint_add_eval_mul_for_fixed_Qs_with_frob, hint_hash_c, hint_hash_c2, hint_init_T4, hint_point_add_with_frob, hints_frob_fp12, hints_precompute_Px, hints_precompute_Py, HashBytes, Sig, SigData}, taps_mul::{self, hint_sparse_dense_mul, hints_dense_dense_mul0, hints_dense_dense_mul0_by_constant, hints_dense_dense_mul0_by_hash, hints_dense_dense_mul1, hints_dense_dense_mul1_by_constant, hints_dense_dense_mul1_by_hash}, wots::WOTSPubKey};
 
@@ -57,209 +58,147 @@ fn compare(hint_out: &Element, claimed_assertions: &mut Option<Intermediates>) -
     return Some(matches) 
 }
 
-pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pubs: Pubs, claimed_assertions: &mut Option<Intermediates>)  {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
+pub(crate) fn groth16(all_output_hints: &mut Vec<Segment>, eval_ins: EvalIns, pubs: Pubs, claimed_assertions: &mut Option<Intermediates>)  {
 
     // let mut all_output_hints: Vec<HintOut> = vec![];
-    for k in eval_ins.ks.iter() {
-        all_output_hints.push(Element::ScalarElem(*k));
-    }
+    let pub_scalars: Vec<Segment> = eval_ins.ks.iter().enumerate().map(|(idx, f)| Segment { id: all_output_hints.len()+idx, output_type: true, inputs: vec![], output: Element::ScalarElem(*f), hint_script: script!(), scr_type: ScriptType::NonDeterministic}).collect();
+    all_output_hints.extend_from_slice(&pub_scalars);
 
-    all_output_hints.push(Element::FieldElem(eval_ins.p4.y));
-    all_output_hints.push(Element::FieldElem(eval_ins.p4.x));
-    all_output_hints.push(Element::FieldElem(eval_ins.p3.y));
-    all_output_hints.push(Element::FieldElem(eval_ins.p3.x));
-    all_output_hints.push(Element::FieldElem(eval_ins.p2.y));
-    all_output_hints.push(Element::FieldElem(eval_ins.p2.x));
-    let (gp4y, gp4x) = (eval_ins.p4.y, eval_ins.p4.x);
-    let (gp3x, gp3y) = (eval_ins.p3.x, eval_ins.p3.y); // 2, 3, 4
-    let (gp2y, gp2x) = (eval_ins.p2.y, eval_ins.p2.x); // 2, 3, 4
-    let (p4y, _, _) = hints_precompute_Py(sig, (0, true), vec![(1, true)], gp4y);
-    let hout = Element::FieldElem(p4y);
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
+    let p4vec: Vec<Segment> = vec![eval_ins.p4.y, eval_ins.p4.x, eval_ins.p3.y, eval_ins.p3.x, eval_ins.p2.y, eval_ins.p2.x].iter().enumerate().map(|(idx, f)| Segment { id: all_output_hints.len()+idx, output_type: true, inputs: vec![], output: Element::FieldElem(*f), hint_script: script!(), scr_type: ScriptType::NonDeterministic}).collect();
+    all_output_hints.extend_from_slice(&p4vec);
+    let (gp4y, gp4x,gp3y, gp3x, gp2y, gp2x) = (&p4vec[0], &p4vec[1], &p4vec[2], &p4vec[3], &p4vec[4], &p4vec[5]);
+
+
+    // PRECOMPUTE
+    let p4y = wrap_hints_precompute_Py(all_output_hints.len(), &gp4y);
+    compare(&p4y.output, claimed_assertions);
+    all_output_hints.push(p4y.clone());
     
 
-    let (p4x, _, _) = hints_precompute_Px(sig, (0, true), vec![(1, true), (2, true), (3, true)], gp4x, gp4y);
-    let hout = Element::FieldElem(p4x);
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
+    let p4x = wrap_hints_precompute_Px(all_output_hints.len(), &gp4x, &gp4y);
+    compare(&p4x.output, claimed_assertions);
+    all_output_hints.push(p4x.clone());
     
 
-    let (p3y, _, _) = hints_precompute_Py(sig, (0, true), vec![(1, true)], gp3y);
-    let hout = Element::FieldElem(p3y);
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
+    let p3y = wrap_hints_precompute_Py(all_output_hints.len(), &gp3y);
+    compare(&p3y.output, claimed_assertions);
+    all_output_hints.push(p3y.clone());
     
 
-    let (p3x, _, _) = hints_precompute_Px(sig, (0, true), vec![(1, true), (2, true), (3, true)], gp3x, gp3y);
-    let hout = Element::FieldElem(p3x);
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
+    let p3x = wrap_hints_precompute_Px(all_output_hints.len(), &gp3x, &gp3y);
+    compare(&p3x.output, claimed_assertions);
+    all_output_hints.push(p3x.clone());
     
     
-    let (p2y, _, _) = hints_precompute_Py(sig, (0, true), vec![(1, true)], gp2y);
-    let hout = Element::FieldElem(p2y);
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
+    let p2y = wrap_hints_precompute_Py(all_output_hints.len(), &gp2y);
+    compare(&p2y.output, claimed_assertions);
+    all_output_hints.push(p2y.clone());
     
 
-    let (p2x, _, _) = hints_precompute_Px(sig, (0, true), vec![(1, true), (2, true), (3, true)], gp2x, gp2y );
-    let hout = Element::FieldElem(p2x);
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
+    let p2x = wrap_hints_precompute_Px(all_output_hints.len(), &gp2x, &gp2y);
+    compare(&p2x.output, claimed_assertions);
+    all_output_hints.push(p2x.clone());
     
 
-    
-    for i in vec![
+    // GC AND GS AND Q4
+    let gc: Vec<Segment> = vec![
         eval_ins.c.c0.c0.c0, eval_ins.c.c0.c0.c1, eval_ins.c.c0.c1.c0, eval_ins.c.c0.c1.c1, eval_ins.c.c0.c2.c0, eval_ins.c.c0.c2.c1, eval_ins.c.c1.c0.c0,
         eval_ins.c.c1.c0.c1, eval_ins.c.c1.c1.c0, eval_ins.c.c1.c1.c1, eval_ins.c.c1.c2.c0, eval_ins.c.c1.c2.c1,
-    ].iter().rev() {
-        all_output_hints.push(Element::FieldElem(*i));
-    }
+    ].iter().enumerate().map(|(idx, f)| Segment { id: all_output_hints.len()+idx, output_type: true, inputs: vec![], output: Element::FieldElem(*f), hint_script: script!(), scr_type: ScriptType::NonDeterministic}).collect();
+    all_output_hints.extend_from_slice(&gc);
 
-    for i in vec![
+
+    let gs: Vec<Segment> = vec![
         eval_ins.s.c0.c0.c0, eval_ins.s.c0.c0.c1, eval_ins.s.c0.c1.c0, eval_ins.s.c0.c1.c1, eval_ins.s.c0.c2.c0, eval_ins.s.c0.c2.c1, eval_ins.s.c1.c0.c0,
         eval_ins.s.c1.c0.c1, eval_ins.s.c1.c1.c0, eval_ins.s.c1.c1.c1, eval_ins.s.c1.c2.c0, eval_ins.s.c1.c2.c1,
-    ].iter().rev() {
-        all_output_hints.push(Element::FieldElem(*i));
-    }
+    ].iter().enumerate().map(|(idx, f)| Segment { id: all_output_hints.len()+idx, output_type: true, inputs: vec![], output: Element::FieldElem(*f), hint_script: script!(), scr_type: ScriptType::NonDeterministic}).collect();
+    all_output_hints.extend_from_slice(&gs);
 
-    all_output_hints.push(Element::FieldElem(eval_ins.q4.y.c1));
-    all_output_hints.push(Element::FieldElem(eval_ins.q4.y.c0));
-    all_output_hints.push(Element::FieldElem(eval_ins.q4.x.c1));
-    all_output_hints.push(Element::FieldElem(eval_ins.q4.x.c0));
+
+    let temp_q4: Vec<Segment> = vec![eval_ins.q4.x.c0, eval_ins.q4.x.c1, eval_ins.q4.y.c0, eval_ins.q4.y.c1].iter().enumerate().map(|(idx, f)| Segment { id: all_output_hints.len()+idx, output_type: true, inputs: vec![], output: Element::FieldElem(*f), hint_script: script!(), scr_type: ScriptType::NonDeterministic}).collect();
+    all_output_hints.extend_from_slice(&temp_q4);
+    let (q4xc0, q4xc1, q4yc0, q4yc1) = (&temp_q4[0], &temp_q4[1], &temp_q4[2], &temp_q4[3]);
     
-    let cvinv = eval_ins.c.inverse().unwrap();
-    let gcinv: ElemFp12Acc = ElemFp12Acc { f: cvinv, hash: extern_hash_fps(
+
+    // C inverse
+    let tmp_cvinv = eval_ins.c.inverse().unwrap();
+    let tmp_cvinv: ElemFp12Acc = ElemFp12Acc { f: tmp_cvinv, hash: extern_hash_fps(
         vec![
-            cvinv.c0.c0.c0,
-            cvinv.c0.c0.c1,
-            cvinv.c0.c1.c0,
-            cvinv.c0.c1.c1,
-            cvinv.c0.c2.c0,
-            cvinv.c0.c2.c1,
-            cvinv.c1.c0.c0,
-            cvinv.c1.c0.c1,
-            cvinv.c1.c1.c0,
-            cvinv.c1.c1.c1,
-            cvinv.c1.c2.c0,
-            cvinv.c1.c2.c1,
+            tmp_cvinv.c0.c0.c0,
+            tmp_cvinv.c0.c0.c1,
+            tmp_cvinv.c0.c1.c0,
+            tmp_cvinv.c0.c1.c1,
+            tmp_cvinv.c0.c2.c0,
+            tmp_cvinv.c0.c2.c1,
+            tmp_cvinv.c1.c0.c0,
+            tmp_cvinv.c1.c0.c1,
+            tmp_cvinv.c1.c1.c0,
+            tmp_cvinv.c1.c1.c1,
+            tmp_cvinv.c1.c2.c0,
+            tmp_cvinv.c1.c2.c1,
         ],
         false,
     ) }; 
-    let fixedacc: ElemFp12Acc = ElemFp12Acc { f: pubs.fixed_acc, hash: extern_hash_fps(
-        vec![
-            pubs.fixed_acc.c0.c0.c0,
-            pubs.fixed_acc.c0.c0.c1,
-            pubs.fixed_acc.c0.c1.c0,
-            pubs.fixed_acc.c0.c1.c1,
-            pubs.fixed_acc.c0.c2.c0,
-            pubs.fixed_acc.c0.c2.c1,
-            pubs.fixed_acc.c1.c0.c0,
-            pubs.fixed_acc.c1.c0.c1,
-            pubs.fixed_acc.c1.c1.c0,
-            pubs.fixed_acc.c1.c1.c1,
-            pubs.fixed_acc.c1.c2.c0,
-            pubs.fixed_acc.c1.c2.c1,
-        ],
-        false,
-    )};
-    let hout = Element::Fp12(gcinv.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
+    let gcinv = Segment { id: all_output_hints.len(), output_type: false, inputs: vec![], output: Element::Fp12(tmp_cvinv), hint_script: script!(), scr_type: ScriptType::NonDeterministic};
+    compare(&gcinv.output, claimed_assertions);
+    all_output_hints.push(gcinv.clone());
     
 
+    // Public Params
     let vky = pubs.ks_vks;
     let vky0 = pubs.vky0;
-    let pub_scalars = eval_ins.ks;
-    // groth16 proof
 
-    let acc = ark_bn254::G1Affine::identity();
-    let (temp, _, _) = hint_msm(sig, (0, false), vec![(1, true), (0, false)], acc, pub_scalars.clone(), 0, vky.clone());
-    let mut hout_msm = temp;
-    compare(&Element::MSMG1(hout_msm.clone()), claimed_assertions);
-    all_output_hints.push(Element::MSMG1(hout_msm.clone()));
+    // MSM
+    let mut msm = wrap_hint_msm(all_output_hints.len(), None, pub_scalars.clone(), 0, vky.clone());
+    compare(&msm.output, claimed_assertions);
+    all_output_hints.push(msm.clone());
+
     for i in 1..32 {
-        let (temp, _, _) = hint_msm(sig, (0, false), vec![(1, true), (0, false)], hout_msm ,pub_scalars.clone(), i, vky.clone());
-        hout_msm = temp;
-        compare(&Element::MSMG1(hout_msm.clone()), claimed_assertions);
-        all_output_hints.push(Element::MSMG1(hout_msm.clone()));
+        msm = wrap_hint_msm(all_output_hints.len(), Some(msm), pub_scalars.clone(), i, vky.clone());
+        compare(&msm.output, claimed_assertions);
+        all_output_hints.push(msm.clone());
     }
-    // send off to get signed
-    let (in_rx, in_ry, in_tx, in_ty, in_q) =  (gp3x, gp3y, hout_msm.x, hout_msm.y, vky0); 
-    // validate gp3 = t + q
-    let (h, _, _) = hint_hash_p(sig, (0, false), vec![(1, false), (2, true), (3, true)], in_rx, in_ry, in_tx, in_ty, in_q);
-    compare(&Element::HashBytes(h.clone()), claimed_assertions);
-    all_output_hints.push(Element::HashBytes(h));
+    let hp = wrap_hint_hash_p(all_output_hints.len(), &gp3x, &gp3y, &msm, vky0);
+    compare(&hp.output, claimed_assertions);
+    all_output_hints.push(hp);
     
     
-    // pre miller checks
+    // PRE MILLER CHECKS
+    
+    let c = wrap_hint_hash_c(all_output_hints.len(), gc);
+    compare(&c.output, claimed_assertions);
+    all_output_hints.push(c.clone());
 
-    let gc: ElemFp12Acc = ElemFp12Acc { f: eval_ins.c, hash: extern_hash_fps(vec![
-        eval_ins.c.c0.c0.c0, eval_ins.c.c0.c0.c1, eval_ins.c.c0.c1.c0, eval_ins.c.c0.c1.c1, eval_ins.c.c0.c2.c0, eval_ins.c.c0.c2.c1, eval_ins.c.c1.c0.c0,
-        eval_ins.c.c1.c0.c1, eval_ins.c.c1.c1.c0, eval_ins.c.c1.c1.c1, eval_ins.c.c1.c2.c0, eval_ins.c.c1.c2.c1,
-    ], true) };
-
-    let gs: ElemFp12Acc = ElemFp12Acc { f: eval_ins.s, hash: extern_hash_fps(vec![
-        eval_ins.s.c0.c0.c0, eval_ins.s.c0.c0.c1, eval_ins.s.c0.c1.c0, eval_ins.s.c0.c1.c1, eval_ins.s.c0.c2.c0, eval_ins.s.c0.c2.c1, eval_ins.s.c1.c0.c0,
-        eval_ins.s.c1.c0.c1, eval_ins.s.c1.c1.c0, eval_ins.s.c1.c1.c1, eval_ins.s.c1.c2.c0, eval_ins.s.c1.c2.c1,
-    ], true) };
-
-
-
-    let q4 = eval_ins.q4;
+    let s = wrap_hint_hash_c(all_output_hints.len(), gs);
+    compare(&s.output, claimed_assertions);
+    all_output_hints.push(s.clone());
     
 
-    let p2 = G1Affine::new_unchecked(p2x, p2y);
-    let p3 = G1Affine::new_unchecked(p3x, p3y);
-    let p4 = G1Affine::new_unchecked(p4x, p4y);
+    let c2 = wrap_hint_hash_c2(all_output_hints.len(), &c);
+    compare(&c2.output, claimed_assertions);
+    all_output_hints.push(c2.clone());
     
-    let (c, _, _) = hint_hash_c(sig, (0, false), (0..12).map(|i| (i+1, true)).collect(), gc);
-    let hout = Element::Fp12(c.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
     
-
-    let (s, _, _) = hint_hash_c(sig, (0, false), (0..12).map(|i| (i+1, true)).collect(), gs);
-    let hout = Element::Fp12(s.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
+    let dmul0 = wrap_hints_dense_dense_mul0_by_hash(all_output_hints.len(), &c2, &gcinv);
+    compare(&dmul0.output, claimed_assertions);
+    all_output_hints.push(dmul0);
     
 
-    let (c2, _, _) = hint_hash_c2(sig, (0, false), vec![(1, false)], c.clone());
-    let hout = Element::Fp12(c2.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
-    
-    let (dmul0, _, _) = hints_dense_dense_mul0_by_hash(sig, (0, false), vec![(1, false), (2, false)], c2.clone(), gcinv.hash);
-    let hout = Element::Fp12(dmul0);
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
+    let dmul1 = wrap_hints_dense_dense_mul1_by_hash(all_output_hints.len(), &c2, &gcinv);
+   compare(&dmul1.output, claimed_assertions);
+   all_output_hints.push(dmul1);
     
 
-    let (dmul1, _, _) = hints_dense_dense_mul1_by_hash(sig, (0, false), vec![(1, false), (2, false), (3, false)], c2, gcinv.hash);
-   let hout = Element::Fp12(dmul1);
-   compare(&hout, claimed_assertions);
-   all_output_hints.push(hout);
+    let cinv2 = wrap_hint_hash_c2(all_output_hints.len(), &gcinv);
+    compare(&cinv2.output, claimed_assertions);
+    all_output_hints.push(cinv2.clone());
     
 
-    let (cinv2, _, _) = hint_hash_c2(sig, (0, false), vec![(1, false)], gcinv.clone());
-    let hout = Element::Fp12(cinv2.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
+    let mut t4 = wrap_hint_init_T4(all_output_hints.len(), &q4xc0, &q4xc1, &q4yc0, &q4yc1); 
+    compare(&t4.output, claimed_assertions);
+    all_output_hints.push(t4.clone());
     
-
-    let (tmpt4, _, _) = hint_init_T4(sig, (0, false), vec![(1, true), (2, true), (3, true), (4, true)], q4.x.c0, q4.x.c1, q4.y.c0, q4.y.c1); 
-    let hout = Element::G2Acc(tmpt4.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
-
-    let mut t4 = tmpt4;
-    let (q2, q3) = (pubs.q2, pubs.q3);
-    let (mut t2, mut t3) = (q2, q3);
+    let (mut t2, mut t3) = (pubs.q2, pubs.q3);
 
     // miller loop
     let mut f_acc = cinv2.clone();
@@ -267,62 +206,45 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
     for j in (1..ATE_LOOP_COUNT.len()).rev() {
         let ate = ATE_LOOP_COUNT[j-1];
         // Sqr
-        let (sq, _, _) = taps_mul::hint_squaring(sig, (0, false), vec![(1, false)], f_acc);
-        let hout = Element::Fp12(sq.clone());
-        compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-        
+        let sq = wrap_hint_squaring(all_output_hints.len(), &f_acc);
+        compare(&sq.output, claimed_assertions);
+        all_output_hints.push(sq.clone());
         f_acc = sq;
 
         // Dbl or DblAdd
         if ate == 0 {
-            let (dbl, _, _) = taps::hint_point_dbl(sig, (0, false), vec![(1, true), (2, true), (3, true)], t4, p4.x, p4.y);
-            let hout = Element::G2Acc(dbl.clone());
-            compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-            
-
+            let dbl = wrap_hint_point_dbl(all_output_hints.len(), &t4, &p4x, &p4y);
+            compare(&dbl.output, claimed_assertions);
+            all_output_hints.push(dbl.clone());
             t4 = dbl;
-
         } else { 
-            let (dbladd, _, _) = taps::hint_point_ops(sig, (0, false), (0..7).map(|i| (i+1, true)).collect(), t4,p4.x, p4.y, q4.x.c0, q4.x.c1, q4.y.c0, q4.y.c1, ate);
-            let hout = Element::G2Acc(dbladd.clone());
-            compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-            
-
+            let dbladd = wrap_hint_point_ops(all_output_hints.len(), &t4,&p4x, &p4y, &q4xc0, &q4xc1, &q4yc0, &q4yc1, ate);
+            compare(&dbladd.output, claimed_assertions);
+            all_output_hints.push(dbladd.clone());
             t4 = dbladd;
         }
         // SD1
-        let (tmp, _, _) = taps_mul::hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], f_acc, t4.clone(),  true);
-        let hout = Element::Fp12(tmp.clone());
-        compare(&hout, claimed_assertions);
-        all_output_hints.push(hout);
-        
-
-        f_acc = tmp;
+        let sdmul = wrap_hint_sparse_dense_mul(all_output_hints.len(), &f_acc, &t4,  true);
+        compare(&sdmul.output, claimed_assertions);
+        all_output_hints.push(sdmul.clone());
+        f_acc = sdmul;
 
 
         // SS1
-        let (leval, _, _) = taps::hint_double_eval_mul_for_fixed_Qs(sig, (0, false), (0..4).map(|i| (i+1, true)).collect(),p2.x, p2.y, p3.x, p3.y, t2, t3);
-        let hout = Element::SparseEval(leval.clone());
-        compare(&hout, claimed_assertions);
-        all_output_hints.push(hout);
-        (t2, t3) = (leval.t2, leval.t3);
+        let leval = wrap_hint_double_eval_mul_for_fixed_Qs(all_output_hints.len(),&p2x, &p2y, &p3x, &p3y, t2, t3);
+        compare(&leval.output, claimed_assertions);
+        all_output_hints.push(leval.clone());
+        let le: ElemSparseEval = leval.output.into();
+        (t2, t3) = (le.t2, le.t3);
 
         // DD1
-        let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc.clone(), leval.f.clone());
-        let hout = Element::Fp12(dmul0);
-        compare(&hout, claimed_assertions);
-        all_output_hints.push(hout);
-        
+        let dmul0 = wrap_hints_dense_dense_mul0(all_output_hints.len(), &f_acc, &leval);
+        compare(&dmul0.output, claimed_assertions);
+        all_output_hints.push(dmul0);
 
-        let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc, leval.f);
-        let hout = Element::Fp12(dmul1.clone());
-        compare(&hout, claimed_assertions);
-        all_output_hints.push(hout);
-        
-
+        let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &leval);
+        compare(&dmul1.output, claimed_assertions);
+        all_output_hints.push(dmul1.clone());
         f_acc = dmul1;
 
         if ate == 0 {
@@ -331,250 +253,184 @@ pub(crate) fn groth16(all_output_hints: &mut Vec<Element>, eval_ins: EvalIns, pu
 
         // DD3
         // mul by cinv if ate == 1
-        // let multiplier = c or c inv if ate == -1 or 1
-        let ctemp = if ate == -1 {
-            c
+        let c_or_cinv = if ate == -1 {
+            c.clone()
         } else {
-            gcinv
+            gcinv.clone()
         };
-        let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc.clone(), ctemp.clone());
-        let hout = Element::Fp12(dmul0);
-        compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-        
+        let dmul0 = wrap_hints_dense_dense_mul0(all_output_hints.len(), &f_acc, &c_or_cinv);
+        compare(&dmul0.output, claimed_assertions);
+        all_output_hints.push(dmul0);
 
-        let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc.clone(), ctemp);
-        let hout = Element::Fp12(dmul1.clone());
-        compare(&hout, claimed_assertions);
-        all_output_hints.push(hout);
-        
-
+        let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &c_or_cinv);
+        compare(&dmul1.output, claimed_assertions);
+        all_output_hints.push(dmul1.clone());
         f_acc = dmul1;
 
         // SD2
-        let (temp, _, _) = taps_mul::hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], f_acc, t4.clone(),  false);
-        let hout = Element::Fp12(temp.clone());
-        compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-        
-
-        f_acc = temp;
+        let sdmul = wrap_hint_sparse_dense_mul(all_output_hints.len(), &f_acc, &t4,  false);
+        compare(&sdmul.output, claimed_assertions);
+        all_output_hints.push(sdmul.clone());
+        f_acc = sdmul;
 
         // SS2
-        
-        let (leval, _, _) = taps::hint_add_eval_mul_for_fixed_Qs(sig, (0, false), (0..4).map(|i| (i+1, true)).collect(), p2.x, p2.y, p3.x, p3.y, t2, t3, q2, q3, ate);
-        let hout = Element::SparseEval(leval.clone());
-        compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-        
+        let leval = wrap_hint_add_eval_mul_for_fixed_Qs(all_output_hints.len(), &p2x, &p2y, &p3x, &p3y, t2, t3, pubs.q2, pubs.q3, ate);
+        compare(&leval.output, claimed_assertions);
+        all_output_hints.push(leval.clone());
+        let le: ElemSparseEval = leval.output.into();
+        (t2, t3) = (le.t2, le.t3);
 
-        (t2, t3) = (leval.t2, leval.t3);
+        // DD5 DD6
+        let dmul0 = wrap_hints_dense_dense_mul0(all_output_hints.len(), &f_acc, &leval);
+        compare(&dmul0.output, claimed_assertions);
+        all_output_hints.push(dmul0);
 
-        // DD5
-        let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc, leval.f);
-        let hout = Element::Fp12(dmul0);
-        compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-        
-
-        let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc, leval.f);
-        let hout = Element::Fp12(dmul1.clone());
-        compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-        
-
+        let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &leval);
+        compare(&dmul1.output, claimed_assertions);
+        all_output_hints.push(dmul1.clone());
         f_acc = dmul1;
     }
 
-    // post miller
+    // POST MILLER
     // f1 = frob1
-    let (cp, _, _) = hints_frob_fp12(sig, (0, false), vec![(1, false)], gcinv, 1);
-    let hout = Element::Fp12(cp.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
+    let cp = wrap_hints_frob_fp12(all_output_hints.len(), &gcinv, 1);
+    compare(&cp.output, claimed_assertions);
+    all_output_hints.push(cp.clone());
 
     // f2 = frob2
-    let (cp2, _, _) = hints_frob_fp12(sig, (0, false), vec![(1, false)], c, 2);
-    let hout = Element::Fp12(cp2.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
+    let cp2 = wrap_hints_frob_fp12(all_output_hints.len(), &c, 2);
+    compare(&cp2.output, claimed_assertions);
+    all_output_hints.push(cp2.clone());
     
     // f3 = frob3
-    let (cp3, _, _) = hints_frob_fp12(sig, (0, false), vec![(1, false)], gcinv, 3);
-    let hout = Element::Fp12(cp3.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
+    let cp3 = wrap_hints_frob_fp12(all_output_hints.len(), &gcinv, 3);
+    compare(&cp3.output, claimed_assertions);
+    all_output_hints.push(cp3.clone());
     
-
-
     // f_acc = f_acc * f1
-    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc, cp);
-    let hout = Element::Fp12(dmul0);
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
+    let dmul0 = wrap_hints_dense_dense_mul0(all_output_hints.len(), &f_acc, &cp);
+    compare(&dmul0.output, claimed_assertions);
+    all_output_hints.push(dmul0);
 
-    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc, cp);
-    let hout = Element::Fp12(dmul1.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
-
+    let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &cp);
+    compare(&dmul1.output, claimed_assertions);
+    all_output_hints.push(dmul1.clone());
     f_acc = dmul1;
 
     // f_acc = f_acc * f2
-    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc, cp2);
-    let hout = Element::Fp12(dmul0);
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
+    let dmul0 = wrap_hints_dense_dense_mul0(all_output_hints.len(), &f_acc, &cp2);
+    compare(&dmul0.output, claimed_assertions);
+    all_output_hints.push(dmul0);
 
-    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc, cp2);
-    let hout = Element::Fp12(dmul1.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
-
+    let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &cp2);
+    compare(&dmul1.output, claimed_assertions);
+    all_output_hints.push(dmul1.clone());
     f_acc = dmul1;
 
+
     // f_acc = f_acc * f3
-    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc, cp3);
-    let hout = Element::Fp12(dmul0);
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
+    let dmul0 = wrap_hints_dense_dense_mul0(all_output_hints.len(), &f_acc, &cp3);
+    compare(&dmul0.output, claimed_assertions);
+    all_output_hints.push(dmul0);
 
-    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc, cp3);
-    let hout = Element::Fp12(dmul1.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
-
+    let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &cp3);
+    compare(&dmul1.output, claimed_assertions);
+    all_output_hints.push(dmul1.clone());
     f_acc = dmul1;
 
     // f_acc = f_acc * s
-    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc, s);
-    let hout = Element::Fp12(dmul0);
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
+    let dmul0 = wrap_hints_dense_dense_mul0(all_output_hints.len(), &f_acc, &s);
+    compare(&dmul0.output, claimed_assertions);
+    all_output_hints.push(dmul0);
 
-    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc, s);
-    let hout = Element::Fp12(dmul1.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
-
+    let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &s);
+    compare(&dmul1.output, claimed_assertions);
+    all_output_hints.push(dmul1.clone());
     f_acc = dmul1;
 
     // add op Add1
-    let (temp, _, _) = hint_point_add_with_frob(sig, (0, false), (0..7).map(|i| (i+1, true)).collect(), t4.clone(), p4.x, p4.y, q4.x.c0, q4.x.c1, q4.y.c0, q4.y.c1, 1);
-    let hout = Element::G2Acc(temp.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
-
-    t4 = temp; 
+    let addf = wrap_hint_point_add_with_frob(all_output_hints.len(), &t4, &p4x, &p4y, &q4xc0, &q4xc1, &q4yc0, &q4yc1, 1);
+    compare(&addf.output, claimed_assertions);
+    all_output_hints.push(addf.clone());
+    t4 = addf; 
 
     // SD
-    let (temp, _, _) = hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], f_acc, t4.clone(), false);
-    let hout = Element::Fp12(temp.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
-
-    f_acc = temp;
+    let sdmul = wrap_hint_sparse_dense_mul(all_output_hints.len(), &f_acc, &t4, false);
+    compare(&sdmul.output, claimed_assertions);
+    all_output_hints.push(sdmul.clone());
+    f_acc = sdmul;
 
     // sparse eval
-    let (le, _, _) = hint_add_eval_mul_for_fixed_Qs_with_frob(sig, (0, false), (0..4).map(|i| (i+1, true)).collect(), p2.x, p2.y, p3.x, p3.y, t2, t3, q2, q3, 1);
-    let hout = Element::SparseEval(le.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
-
+    let leval = wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(all_output_hints.len(), &p2x, &p2y, &p3x, &p3y, t2, t3, pubs.q2, pubs.q3, 1);
+    compare(&leval.output, claimed_assertions);
+    all_output_hints.push(leval.clone());
+    let le: ElemSparseEval = leval.output.into();
     (t2, t3) = (le.t2, le.t3);
+
     // dense_dense_mul
-    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc, le.f);
-    let hout = Element::Fp12(dmul0);
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
+    let dmul0 = wrap_hints_dense_dense_mul0(all_output_hints.len(), &f_acc, &leval);
+    compare(&dmul0.output, claimed_assertions);
+    all_output_hints.push(dmul0);
 
-    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc, le.f);
-    let hout = Element::Fp12(dmul1.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
-
+    let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &leval);
+    compare(&dmul1.output, claimed_assertions);
+    all_output_hints.push(dmul1.clone());
     f_acc = dmul1;
 
     // add op Add2
-    let (temp, _, _) = hint_point_add_with_frob(sig, (0, false), (0..7).map(|i| (i+1, true)).collect(), t4, p4.x, p4.y, q4.x.c0, q4.x.c1, q4.y.c0, q4.y.c1, -1);
-    let hout = Element::G2Acc(temp.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
-
-    t4 = ElemG2PointAcc {t: temp.t, dbl_le: None, add_le: temp.add_le}; 
+    let addf = wrap_hint_point_add_with_frob(all_output_hints.len(), &t4, &p4x, &p4y, &q4xc0, &q4xc1, &q4yc0, &q4yc1, -1);
+    compare(&addf.output, claimed_assertions);
+    all_output_hints.push(addf.clone());
+    t4 = addf; 
 
     // SD
-    let (temp, _, _) = hint_sparse_dense_mul(sig, (0, false), vec![(1, false), (2, false)], f_acc, t4.clone(), false);
-    let hout = Element::Fp12(temp.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
-
-    f_acc = temp;
+    let sdmul = wrap_hint_sparse_dense_mul(all_output_hints.len(), &f_acc, &t4, false);
+    compare(&sdmul.output, claimed_assertions);
+    all_output_hints.push(sdmul.clone());
+    f_acc = sdmul;
 
     // sparse eval
-    let (le, _, _) = hint_add_eval_mul_for_fixed_Qs_with_frob(sig, (0, false), (0..4).map(|i| (i+1, true)).collect(), p2.x, p2.y, p3.x, p3.y, t2, t3, q2, q3, -1);
-    let hout = Element::SparseEval(le.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
-
+    let leval = wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(all_output_hints.len(), &p2x, &p2y, &p3x, &p3y, t2, t3, pubs.q2, pubs.q3, -1);
+    compare(&leval.output, claimed_assertions);
+    all_output_hints.push(leval.clone());
+    let le: ElemSparseEval = leval.output.into();
     (t2, t3) = (le.t2, le.t3);
+
+
     // dense_dense_mul
-    let (dmul0, _, _) = hints_dense_dense_mul0(sig, (0, false), vec![(1, false), (2, false)], f_acc, le.f);
-    let hout = Element::Fp12(dmul0);
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
+    let dmul0 = wrap_hints_dense_dense_mul0(all_output_hints.len(), &f_acc, &leval);
+    compare(&dmul0.output, claimed_assertions);
+    all_output_hints.push(dmul0);
 
-    let (dmul1, _, _) = hints_dense_dense_mul1(sig, (0, false), vec![(1, false), (2, false), (3, false)], f_acc, le.f);
-    let hout = Element::Fp12(dmul1.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
-    
-
+    let dmul1 = wrap_hints_dense_dense_mul1(all_output_hints.len(), &f_acc, &leval);
+    compare(&dmul1.output, claimed_assertions);
+    all_output_hints.push(dmul1.clone());
     f_acc = dmul1;
 
+
     // mul0_by_const is identity
-    let (dmul0, _, _) = hints_dense_dense_mul0_by_constant(sig, (0, false), vec![(1, false)], f_acc, fixedacc);
-    let hout = Element::Fp12(dmul0);
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
+    let dmul0 = wrap_hints_dense_dense_mul0_by_constant(all_output_hints.len(), &f_acc, pubs.fixed_acc);
+    compare(&dmul0.output, claimed_assertions);
+    all_output_hints.push(dmul0);
     
 
     // mul1_by_const is identity
-    let (dmul1, _, _) = hints_dense_dense_mul1_by_constant(sig, (0, false), vec![(1, false), (2, false)], f_acc, fixedacc);
-    let hout = Element::Fp12(dmul1.clone());
-    compare(&hout, claimed_assertions);
-    all_output_hints.push(hout);
+    let dmul1 = wrap_hints_dense_dense_mul1_by_constant(all_output_hints.len(), &f_acc, pubs.fixed_acc);
+    compare(&dmul1.output, claimed_assertions);
+    all_output_hints.push(dmul1.clone());
+    f_acc = dmul1;
     
-
-    assert_eq!(dmul1.f, ark_bn254::Fq12::ONE);
+    let result: ElemFp12Acc = f_acc.output.into();
+    assert_eq!(result.f, ark_bn254::Fq12::ONE);
 
     println!("segments len {}", all_output_hints.len());
 
 }
 
-pub(crate) fn hint_to_data(segments: Vec<Element>) -> Assertions {
+pub(crate) fn hint_to_data(segments: Vec<Segment>) -> Assertions {
     let mut vs: Vec<[u8; 64]> = vec![];
     for v in segments {
-        let x = match v {
+        let x = match v.output {
             Element::G2Acc(r) => r.out(),
             Element::Fp12(r) => r.out(),
             Element::FieldElem(f) => extern_fq_to_nibbles(f),
@@ -754,7 +610,7 @@ pub fn validate(
     let eval_ins = get_proof(&asserts);
     let intermediates = get_intermediates(&asserts);
 
-    let mut hout: Vec<Element> = vec![];
+    let mut hout: Vec<Segment> = vec![];
     groth16(&mut hout, eval_ins, get_pubs(vk), &mut Some(intermediates));
     hint_to_data(hout)
 }

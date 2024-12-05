@@ -101,19 +101,17 @@ mod test {
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
-        let fhash = extern_hash_fps(
+        let fvec = 
             vec![
                 f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
                 f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-            ],
-            false,
-        );
+            ];
         let hint_in = f;
         let mut sig = Sig {
             msk: Some(sec_key_for_bitcomms),
             cache: HashMap::new(),
         };
-        let (_, simulate_stack_input, maybe_wrong) = hint_hash_c(&mut sig, sec_out, sec_in, ElemFp12Acc { f, hash: fhash });
+        let (_, simulate_stack_input, maybe_wrong) = hint_hash_c(&mut sig, sec_out, sec_in, fvec);
 
         let tap_len = hash_c_scr.len();
         let script = script! {

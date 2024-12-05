@@ -2183,18 +2183,14 @@ pub(crate) fn hint_hash_c(
     sig: &mut Sig,
     sec_out: Link,
     sec_in: Vec<Link>,
-    hint_in_c: ElemFp12Acc,
+    hint_in_c: Vec<ElemFq>,
 ) -> (ElemFp12Acc, Script, bool) {
-    let f = hint_in_c.f;
-    let f = vec![
-        f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-        f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-    ];
-    let fhash = extern_hash_fps(f.clone(), false);
+    let fvec = hint_in_c;
+    let fhash = extern_hash_fps(fvec.clone(), false);
 
     let mut tups = vec![(sec_out, fhash)];
     for i in 0..12 {
-        tups.push((sec_in[11 - i], extern_fq_to_nibbles(f[i])));
+        tups.push((sec_in[11 - i], extern_fq_to_nibbles(fvec[i])));
     }
     let (bc_elems, should_validate) = tup_to_scr(sig, tups);
 
@@ -2202,9 +2198,21 @@ pub(crate) fn hint_hash_c(
         // bit commits raw
         { bc_elems }
     };
+    let f = ark_bn254::Fq12::new(
+        ark_bn254::Fq6::new(
+            ark_bn254::Fq2::new(fvec[0], fvec[1]),
+            ark_bn254::Fq2::new(fvec[2], fvec[3]),
+            ark_bn254::Fq2::new(fvec[4], fvec[5]),
+        ),
+        ark_bn254::Fq6::new(
+            ark_bn254::Fq2::new(fvec[6], fvec[7]),
+            ark_bn254::Fq2::new(fvec[8], fvec[9]),
+            ark_bn254::Fq2::new(fvec[10], fvec[11]),
+        ),
+    );
     (
         ElemFp12Acc {
-            f: hint_in_c.f,
+            f,
             hash: fhash,
         },
         simulate_stack_input,

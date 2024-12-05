@@ -1538,21 +1538,21 @@ fn evaluate_pre_miller_circuit(
                 };
                 gs.push(x);
             }
-            let gsf = ark_bn254::Fq12::new(
-                ark_bn254::Fq6::new(
-                    ark_bn254::Fq2::new(gs[11], gs[10]),
-                    ark_bn254::Fq2::new(gs[9], gs[8]),
-                    ark_bn254::Fq2::new(gs[7], gs[6]),
-                ),
-                ark_bn254::Fq6::new(
-                    ark_bn254::Fq2::new(gs[5], gs[4]),
-                    ark_bn254::Fq2::new(gs[3], gs[2]),
-                    ark_bn254::Fq2::new(gs[1], gs[0]),
-                ),
-            );
+            // let gsf = ark_bn254::Fq12::new(
+            //     ark_bn254::Fq6::new(
+            //         ark_bn254::Fq2::new(gs[11], gs[10]),
+            //         ark_bn254::Fq2::new(gs[9], gs[8]),
+            //         ark_bn254::Fq2::new(gs[7], gs[6]),
+            //     ),
+            //     ark_bn254::Fq6::new(
+            //         ark_bn254::Fq2::new(gs[5], gs[4]),
+            //         ark_bn254::Fq2::new(gs[3], gs[2]),
+            //         ark_bn254::Fq2::new(gs[1], gs[0]),
+            //     ),
+            // );
             gs.reverse();
             let (hout, hint_script, maybe_wrong) =
-                hint_hash_c(sig, sec_out, sec_in.clone(), ElemFp12Acc { f: gsf, hash: extern_hash_fps(gs, true) });
+                hint_hash_c(sig, sec_out, sec_in.clone(), gs);
             if force_validate || maybe_wrong {
                 let ops_script = tap_hash_c();
                 let bcs_script = bitcom_hash_c(pub_scripts_per_link_id, sec_out, sec_in.clone());
@@ -1706,7 +1706,7 @@ fn evaluate_pre_miller_circuit(
                 sig,
                 sec_out,
                 sec_in.clone(),
-                p3x, p3y, t.x, t.y, vky0
+                p3x, p3y, t, vky0
             );
             if force_validate || maybe_wrong {
                 let ops_script = tap_hash_p(vky0);

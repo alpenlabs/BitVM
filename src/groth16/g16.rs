@@ -71,7 +71,7 @@ mod test {
 
     use crate::chunk::{config::NUM_PUBS, test_utils::read_map_from_file};
 
-    use self::chunk::{ acc::{self, Pubs}, evaluate::EvalIns, hint_models::Element};
+    use self::chunk::{ acc::{self, Pubs}, evaluate::EvalIns, hint_models::Element, segment::Segment};
 
     use super::*;
 
@@ -359,7 +359,7 @@ mod test {
 
         for i in 0..N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES {
             println!("ITERATION {:?}", i);
-            let mut proof_asserts = read_asserts_from_file("chunker_data/assert.json");
+            let mut proof_asserts = read_asserts_from_file("chunker_data/assert2.json");
             //corrupt(&mut proof_asserts, Some(i));
             let signed_asserts = sign_assertions(proof_asserts);
     
@@ -476,7 +476,7 @@ mod test {
             vky0
         };
 
-        let mut hout: Vec<Element> = vec![];
+        let mut hout: Vec<Segment> = vec![];
 
         acc::groth16(&mut hout, eval_ins, pubs, &mut None);
         let proof_asserts = acc::hint_to_data(hout);

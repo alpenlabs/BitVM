@@ -747,15 +747,14 @@ pub(crate) fn hint_hash_p(
     sec_in: Vec<Link>,
     hint_in_rx: ElemFq,
     hint_in_ry: ElemFq,
-    hint_in_tx: ElemFq,
-    hint_in_ty: ElemFq,
+    hint_in_t: ElemG1Point,
     hint_in_q: ark_bn254::G1Affine,
 ) -> (HashBytes, Script, bool) {
     // r (gp3) = t(msm) + q(vk0)
-    let (tx, qx, ty, qy) = (hint_in_tx, hint_in_q.x, hint_in_ty, hint_in_q.y);
+    let (tx, qx, ty, qy) = (hint_in_t.x, hint_in_q.x, hint_in_t.y, hint_in_q.y);
     
     let (rx, ry) = (hint_in_rx, hint_in_ry);
-    let thash = extern_hash_fps(vec![hint_in_tx, hint_in_ty], false);
+    let thash = extern_hash_fps(vec![hint_in_t.x, hint_in_t.y], false);
 
     let zero_nib = [0u8;64];
 
@@ -1063,7 +1062,7 @@ mod test {
             msk: None,
             cache: sig_cache,
         };
-        let (_, simulate_stack_input, maybe_wrong) = hint_hash_p(&mut sig, (sec_out, false), sec_in_arr, r.x, r.y, t.x, t.y, q);
+        let (_, simulate_stack_input, maybe_wrong) = hint_hash_p(&mut sig, (sec_out, false), sec_in_arr, r.x, r.y, t, q);
 
         let tap_len = hash_c_scr.len();
         let script = script! {

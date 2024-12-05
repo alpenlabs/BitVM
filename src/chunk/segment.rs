@@ -18,6 +18,7 @@ pub struct Segment {
 
 #[derive(Debug, Clone, Copy)]
 pub enum ScriptType {
+    NonDeterministic,
     MSM,
 
     PreMillerInitT4,
@@ -44,8 +45,8 @@ pub enum ScriptType {
     PostMillerAddWithFrob(i8),
     PostMillerSparseDenseMul,
     PostMillerSparseAddWithFrob(([ark_bn254::G2Affine;4], i8)),
-    PostMillerDenseDenseMulByConst0((bool, ark_bn254::Fq12)),
-    PostMillerDenseDenseMulByConst1((bool, ark_bn254::Fq12)),
+    PostMillerDenseDenseMulByConst0(ark_bn254::Fq12),
+    PostMillerDenseDenseMulByConst1(ark_bn254::Fq12),
 }
 
 
@@ -56,7 +57,7 @@ use ark_ff::{AdditiveGroup, Field};
 use super::{hint_models::*, msm::{hint_hash_p, hint_msm}, primitves::extern_hash_fps,  taps::*, taps_mul::*};
 
 
-fn wrap_hint_msm(
+pub(crate) fn wrap_hint_msm(
     segment_id: usize,
     prev_msm: Option<Segment>,
     scalars: Vec<Segment>,
@@ -88,9 +89,9 @@ fn wrap_hint_msm(
 
 }
 
-fn wrap_hint_hash_p(
+pub(crate) fn wrap_hint_hash_p(
     segment_id: usize,
-    hint_in_rx: Segment, hint_in_ry: Segment, hint_in_tx: Segment, hint_in_ty: Segment,
+    hint_in_rx: &Segment, hint_in_ry: &Segment, hint_in_t: &Segment,
     pub_vky0: ark_bn254::G1Affine,
 ) -> Segment {
 
@@ -98,29 +99,35 @@ fn wrap_hint_hash_p(
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
     input_segment_info.push((hint_in_rx.id, hint_in_rx.output_type));
     input_segment_info.push((hint_in_ry.id, hint_in_ry.output_type));
-    input_segment_info.push((hint_in_tx.id, hint_in_tx.output_type));
-    input_segment_info.push((hint_in_ty.id, hint_in_ty.output_type));
+    input_segment_info.push((hint_in_t.id, hint_in_t.output_type));
 
-    let (h, hint_script, _) = hint_hash_p(sig, (0, false), vec![(1, false), (2, true), (3, true)], hint_in_rx.output.into(), hint_in_ry.output.into(), hint_in_tx.output.into(), hint_in_ty.output.into(), pub_vky0);
+    let (h, hint_script, _) = hint_hash_p(sig, (0, false), vec![(1, false), (2, true), (3, true)], hint_in_rx.output.into(), hint_in_ry.output.into(), hint_in_t.output.into(), pub_vky0);
     Segment { id: segment_id, output_type: false, inputs: input_segment_info, output: Element::HashBytes(h), hint_script, scr_type: ScriptType::PreMillerHashP }
 }
 
-fn wrap_hint_hash_c(    
+pub(crate) fn wrap_hint_hash_c(    
     segment_id: usize,
-    hint_in_c: Segment,
+    hint_in_c: Vec<Segment>,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
-    input_segment_info.push((hint_in_c.id, hint_in_c.output_type));
-    let (c, hint_script, _) = hint_hash_c(sig, (0, false), (0..12).map(|i| (i+1, true)).collect(), hint_in_c.output.into());
+    let fqvec: Vec<ElemFq> = hint_in_c
+    .iter()
+    .map(|f| {
+        input_segment_info.push((f.id, f.output_type));
+        f.output.into()
+    })
+    .collect();
+
+    let (c, hint_script, _) = hint_hash_c(sig, (0, false), (0..12).map(|i| (i+1, true)).collect(), fqvec);
     Segment { id:  segment_id, output_type: false, inputs: input_segment_info, output: Element::Fp12(c), hint_script, scr_type: ScriptType::PreMillerHashC }
 }
 
 
 
-fn wrap_hints_precompute_Px(
+pub(crate) fn wrap_hints_precompute_Px(
     segment_id: usize,
-    hint_in_px: Segment, hint_in_py: Segment,
+    hint_in_px: &Segment, hint_in_py: &Segment,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
@@ -131,9 +138,9 @@ fn wrap_hints_precompute_Px(
     Segment { id:  segment_id, output_type: true, inputs: input_segment_info, output: Element::FieldElem(p4x), hint_script, scr_type: ScriptType::PreMillerPrecomputePx }
 }
 
-fn wrap_hints_precompute_Py(
+pub(crate) fn wrap_hints_precompute_Py(
     segment_id: usize,
-    hint_in_p: Segment,
+    hint_in_p: &Segment,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
@@ -143,9 +150,9 @@ fn wrap_hints_precompute_Py(
     Segment { id:  segment_id, output_type: true, inputs: input_segment_info, output: Element::FieldElem(p3y), hint_script, scr_type: ScriptType::PreMillerPrecomputePy }
 }
 
-fn wrap_hint_hash_c2(
+pub(crate) fn wrap_hint_hash_c2(
     segment_id: usize,
-    hint_in_c: Segment
+    hint_in_c: &Segment
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
@@ -154,9 +161,9 @@ fn wrap_hint_hash_c2(
     Segment { id:  segment_id, output_type: false, inputs: input_segment_info, output: Element::Fp12(c2), hint_script, scr_type: ScriptType::PreMillerHashC2 }
 }
 
-fn wrap_hints_dense_dense_mul0_by_hash(
+pub(crate) fn wrap_hints_dense_dense_mul0_by_hash(
     segment_id: usize,
-    hint_in_a: Segment, hint_in_bhash: Segment
+    hint_in_a: &Segment, hint_in_bhash: &Segment
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
@@ -167,9 +174,9 @@ fn wrap_hints_dense_dense_mul0_by_hash(
     Segment { id:  segment_id, output_type: false, inputs: input_segment_info, output: Element::Fp12(dmul0), hint_script, scr_type: ScriptType::PreMillerDenseDenseMulByHash0 }
 }
 
-fn wrap_hints_dense_dense_mul1_by_hash(
+pub(crate) fn wrap_hints_dense_dense_mul1_by_hash(
     segment_id: usize,
-    hint_in_a: Segment, hint_in_bhash: Segment
+    hint_in_a: &Segment, hint_in_bhash: &Segment
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
@@ -180,12 +187,12 @@ fn wrap_hints_dense_dense_mul1_by_hash(
     Segment { id:  segment_id, output_type: false, inputs: input_segment_info, output: Element::Fp12(dmul1), hint_script, scr_type: ScriptType::PreMillerDenseDenseMulByHash1 }
 }
 
-fn wrap_hint_init_T4(
+pub(crate) fn wrap_hint_init_T4(
     segment_id: usize,
-    hint_in_q4_x_c0: Segment,
-    hint_in_q4_x_c1: Segment,
-    hint_in_q4_y_c0: Segment,
-    hint_in_q4_y_c1: Segment,
+    hint_in_q4_x_c0: &Segment,
+    hint_in_q4_x_c1: &Segment,
+    hint_in_q4_y_c0: &Segment,
+    hint_in_q4_y_c1: &Segment,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let input_segment_info = vec![
@@ -220,9 +227,9 @@ fn wrap_hint_init_T4(
     }
 }
 
-fn wrap_hint_squaring(
+pub(crate) fn wrap_hint_squaring(
     segment_id: usize,
-    hint_in_a: Segment,
+    hint_in_a: &Segment,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let input_segment_info = vec![(hint_in_a.id, hint_in_a.output_type)];
@@ -246,11 +253,11 @@ fn wrap_hint_squaring(
     }
 }
 
-fn wrap_hint_point_dbl(
+pub(crate) fn wrap_hint_point_dbl(
     segment_id: usize,
-    hint_in_t4: Segment,
-    hint_in_p4x: Segment,
-    hint_in_p4y: Segment,
+    hint_in_t4: &Segment,
+    hint_in_p4x: &Segment,
+    hint_in_p4y: &Segment,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let input_segment_info = vec![
@@ -283,15 +290,15 @@ fn wrap_hint_point_dbl(
 }
 
 
-fn wrap_hint_point_ops(
+pub(crate) fn wrap_hint_point_ops(
     segment_id: usize,
-    hint_in_t4: Segment,
-    hint_in_p4x: Segment,
-    hint_in_p4y: Segment,
-    hint_in_q4_x_c0: Segment,
-    hint_in_q4_x_c1: Segment,
-    hint_in_q4_y_c0: Segment,
-    hint_in_q4_y_c1: Segment,
+    hint_in_t4: &Segment,
+    hint_in_p4x: &Segment,
+    hint_in_p4y: &Segment,
+    hint_in_q4_x_c0: &Segment,
+    hint_in_q4_x_c1: &Segment,
+    hint_in_q4_y_c0: &Segment,
+    hint_in_q4_y_c1: &Segment,
     ate: i8,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
@@ -338,10 +345,10 @@ fn wrap_hint_point_ops(
     }
 }
 
-fn wrap_hint_sparse_dense_mul(
+pub(crate) fn wrap_hint_sparse_dense_mul(
     segment_id: usize,
-    hint_in_a: Segment,
-    hint_in_g: Segment,
+    hint_in_a: &Segment,
+    hint_in_g: &Segment,
     is_dbl_blk: bool,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
@@ -372,12 +379,12 @@ fn wrap_hint_sparse_dense_mul(
     }
 }
 
-fn wrap_hint_double_eval_mul_for_fixed_Qs(
+pub(crate) fn wrap_hint_double_eval_mul_for_fixed_Qs(
     segment_id: usize,
-    hint_in_p2x: Segment,
-    hint_in_p2y: Segment,
-    hint_in_p3x: Segment,
-    hint_in_p3y: Segment,
+    hint_in_p2x: &Segment,
+    hint_in_p2y: &Segment,
+    hint_in_p3x: &Segment,
+    hint_in_p3y: &Segment,
     hint_in_t2: ark_bn254::G2Affine,
     hint_in_t3: ark_bn254::G2Affine,
 ) -> Segment {
@@ -416,10 +423,10 @@ fn wrap_hint_double_eval_mul_for_fixed_Qs(
     }
 }
 
-fn wrap_hints_dense_dense_mul0(
+pub(crate) fn wrap_hints_dense_dense_mul0(
     segment_id: usize,
-    hint_in_a: Segment,
-    hint_in_b: Segment,
+    hint_in_a: &Segment,
+    hint_in_b: &Segment,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
 
@@ -449,10 +456,10 @@ fn wrap_hints_dense_dense_mul0(
     }
 }
 
-fn wrap_hints_dense_dense_mul1(
+pub(crate) fn wrap_hints_dense_dense_mul1(
     segment_id: usize,
-    hint_in_a: Segment,
-    hint_in_b: Segment,
+    hint_in_a: &Segment,
+    hint_in_b: &Segment,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
 
@@ -483,12 +490,12 @@ fn wrap_hints_dense_dense_mul1(
 }
 
 
-fn wrap_hint_add_eval_mul_for_fixed_Qs(
+pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs(
     segment_id: usize,
-    hint_in_p2x: Segment,
-    hint_in_p2y: Segment,
-    hint_in_p3x: Segment,
-    hint_in_p3y: Segment,
+    hint_in_p2x: &Segment,
+    hint_in_p2y: &Segment,
+    hint_in_p3x: &Segment,
+    hint_in_p3y: &Segment,
     hint_in_t2: ark_bn254::G2Affine,
     hint_in_t3: ark_bn254::G2Affine,
     pub_q2: ark_bn254::G2Affine,
@@ -533,9 +540,9 @@ fn wrap_hint_add_eval_mul_for_fixed_Qs(
     }
 }
 
-fn wrap_hints_frob_fp12(
+pub(crate) fn wrap_hints_frob_fp12(
     segment_id: usize,
-    hint_in_f: Segment,
+    hint_in_f: &Segment,
     power: usize,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
@@ -562,15 +569,15 @@ fn wrap_hints_frob_fp12(
     }
 }
 
-fn wrap_hint_point_add_with_frob(
+pub(crate) fn wrap_hint_point_add_with_frob(
     segment_id: usize,
-    hint_in_t4: Segment,
-    hint_in_p4x: Segment,
-    hint_in_p4y: Segment,
-    hint_in_q4_x_c0: Segment,
-    hint_in_q4_x_c1: Segment,
-    hint_in_q4_y_c0: Segment,
-    hint_in_q4_y_c1: Segment,
+    hint_in_t4: &Segment,
+    hint_in_p4x: &Segment,
+    hint_in_p4y: &Segment,
+    hint_in_q4_x_c0: &Segment,
+    hint_in_q4_x_c1: &Segment,
+    hint_in_q4_y_c0: &Segment,
+    hint_in_q4_y_c1: &Segment,
     power: i8,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
@@ -616,12 +623,12 @@ fn wrap_hint_point_add_with_frob(
     }
 }
 
-fn wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(
+pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(
     segment_id: usize,
-    hint_in_p2x: Segment,
-    hint_in_p2y: Segment,
-    hint_in_p3x: Segment,
-    hint_in_p3y: Segment,
+    hint_in_p2x: &Segment,
+    hint_in_p2y: &Segment,
+    hint_in_p3x: &Segment,
+    hint_in_p3y: &Segment,
     hint_in_t2: ark_bn254::G2Affine,
     hint_in_t3: ark_bn254::G2Affine,
     pub_q2: ark_bn254::G2Affine,
@@ -667,10 +674,9 @@ fn wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(
 }
 
 
-fn wrap_hints_dense_dense_mul0_by_constant(
+pub(crate) fn wrap_hints_dense_dense_mul0_by_constant(
     segment_id: usize,
-    hint_in_a: Segment,
-    is_identity: bool,
+    hint_in_a: &Segment,
     constant: ark_bn254::Fq12,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
@@ -713,14 +719,13 @@ fn wrap_hints_dense_dense_mul0_by_constant(
         inputs: input_segment_info,
         output: Element::Fp12(dmul0),
         hint_script,
-        scr_type: ScriptType::PostMillerDenseDenseMulByConst0((is_identity, constant)),
+        scr_type: ScriptType::PostMillerDenseDenseMulByConst0(constant),
     }
 }
 
-fn wrap_hints_dense_dense_mul1_by_constant(
+pub(crate) fn wrap_hints_dense_dense_mul1_by_constant(
     segment_id: usize,
-    hint_in_a: Segment,
-    is_identity: bool,
+    hint_in_a: &Segment,
     constant: ark_bn254::Fq12,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
@@ -763,6 +768,6 @@ fn wrap_hints_dense_dense_mul1_by_constant(
         inputs: input_segment_info,
         output: Element::Fp12(dmul1),
         hint_script,
-        scr_type: ScriptType::PostMillerDenseDenseMulByConst1((is_identity, constant)),
+        scr_type: ScriptType::PostMillerDenseDenseMulByConst1(constant),
     }
 }
