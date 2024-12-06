@@ -71,7 +71,7 @@ mod test {
 
     use crate::chunk::{config::NUM_PUBS, test_utils::read_map_from_file};
 
-    use self::chunk::{ acc::{self, full_exec, Pubs}, evaluate::EvalIns, hint_models::Element, segment::Segment};
+    use self::chunk::{ acc::{self, check_msm, check_precompute_py, full_exec, Pubs}, evaluate::EvalIns, hint_models::Element, segment::Segment};
 
     use super::*;
 
@@ -481,7 +481,9 @@ mod test {
         acc::groth16(&mut segments, eval_ins, pubs, &mut None);
         let proof_asserts = acc::hint_to_data(segments.clone());
         let signed_asserts = sign_assertions(proof_asserts);
-        full_exec(segments, signed_asserts);
+        let mock_pubks = mock_pubkeys(MOCK_SECRET);
+
+        full_exec(segments, signed_asserts, mock_pubks);
         // write_asserts_to_file(proof_asserts, "chunker_data/assert2.json");
 
     }
@@ -495,5 +497,60 @@ mod test {
         let mock_pubks = mock_pubkeys(MOCK_SECRET);
         let new_proof_asserts = acc::validate(&vk, signed_asserts, mock_pubks);
         assert_eq!(proof_asserts, new_proof_asserts);
+    }
+
+    #[test]
+    fn test_something() {
+        let (_, vk) = mock::compile_circuit();
+        let (proof, scalars) = mock::generate_proof();
+        let p4 = proof.a;
+        check_precompute_py(p4.y);
+    }
+
+    #[test]
+    fn test_another() {
+        let (_, vk) = mock::compile_circuit();
+        let (proof, scalars) = mock::generate_proof();
+
+        let mut msm_scalar = scalars.to_vec();
+        msm_scalar.reverse();
+        let mut msm_gs = vk.gamma_abc_g1.clone(); // vk.vk_pubs[0]
+        msm_gs.reverse();
+        let vky0 = msm_gs.pop().unwrap();
+    
+        let mut p3 = vky0 * ark_bn254::Fr::ONE;
+        for i in 0..NUM_PUBS {
+            p3 = p3 + msm_gs[i] * msm_scalar[i];
+        }
+        let p3 = p3.into_affine();
+    
+        let (p2, p1, p4) = (proof.c, vk.alpha_g1, proof.a);
+        let (q3, q2, q1, q4) = (
+            vk.gamma_g2.into_group().neg().into_affine(),
+            vk.delta_g2.into_group().neg().into_affine(),
+            -vk.beta_g2,
+            proof.b,
+        );
+        let f_fixed = Bn254::multi_miller_loop_affine([p1], [q1]).0;
+        let f = Bn254::multi_miller_loop_affine([p1, p2, p3, p4], [q1, q2, q3, q4]).0;
+        let (c, s) = compute_c_wi(f);
+        let eval_ins: EvalIns = EvalIns {
+            p2,
+            p3,
+            p4,
+            q4,
+            c,
+            s,
+            ks: msm_scalar.clone(),
+        };
+    
+        let pubs: Pubs = Pubs {
+            q2, 
+            q3, 
+            fixed_acc: f_fixed, 
+            ks_vks: msm_gs.clone(), 
+            vky0
+        };
+        check_msm(msm_scalar[0], msm_gs);
     }
 }

@@ -82,7 +82,7 @@ pub(crate) fn wrap_hint_msm(
     }
 
     let (hout_msm, hint_script, _) = hint_msm(sig, (segment_id as u32, output_type), input_segment_info.clone(), acc, hint_scalars, msm_chain_index, pub_vky.clone());
-
+    input_segment_info.reverse();
     Segment { id: segment_id as u32 as u32, output_type, inputs: input_segment_info, output: Element::MSMG1(hout_msm), hint_script, scr_type: ScriptType::MSM((msm_chain_index, pub_vky)) }
 
 }
@@ -101,6 +101,7 @@ pub(crate) fn wrap_hint_hash_p(
     input_segment_info.push((hint_in_rx.id, hint_in_rx.output_type));
 
     let (h, hint_script, _) = hint_hash_p(sig, (segment_id as u32, output_type), input_segment_info.clone(), hint_in_rx.output.into(), hint_in_ry.output.into(), hint_in_t.output.into(), pub_vky0.clone());
+    input_segment_info.reverse();
     Segment { id: segment_id as u32, output_type, inputs: input_segment_info, output: Element::HashBytes(h), hint_script, scr_type: ScriptType::PreMillerHashP(pub_vky0) }
 }
 
@@ -877,167 +878,170 @@ pub(crate) fn wrap_hints_dense_dense_mul1_by_constant(
 }
 
 
-pub(crate) fn op_scripts_from_segments(segments: Vec<Segment>) {
+pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::Script> {
     let msm_window = 8;
+    let mut op_scripts: Vec<treepp::Script> = vec![];
     for seg in segments {
-        match seg.scr_type {
+        let scr_type = seg.scr_type.clone();
+        match scr_type {
             ScriptType::NonDeterministic => {
-                script!();
+                op_scripts.push(script!());
             },
             ScriptType::MSM(inp) => {
-                tap_msm(msm_window, inp.0, inp.1 );
+                op_scripts.push(tap_msm(msm_window, inp.0, inp.1 ));
             },
             ScriptType::PreMillerInitT4 => {
-                tap_initT4();
+                op_scripts.push(tap_initT4());
             },
             ScriptType::PreMillerPrecomputePy => {
-                tap_precompute_Py();
+                op_scripts.push(tap_precompute_Py());
             },
             ScriptType::PreMillerPrecomputePx => {
-                tap_precompute_Px();
+                op_scripts.push(tap_precompute_Px());
             },
             ScriptType::PreMillerHashC => {
-                tap_hash_c();
+                op_scripts.push(tap_hash_c());
             },
             ScriptType::PreMillerHashC2 => {
-                tap_hash_c2();
+                op_scripts.push(tap_hash_c2());
             },
             ScriptType::PreMillerDenseDenseMulByHash0 => {
-                tap_dense_dense_mul0_by_hash();
+                op_scripts.push(tap_dense_dense_mul0_by_hash());
             },
             ScriptType::PreMillerDenseDenseMulByHash1 => {
-                tap_dense_dense_mul1_by_hash();
+                op_scripts.push(tap_dense_dense_mul1_by_hash());
             },
             ScriptType::PreMillerHashP(inp) => {
-                tap_hash_p(inp);
+                op_scripts.push(tap_hash_p(inp));
             },
             ScriptType::MillerSquaring => {
-                tap_squaring();
+                op_scripts.push(tap_squaring());
             },
             ScriptType::MillerDoubleAdd(a) => {
-                tap_point_ops(a);
+                op_scripts.push(tap_point_ops(a));
             },
             ScriptType::MillerDouble => {
-                tap_point_dbl();
+                op_scripts.push(tap_point_dbl());
             },
             ScriptType::SparseDenseMul(dbl_blk) => {
-                tap_sparse_dense_mul(dbl_blk);
+                op_scripts.push(tap_sparse_dense_mul(dbl_blk));
             },
             ScriptType::DenseDenseMul0() => {
-                tap_dense_dense_mul0();
+                op_scripts.push(tap_dense_dense_mul0());
             },
             ScriptType::DenseDenseMul1() => {
-                tap_dense_dense_mul1();
+                op_scripts.push(tap_dense_dense_mul1());
             },
             ScriptType::PostMillerFrobFp12(power) => {
-                tap_frob_fp12(power as usize);
+                op_scripts.push(tap_frob_fp12(power as usize));
             },
             ScriptType::PostMillerAddWithFrob(ate) => {
-                tap_point_add_with_frob(ate);
+                op_scripts.push(tap_point_add_with_frob(ate));
             },
             ScriptType::PostMillerDenseDenseMulByConst0(inp) => {
-                tap_dense_dense_mul0_by_constant(inp);
+                op_scripts.push(tap_dense_dense_mul0_by_constant(inp));
             },
             ScriptType::PostMillerDenseDenseMulByConst1(inp) => {
-                tap_dense_dense_mul1_by_constant(inp);
+                op_scripts.push(tap_dense_dense_mul1_by_constant(inp));
             },
             ScriptType::MillerSparseSparseDbl(inp) => {
-                tap_double_eval_mul_for_fixed_Qs(inp.0, inp.1);
+                op_scripts.push(tap_double_eval_mul_for_fixed_Qs(inp.0, inp.1).0);
             },
             ScriptType::MillerSparseSparseAdd(inp) => {
-                tap_add_eval_mul_for_fixed_Qs(inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1);
+                op_scripts.push(tap_add_eval_mul_for_fixed_Qs(inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1).0);
             },
             ScriptType::PostMillerSparseAddWithFrob(inp) => {
-                tap_add_eval_mul_for_fixed_Qs_with_frob(inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1);
+                op_scripts.push(tap_add_eval_mul_for_fixed_Qs_with_frob(inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1).0);
             },
         }
     }
+    op_scripts
 }
 
-pub(crate) fn bitcom_scripts_from_segments(segments: Vec<Segment>, pubkeys: Vec<WOTSPubKey>) {
+pub(crate) fn bitcom_scripts_from_segments(segments: &Vec<Segment>, pubkeys: Vec<WOTSPubKey>) -> Vec<treepp::Script> {
     let pubkeys_map: HashMap<u32, WOTSPubKey> = pubkeys
         .into_iter()
         .enumerate()
         .map(|(i, pk)| (i as u32, pk))
         .collect();
+    let mut bitcom_scripts: Vec<treepp::Script> = vec![];
     for seg in segments {
         let sec_out = (seg.id as u32, seg.output_type);
-        let sec_in = seg.inputs.iter().map(|f| (f.0 as u32, f.1)).collect();
+        let mut sec_in: Vec<(u32, bool)> = seg.inputs.iter().map(|f| (f.0 as u32, f.1)).collect();
         match seg.scr_type {
             ScriptType::NonDeterministic => {
-                script!();
+                bitcom_scripts.push(script!());
             },
             ScriptType::MSM(_) => {
-                bitcom_msm(&pubkeys_map, sec_out, sec_in);
+                sec_in.reverse();
+                bitcom_scripts.push(bitcom_msm(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::PreMillerInitT4 => {
-                bitcom_initT4(&pubkeys_map, sec_out, sec_in);
+                bitcom_scripts.push(bitcom_initT4(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::PreMillerPrecomputePy => {
-                bitcom_precompute_Py(&pubkeys_map, sec_out, sec_in);
+                bitcom_scripts.push(bitcom_precompute_Py(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::PreMillerPrecomputePx => {
-                bitcom_precompute_Px(&pubkeys_map, sec_out, sec_in);
+                bitcom_scripts.push(bitcom_precompute_Px(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::PreMillerHashC => {
-                bitcom_hash_c(&pubkeys_map, sec_out, sec_in);
+                bitcom_scripts.push(bitcom_hash_c(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::PreMillerHashC2 => {
-                bitcom_hash_c2(&pubkeys_map, sec_out, sec_in);
+                bitcom_scripts.push(bitcom_hash_c2(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::PreMillerDenseDenseMulByHash0 => {
-                bitcom_dense_dense_mul0_by_hash(&pubkeys_map, sec_out, sec_in);
+                bitcom_scripts.push(bitcom_dense_dense_mul0_by_hash(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::PreMillerDenseDenseMulByHash1 => {
-                bitcom_dense_dense_mul1_by_hash(&pubkeys_map, sec_out, sec_in);
+                bitcom_scripts.push(bitcom_dense_dense_mul1_by_hash(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::PreMillerHashP(_) => {
-                bitcom_hash_p(&pubkeys_map, sec_out, sec_in);
+                sec_in.reverse();
+                bitcom_scripts.push(bitcom_hash_p(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::MillerSquaring => {
-                bitcom_squaring(&pubkeys_map, sec_out, sec_in);
+                bitcom_scripts.push(bitcom_squaring(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::MillerDoubleAdd(ate) => {
-                bitcom_point_ops(&pubkeys_map, sec_out, sec_in, ate);
+                bitcom_scripts.push(bitcom_point_ops(&pubkeys_map, sec_out, sec_in, ate));
             },
             ScriptType::MillerDouble => {
-                bitcom_point_dbl(&pubkeys_map, sec_out, sec_in);
+                bitcom_scripts.push(bitcom_point_dbl(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::SparseDenseMul(_) => {
-                bitcom_sparse_dense_mul(&pubkeys_map, sec_out, sec_in);
+                bitcom_scripts.push(bitcom_sparse_dense_mul(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::DenseDenseMul0() => {
-                bitcom_dense_dense_mul0(&pubkeys_map, sec_out, sec_in);
+                bitcom_scripts.push(bitcom_dense_dense_mul0(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::DenseDenseMul1() => {
-                bitcom_dense_dense_mul1(&pubkeys_map, sec_out, sec_in);
+                bitcom_scripts.push(bitcom_dense_dense_mul1(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::PostMillerFrobFp12(_) => {
-                bitcom_frob_fp12(&pubkeys_map, sec_out, sec_in);;
+                bitcom_scripts.push(bitcom_frob_fp12(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::PostMillerAddWithFrob(_) => {
-                bitcom_point_add_with_frob(&pubkeys_map, sec_out, sec_in);;
+                bitcom_scripts.push(bitcom_point_add_with_frob(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::PostMillerDenseDenseMulByConst0(_) => {
-                bitcom_dense_dense_mul0_by_constant(&pubkeys_map, sec_out, sec_in);
+                bitcom_scripts.push(bitcom_dense_dense_mul0_by_constant(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::PostMillerDenseDenseMulByConst1(_) => {
-                bitcom_dense_dense_mul1_by_constant(&pubkeys_map, sec_out, sec_in);
+                bitcom_scripts.push(bitcom_dense_dense_mul1_by_constant(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::MillerSparseSparseDbl(_) => {
-                bitcom_double_eval_mul_for_fixed_Qs(&pubkeys_map, sec_out, sec_in);
+                bitcom_scripts.push(bitcom_double_eval_mul_for_fixed_Qs(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::MillerSparseSparseAdd(_) => {
-                bitcom_add_eval_mul_for_fixed_Qs(&pubkeys_map, sec_out, sec_in);
+                bitcom_scripts.push(bitcom_add_eval_mul_for_fixed_Qs(&pubkeys_map, sec_out, sec_in));
             },
             ScriptType::PostMillerSparseAddWithFrob(_) => {
-                bitcom_add_eval_mul_for_fixed_Qs_with_frob(&pubkeys_map, sec_out, sec_in);
+                bitcom_scripts.push(bitcom_add_eval_mul_for_fixed_Qs_with_frob(&pubkeys_map, sec_out, sec_in));
             },
         }
-    
     }
+    bitcom_scripts
 }
-
-
-
 
