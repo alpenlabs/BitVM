@@ -16,7 +16,8 @@ pub struct Segment {
     pub scr_type: ScriptType,
 }
 
-#[derive(Debug, Clone)]
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ScriptType {
     NonDeterministic,
     MSM((usize, Vec<ark_bn254::G1Affine>)),
@@ -877,66 +878,97 @@ pub(crate) fn wrap_hints_dense_dense_mul1_by_constant(
     }
 }
 
-
+fn cached<F, T, R>(fun: F) -> impl FnMut(T) -> R
+where
+    F: Fn(T) -> R + 'static,
+    R: Clone + 'static,
+    T: Eq + std::hash::Hash + 'static + Clone,
+{
+    let mut cache: HashMap<T, R> = HashMap::new();
+    let f = move |a| {
+        let ret = if let Some(v) = cache.get(&a) {
+            v.clone()
+        } else {
+            let ret = fun(a.clone());
+            cache.insert(a, ret.clone());
+            ret
+        };
+        ret
+    };
+    f
+}
 pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::Script> {
+
+    let mut tap_point_ops = cached(tap_point_ops);
+    let mut tap_sparse_dense_mul = cached(tap_sparse_dense_mul);
+    let mut tap_dense_dense_mul0_by_constant = cached(tap_dense_dense_mul0_by_constant);
+    let mut tap_dense_dense_mul1_by_constant = cached(tap_dense_dense_mul1_by_constant);
+    let mut tap_frob_fp12 = cached(tap_frob_fp12);
+    let mut tap_point_add_with_frob = cached(tap_point_add_with_frob);
+    let mut tap_hash_p = cached(tap_hash_p);
+    let mut tap_msm = cached(|(a, b, c)| tap_msm(a, b, c ));
+    let mut tap_double_eval_mul_for_fixed_Qs = cached(|(a, b)| tap_double_eval_mul_for_fixed_Qs(a, b));
+    let mut tap_add_eval_mul_for_fixed_Qs = cached(|(a, b, c, d, e)| tap_add_eval_mul_for_fixed_Qs(a, b, c, d, e));
+    let mut tap_add_eval_mul_for_fixed_Qs_with_frob = cached(|(a, b, c, d, e)| tap_add_eval_mul_for_fixed_Qs_with_frob(a, b, c, d, e));
+    let tap_initT4 = tap_initT4();
+    let tap_precompute_Py = tap_precompute_Py();
+    let tap_precompute_Px = tap_precompute_Px();
+    let tap_hash_c = tap_hash_c();
+    let tap_hash_c2 = tap_hash_c2();
+    let tap_dense_dense_mul0_by_hash = tap_dense_dense_mul0_by_hash();
+    let tap_dense_dense_mul1_by_hash = tap_dense_dense_mul1_by_hash();
+    let tap_squaring = tap_squaring();
+    let tap_point_dbl = tap_point_dbl();
+    let tap_dense_dense_mul0 = tap_dense_dense_mul0();
+    let tap_dense_dense_mul1 = tap_dense_dense_mul1();
+
     let msm_window = 8;
     let mut op_scripts: Vec<treepp::Script> = vec![];
     for seg in segments {
         let scr_type = seg.scr_type.clone();
+
         match scr_type {
             ScriptType::NonDeterministic => {
                 op_scripts.push(script!());
             },
-            ScriptType::MSM(inp) => {
-                op_scripts.push(tap_msm(msm_window, inp.0, inp.1 ));
-            },
             ScriptType::PreMillerInitT4 => {
-                op_scripts.push(tap_initT4());
-            },
+                op_scripts.push(tap_initT4.clone());
+            }
             ScriptType::PreMillerPrecomputePy => {
-                op_scripts.push(tap_precompute_Py());
+                op_scripts.push(tap_precompute_Py.clone());
             },
             ScriptType::PreMillerPrecomputePx => {
-                op_scripts.push(tap_precompute_Px());
+                op_scripts.push(tap_precompute_Px.clone());
             },
             ScriptType::PreMillerHashC => {
-                op_scripts.push(tap_hash_c());
+                op_scripts.push(tap_hash_c.clone());
             },
             ScriptType::PreMillerHashC2 => {
-                op_scripts.push(tap_hash_c2());
+                op_scripts.push(tap_hash_c2.clone());
             },
             ScriptType::PreMillerDenseDenseMulByHash0 => {
-                op_scripts.push(tap_dense_dense_mul0_by_hash());
+                op_scripts.push(tap_dense_dense_mul0_by_hash.clone());
             },
             ScriptType::PreMillerDenseDenseMulByHash1 => {
-                op_scripts.push(tap_dense_dense_mul1_by_hash());
-            },
-            ScriptType::PreMillerHashP(inp) => {
-                op_scripts.push(tap_hash_p(inp));
+                op_scripts.push(tap_dense_dense_mul1_by_hash.clone());
             },
             ScriptType::MillerSquaring => {
-                op_scripts.push(tap_squaring());
+                op_scripts.push(tap_squaring.clone());
             },
             ScriptType::MillerDoubleAdd(a) => {
                 op_scripts.push(tap_point_ops(a));
             },
             ScriptType::MillerDouble => {
-                op_scripts.push(tap_point_dbl());
+                op_scripts.push(tap_point_dbl.clone());
             },
             ScriptType::SparseDenseMul(dbl_blk) => {
                 op_scripts.push(tap_sparse_dense_mul(dbl_blk));
             },
             ScriptType::DenseDenseMul0() => {
-                op_scripts.push(tap_dense_dense_mul0());
+                op_scripts.push(tap_dense_dense_mul0.clone());
             },
             ScriptType::DenseDenseMul1() => {
-                op_scripts.push(tap_dense_dense_mul1());
-            },
-            ScriptType::PostMillerFrobFp12(power) => {
-                op_scripts.push(tap_frob_fp12(power as usize));
-            },
-            ScriptType::PostMillerAddWithFrob(ate) => {
-                op_scripts.push(tap_point_add_with_frob(ate));
+                op_scripts.push(tap_dense_dense_mul1.clone());
             },
             ScriptType::PostMillerDenseDenseMulByConst0(inp) => {
                 op_scripts.push(tap_dense_dense_mul0_by_constant(inp));
@@ -944,14 +976,27 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
             ScriptType::PostMillerDenseDenseMulByConst1(inp) => {
                 op_scripts.push(tap_dense_dense_mul1_by_constant(inp));
             },
+
+            ScriptType::MSM(inp) => {
+                op_scripts.push(tap_msm((msm_window, inp.0, inp.1 )));
+            },
+            ScriptType::PostMillerFrobFp12(power) => {
+                op_scripts.push(tap_frob_fp12(power as usize));
+            },
+            ScriptType::PostMillerAddWithFrob(ate) => {
+                op_scripts.push(tap_point_add_with_frob(ate));
+            },
+            ScriptType::PreMillerHashP(inp) => {
+                op_scripts.push(tap_hash_p(inp));
+            },
             ScriptType::MillerSparseSparseDbl(inp) => {
-                op_scripts.push(tap_double_eval_mul_for_fixed_Qs(inp.0, inp.1).0);
+                op_scripts.push(tap_double_eval_mul_for_fixed_Qs((inp.0, inp.1)).0);
             },
             ScriptType::MillerSparseSparseAdd(inp) => {
-                op_scripts.push(tap_add_eval_mul_for_fixed_Qs(inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1).0);
+                op_scripts.push(tap_add_eval_mul_for_fixed_Qs((inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1)).0);
             },
             ScriptType::PostMillerSparseAddWithFrob(inp) => {
-                op_scripts.push(tap_add_eval_mul_for_fixed_Qs_with_frob(inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1).0);
+                op_scripts.push(tap_add_eval_mul_for_fixed_Qs_with_frob((inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1)).0);
             },
         }
     }
