@@ -4,8 +4,7 @@ use ark_ff::{BigInteger, Field, PrimeField};
 use bitcoin_script::script;
 use std::collections::HashMap;
 
-use crate::chunk::compile::ATE_LOOP_COUNT;
-use crate::chunk::config::miller_config_gen;
+use crate::chunk::config::{miller_config_gen, ATE_LOOP_COUNT};
 use crate::chunk::msm::{bitcom_hash_p, bitcom_msm, hint_hash_p, hint_msm, tap_hash_p, tap_msm};
 use crate::chunk::primitves::extern_hash_fps;
 use crate::chunk::{taps, taps_mul};

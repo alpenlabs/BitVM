@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::ops::Neg;
 
-use crate::chunk::compile::{compile, get_tapscript_link_ids, Vkey};
+use crate::chunk::compile::{compile_ops, compile_taps, get_tapscript_link_ids, Vkey};
 use crate::chunk::config::{assign_link_ids, keygen, NUM_PUBS, NUM_U160, NUM_U256};
 use crate::chunk::evaluate::{evaluate, extract_values_from_hints, EvalIns};
+use crate::chunk::hint_models::{ElemG1Point, G1PointExt};
 use crate::chunk::taps::{Sig, SigData};
 use crate::chunk::wots::WOTSPubKey;
 use crate::groth16::g16::{
@@ -34,7 +35,7 @@ pub fn api_compile(vk: &ark_groth16::VerifyingKey<Bn254>) -> Vec<Script> {
     p3vk.reverse();
     let vky0 = p3vk.pop().unwrap();
 
-    let res = compile(
+    let taps = compile_ops(
         Vkey {
             q2,
             q3,
@@ -42,10 +43,8 @@ pub fn api_compile(vk: &ark_groth16::VerifyingKey<Bn254>) -> Vec<Script> {
             p1q1,
             vky0,
         },
-        &HashMap::new(),
-        false,
     );
-    let taps: Vec<Script> = res.into_iter().map(|(_, f)| f).collect();
+    // let taps: Vec<Script> = res.into_iter().map(|(_, f)| f).collect();
     taps
 }
 
@@ -66,28 +65,18 @@ pub fn generate_tapscripts(
         pubkeys.insert((len + i) as u32, WOTSPubKey::P160(inpubkeys.2[i]));
     }
 
-    let bitcom_scripts_per_link = compile(
+    let taps_per_link = compile_taps(
         Vkey {
             q2: ark_bn254::G2Affine::identity(),
             q3: ark_bn254::G2Affine::identity(),
-            p3vk: vec![],
+            p3vk: (0..NUM_PUBS).map(|_| ElemG1Point::mock()).collect(),
             p1q1: ark_bn254::Fq12::ONE,
             vky0: ark_bn254::G1Affine::identity(),
         },
-        &pubkeys,
-        true,
+        pubkeys,
+        ops_scripts_per_link.to_vec(),
     );
-    assert_eq!(ops_scripts_per_link.len(), bitcom_scripts_per_link.len());
-    let mut itr = 0;
-    let mut taps_per_link = vec![];
-    for (_, bcs) in bitcom_scripts_per_link {
-        let scr = script!(
-            {bcs}
-            {ops_scripts_per_link[itr].clone()}
-        );
-        taps_per_link.push(scr);
-        itr += 1;
-    }
+    assert_eq!(ops_scripts_per_link.len(), taps_per_link.len());
     taps_per_link
 }
 

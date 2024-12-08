@@ -1,507 +1,275 @@
-use ark_bn254::g2::G2Affine;
-use ark_ec::bn::BnConfig;
+
 use std::collections::HashMap;
 
-use super::config::{
-    assign_link_ids, msm_config_gen, post_miller_config_gen, pre_miller_config_gen,
-};
-use super::config::{miller_config_gen, NUM_PUBS, NUM_U160, NUM_U256, PUB_ID};
-use super::msm::{bitcom_msm, tap_msm};
-use super::taps::{
-    bitcom_add_eval_mul_for_fixed_Qs_with_frob, bitcom_frob_fp12, bitcom_hash_c, bitcom_hash_c2,
-    bitcom_initT4, bitcom_point_add_with_frob, bitcom_precompute_Px, bitcom_precompute_Py,
-    tap_add_eval_mul_for_fixed_Qs_with_frob, tap_frob_fp12, tap_hash_c2, tap_point_add_with_frob,
-    tap_precompute_Px, tap_precompute_Py, Link,
-};
-use super::taps::{tap_hash_c, tap_initT4};
-use super::taps_mul::{
-    bitcom_dense_dense_mul0, bitcom_dense_dense_mul1, bitcom_sparse_dense_mul, bitcom_squaring,
-    tap_dense_dense_mul0, tap_dense_dense_mul1, tap_sparse_dense_mul, tap_squaring,
-};
-use super::wots::WOTSPubKey;
+use ark_ff::{AdditiveGroup, Field, UniformRand};
+use bitcoin_script::script;
+use rand::{rngs::mock, SeedableRng};
+use rand_chacha::ChaCha20Rng;
 
-use crate::chunk::msm::{bitcom_hash_p, tap_hash_p};
-use crate::chunk::taps::{
-    bitcom_add_eval_mul_for_fixed_Qs, bitcom_double_eval_mul_for_fixed_Qs, bitcom_point_dbl,
-    bitcom_point_ops, tap_add_eval_mul_for_fixed_Qs, tap_double_eval_mul_for_fixed_Qs,
-    tap_point_dbl, tap_point_ops,
-};
-use crate::chunk::taps_mul::{
-    bitcom_dense_dense_mul0_by_constant, bitcom_dense_dense_mul0_by_hash, bitcom_dense_dense_mul1_by_constant, bitcom_dense_dense_mul1_by_hash, tap_dense_dense_mul0_by_constant, tap_dense_dense_mul0_by_hash, tap_dense_dense_mul1_by_constant, tap_dense_dense_mul1_by_hash
-};
-use crate::treepp::*;
+use crate::{chunk::hint_models::{ElemG1Point, G1PointExt}, treepp};
 
-// pub const ATE_LOOP_COUNT: &'static [i8] = &[
-//     0, 0, 0, 1, 0, 1, 0, -1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, -1, 0, 0, 0, 1, 0, -1, 0, 0, 0,
-//     0, -1, 0, 0, 1, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 1, 0, -1, 0, 0, 0, -1, 0,
-//     -1, 0, 0, 0, 1, 0, 1, 1,
-// ];
-pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
+use super::{acc::{groth16, Pubs}, evaluate::EvalIns, hint_models::{ElemG2PointAcc, Element}, msm::{bitcom_hash_p, bitcom_msm, tap_hash_p, tap_msm}, segment::{ScriptType, Segment}, taps::*, taps_mul::*, wots::WOTSPubKey};
 
-// given a groth16 verification key, generate all of the tapscripts in compile mode
-fn compile_miller_circuit(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    id_to_sec: HashMap<String, (u32, bool)>,
-    q2: ark_bn254::G2Affine,
-    q3: ark_bn254::G2Affine,
-    collect_bitcom: bool,
-) -> (Vec<(u32, Script)>, G2Affine, G2Affine) {
-    // vk: (G1Affine, G2Affine, G2Affine, G2Affine)
-    // groth16 is 1 G2 and 2 G1, P4, Q4,
-    // e(A,B)⋅e(vkα ,vkβ)=e(C,vkδ)⋅e(vkγ_ABC,vkγ)
-    // e(P4,Q4).e(P1,Q1) = e(P2,Q2).e(P3,Q3)
-    // P3 = vk_0 + msm(vk_i, k_i)
-
-    // Verification key is P1, Q1, Q2, Q3
-    // let (P1, Q1, Q2, Q3) = vk;
-    let (t2, t3) = (q2.clone(), q3.clone());
-
-    let blocks = miller_config_gen();
-
-    let mut itr = 0;
-    // println!("max id {:?}", max_id);
-
-    fn get_index(blk_name: &str, id_to_sec: HashMap<String, (u32, bool)>) -> Link {
-        id_to_sec.get(blk_name).unwrap().clone()
-    }
-
-    fn get_deps(deps: &str, id_to_sec: HashMap<String, (u32, bool)>) -> Vec<Link> {
-        let splits: Vec<Link> = deps
-            .split(",")
-            .into_iter()
-            .map(|s| get_index(s, id_to_sec.clone()))
-            .collect();
-        splits
-    }
-
-    let mut scripts: Vec<(u32, Script)> = vec![];
-
-    let mut nt2 = t2.clone();
-    let mut nt3 = t3.clone();
-    for j in (1..ATE_LOOP_COUNT.len()).rev() {
-        let bit = &ATE_LOOP_COUNT[j - 1];
-        let blocks_of_a_loop = &blocks[itr];
-        for block in blocks_of_a_loop {
-            let sec_out = get_index(&block.link_id, id_to_sec.clone());
-            let deps_indices = get_deps(&block.dependencies, id_to_sec.clone());
-            // println!(
-            //     "{itr} ate {:?} ID {:?} deps {:?}",
-            //     *bit, block.link_id, block.dependencies
-            // );
-            // println!(
-            //     "{itr} {} ID {:?} deps {:?}",
-            //     block.category, sec_out, deps_indices
-            // );
-            let blk_name = block.category.clone();
-            if blk_name == "Sqr" {
-                let mut sc = script!();
-                if collect_bitcom {
-                    sc = bitcom_squaring(link_ids, sec_out, deps_indices);
-                } else {
-                    sc = tap_squaring();
-                }
-                scripts.push((sec_out.0, sc));
-            } else if blk_name == "DblAdd" {
-                let mut sc = script!();
-                if collect_bitcom {
-                    sc = bitcom_point_ops(link_ids, sec_out, deps_indices, *bit);
-                } else {
-                    sc = tap_point_ops(*bit);
-                }
-                scripts.push((sec_out.0, sc));
-            } else if blk_name == "Dbl" {
-                let mut sc = script!();
-                if collect_bitcom {
-                    sc = bitcom_point_dbl(link_ids, sec_out, deps_indices);
-                } else {
-                    sc = tap_point_dbl();
-                }
-                scripts.push((sec_out.0, sc));
-            } else if blk_name == "SD1" || blk_name == "SD2" {
-                let mut sc = script!();
-                if collect_bitcom {
-                    sc = bitcom_sparse_dense_mul(link_ids, sec_out, deps_indices);
-                } else {
-                    sc = tap_sparse_dense_mul(blk_name == "SD1");
-                }
-                scripts.push((sec_out.0, sc));
-            } else if blk_name == "SS1" {
-                let mut sc = script!();
-                if collect_bitcom {
-                    sc = bitcom_double_eval_mul_for_fixed_Qs(link_ids, sec_out, deps_indices);
-                } else {
-                    let (sc1, a, b) = tap_double_eval_mul_for_fixed_Qs(nt2, nt3);
-                    nt2 = a;
-                    nt3 = b;
-                    sc = sc1;
-                }
-                scripts.push((sec_out.0, sc));
-            } else if blk_name == "DD1" || blk_name == "DD3" || blk_name == "DD5" {
-                let mut sc = script!();
-                if collect_bitcom {
-                    sc = bitcom_dense_dense_mul0(link_ids, sec_out, deps_indices);
-                } else {
-                    sc = tap_dense_dense_mul0();
-                }
-                scripts.push((sec_out.0, sc));
-            } else if blk_name == "DD2" || blk_name == "DD4" || blk_name == "DD6" {
-                let mut sc = script!();
-                if collect_bitcom {
-                    sc = bitcom_dense_dense_mul1(link_ids, sec_out, deps_indices);
-                } else {
-                    sc = tap_dense_dense_mul1();
-                }
-                scripts.push((sec_out.0, sc));
-            } else if blk_name == "SS2" {
-                let mut sc = script!();
-                if collect_bitcom {
-                    sc = bitcom_add_eval_mul_for_fixed_Qs(link_ids, sec_out, deps_indices);
-                } else {
-                    let (sc1, a, b) = tap_add_eval_mul_for_fixed_Qs(nt2, nt3, q2, q3, *bit);
-                    nt2 = a;
-                    nt3 = b;
-                    sc = sc1;
-                }
-                scripts.push((sec_out.0, sc));
-            } else {
-                println!("unhandled {:?}", blk_name);
-                panic!();
-            }
-        }
-        itr += 1;
-    }
-    (scripts, nt2, nt3)
-}
-
-fn compile_pre_miller_circuit(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    id_map: HashMap<String, (u32, bool)>,
-    vky0: ark_bn254::G1Affine,
-    collect_bitcom: bool,
-) -> Vec<(u32, Script)> {
-    let tables = pre_miller_config_gen();
-
-    let mut scripts: Vec<(u32, Script)> = vec![];
-    for row in tables {
-        let sec_in = row
-            .dependencies
-            .split(",")
-            .into_iter()
-            .map(|s| id_map.get(s).unwrap().clone())
-            .collect();
-        //println!("row ID {:?}", row.link_id);
-        let sec_out = id_map.get(&row.link_id).unwrap().clone();
-        //println!(" {} ID {:?} deps {:?}", row.category, sec_out, sec_in);
-
-        if row.category == "T4Init" {
-            let mut sc = script!();
-            if collect_bitcom {
-                sc = bitcom_initT4(link_ids, sec_out, sec_in);
-            } else {
-                sc = tap_initT4();
-            }
-            scripts.push((sec_out.0, sc));
-        } else if row.category == "PrePy" {
-            let mut sc = script!();
-            if collect_bitcom {
-                sc = bitcom_precompute_Py(link_ids, sec_out, sec_in);
-            } else {
-                sc = tap_precompute_Py();
-            }
-            scripts.push((sec_out.0, sc));
-        } else if row.category == "PrePx" {
-            let mut sc = script!();
-            if collect_bitcom {
-                sc = bitcom_precompute_Px(link_ids, sec_out, sec_in);
-            } else {
-                sc = tap_precompute_Px();
-            }
-            scripts.push((sec_out.0, sc));
-        } else if row.category == "HashC" {
-            let mut sc = script!();
-            if collect_bitcom {
-                sc = bitcom_hash_c(link_ids, sec_out, sec_in);
-            } else {
-                sc = tap_hash_c();
-            }
-            scripts.push((sec_out.0, sc));
-        } else if row.category == "HashC2" {
-            let mut sc = script!();
-            if collect_bitcom {
-                sc = bitcom_hash_c2(link_ids, sec_out, sec_in);
-            } else {
-                sc = tap_hash_c2();
-            }
-            scripts.push((sec_out.0, sc));
-        } else if row.category == "DD1" {
-            let mut sc = script!();
-            if collect_bitcom {
-                sc = bitcom_dense_dense_mul0_by_hash(link_ids, sec_out, sec_in);
-            } else {
-                sc = tap_dense_dense_mul0_by_hash();
-            }
-            scripts.push((sec_out.0, sc));
-        } else if row.category == "DD2" {
-            let mut sc = script!();
-            if collect_bitcom {
-                sc = bitcom_dense_dense_mul1_by_hash(link_ids, sec_out, sec_in);
-            } else {
-                sc = tap_dense_dense_mul1_by_hash();
-            }
-            scripts.push((sec_out.0, sc));
-        } else if row.category == "P3Hash" {
-            let mut sc = script!();
-            if collect_bitcom {
-                sc = bitcom_hash_p(link_ids, sec_out, sec_in);
-            } else {
-                sc = tap_hash_p(vky0);
-            }
-            scripts.push((sec_out.0, sc));
-        } else {
-            panic!()
-        }
-    }
-    scripts
-}
-
-fn compile_post_miller_circuit(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    id_map: HashMap<String, (u32, bool)>,
-    t2: ark_bn254::G2Affine,
-    t3: ark_bn254::G2Affine,
-    q2: ark_bn254::G2Affine,
-    q3: ark_bn254::G2Affine,
-    facc: String,
-    tacc: String,
-    p1q1: ark_bn254::Fq12,
-    collect_bitcom: bool,
-) -> Vec<(u32, Script)> {
-    let tables = post_miller_config_gen(facc, tacc);
-
-    let mut nt2 = t2;
-    let mut nt3 = t3;
-    let mut scripts: Vec<(u32, Script)> = vec![];
-    for row in tables {
-        let sec_in: Vec<Link> = row
-            .dependencies
-            .split(",")
-            .into_iter()
-            .map(|s| id_map.get(s).unwrap().clone())
-            .collect();
-        //println!("row ID {:?}", row.link_id);
-        let sec_out = id_map.get(&row.link_id).unwrap().clone();
-        if row.category == "Frob1" || row.category == "Frob2" || row.category == "Frob3" {
-            let mut sc = script!();
-            let power = if row.category == "Frob1" {
-                1
-            } else if row.category == "Frob2" {
-                2
-            } else {
-                3
-            };
-            if collect_bitcom {
-                sc = bitcom_frob_fp12(link_ids, sec_out, sec_in);
-            } else {
-                sc = tap_frob_fp12(power);
-            }
-            scripts.push((sec_out.0, sc));
-        } else if row.category == "DD1" || row.category == "DD3" {
-            let mut sc = script!();
-            if collect_bitcom {
-                sc = bitcom_dense_dense_mul0(link_ids, sec_out, sec_in);
-            } else {
-                sc = tap_dense_dense_mul0();
-            }
-            scripts.push((sec_out.0, sc));
-        } else if row.category == "DD2" || row.category == "DD4" {
-            let mut sc = script!();
-            if collect_bitcom {
-                sc = bitcom_dense_dense_mul1(link_ids, sec_out, sec_in);
-            } else {
-                sc = tap_dense_dense_mul1();
-            }
-            scripts.push((sec_out.0, sc));
-        } else if row.category == "Add1" || row.category == "Add2" {
-            let mut sign = 1;
-            if row.category == "Add2" {
-                sign = -1;
-            };
-            let mut sc = script!();
-            if collect_bitcom {
-                sc = bitcom_point_add_with_frob(link_ids, sec_out, sec_in);
-            } else {
-                sc = tap_point_add_with_frob(sign);
-            }
-            scripts.push((sec_out.0, sc));
-        } else if row.category == "SD" {
-            let mut sc = script!();
-            if collect_bitcom {
-                sc = bitcom_sparse_dense_mul(link_ids, sec_out, sec_in);
-            } else {
-                sc = tap_sparse_dense_mul(false);
-            }
-            scripts.push((sec_out.0, sc));
-        } else if row.category == "SS1" || row.category == "SS2" {
-            let mut sign = 1;
-            if row.category == "SS2" {
-                sign = -1;
-            }
-            let mut sc = script!();
-            if collect_bitcom {
-                sc = bitcom_add_eval_mul_for_fixed_Qs_with_frob(link_ids, sec_out, sec_in);
-            } else {
-                let (sc1, a, b) = tap_add_eval_mul_for_fixed_Qs_with_frob(nt2, nt3, q2, q3, sign);
-                nt2 = a;
-                nt3 = b;
-                sc = sc1;
-            }
-            scripts.push((sec_out.0, sc));
-        } else if row.category == "DK1" {
-            let mut sc = script!();
-            if collect_bitcom {
-                sc = bitcom_dense_dense_mul0_by_constant(link_ids, sec_out, sec_in);
-            } else {
-                sc = tap_dense_dense_mul0_by_constant(p1q1);
-            }
-            scripts.push((sec_out.0, sc));
-        } else if row.category == "DK2" {
-            let mut sc = script!();
-            if collect_bitcom {
-                sc = bitcom_dense_dense_mul1_by_constant(link_ids, sec_out, sec_in);
-            } else {
-                sc = tap_dense_dense_mul1_by_constant(p1q1);
-            }
-            scripts.push((sec_out.0, sc));
-        }
-    }
-    return scripts;
-}
-
-fn compile_msm_circuit(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    id_map: HashMap<String, (u32, bool)>,
-    qs: Vec<ark_bn254::G1Affine>,
-    collect_bitcom: bool,
-) -> Vec<(u32, Script)> {
-    let rows = msm_config_gen(String::from(PUB_ID));
-
-    let mut msm_tap_index = 0;
-    let window = 8;
-    let mut scripts: Vec<(u32, Script)> = vec![];
-    for row in rows {
-        let sec_in: Vec<Link> = row
-            .dependencies
-            .split(",")
-            .into_iter()
-            .map(|s| id_map.get(s).unwrap().clone())
-            .collect();
-        //println!("row ID {:?}", row.link_id);
-        let sec_out = id_map.get(&row.link_id).unwrap().clone();
-
-        if row.category == "MSM" {
-            let mut sc = script!();
-            if collect_bitcom {
-                sc = bitcom_msm(link_ids, sec_out, sec_in);
-            } else {
-                sc = tap_msm(window, msm_tap_index, qs.clone());
-            }
-            scripts.push((sec_out.0, sc));
-        } else {
-            panic!()
-        }
-        msm_tap_index += 1;
-    }
-    scripts
+pub(crate) fn get_tapscript_link_ids() -> Vec<u32>  {
+    vec![]
 }
 
 pub(crate) struct Vkey {
-    pub(crate) q2: G2Affine,
-    pub(crate) q3: G2Affine,
+    pub(crate) q2: ark_bn254::G2Affine,
+    pub(crate) q3: ark_bn254::G2Affine,
     pub(crate) p3vk: Vec<ark_bn254::G1Affine>,
     pub(crate) p1q1: ark_bn254::Fq12,
     pub(crate) vky0: ark_bn254::G1Affine,
 }
 
-pub(crate) fn get_tapscript_link_ids() -> Vec<u32> {
-    let (id_map, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
-    let mut all_ids: Vec<u32> = vec![];
-    let ids: Vec<u32> = msm_config_gen(String::from(PUB_ID)).iter().map(|f| id_map.get(&f.link_id).unwrap().0).collect();
-    all_ids.extend_from_slice(&ids);
-    let ids: Vec<u32> = pre_miller_config_gen().iter().map(|f| id_map.get(&f.link_id).unwrap().0).collect();
-    all_ids.extend_from_slice(&ids);
-    let ids: Vec<u32> = miller_config_gen().iter().flatten().map(|f| id_map.get(&f.link_id).unwrap().0).collect();
-    all_ids.extend_from_slice(&ids);
-    let ids: Vec<u32> = post_miller_config_gen(facc, tacc).iter().map(|f| id_map.get(&f.link_id).unwrap().0).collect();
-    all_ids.extend_from_slice(&ids);
-    all_ids
-}
-
-pub(crate) fn compile(
-    vk: Vkey,
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    collect_bitcom: bool,
-) -> Vec<(u32, Script)> {
-    let (q2, q3) = (vk.q2, vk.q3);
-    let (id_map, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
-    let mut scrs: Vec<(u32, Script)> = Vec::new();
-    let scr = compile_msm_circuit(&link_ids, id_map.clone(), vk.p3vk, collect_bitcom);
-    scrs.extend(scr);
-    let scr = compile_pre_miller_circuit(&link_ids, id_map.clone(), vk.vky0, collect_bitcom);
-    scrs.extend(scr);
-    let (scr, t2, t3) = compile_miller_circuit(&link_ids, id_map.clone(), q2, q3, collect_bitcom);
-    scrs.extend(scr);
-    let scr = compile_post_miller_circuit(
-        &link_ids,
-        id_map,
-        t2,
-        t3,
-        q2,
-        q3,
-        facc,
-        tacc,
-        vk.p1q1,
-        collect_bitcom,
-    );
-    scrs.extend(scr);
-    scrs
-}
-
-#[cfg(test)]
-mod test {
-    use ark_ff::UniformRand;
-    use rand::SeedableRng;
-    use rand_chacha::ChaCha20Rng;
-
-    use crate::chunk::{config::keygen, test_utils::read_scripts_from_file};
-
-    use super::*;
-
-    #[test]
-    fn run_compile() {
-        let mut prng = ChaCha20Rng::seed_from_u64(1);
-        let q2 = ark_bn254::G2Affine::rand(&mut prng);
-        let q3 = ark_bn254::G2Affine::rand(&mut prng);
-        let vka = ark_bn254::G1Affine::rand(&mut prng);
-        let vkb = ark_bn254::G1Affine::rand(&mut prng);
-        let vky0 = ark_bn254::G1Affine::rand(&mut prng);
-        let p1q1 = ark_bn254::Fq12::rand(&mut prng);
-        let sec_key = "b138982ce17ac813d505b5b40b665d404e9528e7";
-
-        let link_ids = keygen(sec_key);
-        let vk = Vkey {
-            q2,
-            q3,
-            p3vk: vec![vka, vkb],
-            p1q1,
-            vky0,
+fn cached<F, T, R>(fun: F) -> impl FnMut(T) -> R
+where
+    F: Fn(T) -> R + 'static,
+    R: Clone + 'static,
+    T: Eq + std::hash::Hash + 'static + Clone,
+{
+    let mut cache: HashMap<T, R> = HashMap::new();
+    let f = move |a| {
+        let ret = if let Some(v) = cache.get(&a) {
+            v.clone()
+        } else {
+            let ret = fun(a.clone());
+            cache.insert(a, ret.clone());
+            ret
         };
-        let bcs = compile(vk, &link_ids, false);
-    }
-
-    #[test]
-    fn print_links() {
-        let (id_map, facc, tacc) = assign_link_ids(NUM_PUBS, NUM_U256, NUM_U160);
-        let mut scrs: Vec<(u32, Script)> = Vec::new();
-        println!("idmap {:?}", id_map);
-    }
+        ret
+    };
+    f
 }
+
+pub(crate) fn compile_ops(
+    vk: Vkey,
+) -> Vec<bitcoin_script::Script>  {
+    println!("Preparing segments");
+    let mock_segments = segments_from_pubs(vk);
+    println!("Generating op scripts");
+    let op_scripts = op_scripts_from_segments(&mock_segments).into_iter().filter(|f| f.len() > 0).collect();
+    op_scripts
+}
+
+pub(crate) fn compile_taps(
+    vk: Vkey,
+    pubkeys: HashMap<u32, WOTSPubKey>,
+    ops_scripts: Vec<bitcoin_script::Script>,
+) ->  Vec<bitcoin_script::Script> {
+    let mock_segments = segments_from_pubs(vk);
+    let bitcom_scripts = bitcom_scripts_from_segments(&mock_segments, pubkeys);
+    let res  =ops_scripts.into_iter().zip(bitcom_scripts).map(|(op_scr, bit_scr)| script!(
+        {op_scr}
+        {bit_scr}
+    )).collect();
+    res
+}
+
+fn segments_from_pubs(vk: Vkey) -> Vec<Segment> {
+    let mut segments: Vec<Segment> = vec![];
+    let g1 = ElemG1Point::mock();
+    let g2 = ElemG2PointAcc::mock().t;
+    let fr = ark_bn254::Fr::ONE;
+    let s = ark_bn254::Fq12::ONE;
+    let c = ark_bn254::Fq12::ONE;
+    let eval_ins: EvalIns = EvalIns { p2: g1, p3: g1, p4: g1, q4: g2, c, s, ks: vec![fr] };
+
+    let pubs: Pubs = Pubs { q2: vk.q2, q3: vk.q3, fixed_acc: vk.p1q1, ks_vks: vk.p3vk, vky0: vk.vky0 };
+    groth16(true, &mut segments, eval_ins, pubs, &mut None);
+    segments
+}
+
+pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::Script> {
+
+    let mut tap_point_ops = cached(tap_point_ops);
+    let mut tap_sparse_dense_mul = cached(tap_sparse_dense_mul);
+    let mut tap_dense_dense_mul0_by_constant = cached(tap_dense_dense_mul0_by_constant);
+    let mut tap_dense_dense_mul1_by_constant = cached(tap_dense_dense_mul1_by_constant);
+    let mut tap_frob_fp12 = cached(tap_frob_fp12);
+    let mut tap_point_add_with_frob = cached(tap_point_add_with_frob);
+    let mut tap_hash_p = cached(tap_hash_p);
+    let mut tap_msm = cached(|(a, b, c)| tap_msm(a, b, c ));
+    let mut tap_double_eval_mul_for_fixed_Qs = cached(|(a, b)| tap_double_eval_mul_for_fixed_Qs(a, b));
+    let mut tap_add_eval_mul_for_fixed_Qs = cached(|(a, b, c, d, e)| tap_add_eval_mul_for_fixed_Qs(a, b, c, d, e));
+    let mut tap_add_eval_mul_for_fixed_Qs_with_frob = cached(|(a, b, c, d, e)| tap_add_eval_mul_for_fixed_Qs_with_frob(a, b, c, d, e));
+    let tap_initT4 = tap_initT4();
+    let tap_precompute_Py = tap_precompute_Py();
+    let tap_precompute_Px = tap_precompute_Px();
+    let tap_hash_c = tap_hash_c();
+    let tap_hash_c2 = tap_hash_c2();
+    let tap_dense_dense_mul0_by_hash = tap_dense_dense_mul0_by_hash();
+    let tap_dense_dense_mul1_by_hash = tap_dense_dense_mul1_by_hash();
+    let tap_squaring = tap_squaring();
+    let tap_point_dbl = tap_point_dbl();
+    let tap_dense_dense_mul0 = tap_dense_dense_mul0();
+    let tap_dense_dense_mul1 = tap_dense_dense_mul1();
+
+    let msm_window = 8;
+    let mut op_scripts: Vec<treepp::Script> = vec![];
+    for seg in segments {
+        let scr_type = seg.scr_type.clone();
+
+        match scr_type {
+            ScriptType::NonDeterministic => {
+                op_scripts.push(script!());
+            },
+            ScriptType::PreMillerInitT4 => {
+                op_scripts.push(tap_initT4.clone());
+            }
+            ScriptType::PreMillerPrecomputePy => {
+                op_scripts.push(tap_precompute_Py.clone());
+            },
+            ScriptType::PreMillerPrecomputePx => {
+                op_scripts.push(tap_precompute_Px.clone());
+            },
+            ScriptType::PreMillerHashC => {
+                op_scripts.push(tap_hash_c.clone());
+            },
+            ScriptType::PreMillerHashC2 => {
+                op_scripts.push(tap_hash_c2.clone());
+            },
+            ScriptType::PreMillerDenseDenseMulByHash0 => {
+                op_scripts.push(tap_dense_dense_mul0_by_hash.clone());
+            },
+            ScriptType::PreMillerDenseDenseMulByHash1 => {
+                op_scripts.push(tap_dense_dense_mul1_by_hash.clone());
+            },
+            ScriptType::MillerSquaring => {
+                op_scripts.push(tap_squaring.clone());
+            },
+            ScriptType::MillerDoubleAdd(a) => {
+                op_scripts.push(tap_point_ops(a));
+            },
+            ScriptType::MillerDouble => {
+                op_scripts.push(tap_point_dbl.clone());
+            },
+            ScriptType::SparseDenseMul(dbl_blk) => {
+                op_scripts.push(tap_sparse_dense_mul(dbl_blk));
+            },
+            ScriptType::DenseDenseMul0() => {
+                op_scripts.push(tap_dense_dense_mul0.clone());
+            },
+            ScriptType::DenseDenseMul1() => {
+                op_scripts.push(tap_dense_dense_mul1.clone());
+            },
+            ScriptType::PostMillerDenseDenseMulByConst0(inp) => {
+                op_scripts.push(tap_dense_dense_mul0_by_constant(inp));
+            },
+            ScriptType::PostMillerDenseDenseMulByConst1(inp) => {
+                op_scripts.push(tap_dense_dense_mul1_by_constant(inp));
+            },
+
+            ScriptType::MSM(inp) => {
+                op_scripts.push(tap_msm((msm_window, inp.0, inp.1 )));
+            },
+            ScriptType::PostMillerFrobFp12(power) => {
+                op_scripts.push(tap_frob_fp12(power as usize));
+            },
+            ScriptType::PostMillerAddWithFrob(ate) => {
+                op_scripts.push(tap_point_add_with_frob(ate));
+            },
+            ScriptType::PreMillerHashP(inp) => {
+                op_scripts.push(tap_hash_p(inp));
+            },
+            ScriptType::MillerSparseSparseDbl(inp) => {
+                op_scripts.push(tap_double_eval_mul_for_fixed_Qs((inp.0, inp.1)).0);
+            },
+            ScriptType::MillerSparseSparseAdd(inp) => {
+                op_scripts.push(tap_add_eval_mul_for_fixed_Qs((inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1)).0);
+            },
+            ScriptType::PostMillerSparseAddWithFrob(inp) => {
+                op_scripts.push(tap_add_eval_mul_for_fixed_Qs_with_frob((inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1)).0);
+            },
+        }
+    }
+    op_scripts
+}
+
+pub(crate) fn bitcom_scripts_from_segments(segments: &Vec<Segment>, pubkeys_map: HashMap<u32, WOTSPubKey>) -> Vec<treepp::Script> {
+    // let pubkeys_map: HashMap<u32, WOTSPubKey> = pubkeys
+    //     .into_iter()
+    //     .enumerate()
+    //     .map(|(i, pk)| (i as u32, pk))
+    //     .collect();
+    let mut bitcom_scripts: Vec<treepp::Script> = vec![];
+    for seg in segments {
+        let sec_out = (seg.id as u32, seg.output_type);
+        let mut sec_in: Vec<(u32, bool)> = seg.inputs.iter().map(|f| (f.0 as u32, f.1)).collect();
+        match seg.scr_type {
+            ScriptType::NonDeterministic => {
+                bitcom_scripts.push(script!());
+            },
+            ScriptType::MSM(_) => {
+                sec_in.reverse();
+                bitcom_scripts.push(bitcom_msm(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::PreMillerInitT4 => {
+                bitcom_scripts.push(bitcom_initT4(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::PreMillerPrecomputePy => {
+                bitcom_scripts.push(bitcom_precompute_Py(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::PreMillerPrecomputePx => {
+                bitcom_scripts.push(bitcom_precompute_Px(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::PreMillerHashC => {
+                bitcom_scripts.push(bitcom_hash_c(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::PreMillerHashC2 => {
+                bitcom_scripts.push(bitcom_hash_c2(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::PreMillerDenseDenseMulByHash0 => {
+                bitcom_scripts.push(bitcom_dense_dense_mul0_by_hash(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::PreMillerDenseDenseMulByHash1 => {
+                bitcom_scripts.push(bitcom_dense_dense_mul1_by_hash(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::PreMillerHashP(_) => {
+                sec_in.reverse();
+                bitcom_scripts.push(bitcom_hash_p(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::MillerSquaring => {
+                bitcom_scripts.push(bitcom_squaring(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::MillerDoubleAdd(ate) => {
+                bitcom_scripts.push(bitcom_point_ops(&pubkeys_map, sec_out, sec_in, ate));
+            },
+            ScriptType::MillerDouble => {
+                bitcom_scripts.push(bitcom_point_dbl(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::SparseDenseMul(_) => {
+                bitcom_scripts.push(bitcom_sparse_dense_mul(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::DenseDenseMul0() => {
+                bitcom_scripts.push(bitcom_dense_dense_mul0(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::DenseDenseMul1() => {
+                bitcom_scripts.push(bitcom_dense_dense_mul1(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::PostMillerFrobFp12(_) => {
+                bitcom_scripts.push(bitcom_frob_fp12(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::PostMillerAddWithFrob(_) => {
+                bitcom_scripts.push(bitcom_point_add_with_frob(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::PostMillerDenseDenseMulByConst0(_) => {
+                bitcom_scripts.push(bitcom_dense_dense_mul0_by_constant(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::PostMillerDenseDenseMulByConst1(_) => {
+                bitcom_scripts.push(bitcom_dense_dense_mul1_by_constant(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::MillerSparseSparseDbl(_) => {
+                bitcom_scripts.push(bitcom_double_eval_mul_for_fixed_Qs(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::MillerSparseSparseAdd(_) => {
+                bitcom_scripts.push(bitcom_add_eval_mul_for_fixed_Qs(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::PostMillerSparseAddWithFrob(_) => {
+                bitcom_scripts.push(bitcom_add_eval_mul_for_fixed_Qs_with_frob(&pubkeys_map, sec_out, sec_in));
+            },
+        }
+    }
+    bitcom_scripts
+}
+

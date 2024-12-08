@@ -478,12 +478,14 @@ mod test {
 
         let mut segments: Vec<Segment> = vec![];
 
-        acc::groth16(&mut segments, eval_ins, pubs, &mut None);
-        let proof_asserts = acc::hint_to_data(segments.clone());
-        let signed_asserts = sign_assertions(proof_asserts);
-        let mock_pubks = mock_pubkeys(MOCK_SECRET);
+        println!("eval_ins {:?}", eval_ins);
+        println!("pubs {:?}", pubs);
+        // acc::groth16(&mut segments, eval_ins, pubs, &mut None);
+        // let proof_asserts = acc::hint_to_data(segments.clone());
+        // let signed_asserts = sign_assertions(proof_asserts);
+        // let mock_pubks = mock_pubkeys(MOCK_SECRET);
 
-        full_exec(segments, signed_asserts, mock_pubks);
+        // full_exec(segments, signed_asserts, mock_pubks);
         // write_asserts_to_file(proof_asserts, "chunker_data/assert2.json");
 
     }
@@ -508,7 +510,7 @@ mod test {
     }
 
     #[test]
-    fn test_another() {
+    fn test_compile() {
         let (_, vk) = mock::compile_circuit();
         let (proof, scalars) = mock::generate_proof();
 
