@@ -378,6 +378,9 @@ pub(crate) fn groth16(
     f_acc = dmul1;
 
     let result: ElemFp12Acc = f_acc.output.into();
+    if result.f != ark_bn254::Fq12::ONE {
+        return false;
+    }
     //assert_eq!(result.f, ark_bn254::Fq12::ONE);
 
     println!("segments len {}", all_output_hints.len());
@@ -454,7 +457,7 @@ type Intermediates = (
     Vec<HashBytes>,
 );
 
-fn get_proof(asserts: &TypedAssertions) -> EvalIns { // EvalIns
+pub(crate) fn get_proof(asserts: &TypedAssertions) -> EvalIns { // EvalIns
     let numfqs = asserts.1;
     let p4 = ark_bn254::G1Affine::new_unchecked(numfqs[1], numfqs[0]);
     let p3 = ark_bn254::G1Affine::new_unchecked(numfqs[3], numfqs[2]);
@@ -495,7 +498,7 @@ fn get_proof(asserts: &TypedAssertions) -> EvalIns { // EvalIns
     eval_ins
 }
 
-fn get_intermediates(asserts: &TypedAssertions) -> Intermediates { // Intermediates
+pub(crate) fn get_intermediates(asserts: &TypedAssertions) -> Intermediates { // Intermediates
     let mut fqs = asserts.1[6..12].to_vec();
     fqs.reverse();
     let mut hashes= asserts.2.to_vec();
@@ -503,7 +506,7 @@ fn get_intermediates(asserts: &TypedAssertions) -> Intermediates { // Intermedia
     (fqs, hashes)
 }
 
-fn get_assertions(signed_asserts: Signatures) -> TypedAssertions {
+pub(crate) fn get_assertions(signed_asserts: Signatures) -> TypedAssertions {
     let mut ks: Vec<ark_bn254::Fr> = vec![];
     for i in 0..N_VERIFIER_PUBLIC_INPUTS {
         let sc = signed_asserts.0[i];
@@ -546,7 +549,7 @@ fn get_assertions(signed_asserts: Signatures) -> TypedAssertions {
     (ks.try_into().unwrap(), numfqs.try_into().unwrap(), numhashes.try_into().unwrap())
 }
 
-fn get_pubs(vk: &ark_groth16::VerifyingKey<Bn254>) -> Pubs {
+pub(crate) fn get_pubs(vk: &ark_groth16::VerifyingKey<Bn254>) -> Pubs {
     let mut msm_gs = vk.gamma_abc_g1.clone(); // vk.vk_pubs[0]
     msm_gs.reverse();
     let vky0 = msm_gs.pop().unwrap();
@@ -562,38 +565,11 @@ fn get_pubs(vk: &ark_groth16::VerifyingKey<Bn254>) -> Pubs {
     pubs
 }
 
-pub fn validate(
-    vk: &ark_groth16::VerifyingKey<Bn254>,
+pub fn script_exec(
+    segments: Vec<Segment>, 
     signed_asserts: Signatures,
     inpubkeys: PublicKeys,
-) -> Assertions {
-    let mut pubkeys: Vec<WOTSPubKey> = vec![];
-    for i in 0..NUM_PUBS {
-        pubkeys.push(WOTSPubKey::P256(inpubkeys.0[i]));
-    }
-    for i in 0..inpubkeys.1.len() {
-        pubkeys.push(WOTSPubKey::P256(inpubkeys.1[i]));
-    }
-    for i in 0..inpubkeys.2.len() {
-        pubkeys.push(WOTSPubKey::P160(inpubkeys.2[i]));
-    }
-
-    let asserts = get_assertions(signed_asserts);
-    let eval_ins = get_proof(&asserts);
-
-    let intermediates = get_intermediates(&asserts);
-
-    let mut hout: Vec<Segment> = vec![];
-    groth16(false, &mut hout, eval_ins, get_pubs(vk), &mut Some(intermediates));
-    hint_to_data(hout)
-}
-
-
-pub fn full_exec(
-    segments: Vec<Segment>,
-    signed_asserts: Signatures,
-    inpubkeys: PublicKeys,
-) {
+) -> Option<(usize, treepp::Script)> {
     let mut sigcache: HashMap<u32, SigData> = HashMap::new();
 
     assert_eq!(signed_asserts.0.len(), NUM_PUBS);
@@ -610,18 +586,18 @@ pub fn full_exec(
         sigcache.insert((NUM_PUBS + N_VERIFIER_FQS + i) as u32, SigData::Sig160(signed_asserts.2[i]));
     }
 
-    assert_eq!(segments.len(), sigcache.len());
 
-
-    let mut pubkeys: Vec<WOTSPubKey> = vec![];
+    let mut pubkeys: HashMap<u32, WOTSPubKey> = HashMap::new();
     for i in 0..NUM_PUBS {
-        pubkeys.push(WOTSPubKey::P256(inpubkeys.0[i]));
+        pubkeys.insert(i as u32, WOTSPubKey::P256(inpubkeys.0[i]));
     }
+    let len = pubkeys.len();
     for i in 0..inpubkeys.1.len() {
-        pubkeys.push(WOTSPubKey::P256(inpubkeys.1[i]));
+        pubkeys.insert((len + i) as u32, WOTSPubKey::P256(inpubkeys.1[i]));
     }
+    let len = pubkeys.len();
     for i in 0..inpubkeys.2.len() {
-        pubkeys.push(WOTSPubKey::P160(inpubkeys.2[i]));
+        pubkeys.insert((len + i) as u32, WOTSPubKey::P160(inpubkeys.2[i]));
     }
 
     let mut sig = Sig {
@@ -677,13 +653,17 @@ pub fn full_exec(
         bc_hints.push(bcelems);
     }
 
-    let locking_bitcoms = bitcom_scripts_from_segments(&segments, HashMap::new());
+    println!("op_scripts_from_segments");
     let locking_ops = op_scripts_from_segments(&segments);
+    println!("bitcom_scripts_from_segments");
+    let locking_bitcoms = bitcom_scripts_from_segments(&segments, pubkeys);
+
 
     let aux_hints: Vec<treepp::Script> = segments.iter().map(|f| f.hint_script.clone()).collect();
 
     assert!(aux_hints.len() == bc_hints.len() && locking_bitcoms.len() == locking_ops.len() && bc_hints.len() == locking_bitcoms.len());
 
+    let mut tap_script_index = 0;
     for i in 0..aux_hints.len() {
         if locking_ops[i].len() == 0 {
             continue;
@@ -695,169 +675,180 @@ pub fn full_exec(
             {locking_bitcoms[i].clone()}
             {locking_ops[i].clone()}
         };
+        tap_script_index += 1;
 
         let exec_result = execute_script(total_script);
         for i in 0..exec_result.final_stack.len() {
             println!("{i:} {:?}", exec_result.final_stack.get(i));
         }
-        // assert!(exec_result.final_stack.len() == 1);
+        if !exec_result.success {
+            assert!(exec_result.final_stack.len() == 1);
+        } else {
+            let disprove_hint = (
+                tap_script_index,
+                script!(
+                    {aux_hints[i].clone()}
+                    {bc_hints[i].clone()}
+                ),
+            );
+            return Some(disprove_hint);
+        }
     }
-
-
+    None
 }
 
 
-pub fn check_precompute_py(f: ark_bn254::Fq) {
-    // segments
-    let id_gp4y = 1;
-    let id_p4y: u32 = 7;
-    //let f = ark_bn254::Fq::ONE + ark_bn254::Fq::ONE;
-    let gp4y = Segment {
-        id: id_gp4y,
-        output_type: true,
-        inputs: vec![],
-        output: Element::FieldElem(f),
-        hint_script: script!(),
-        scr_type: ScriptType::NonDeterministic
-    };
-    let p4y = wrap_hints_precompute_Py(false, id_p4y as usize, &gp4y);
-
-    // assertioons
-    let n_gp4y = extern_fq_to_nibbles(gp4y.output.into());
-    let a_gp4y = nib_to_byte_array(&n_gp4y);
-    let n_p4y = extern_fq_to_nibbles(p4y.output.into());
-    let a_p4y = nib_to_byte_array(&n_p4y);
-
-    // signature
-    const MOCK_SECRET: &str = "a138982ce17ac813d505a5b40b665d404e9528e7";
-    let pub_gp4y = wots256::generate_public_key(&format!("{MOCK_SECRET}{:04x}", id_gp4y));
-    let pub_p4y = wots256::generate_public_key(&format!("{MOCK_SECRET}{:04x}", id_p4y));
-    let mut pubk: HashMap<u32, WOTSPubKey> = HashMap::new();
-    pubk.insert(id_gp4y, WOTSPubKey::P256(pub_gp4y));
-    pubk.insert(id_p4y, WOTSPubKey::P256(pub_p4y));
-
-    let sa_gp4y = wots256::get_signature(&format!("{MOCK_SECRET}{:04x}", id_gp4y), &a_gp4y);
-    let sa_p4y = wots256::get_signature(&format!("{MOCK_SECRET}{:04x}", id_p4y), &a_p4y);
 
 
-    // execution
-    let mut sigcache: HashMap<u32, SigData> = HashMap::new();
-    sigcache.insert(id_gp4y, SigData::Sig256(sa_gp4y));
-    sigcache.insert(id_p4y, SigData::Sig256(sa_p4y));
+#[cfg(test)]
+mod test {
+
+    use crate::{chunk::taps::{bitcom_precompute_Py, tap_precompute_Py}, signatures::wots::wots256};
+    use super::*;
 
 
-    let locking_bitcom = bitcom_precompute_Py(&pubk, (id_p4y, true), vec![(id_gp4y, true)]);
-    let (unlocking_bitcom_script, _) = tup_to_scr(&mut Sig { msk: None, cache: sigcache }, vec![((id_p4y, true), n_p4y), ((id_gp4y, true), n_gp4y)]);
-    let aux_hints = p4y.hint_script;
-    let ops_scripts = tap_precompute_Py();
-
-    let exec_result = execute_script(script!{
-        {aux_hints.clone()}
-        {unlocking_bitcom_script.clone()}
-        {locking_bitcom.clone()}
-        {ops_scripts.clone()}
-    });
-    for i in 0..exec_result.final_stack.len() {
-        println!("{i:} {:?}", exec_result.final_stack.get(i));
-    }
-
-    let mut hasher = Sha256::new();
-    hasher.update(aux_hints.compile().as_bytes());
-    let a = hasher.finalize();
-    let mut hasher = Sha256::new();
-    hasher.update(unlocking_bitcom_script.compile().as_bytes());
-    let b = hasher.finalize();
-    let mut hasher = Sha256::new();
-    hasher.update(locking_bitcom.compile().as_bytes());
-    let c = hasher.finalize();
-    let mut hasher = Sha256::new();
-    hasher.update(ops_scripts.compile().as_bytes());
-    let d = hasher.finalize();
+    pub fn try_check_precompute_py(f: ark_bn254::Fq) {
+        // segments
+        let id_gp4y = 1;
+        let id_p4y: u32 = 7;
+        //let f = ark_bn254::Fq::ONE + ark_bn254::Fq::ONE;
+        let gp4y = Segment {
+            id: id_gp4y,
+            output_type: true,
+            inputs: vec![],
+            output: Element::FieldElem(f),
+            hint_script: script!(),
+            scr_type: ScriptType::NonDeterministic
+        };
+        let p4y = wrap_hints_precompute_Py(false, id_p4y as usize, &gp4y);
     
-    println!("a {:?}", a);
-    println!("b {:?}", b);
-    println!("c {:?}", c);
-    println!("d {:?}", d);
-}
-
-
-pub fn check_msm(f: ark_bn254::Fr, pub_vky: Vec<ark_bn254::G1Affine>) {
-    let msm_chain_index = 1;
-    // segments
-    let id_scalar = 0;
-    let id_msm: u32 = 43;
-    let id_msm0: u32 = 42;
-    //let f = ark_bn254::Fq::ONE + ark_bn254::Fq::ONE;
-    let scalar = Segment {
-        id: id_scalar,
-        output_type: true,
-        inputs: vec![],
-        output: Element::ScalarElem(f),
-        hint_script: script!(),
-        scr_type: ScriptType::NonDeterministic
-    };
-    let msm0 = wrap_hint_msm(false, id_msm0 as usize, None, vec![scalar.clone()], msm_chain_index-1, pub_vky.clone());
-    let msm = wrap_hint_msm(false, id_msm as usize, Some(msm0.clone()), vec![scalar.clone()], msm_chain_index, pub_vky.clone());
-
-    // assertioons
-    let n_scalar = extern_fr_to_nibbles(scalar.output.into());
-    let a_scalar = nib_to_byte_array(&n_scalar);
-    let n_msm: ElemG1Point = msm.output.into();
-    let n_msm = extern_hash_fps(vec![n_msm.x, n_msm.y], true);
-    let a_msm: [u8; 32] = nib_to_byte_array(&n_msm).try_into().unwrap();
-    let a_msm: [u8; 20] = a_msm[12..32].try_into().unwrap();
-
-    let n_msm0: ElemG1Point = msm0.output.into();
-    let n_msm0 = extern_hash_fps(vec![n_msm0.x, n_msm0.y], true);
-    let a_msm0: [u8; 32] = nib_to_byte_array(&n_msm0).try_into().unwrap();
-    let a_msm0: [u8; 20] = a_msm0[12..32].try_into().unwrap();
-
-    // signature
-    const MOCK_SECRET: &str = "a138982ce17ac813d505a5b40b665d404e9528e7";
-    let pub_scalar = wots256::generate_public_key(&format!("{MOCK_SECRET}{:04x}", id_scalar));
-    let pub_msm0 = wots160::generate_public_key(&format!("{MOCK_SECRET}{:04x}", id_msm0));
-    let pub_msm = wots160::generate_public_key(&format!("{MOCK_SECRET}{:04x}", id_msm));
-    let mut pubk: HashMap<u32, WOTSPubKey> = HashMap::new();
-    pubk.insert(id_scalar, WOTSPubKey::P256(pub_scalar));
-    pubk.insert(id_msm0, WOTSPubKey::P160(pub_msm0));
-    pubk.insert(id_msm, WOTSPubKey::P160(pub_msm));
-
-    let sa_scalar = wots256::get_signature(&format!("{MOCK_SECRET}{:04x}", id_scalar), &a_scalar);
-    let sa_msm0 = wots160::get_signature(&format!("{MOCK_SECRET}{:04x}", id_msm0), &a_msm0);
-    let sa_msm = wots160::get_signature(&format!("{MOCK_SECRET}{:04x}", id_msm), &a_msm);
-
-
-    // execution
-    let mut sigcache: HashMap<u32, SigData> = HashMap::new();
-    sigcache.insert(id_scalar, SigData::Sig256(sa_scalar));
-    sigcache.insert(id_msm0, SigData::Sig160(sa_msm0));
-    sigcache.insert(id_msm, SigData::Sig160(sa_msm));
-
-
-    let locking_bitcom = bitcom_msm(&pubk, (id_msm, msm.output_type), vec![(id_scalar, scalar.output_type), (id_msm0, msm0.output_type)]);
-    let (unlocking_bitcom_script, _) = tup_to_scr(&mut Sig { msk: None, cache: sigcache }, vec![((id_scalar, scalar.output_type), n_scalar), ((id_msm0, msm0.output_type), n_msm0), ((id_msm, msm.output_type), n_msm)]);
-    let aux_hints = msm.hint_script;
-    let ops_scripts = tap_msm(8, msm_chain_index, pub_vky);
-
-    let exec_result = execute_script(script!{
-        {aux_hints.clone()}
-        {unlocking_bitcom_script.clone()}
-        {locking_bitcom.clone()}
-        {ops_scripts.clone()}
-    });
-    for i in 0..exec_result.final_stack.len() {
-        println!("{i:} {:?}", exec_result.final_stack.get(i));
+        // assertioons
+        let n_gp4y = extern_fq_to_nibbles(gp4y.output.into());
+        let a_gp4y = nib_to_byte_array(&n_gp4y);
+        let n_p4y = extern_fq_to_nibbles(p4y.output.into());
+        let a_p4y = nib_to_byte_array(&n_p4y);
+    
+        // signature
+        const MOCK_SECRET: &str = "a138982ce17ac813d505a5b40b665d404e9528e7";
+        let pub_gp4y = wots256::generate_public_key(&format!("{MOCK_SECRET}{:04x}", id_gp4y));
+        let pub_p4y = wots256::generate_public_key(&format!("{MOCK_SECRET}{:04x}", id_p4y));
+        let mut pubk: HashMap<u32, WOTSPubKey> = HashMap::new();
+        pubk.insert(id_gp4y, WOTSPubKey::P256(pub_gp4y));
+        pubk.insert(id_p4y, WOTSPubKey::P256(pub_p4y));
+    
+        let sa_gp4y = wots256::get_signature(&format!("{MOCK_SECRET}{:04x}", id_gp4y), &a_gp4y);
+        let sa_p4y = wots256::get_signature(&format!("{MOCK_SECRET}{:04x}", id_p4y), &a_p4y);
+    
+    
+        // execution
+        let mut sigcache: HashMap<u32, SigData> = HashMap::new();
+        sigcache.insert(id_gp4y, SigData::Sig256(sa_gp4y));
+        sigcache.insert(id_p4y, SigData::Sig256(sa_p4y));
+    
+    
+        let locking_bitcom = bitcom_precompute_Py(&pubk, (id_p4y, true), vec![(id_gp4y, true)]);
+        let (unlocking_bitcom_script, _) = tup_to_scr(&mut Sig { msk: None, cache: sigcache }, vec![((id_p4y, true), n_p4y), ((id_gp4y, true), n_gp4y)]);
+        let aux_hints = p4y.hint_script;
+        let ops_scripts = tap_precompute_Py();
+    
+        let exec_result = execute_script(script!{
+            {aux_hints.clone()}
+            {unlocking_bitcom_script.clone()}
+            {locking_bitcom.clone()}
+            {ops_scripts.clone()}
+        });
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:} {:?}", exec_result.final_stack.get(i));
+        }
+    
+        let mut hasher = Sha256::new();
+        hasher.update(aux_hints.compile().as_bytes());
+        let a = hasher.finalize();
+        let mut hasher = Sha256::new();
+        hasher.update(unlocking_bitcom_script.compile().as_bytes());
+        let b = hasher.finalize();
+        let mut hasher = Sha256::new();
+        hasher.update(locking_bitcom.compile().as_bytes());
+        let c = hasher.finalize();
+        let mut hasher = Sha256::new();
+        hasher.update(ops_scripts.compile().as_bytes());
+        let d = hasher.finalize();
+        
+        println!("a {:?}", a);
+        println!("b {:?}", b);
+        println!("c {:?}", c);
+        println!("d {:?}", d);
     }
+    
+    
+    pub fn try_check_msm(f: ark_bn254::Fr, pub_vky: Vec<ark_bn254::G1Affine>) {
+        let msm_chain_index = 1;
+        // segments
+        let id_scalar = 0;
+        let id_msm: u32 = 43;
+        let id_msm0: u32 = 42;
+        //let f = ark_bn254::Fq::ONE + ark_bn254::Fq::ONE;
+        let scalar = Segment {
+            id: id_scalar,
+            output_type: true,
+            inputs: vec![],
+            output: Element::ScalarElem(f),
+            hint_script: script!(),
+            scr_type: ScriptType::NonDeterministic
+        };
+        let msm0 = wrap_hint_msm(false, id_msm0 as usize, None, vec![scalar.clone()], msm_chain_index-1, pub_vky.clone());
+        let msm = wrap_hint_msm(false, id_msm as usize, Some(msm0.clone()), vec![scalar.clone()], msm_chain_index, pub_vky.clone());
+    
+        // assertioons
+        let n_scalar = extern_fr_to_nibbles(scalar.output.into());
+        let a_scalar = nib_to_byte_array(&n_scalar);
+        let n_msm: ElemG1Point = msm.output.into();
+        let n_msm = extern_hash_fps(vec![n_msm.x, n_msm.y], true);
+        let a_msm: [u8; 32] = nib_to_byte_array(&n_msm).try_into().unwrap();
+        let a_msm: [u8; 20] = a_msm[12..32].try_into().unwrap();
+    
+        let n_msm0: ElemG1Point = msm0.output.into();
+        let n_msm0 = extern_hash_fps(vec![n_msm0.x, n_msm0.y], true);
+        let a_msm0: [u8; 32] = nib_to_byte_array(&n_msm0).try_into().unwrap();
+        let a_msm0: [u8; 20] = a_msm0[12..32].try_into().unwrap();
+    
+        // signature
+        const MOCK_SECRET: &str = "a138982ce17ac813d505a5b40b665d404e9528e7";
+        let pub_scalar = wots256::generate_public_key(&format!("{MOCK_SECRET}{:04x}", id_scalar));
+        let pub_msm0 = wots160::generate_public_key(&format!("{MOCK_SECRET}{:04x}", id_msm0));
+        let pub_msm = wots160::generate_public_key(&format!("{MOCK_SECRET}{:04x}", id_msm));
+        let mut pubk: HashMap<u32, WOTSPubKey> = HashMap::new();
+        pubk.insert(id_scalar, WOTSPubKey::P256(pub_scalar));
+        pubk.insert(id_msm0, WOTSPubKey::P160(pub_msm0));
+        pubk.insert(id_msm, WOTSPubKey::P160(pub_msm));
+    
+        let sa_scalar = wots256::get_signature(&format!("{MOCK_SECRET}{:04x}", id_scalar), &a_scalar);
+        let sa_msm0 = wots160::get_signature(&format!("{MOCK_SECRET}{:04x}", id_msm0), &a_msm0);
+        let sa_msm = wots160::get_signature(&format!("{MOCK_SECRET}{:04x}", id_msm), &a_msm);
+    
+    
+        // execution
+        let mut sigcache: HashMap<u32, SigData> = HashMap::new();
+        sigcache.insert(id_scalar, SigData::Sig256(sa_scalar));
+        sigcache.insert(id_msm0, SigData::Sig160(sa_msm0));
+        sigcache.insert(id_msm, SigData::Sig160(sa_msm));
+    
+    
+        let locking_bitcom = bitcom_msm(&pubk, (id_msm, msm.output_type), vec![(id_scalar, scalar.output_type), (id_msm0, msm0.output_type)]);
+        let (unlocking_bitcom_script, _) = tup_to_scr(&mut Sig { msk: None, cache: sigcache }, vec![((id_scalar, scalar.output_type), n_scalar), ((id_msm0, msm0.output_type), n_msm0), ((id_msm, msm.output_type), n_msm)]);
+        let aux_hints = msm.hint_script;
+        let ops_scripts = tap_msm(8, msm_chain_index, pub_vky);
+    
+        let exec_result = execute_script(script!{
+            {aux_hints.clone()}
+            {unlocking_bitcom_script.clone()}
+            {locking_bitcom.clone()}
+            {ops_scripts.clone()}
+        });
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:} {:?}", exec_result.final_stack.get(i));
+        }
+    }
+    
+    
 }
-
-
-
-// #[cfg(test)]
-// mod test {
-
-//     use crate::{chunk::taps::{bitcom_precompute_Py, tap_precompute_Py}, signatures::wots::wots256};
-//     use super::*;
-
-//     #[test]
-
-// }

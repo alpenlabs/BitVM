@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 use std::ops::Neg;
 
+use crate::chunk::acc::{groth16, hint_to_data, Pubs};
 use crate::chunk::compile::{compile_ops, compile_taps, get_tapscript_link_ids, Vkey};
 use crate::chunk::config::{assign_link_ids, keygen, NUM_PUBS, NUM_U160, NUM_U256};
 use crate::chunk::evaluate::{evaluate, extract_values_from_hints, EvalIns};
 use crate::chunk::hint_models::{ElemG1Point, G1PointExt};
+use crate::chunk::segment::Segment;
 use crate::chunk::taps::{Sig, SigData};
 use crate::chunk::wots::WOTSPubKey;
 use crate::groth16::g16::{
@@ -18,6 +20,8 @@ use ark_ec::bn::Bn;
 use ark_ec::pairing::Pairing;
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::Field;
+
+use super::acc::{script_exec, get_assertions, get_intermediates, get_proof, get_pubs};
 
 
 pub fn api_compile(vk: &ark_groth16::VerifyingKey<Bn254>) -> Vec<Script> {
@@ -122,12 +126,6 @@ pub fn generate_assertions(
 ) -> Assertions {
     assert_eq!(scalars.len(), NUM_PUBS);
 
-    let mut sig = Sig {
-        msk: None,
-        cache: HashMap::new(),
-    };
-
-
     let mut msm_scalar = scalars.clone();
     msm_scalar.reverse();
     let mut msm_gs = vk.gamma_abc_g1.clone(); // vk.vk_pubs[0]
@@ -160,51 +158,20 @@ pub fn generate_assertions(
         ks: msm_scalar.clone(),
     };
 
-    let (aux, fault) = evaluate(
-        &mut sig,
-        &HashMap::new(),
-        Some(eval_ins),
-        q2,
-        q3,
-        f_fixed,
-        msm_gs.clone(),
-        vky0,
-        false
-    );
-    let assertions = extract_values_from_hints(aux);
-    println!(
-        "{} and {}",
-        assertions.len(),
-        NUM_PUBS + NUM_U160 + NUM_U256
-    );
-    let mut batch1 = vec![];
-    for i in 0..NUM_PUBS {
-        let val = assertions.get(&(i as u32)).unwrap();
-        let bal: [u8; 32] = nib_to_byte_array(val).try_into().unwrap();
-        batch1.push(bal);
-    }
-    let batch1: [[u8; 32]; NUM_PUBS] = batch1.try_into().unwrap();
+    let pubs: Pubs = Pubs {
+        q2, 
+        q3, 
+        fixed_acc: f_fixed, 
+        ks_vks: msm_gs, 
+        vky0
+    };
 
-    let len = batch1.len();
-    let mut batch2 = vec![];
-    for i in 0..NUM_U256 {
-        let val = assertions.get(&((i + len) as u32)).unwrap();
-        let bal: [u8; 32] = nib_to_byte_array(val).try_into().unwrap();
-        batch2.push(bal);
-    }
-    let batch2: [[u8; 32]; N_VERIFIER_FQS] = batch2.try_into().unwrap();
-
-    let len = batch1.len() + batch2.len();
-    let mut batch3 = vec![];
-    for i in 0..NUM_U160 {
-        let val = assertions.get(&((i + len) as u32)).unwrap();
-        let bal: [u8; 32] = nib_to_byte_array(val).try_into().unwrap();
-        let bal: [u8; 20] = bal[12..32].try_into().unwrap();
-        batch3.push(bal);
-    }
-    let batch3: [[u8; 20]; N_VERIFIER_HASHES] = batch3.try_into().unwrap();
-
-    (batch1, batch2, batch3)
+    let mut segments: Vec<Segment> = vec![];
+    println!("generating assertions as prover");
+    let success = groth16(false, &mut segments, eval_ins, pubs, &mut None);
+    assert!(success);
+    let proof_asserts = hint_to_data(segments.clone());
+    proof_asserts
 }
 
 pub fn validate_assertions(
@@ -212,74 +179,23 @@ pub fn validate_assertions(
     signed_asserts: Signatures,
     inpubkeys: PublicKeys,
 ) -> Option<(usize, Script)> {
-    let mut sigcache: HashMap<u32, SigData> = HashMap::new();
+    let asserts = get_assertions(signed_asserts);
+    let eval_ins = get_proof(&asserts);
 
-    assert_eq!(signed_asserts.0.len(), NUM_PUBS);
+    let intermediates = get_intermediates(&asserts);
 
-    for i in 0..NUM_PUBS {
-        sigcache.insert(i as u32, SigData::Sig256(signed_asserts.0[i]));
-    }
-
-    for i in 0..N_VERIFIER_FQS {
-        sigcache.insert((NUM_PUBS + i) as u32, SigData::Sig256(signed_asserts.1[i]));
-    }
-
-    for i in 0..N_VERIFIER_HASHES {
-        sigcache.insert((NUM_PUBS + N_VERIFIER_FQS + i) as u32, SigData::Sig160(signed_asserts.2[i]));
-    }
-
-    let mut pubkeys: HashMap<u32, WOTSPubKey> = HashMap::new();
-    for i in 0..NUM_PUBS {
-        pubkeys.insert(i as u32, WOTSPubKey::P256(inpubkeys.0[i]));
-    }
-    let len = pubkeys.len();
-    for i in 0..inpubkeys.1.len() {
-        pubkeys.insert((len + i) as u32, WOTSPubKey::P256(inpubkeys.1[i]));
-    }
-    let len = pubkeys.len();
-    for i in 0..inpubkeys.2.len() {
-        pubkeys.insert((len + i) as u32, WOTSPubKey::P160(inpubkeys.2[i]));
-    }
-
-    let mut sig = Sig {
-        msk: None,
-        cache: sigcache,
-    };
-
-    let mut msm_gs = vk.gamma_abc_g1.clone(); // vk.vk_pubs[0]
-    msm_gs.reverse();
-    let vky0 = msm_gs.pop().unwrap();
-
-    let (q3, q2, q1) = (
-        vk.gamma_g2.into_group().neg().into_affine(),
-        vk.delta_g2.into_group().neg().into_affine(),
-        -vk.beta_g2,
-    );
-    let f_fixed = Bn254::multi_miller_loop_affine([vk.alpha_g1], [q1]).0;
-
-    let (_, fault) = evaluate(
-        &mut sig,
-        &pubkeys,
-        None,
-        q2,
-        q3,
-        f_fixed,
-        msm_gs.clone(),
-        vky0,
-        false
-    );
-    if fault.is_none() {
+    let mut segments: Vec<Segment> = vec![];
+    println!("generating assertions to validate");
+    let passed = groth16(false, &mut segments, eval_ins, get_pubs(vk), &mut Some(intermediates));
+    if passed {
+        println!("assertion passed, running full script execution now");
+        let exec_result = script_exec(segments, signed_asserts, inpubkeys);
+        assert!(exec_result.is_none());
         return None;
     }
-    let (fault_index, hint_scr) = fault.unwrap();
-    let script_link_ids_in_order = get_tapscript_link_ids();
-    let mut script_index = 0; // tapleaf index
-    for arr_index in 0..script_link_ids_in_order.len() {
-        let k = script_link_ids_in_order[arr_index];
-        if k == fault_index {
-            script_index = arr_index;
-        }
-    }
-    Some((script_index, hint_scr))
+    println!("assertion failed, return faulty script");
+    let exec_result = script_exec(segments, signed_asserts, inpubkeys);
+    assert!(exec_result.is_some());
+    return exec_result;
 }
 
