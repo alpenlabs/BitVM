@@ -67,11 +67,11 @@ mod test {
     use ark_ff::Field;
     use rand::Rng;
 
-    use crate::{chunk::{api::mock_pubkeys, test_utils::{read_scripts_from_file, write_map_to_file, write_scripts_to_file, write_scripts_to_separate_files}}, groth16::offchain_checker::compute_c_wi};
+    use crate::{chunk::{api::mock_pubkeys, hint_models::EvalIns, test_utils::{read_scripts_from_file, write_map_to_file, write_scripts_to_file, write_scripts_to_separate_files}}, groth16::offchain_checker::compute_c_wi};
 
-    use crate::chunk::{config::NUM_PUBS, test_utils::read_map_from_file};
+    use crate::chunk::{compile::NUM_PUBS, test_utils::read_map_from_file};
 
-    use self::chunk::{ acc::{self, script_exec, Pubs}, evaluate::EvalIns, hint_models::Element, segment::Segment};
+    use self::chunk::{ acc::{self, script_exec, Pubs}, hint_models::Element, segment::Segment};
 
     use super::*;
 
@@ -500,7 +500,7 @@ mod test {
         println!("eval_ins {:?}", eval_ins);
         println!("pubs {:?}", pubs);
         acc::groth16(true, &mut segments, eval_ins, pubs, &mut None);
-        
+
         // let proof_asserts = acc::hint_to_data(segments.clone());
         // let signed_asserts = sign_assertions(proof_asserts);
         // let mock_pubks = mock_pubkeys(MOCK_SECRET);

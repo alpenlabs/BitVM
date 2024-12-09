@@ -1,9 +1,6 @@
 pub mod api;
 pub mod blake3compiled;
 pub mod compile;
-pub mod config;
-pub mod evaluate;
-pub mod evaluate_test;
 pub mod hint_models;
 mod msm;
 pub mod primitves;

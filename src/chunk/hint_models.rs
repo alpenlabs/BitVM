@@ -15,6 +15,17 @@ pub(crate) enum Element {
     MSMG1(ElemG1Point),
 }
 
+#[derive(Debug)]
+pub(crate) struct EvalIns {
+    pub(crate) p2: G1Affine,
+    pub(crate) p3: G1Affine,
+    pub(crate) p4: G1Affine,
+    pub(crate) q4: G2Affine,
+    pub(crate) c: ark_bn254::Fq12,
+    pub(crate) s: ark_bn254::Fq12,
+    pub(crate) ks: Vec<ark_bn254::Fr>,
+}
+
 
 impl From<Element> for ElemG2PointAcc {
     fn from(value: Element) -> Self {

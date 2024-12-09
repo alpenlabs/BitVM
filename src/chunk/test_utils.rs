@@ -143,37 +143,9 @@ mod test {
 
     use crate::{
         chunk::{
-            config::keygen,
             taps::{bitcom_precompute_Py, tap_precompute_Py},
         },
         groth16::offchain_checker::compute_c_wi,
     };
 
-    use super::{read_scripts_from_file, write_scripts_to_file};
-
-    #[test]
-    fn test_read_write_script() {
-        let sec_out = (56, true);
-        let sec_in = vec![(14, true)];
-        let master_secret = "b138982ce17ac813d505b5b40b665d404e9528e7";
-
-        let pub_scripts_per_link_id = &keygen(master_secret);
-        let tap = tap_precompute_Py();
-        let bc = bitcom_precompute_Py(pub_scripts_per_link_id, sec_out, sec_in);
-        let script = script! {
-            {bc}
-            {tap}
-        };
-
-        let mut cache = HashMap::new();
-        cache.insert(sec_out.0, vec![script.clone()]);
-        write_scripts_to_file(cache, "/tmp/tmp.json");
-        let read = read_scripts_from_file("/tmp/tmp.json");
-        let read = read.get(&sec_out.0).unwrap().first().unwrap();
-        assert_eq!(read.len(), script.len());
-        assert_eq!(
-            read.clone().compile().to_bytes(),
-            script.compile().to_bytes()
-        );
-    }
 }

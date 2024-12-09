@@ -1,14 +1,19 @@
 
 use std::collections::HashMap;
 
-use ark_ff::{AdditiveGroup, Field, UniformRand};
+use ark_ec::bn::BnConfig;
 use bitcoin_script::script;
-use rand::{rngs::mock, SeedableRng};
-use rand_chacha::ChaCha20Rng;
 
 use crate::{chunk::hint_models::{ElemG1Point, G1PointExt}, treepp};
 
-use super::{acc::{groth16, Pubs}, evaluate::EvalIns, hint_models::{ElemFp12Acc, ElemFr, ElemG2PointAcc, ElemeFrTrait}, msm::{bitcom_hash_p, bitcom_msm, tap_hash_p, tap_msm}, segment::{ScriptType, Segment}, taps::*, taps_mul::*, wots::WOTSPubKey};
+use super::{acc::{groth16, Pubs},  hint_models::{ElemFp12Acc, ElemFr, ElemG2PointAcc, ElemeFrTrait, EvalIns}, msm::{bitcom_hash_p, bitcom_msm, tap_hash_p, tap_msm}, segment::{ScriptType, Segment}, taps::*, taps_mul::*, wots::WOTSPubKey};
+
+pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
+pub const NUM_PUBS: usize = 1;
+pub const NUM_U256: usize = 40;
+pub const NUM_U160: usize = 574;
+pub const PUB_ID: &str = "k0";
+
 
 pub(crate) struct Vkey {
     pub(crate) q2: ark_bn254::G2Affine,
