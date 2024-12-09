@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ops::Neg;
 
 use crate::chunk::acc::{groth16, hint_to_data, Pubs};
-use crate::chunk::compile::{compile_ops, compile_taps, get_tapscript_link_ids, Vkey};
+use crate::chunk::compile::{compile_ops, compile_taps, Vkey};
 use crate::chunk::config::{assign_link_ids, keygen, NUM_PUBS, NUM_U160, NUM_U256};
 use crate::chunk::evaluate::{evaluate, extract_values_from_hints, EvalIns};
 use crate::chunk::hint_models::{ElemG1Point, G1PointExt};
@@ -193,7 +193,7 @@ pub fn validate_assertions(
         assert!(exec_result.is_none());
         return None;
     }
-    println!("assertion failed, return faulty script");
+    println!("assertion failed, return faulty script segments acc {:?}", segments.len());
     let exec_result = script_exec(segments, signed_asserts, inpubkeys);
     assert!(exec_result.is_some());
     return exec_result;

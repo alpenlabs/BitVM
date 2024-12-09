@@ -278,7 +278,7 @@ mod test {
 
         assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1);
         // let proof_asserts = generate_proof_assertions(mock_vk.clone(), proof, public_inputs);
-        let proof_asserts = read_asserts_from_file("chunker_data/assert2.json");
+        let proof_asserts = read_asserts_from_file("chunker_data/assert.json");
         let signed_asserts = sign_assertions(proof_asserts);
         let mock_pubks = mock_pubkeys(MOCK_SECRET);
 
@@ -335,6 +335,7 @@ mod test {
         }
     }
 
+    use sha2::{Digest, Sha256};
     // Step 4: Challenger finds fault given signatures
     #[test]
     fn test_fn_disprove_invalid_assertions() {
@@ -358,10 +359,12 @@ mod test {
         let mock_pubks = mock_pubkeys(MOCK_SECRET);
         let verifier_scripts = generate_disprove_scripts(mock_pubks, &ops_scripts);
 
-        for i in 0..N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES {
+        verifier_scripts.iter().enumerate().for_each(|f| println!("{} and {}", f.0, f.1.len()));
+
+        for i in 91..92 {//N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES {
             println!("ITERATION {:?}", i);
-            let mut proof_asserts = read_asserts_from_file("chunker_data/assert2.json");
-            //corrupt(&mut proof_asserts, Some(i));
+            let mut proof_asserts = read_asserts_from_file("chunker_data/assert.json");
+            corrupt(&mut proof_asserts, Some(i));
             let signed_asserts = sign_assertions(proof_asserts);
     
             let fault = verify_signed_assertions(mock_vk.clone(), mock_pubks, signed_asserts);
@@ -369,10 +372,25 @@ mod test {
             if fault.is_some() {
                 let (index, hint_script) = fault.unwrap();
                 println!("taproot index {:?}", index);
+                println!("vs len {:?} and hs len {:?}", verifier_scripts[index].len(), hint_script.len());
                 let scr = script!(
                     {hint_script.clone()}
                     {verifier_scripts[index].clone()}
                 );
+                let mut hasher = Sha256::new();
+
+                hasher.update(hint_script.clone().compile().as_bytes());
+            
+                let hashed_value = hasher.finalize();
+        
+                println!("hint_script hashed value {:?}", hashed_value);
+                let mut hasher = Sha256::new();
+        
+                hasher.update(verifier_scripts[index].clone().compile().as_bytes());
+            
+                let hashed_value = hasher.finalize();
+        
+                println!("lock_script hashed value {:?}", hashed_value);
                 let res = execute_script(scr);
                 for i in 0..res.final_stack.len() {
                     println!("{i:} {:?}", res.final_stack.get(i));
@@ -481,7 +499,8 @@ mod test {
 
         println!("eval_ins {:?}", eval_ins);
         println!("pubs {:?}", pubs);
-        // acc::groth16(&mut segments, eval_ins, pubs, &mut None);
+        acc::groth16(true, &mut segments, eval_ins, pubs, &mut None);
+        
         // let proof_asserts = acc::hint_to_data(segments.clone());
         // let signed_asserts = sign_assertions(proof_asserts);
         // let mock_pubks = mock_pubkeys(MOCK_SECRET);

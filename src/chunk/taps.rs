@@ -15,6 +15,7 @@ use crate::{
     treepp::*,
 };
 use ark_bn254::{G1Affine, G2Affine};
+use ark_ec::CurveGroup;
 use ark_ff::{AdditiveGroup, Field, Zero};
 use num_bigint::BigUint;
 use num_traits::One;
@@ -1798,6 +1799,58 @@ pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs(
         // Stack: [bhash, P2x, P2y, P3x, P3y]
     };
     bitcomms_script
+}
+
+pub(crate) fn add_with_frob(q: ark_bn254::G2Affine, t: ark_bn254::G2Affine, ate: i8) -> ark_bn254::G2Affine {
+    let beta_12x = BigUint::from_str(
+        "21575463638280843010398324269430826099269044274347216827212613867836435027261",
+    )
+    .unwrap();
+    let beta_12y = BigUint::from_str(
+        "10307601595873709700152284273816112264069230130616436755625194854815875713954",
+    )
+    .unwrap();
+    let beta_12 = ark_bn254::Fq2::from_base_prime_field_elems([
+        ark_bn254::Fq::from(beta_12x.clone()),
+        ark_bn254::Fq::from(beta_12y),
+    ])
+    .unwrap();
+    let beta_13x = BigUint::from_str(
+        "2821565182194536844548159561693502659359617185244120367078079554186484126554",
+    )
+    .unwrap();
+    let beta_13y = BigUint::from_str(
+        "3505843767911556378687030309984248845540243509899259641013678093033130930403",
+    )
+    .unwrap();
+    let beta_13 = ark_bn254::Fq2::from_base_prime_field_elems([
+        ark_bn254::Fq::from(beta_13x.clone()),
+        ark_bn254::Fq::from(beta_13y),
+    ])
+    .unwrap();
+    let beta_22x = BigUint::from_str(
+        "21888242871839275220042445260109153167277707414472061641714758635765020556616",
+    )
+    .unwrap();
+    let beta_22y = BigUint::from_str("0").unwrap();
+    let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([
+        ark_bn254::Fq::from(beta_22x.clone()),
+        ark_bn254::Fq::from(beta_22y),
+    ])
+    .unwrap();
+
+    let mut q = q.clone();
+    if ate == 1 {
+        q.x.conjugate_in_place();
+        q.x = q.x * beta_12;
+        q.y.conjugate_in_place();
+        q.y = q.y * beta_13;
+    } else if ate == -1 {
+        q.x = q.x * beta_22;
+    }
+    let r = (t + q).into_affine();
+    r
+
 }
 
 pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(

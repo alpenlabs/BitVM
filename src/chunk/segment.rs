@@ -817,7 +817,7 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(
     hint_in_t3: ark_bn254::G2Affine,
     pub_q2: ark_bn254::G2Affine,
     pub_q3: ark_bn254::G2Affine,
-    power: i8,
+    ate: i8,
 ) -> Segment {
     let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
@@ -846,7 +846,7 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(
             hint_in_t3,
             pub_q2,
             pub_q3,
-            power,
+            ate,
         );
     }
 
@@ -856,7 +856,7 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(
         inputs: input_segment_info,
         output: Element::SparseEval(leval),
         hint_script,
-        scr_type: ScriptType::PostMillerSparseAddWithFrob(([hint_in_t2, hint_in_t3, pub_q2, pub_q3], power)),
+        scr_type: ScriptType::PostMillerSparseAddWithFrob(([hint_in_t2, hint_in_t3, pub_q2, pub_q3], ate)),
     }
 }
 

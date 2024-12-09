@@ -6,7 +6,7 @@ use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::{Field, PrimeField};
 use bitcoin_script::script;
 
-use crate::{chunk::{compile::{bitcom_scripts_from_segments, op_scripts_from_segments}, msm::{bitcom_msm, tap_msm}, segment::*, taps::{bitcom_precompute_Py, tap_precompute_Py, tup_to_scr, Sig, SigData}}, execute_script, groth16::g16::{Assertions, PublicKeys, Signatures, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}, signatures::wots::{wots160, wots256}, treepp};
+use crate::{chunk::{compile::{bitcom_scripts_from_segments, op_scripts_from_segments, Vkey}, msm::{bitcom_msm, tap_msm}, segment::*, taps::{add_with_frob, bitcom_precompute_Py, tap_precompute_Py, tup_to_scr, Sig, SigData}}, execute_script, groth16::g16::{Assertions, PublicKeys, Signatures, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}, signatures::wots::{wots160, wots256}, treepp};
 use sha2::{Digest, Sha256};
 
 use super::{api::nib_to_byte_array, config::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, evaluate::{EvalIns}, hint_models::*, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps}, taps::{HashBytes}, wots::WOTSPubKey};
@@ -231,7 +231,9 @@ pub(crate) fn groth16(
     let mut f_acc = cinv2.clone();
 
     for j in (1..ATE_LOOP_COUNT.len()).rev() {
-        println!("itr {:?}", j);
+        if !is_compile_mode {
+            println!("itr {:?}", j);
+        }
         let ate = ATE_LOOP_COUNT[j - 1];
         let sq = wrap_hint_squaring(is_compile_mode, all_output_hints.len(), &f_acc);
         push_compare_or_return!(sq);
@@ -253,8 +255,8 @@ pub(crate) fn groth16(
 
         let leval = wrap_hint_double_eval_mul_for_fixed_Qs(is_compile_mode, all_output_hints.len(), &p2x, &p2y, &p3x, &p3y, t2, t3);
         push_compare_or_return!(leval);
-        // let le: ElemSparseEval = leval.output.into();
         (t2, t3) = ((t2 + t2).into_affine(), (t3 + t3).into_affine());
+
 
         let dmul0 = wrap_hints_dense_le_mul0(is_compile_mode, all_output_hints.len(), &f_acc, &leval);
         push_compare_or_return!(dmul0);
@@ -282,8 +284,11 @@ pub(crate) fn groth16(
 
         let leval = wrap_hint_add_eval_mul_for_fixed_Qs(is_compile_mode, all_output_hints.len(), &p2x, &p2y, &p3x, &p3y, t2, t3, pubs.q2, pubs.q3, ate);
         push_compare_or_return!(leval);
-        //let le: ElemSparseEval = leval.output.into();
-        (t2, t3) = ((t2 + pubs.q2).into_affine(), (t3 + pubs.q3).into_affine());
+        if ate == 1 {
+            (t2, t3) = ((t2 + pubs.q2).into_affine(), (t3 + pubs.q3).into_affine());
+        } else {
+            (t2, t3) = ((t2 - pubs.q2).into_affine(), (t3 - pubs.q3).into_affine());
+        }
 
         let dmul0 = wrap_hints_dense_le_mul0(is_compile_mode, all_output_hints.len(), &f_acc, &leval);
         push_compare_or_return!(dmul0);
@@ -340,8 +345,10 @@ pub(crate) fn groth16(
 
     let leval = wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(is_compile_mode, all_output_hints.len(), &p2x, &p2y, &p3x, &p3y, t2, t3, pubs.q2, pubs.q3, 1);
     push_compare_or_return!(leval);
-    // let le: ElemSparseEval = leval.output.into();
-    (t2, t3) = ((t2 + pubs.q2).into_affine(), (t3 + pubs.q3).into_affine());
+    // (t2, t3) = (le.t2, le.t3);
+    t2 = add_with_frob(pubs.q2, t2, 1);
+    t3 = add_with_frob(pubs.q3, t3, 1);
+
 
     let dmul0 = wrap_hints_dense_le_mul0(is_compile_mode, all_output_hints.len(), &f_acc, &leval);
     push_compare_or_return!(dmul0);
@@ -360,8 +367,8 @@ pub(crate) fn groth16(
 
     let leval = wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(is_compile_mode, all_output_hints.len(), &p2x, &p2y, &p3x, &p3y, t2, t3, pubs.q2, pubs.q3, -1);
     push_compare_or_return!(leval);
-    //let le: ElemSparseEval = leval.output.into();
-    (t2, t3) = ((t2 + pubs.q2).into_affine(), (t3 + pubs.q3).into_affine());
+    t2 = add_with_frob(pubs.q2, t2, -1);
+    t3 = add_with_frob(pubs.q3, t3, -1);
 
     let dmul0 = wrap_hints_dense_le_mul0(is_compile_mode, all_output_hints.len(), &f_acc, &leval);
     push_compare_or_return!(dmul0);
@@ -653,11 +660,11 @@ pub fn script_exec(
         bc_hints.push(bcelems);
     }
 
-    println!("op_scripts_from_segments");
+    println!("generating op_scripts_from_segments");
     let locking_ops = op_scripts_from_segments(&segments);
-    println!("bitcom_scripts_from_segments");
-    let locking_bitcoms = bitcom_scripts_from_segments(&segments, pubkeys);
+    println!("generating bitcom_scripts_from_segments");
 
+    let locking_bitcoms = bitcom_scripts_from_segments(&segments, pubkeys);
 
     let aux_hints: Vec<treepp::Script> = segments.iter().map(|f| f.hint_script.clone()).collect();
 
@@ -665,34 +672,36 @@ pub fn script_exec(
 
     let mut tap_script_index = 0;
     for i in 0..aux_hints.len() {
-        if locking_ops[i].len() == 0 {
+        if locking_ops[i].len() == 0  {
             continue;
         }
         println!("Executing script {:?}", i);
-        let total_script = script!{
+        let hint_script = script!{
             {aux_hints[i].clone()}
             {bc_hints[i].clone()}
+        };
+        let total_script = script!{
+            {hint_script.clone()}
             {locking_bitcoms[i].clone()}
             {locking_ops[i].clone()}
         };
-        tap_script_index += 1;
 
         let exec_result = execute_script(total_script);
-        for i in 0..exec_result.final_stack.len() {
-            println!("{i:} {:?}", exec_result.final_stack.get(i));
+        if exec_result.final_stack.len() > 1 {
+            for i in 0..exec_result.final_stack.len() {
+                println!("{i:} {:?}", exec_result.final_stack.get(i));
+            }
         }
         if !exec_result.success {
             assert!(exec_result.final_stack.len() == 1);
         } else {
             let disprove_hint = (
                 tap_script_index,
-                script!(
-                    {aux_hints[i].clone()}
-                    {bc_hints[i].clone()}
-                ),
+                hint_script,
             );
             return Some(disprove_hint);
         }
+        tap_script_index += 1;
     }
     None
 }

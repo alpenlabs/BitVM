@@ -8,11 +8,7 @@ use rand_chacha::ChaCha20Rng;
 
 use crate::{chunk::hint_models::{ElemG1Point, G1PointExt}, treepp};
 
-use super::{acc::{groth16, Pubs}, evaluate::EvalIns, hint_models::{ElemG2PointAcc, Element}, msm::{bitcom_hash_p, bitcom_msm, tap_hash_p, tap_msm}, segment::{ScriptType, Segment}, taps::*, taps_mul::*, wots::WOTSPubKey};
-
-pub(crate) fn get_tapscript_link_ids() -> Vec<u32>  {
-    vec![]
-}
+use super::{acc::{groth16, Pubs}, evaluate::EvalIns, hint_models::{ElemFp12Acc, ElemFr, ElemG2PointAcc, ElemeFrTrait}, msm::{bitcom_hash_p, bitcom_msm, tap_hash_p, tap_msm}, segment::{ScriptType, Segment}, taps::*, taps_mul::*, wots::WOTSPubKey};
 
 pub(crate) struct Vkey {
     pub(crate) q2: ark_bn254::G2Affine,
@@ -58,11 +54,15 @@ pub(crate) fn compile_taps(
     ops_scripts: Vec<bitcoin_script::Script>,
 ) ->  Vec<bitcoin_script::Script> {
     let mock_segments = segments_from_pubs(vk);
-    let bitcom_scripts = bitcom_scripts_from_segments(&mock_segments, pubkeys);
-    let res  =ops_scripts.into_iter().zip(bitcom_scripts).map(|(op_scr, bit_scr)| script!(
-        {op_scr}
-        {bit_scr}
-    )).collect();
+    let bitcom_scripts: Vec<treepp::Script> = bitcom_scripts_from_segments(&mock_segments, pubkeys).into_iter().filter(|f| f.len() > 0).collect();
+    assert_eq!(ops_scripts.len(), bitcom_scripts.len());
+    let res: Vec<treepp::Script>  = ops_scripts.into_iter().zip(bitcom_scripts).map(|(op_scr, bit_scr)| 
+        script!(
+            {bit_scr}
+            {op_scr}
+        )   
+    ).collect();
+
     res
 }
 
@@ -70,10 +70,10 @@ fn segments_from_pubs(vk: Vkey) -> Vec<Segment> {
     let mut segments: Vec<Segment> = vec![];
     let g1 = ElemG1Point::mock();
     let g2 = ElemG2PointAcc::mock().t;
-    let fr = ark_bn254::Fr::ONE;
-    let s = ark_bn254::Fq12::ONE;
-    let c = ark_bn254::Fq12::ONE;
-    let eval_ins: EvalIns = EvalIns { p2: g1, p3: g1, p4: g1, q4: g2, c, s, ks: vec![fr] };
+    let fr = ElemFr::mock();
+    let s = ElemFp12Acc::mock();
+    let c = ElemFp12Acc::mock();
+    let eval_ins: EvalIns = EvalIns { p2: g1, p3: g1, p4: g1, q4: g2, c: c.f, s: s.f, ks: vec![fr] };
 
     let pubs: Pubs = Pubs { q2: vk.q2, q3: vk.q3, fixed_acc: vk.p1q1, ks_vks: vk.p3vk, vky0: vk.vky0 };
     groth16(true, &mut segments, eval_ins, pubs, &mut None);
