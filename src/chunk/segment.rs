@@ -1,7 +1,7 @@
 
 use crate::treepp;
 
-use super::{hint_models::Element, msm::{ tap_hash_p, tap_msm}, wots::WOTSPubKey};
+use super::{hint_models::Element};
 
 pub type SegmentID = u32;
 pub type SegmentOutputType = bool;
@@ -65,7 +65,7 @@ pub(crate) fn wrap_hint_msm(
     pub_vky: Vec<ark_bn254::G1Affine>,
 ) -> Segment {
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
+   // let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
 
     let hint_scalars: Vec<ark_bn254::Fr> = scalars
@@ -85,7 +85,9 @@ pub(crate) fn wrap_hint_msm(
 
     let (mut hout_msm, mut hint_script) = (ElemG1Point::mock(), script!());
     if !skip {
-        (hout_msm, hint_script, _) = hint_msm(sig, (segment_id as u32, output_type), input_segment_info.clone(), acc, hint_scalars, msm_chain_index, pub_vky.clone());
+        (hout_msm, hint_script) = hint_msm(
+            // sig, (segment_id as u32, output_type), input_segment_info.clone(), 
+            acc, hint_scalars, msm_chain_index, pub_vky.clone());
         input_segment_info.reverse();
     }
     Segment { id: segment_id as u32 as u32, output_type, inputs: input_segment_info, output: Element::MSMG1(hout_msm), hint_script, scr_type: ScriptType::MSM((msm_chain_index, pub_vky)) }
@@ -100,7 +102,7 @@ pub(crate) fn wrap_hint_hash_p(
 ) -> Segment {
 
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
+    //let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
     input_segment_info.push((hint_in_t.id, hint_in_t.output_type));
     input_segment_info.push((hint_in_ry.id, hint_in_ry.output_type));
@@ -108,7 +110,9 @@ pub(crate) fn wrap_hint_hash_p(
 
     let (mut h, mut hint_script) = ([0u8;64], script!());
     if !skip {
-        (h, hint_script, _) = hint_hash_p(sig, (segment_id as u32, output_type), input_segment_info.clone(), hint_in_rx.output.into(), hint_in_ry.output.into(), hint_in_t.output.into(), pub_vky0.clone());
+        (h, hint_script) = hint_hash_p(
+            // sig, (segment_id as u32, output_type), input_segment_info.clone(),
+             hint_in_rx.output.into(), hint_in_ry.output.into(), hint_in_t.output.into(), pub_vky0.clone());
         input_segment_info.reverse();
     }
     Segment { id: segment_id as u32, output_type, inputs: input_segment_info, output: Element::HashBytes(h), hint_script, scr_type: ScriptType::PreMillerHashP(pub_vky0) }
@@ -119,7 +123,6 @@ pub(crate) fn wrap_hint_hash_c(
     segment_id: usize,
     hint_in_c: Vec<Segment>,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     let fqvec: Vec<ElemFq> = hint_in_c
@@ -138,7 +141,9 @@ pub(crate) fn wrap_hint_hash_c(
 
     let (mut c, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (c, hint_script, _) = hint_hash_c(sig, (segment_id as u32, output_type), input_segment_info.clone(), fqvec);
+        (c, hint_script) = hint_hash_c(
+            // sig, (segment_id as u32, output_type), input_segment_info.clone(),
+             fqvec);
     }
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(c), hint_script, scr_type: ScriptType::PreMillerHashC }
 }
@@ -150,7 +155,6 @@ pub(crate) fn wrap_hints_precompute_Px(
     segment_id: usize,
     hint_in_px: &Segment, hint_in_py: &Segment, hint_in_pdy: &Segment,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = true;
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     input_segment_info.push((hint_in_py.id, hint_in_py.output_type));
@@ -159,7 +163,9 @@ pub(crate) fn wrap_hints_precompute_Px(
 
     let (mut p4x, mut hint_script) = (ElemFq::mock(), script!());
     if !skip {
-        (p4x, hint_script, _) = hints_precompute_Px(sig, (segment_id as u32, output_type), input_segment_info.clone(), hint_in_px.output.into(), hint_in_py.output.into(), hint_in_pdy.output.into());
+        (p4x, hint_script) = hints_precompute_Px(
+            // sig, (segment_id as u32, output_type), input_segment_info.clone(), 
+            hint_in_px.output.into(), hint_in_py.output.into(), hint_in_pdy.output.into());
     }
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::FieldElem(p4x), hint_script, scr_type: ScriptType::PreMillerPrecomputePx }
 }
@@ -169,14 +175,15 @@ pub(crate) fn wrap_hints_precompute_Py(
     segment_id: usize,
     hint_in_p: &Segment,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = true;
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     input_segment_info.push((hint_in_p.id, hint_in_p.output_type));
 
     let (mut p3y, mut hint_script) = (ElemFq::mock(), script!());
     if !skip {
-        (p3y, hint_script, _) = hints_precompute_Py(sig, (segment_id as u32, output_type), input_segment_info.clone(), hint_in_p.output.into());
+        (p3y, hint_script) = hints_precompute_Py(
+            // sig, (segment_id as u32, output_type), input_segment_info.clone(), 
+            hint_in_p.output.into());
     }
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::FieldElem(p3y), hint_script, scr_type: ScriptType::PreMillerPrecomputePy }
 }
@@ -186,14 +193,13 @@ pub(crate) fn wrap_hint_hash_c2(
     segment_id: usize,
     hint_in_c: &Segment
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     input_segment_info.push((hint_in_c.id, hint_in_c.output_type));
 
     let (mut c2, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (c2, hint_script, _) = hint_hash_c2(sig, (segment_id as u32, output_type), input_segment_info.clone(), hint_in_c.output.into());
+        (c2, hint_script) = hint_hash_c2(hint_in_c.output.into());
     }
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(c2), hint_script, scr_type: ScriptType::PreMillerHashC2 }
 }
@@ -203,7 +209,6 @@ pub(crate) fn wrap_hints_dense_dense_mul0_by_hash(
     segment_id: usize,
     hint_in_a: &Segment, hint_in_bhash: &Segment
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     input_segment_info.push((hint_in_a.id, hint_in_a.output_type));
@@ -211,7 +216,7 @@ pub(crate) fn wrap_hints_dense_dense_mul0_by_hash(
 
     let (mut dmul0, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul0, hint_script, _) = hints_dense_dense_mul0_by_hash(sig, (segment_id as u32, output_type), input_segment_info.clone(), hint_in_a.output.into(), hint_in_bhash.output.into());
+        (dmul0, hint_script) = hints_dense_dense_mul0_by_hash(hint_in_a.output.into(), hint_in_bhash.output.into());
     }
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(dmul0), hint_script, scr_type: ScriptType::PreMillerDenseDenseMulByHash0 }
 }
@@ -221,7 +226,6 @@ pub(crate) fn wrap_hints_dense_dense_mul1_by_hash(
     segment_id: usize,
     hint_in_a: &Segment, hint_in_bhash: &Segment, hint_in_c0: &Segment,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     input_segment_info.push((hint_in_a.id, hint_in_a.output_type));
@@ -230,7 +234,7 @@ pub(crate) fn wrap_hints_dense_dense_mul1_by_hash(
 
     let (mut dmul1, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul1, hint_script, _) = hints_dense_dense_mul1_by_hash(sig, (segment_id as u32, output_type), input_segment_info.clone(), hint_in_a.output.into(), hint_in_bhash.output.into(), hint_in_c0.output.into());
+        (dmul1, hint_script) = hints_dense_dense_mul1_by_hash( hint_in_a.output.into(), hint_in_bhash.output.into(), hint_in_c0.output.into());
     }
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(dmul1), hint_script, scr_type: ScriptType::PreMillerDenseDenseMulByHash1 }
 }
@@ -243,7 +247,6 @@ pub(crate) fn wrap_hint_init_T4(
     hint_in_q4_y_c0: &Segment,
     hint_in_q4_y_c1: &Segment,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
     let input_segment_info = vec![
         (hint_in_q4_y_c1.id, hint_in_q4_y_c1.output_type),
@@ -259,10 +262,7 @@ pub(crate) fn wrap_hint_init_T4(
 
     let (mut tmpt4, mut hint_script) = (ElemG2PointAcc::mock(), script!());
     if !skip {
-        (tmpt4, hint_script, _) = hint_init_T4(
-            sig,
-            (segment_id as u32, output_type),
-            input_segment_info.clone(),
+        (tmpt4, hint_script) = hint_init_T4(
             q4_x_c0,
             q4_x_c1,
             q4_y_c0,
@@ -284,7 +284,6 @@ pub(crate) fn wrap_hint_squaring(
     segment_id: usize,
     hint_in_a: &Segment,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
     let input_segment_info = vec![(hint_in_a.id, hint_in_a.output_type)];
 
@@ -292,10 +291,10 @@ pub(crate) fn wrap_hint_squaring(
 
     let (mut sq, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (sq, hint_script, _) = hint_squaring(
-            sig, 
-            (segment_id as u32, output_type),
-            input_segment_info.clone(),
+        (sq, hint_script) = hint_squaring(
+            // sig, 
+            // (segment_id as u32, output_type),
+            // input_segment_info.clone(),
             f_acc,
         );
     }
@@ -317,7 +316,6 @@ pub(crate) fn wrap_hint_point_dbl(
     hint_in_p4x: &Segment,
     hint_in_p4y: &Segment,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
     let input_segment_info = vec![
         (hint_in_t4.id, hint_in_t4.output_type),
@@ -331,9 +329,9 @@ pub(crate) fn wrap_hint_point_dbl(
 
     let (mut dbl, mut hint_script) = (ElemG2PointAcc::mock(), script!());
     if !skip {
-        (dbl, hint_script, _) = hint_point_dbl(
-            sig, (segment_id as u32, output_type),
-            input_segment_info.clone(),
+        (dbl, hint_script) = hint_point_dbl(
+            // sig, (segment_id as u32, output_type),
+            // input_segment_info.clone(),
             t4,
             p4x,
             p4y,
@@ -364,7 +362,6 @@ pub(crate) fn wrap_hint_point_ops(
     hint_in_q4_y_c1: &Segment,
     ate: i8,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
     let input_segment_info = vec![
         (hint_in_t4.id, hint_in_t4.output_type),
@@ -386,9 +383,9 @@ pub(crate) fn wrap_hint_point_ops(
 
     let (mut dbladd, mut hint_script) = (ElemG2PointAcc::mock(), script!());
     if !skip {
-        (dbladd, hint_script, _) = hint_point_ops(
-            sig, (segment_id as u32, output_type),
-            input_segment_info.clone(),
+        (dbladd, hint_script) = hint_point_ops(
+            // sig, (segment_id as u32, output_type),
+            // input_segment_info.clone(),
             t4,
             p4x,
             p4y,
@@ -417,7 +414,6 @@ pub(crate) fn wrap_hint_sparse_dense_mul(
     hint_in_g: &Segment,
     is_dbl_blk: bool,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
     let input_segment_info = vec![
         (hint_in_a.id, hint_in_a.output_type),
@@ -429,9 +425,9 @@ pub(crate) fn wrap_hint_sparse_dense_mul(
 
     let (mut temp, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (temp, hint_script, _) = hint_sparse_dense_mul(
-            sig, (segment_id as u32, output_type),
-            input_segment_info.clone(),
+        (temp, hint_script) = hint_sparse_dense_mul(
+            // sig, (segment_id as u32, output_type),
+            // input_segment_info.clone(),
             f_acc,
             t4,
             is_dbl_blk,
@@ -458,7 +454,6 @@ pub(crate) fn wrap_hint_double_eval_mul_for_fixed_Qs(
     hint_in_t2: ark_bn254::G2Affine,
     hint_in_t3: ark_bn254::G2Affine,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
     let input_segment_info = vec![
         (hint_in_p3y.id, hint_in_p3y.output_type),
@@ -474,9 +469,9 @@ pub(crate) fn wrap_hint_double_eval_mul_for_fixed_Qs(
 
     let (mut leval, mut hint_script) = (ElemSparseEval::mock(), script!());
     if !skip {
-        (leval, hint_script, _) = hint_double_eval_mul_for_fixed_Qs(
-            sig,(segment_id as u32, output_type),
-            input_segment_info.clone(),
+        (leval, hint_script) = hint_double_eval_mul_for_fixed_Qs(
+            // sig,(segment_id as u32, output_type),
+            // input_segment_info.clone(),
             p2x,
             p2y,
             p3x,
@@ -502,7 +497,6 @@ pub(crate) fn wrap_hints_dense_dense_mul0(
     hint_in_a: &Segment,
     hint_in_b: &Segment,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
 
     let input_segment_info = vec![
         (hint_in_a.id, hint_in_a.output_type),
@@ -515,9 +509,9 @@ pub(crate) fn wrap_hints_dense_dense_mul0(
     let output_type = false;
     let (mut dmul0, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul0, hint_script, _) = hints_dense_dense_mul0(
-            sig, (segment_id as u32, output_type),
-            input_segment_info.clone(),
+        (dmul0, hint_script) = hints_dense_dense_mul0(
+            // sig, (segment_id as u32, output_type),
+            // input_segment_info.clone(),
             a.clone(),
             b.clone(),
         );
@@ -540,7 +534,6 @@ pub(crate) fn wrap_hints_dense_dense_mul1(
     hint_in_b: &Segment,
     hint_in_c: &Segment,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
 
     let input_segment_info = vec![
         (hint_in_a.id, hint_in_a.output_type),
@@ -556,10 +549,10 @@ pub(crate) fn wrap_hints_dense_dense_mul1(
 
     let (mut dmul1, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul1, hint_script, _) = hints_dense_dense_mul1(
-            sig,
-            (segment_id as u32, output_type),
-            input_segment_info.clone(),
+        (dmul1, hint_script) = hints_dense_dense_mul1(
+            // sig,
+            // (segment_id as u32, output_type),
+            // input_segment_info.clone(),
             a.clone(),
             b.clone(),
             c.clone(),
@@ -584,7 +577,6 @@ pub(crate) fn wrap_hints_dense_le_mul0(
     hint_in_a: &Segment,
     hint_in_b: &Segment,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
 
     let input_segment_info = vec![
         (hint_in_a.id, hint_in_a.output_type),
@@ -598,9 +590,9 @@ pub(crate) fn wrap_hints_dense_le_mul0(
 
     let (mut dmul0, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul0, hint_script, _) = hints_dense_dense_mul0(
-            sig, (segment_id as u32, output_type),
-            input_segment_info.clone(),
+        (dmul0, hint_script) = hints_dense_dense_mul0(
+            // sig, (segment_id as u32, output_type),
+            // input_segment_info.clone(),
             a.clone(),
             b.f.clone(),
         );
@@ -623,7 +615,6 @@ pub(crate) fn wrap_hints_dense_le_mul1(
     hint_in_b: &Segment,
     hint_in_c: &Segment,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
 
     let input_segment_info = vec![
         (hint_in_a.id, hint_in_a.output_type),
@@ -639,9 +630,7 @@ pub(crate) fn wrap_hints_dense_le_mul1(
 
     let (mut dmul1, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul1, hint_script, _) = hints_dense_dense_mul1(
-            sig, (segment_id as u32, output_type),
-            input_segment_info.clone(),
+        (dmul1, hint_script) = hints_dense_dense_mul1(
             a.clone(),
             b.f.clone(),
             c.clone(),
@@ -673,7 +662,6 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs(
     pub_q3: ark_bn254::G2Affine,
     ate: i8,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
     let input_segment_info = vec![
         (hint_in_p3y.id, hint_in_p3y.output_type),
@@ -689,9 +677,9 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs(
 
     let (mut leval, mut hint_script) = (ElemSparseEval::mock(), script!());
     if !skip {
-        (leval, hint_script, _) = hint_add_eval_mul_for_fixed_Qs(
-            sig, (segment_id as u32, output_type),
-            input_segment_info.clone(),
+        (leval, hint_script) = hint_add_eval_mul_for_fixed_Qs(
+            // sig, (segment_id as u32, output_type),
+            // input_segment_info.clone(),
             p2x,
             p2y,
             p3x,
@@ -720,7 +708,6 @@ pub(crate) fn wrap_hints_frob_fp12(
     hint_in_f: &Segment,
     power: usize,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
 
     let input_segment_info = vec![(hint_in_f.id, hint_in_f.output_type)];
 
@@ -730,9 +717,9 @@ pub(crate) fn wrap_hints_frob_fp12(
 
     let (mut cp, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (cp, hint_script, _) = hints_frob_fp12(
-            sig, (segment_id as u32, output_type),
-            input_segment_info.clone(),
+        (cp, hint_script) = hints_frob_fp12(
+            // sig, (segment_id as u32, output_type),
+            // input_segment_info.clone(),
             f,
             power,
         );
@@ -760,7 +747,6 @@ pub(crate) fn wrap_hint_point_add_with_frob(
     hint_in_q4_y_c1: &Segment,
     power: i8,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
     let input_segment_info = vec![
         (hint_in_t4.id, hint_in_t4.output_type),
@@ -782,9 +768,9 @@ pub(crate) fn wrap_hint_point_add_with_frob(
 
     let (mut temp, mut hint_script) = (ElemG2PointAcc::mock(), script!());
     if !skip {
-        (temp, hint_script, _) = hint_point_add_with_frob(
-            sig, (segment_id as u32, output_type),
-            input_segment_info.clone(),
+        (temp, hint_script) = hint_point_add_with_frob(
+            // sig, (segment_id as u32, output_type),
+            // input_segment_info.clone(),
             t4,
             p4x,
             p4y,
@@ -819,7 +805,6 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(
     pub_q3: ark_bn254::G2Affine,
     ate: i8,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
     let output_type = false;
     let input_segment_info = vec![
         (hint_in_p3y.id, hint_in_p3y.output_type),
@@ -835,9 +820,9 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(
 
     let (mut leval, mut hint_script) = (ElemSparseEval::mock(), script!());
     if !skip {
-        (leval, hint_script, _) = hint_add_eval_mul_for_fixed_Qs_with_frob(
-            sig, (segment_id as u32, output_type),
-            input_segment_info.clone(),
+        (leval, hint_script) = hint_add_eval_mul_for_fixed_Qs_with_frob(
+            // sig, (segment_id as u32, output_type),
+            // input_segment_info.clone(),
             p2x,
             p2y,
             p3x,
@@ -867,7 +852,6 @@ pub(crate) fn wrap_hints_dense_dense_mul0_by_constant(
     hint_in_a: &Segment,
     constant: ark_bn254::Fq12,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
 
     let input_segment_info = vec![(hint_in_a.id, hint_in_a.output_type)];
 
@@ -898,9 +882,8 @@ pub(crate) fn wrap_hints_dense_dense_mul0_by_constant(
 
     let (mut dmul0, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul0, hint_script, _) = hints_dense_dense_mul0_by_constant(
-            sig, (segment_id as u32, output_type),
-            input_segment_info.clone(),
+        (dmul0, hint_script) = hints_dense_dense_mul0_by_constant(
+
             a.clone(),
             fixedacc,
         );
@@ -923,7 +906,6 @@ pub(crate) fn wrap_hints_dense_dense_mul1_by_constant(
     hint_in_a: &Segment, hint_in_c0: &Segment,
     constant: ark_bn254::Fq12,
 ) -> Segment {
-    let sig = &mut Sig { msk: None, cache: HashMap::new() };
 
     let input_segment_info = vec![
         (hint_in_a.id, hint_in_a.output_type),
@@ -956,9 +938,7 @@ pub(crate) fn wrap_hints_dense_dense_mul1_by_constant(
 
     let (mut dmul1, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul1, hint_script, _) = hints_dense_dense_mul1_by_constant(
-            sig, (segment_id as u32, output_type),
-            input_segment_info.clone(),
+        (dmul1, hint_script) = hints_dense_dense_mul1_by_constant(
             a.clone(),
             hint_in_c0.output.into(),
             fixedacc,

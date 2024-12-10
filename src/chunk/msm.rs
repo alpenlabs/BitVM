@@ -407,14 +407,11 @@ fn get_byte_mul_g1(
 }
 
 pub(crate) fn hint_msm(
-    sig: &mut Sig,
-    sec_out: Link,
-    sec_in: Vec<Link>,
     hint_in_t: ElemG1Point,
     hint_in_scalars: Vec<ElemFr>,
     msm_tap_index: usize,
     qs: Vec<ark_bn254::G1Affine>,
-) -> (ElemG1Point, Script, bool) {
+) -> (ElemG1Point, Script) {
     const WINDOW_LEN: u8 = 8;
     const MAX_SUPPORTED_PUBS: usize = 3;
 
@@ -498,26 +495,6 @@ pub(crate) fn hint_msm(
         }
     }
 
-    let mut tup = vec![];
-
-    let mut hash_scalars = vec![];
-    for i in 0..hint_in_scalars.len() {
-        let tup = (sec_in[i], extern_fr_to_nibbles(hint_in_scalars[i]));
-        hash_scalars.push(tup);
-    }
-    tup.extend_from_slice(&hash_scalars);
-
-    if msm_tap_index != 0 {
-        assert!(sec_in.len() == hint_in_scalars.len() + 1);
-        tup.push((
-            sec_in[sec_in.len() - 1],
-            extern_hash_fps(vec![hint_in_t.x, hint_in_t.y], true),
-        ))
-    }
-    let outhash = extern_hash_fps(vec![t.x, t.y], true);
-    tup.push((sec_out, outhash));
-    let (bc_elems, should_validate) = tup_to_scr(sig, tup);
-
     let simulate_stack_input = script! {
         // // tmul hints
         for hint in hints_tangent { // check_tangent then double line
@@ -537,11 +514,10 @@ pub(crate) fn hint_msm(
         {fq_push_not_montgomery(hint_in_t.x)}
         {fq_push_not_montgomery(hint_in_t.y)}
 
-        { bc_elems }
     };
     let hint_out = t;
 
-    (hint_out, simulate_stack_input, should_validate)
+    (hint_out, simulate_stack_input)
 }
 
 pub fn try_msm(qs: Vec<ark_bn254::G1Affine>, scalars: Vec<ark_bn254::Fr>) {
@@ -592,10 +568,10 @@ pub fn try_msm(qs: Vec<ark_bn254::G1Affine>, scalars: Vec<ark_bn254::Fr>) {
         let bitcomms_tapscript = script!(); // bitcom_msm(&pub_scripts, msec_out, msec_in.clone());
         let msm_ops = tap_msm(window, i, qs.clone());
 
-        let (aux, stack_data, maybe_wrong) = hint_msm(
-            &mut sig,
-            msec_out,
-            msec_in.clone(),
+        let (aux, stack_data) = hint_msm(
+            // &mut sig,
+            // msec_out,
+            // msec_in.clone(),
             hint_in_t.clone(),
             hint_in_scalars.clone(),
             i as usize,
@@ -700,14 +676,12 @@ pub(crate) fn tap_hash_p(q: G1Affine) -> Script {
 
 
 pub(crate) fn hint_hash_p(
-    sig: &mut Sig,
-    sec_out: Link,
-    sec_in: Vec<Link>,
+
     hint_in_rx: ElemFq,
     hint_in_ry: ElemFq,
     hint_in_t: ElemG1Point,
     hint_in_q: ark_bn254::G1Affine,
-) -> (HashBytes, Script, bool) {
+) -> (HashBytes, Script) {
     // r (gp3) = t(msm) + q(vk0)
     let (tx, qx, ty, qy) = (hint_in_t.x, hint_in_q.x, hint_in_t.y, hint_in_q.y);
     
@@ -716,16 +690,6 @@ pub(crate) fn hint_hash_p(
 
     let zero_nib = [0u8;64];
 
-    let mut tups = vec![];
-    tups.push((sec_in[0], thash));
-    tups.push((sec_in[1], extern_fq_to_nibbles(ry)));
-    tups.push((sec_in[2], extern_fq_to_nibbles(rx)));
-    tups.push((sec_out, zero_nib));
-
-    let (bc_elems, mut should_validate) = tup_to_scr(sig, tups);
-    if bc_elems.len() > 0 {
-        should_validate = true;  // intermediate fix to force validate
-    }
     let alpha_chord = (ty - qy) / (tx - qx);
     let bias_minus_chord = alpha_chord * tx - ty;
     assert_eq!(alpha_chord * tx - ty, bias_minus_chord);
@@ -753,9 +717,9 @@ pub(crate) fn hint_hash_p(
         {fq_push_not_montgomery(tx)}
         {fq_push_not_montgomery(ty)}
 
-        { bc_elems }
+        // { bc_elems }
     };
-    (zero_nib, simulate_stack_input, should_validate)
+    (zero_nib, simulate_stack_input)
 }
 
 
@@ -1020,7 +984,9 @@ mod test {
             msk: None,
             cache: sig_cache,
         };
-        let (_, simulate_stack_input, maybe_wrong) = hint_hash_p(&mut sig, (sec_out, false), sec_in_arr, r.x, r.y, t, q);
+        let (_, simulate_stack_input) = hint_hash_p(
+            // &mut sig, (sec_out, false), sec_in_arr, 
+            r.x, r.y, t, q);
 
         let tap_len = hash_c_scr.len();
         let script = script! {

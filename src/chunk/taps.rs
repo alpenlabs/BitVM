@@ -288,14 +288,11 @@ pub(crate) fn tap_point_dbl() -> Script {
 
 
 pub(crate) fn hint_point_dbl(
-    sig: &mut Sig,
-    sec_out: Link,
-    sec_in: Vec<Link>,
     hint_t: ElemG2PointAcc,
     hint_px: ElemFq,
     hint_py: ElemFq,
-) -> (ElemG2PointAcc, Script, bool) {
-    assert_eq!(sec_in.len(), 3);
+) -> (ElemG2PointAcc, Script) {
+    // assert_eq!(sec_in.len(), 3);
     let t = hint_t.t;
     let p = ark_bn254::G1Affine::new_unchecked(hint_px, hint_py);
     let hash_le_aux = hint_t.hash_le();
@@ -353,13 +350,6 @@ pub(crate) fn hint_point_dbl(
     let aux_hash_le = extern_nibbles_to_limbs(hash_le_aux); // mock
     let hash_input = extern_hash_nibbles(vec![hash_t, hash_le_aux], true);
 
-    let tup = vec![
-        (sec_in[2], pdash_x),
-        (sec_in[1], pdash_y),
-        (sec_in[0], hash_input),
-        (sec_out, hash_root_claim),
-    ];
-    let (bc_elems, should_validate) = tup_to_scr(sig, tup);
 
     let simulate_stack_input = script! {
         // tmul_hints
@@ -377,7 +367,7 @@ pub(crate) fn hint_point_dbl(
         }
         // bit commits raw
 
-        {bc_elems}
+        // {bc_elems}
     };
     let hint_out: ElemG2PointAcc = ElemG2PointAcc {
         t: G2Affine::new_unchecked(new_tx, new_ty),
@@ -385,7 +375,7 @@ pub(crate) fn hint_point_dbl(
         add_le: None,
         // hash: hash_root_claim,
     };
-    (hint_out, simulate_stack_input, should_validate)
+    (hint_out, simulate_stack_input)
 }
 
 pub(crate) fn tap_point_add_with_frob(ate: i8) -> Script {
@@ -652,9 +642,6 @@ pub(crate) fn tap_point_add_with_frob(ate: i8) -> Script {
 }
 
 pub(crate) fn hint_point_add_with_frob(
-    sig: &mut Sig,
-    sec_out: Link,
-    sec_in: Vec<Link>,
     hint_t: ElemG2PointAcc,
     hint_px: ElemFq,
     hint_py: ElemFq,
@@ -663,9 +650,8 @@ pub(crate) fn hint_point_add_with_frob(
     hint_q4y0: ElemFq,
     hint_q4y1: ElemFq,
     ate: i8,
-) -> (ElemG2PointAcc, Script, bool) {
+) -> (ElemG2PointAcc, Script) {
     assert!(ate == 1 || ate == -1);
-    assert_eq!(sec_in.len(), 7);
     let (tt, p) = (hint_t.t, ark_bn254::G1Affine::new_unchecked(hint_px, hint_py));
     let q = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0, hint_q4x1), ark_bn254::Fq2::new(hint_q4y0, hint_q4y1));
     let mut qq = q.clone();
@@ -795,18 +781,6 @@ pub(crate) fn hint_point_add_with_frob(
     let aux_hash_le = extern_nibbles_to_limbs(hash_le_aux); // mock
     let hash_input = extern_hash_nibbles(vec![hash_t, hash_le_aux], true);
 
-    let tup = vec![
-        (sec_in[6], pdash_x),
-        (sec_in[5], pdash_y),
-        (sec_in[4], qdash_x0),
-        (sec_in[3], qdash_x1),
-        (sec_in[2], qdash_y0),
-        (sec_in[1], qdash_y1),
-        (sec_in[0], hash_input),
-        (sec_out, hash_root_claim),
-    ];
-
-    let (bc_elems, should_validate) = tup_to_scr(sig, tup);
 
     let simulate_stack_input = script! {
         // tmul_hints
@@ -824,7 +798,6 @@ pub(crate) fn hint_point_add_with_frob(
         }
 
         // bit commits raw
-        { bc_elems }
     };
     let hint_out = ElemG2PointAcc {
         t: G2Affine::new_unchecked(new_tx, new_ty),
@@ -832,7 +805,7 @@ pub(crate) fn hint_point_add_with_frob(
         dbl_le: None,
         // hash: hash_root_claim,
     };
-    (hint_out, simulate_stack_input, should_validate)
+    (hint_out, simulate_stack_input)
 }
 
 // POINT DBL AND ADD
@@ -1131,9 +1104,6 @@ pub(crate) fn tap_point_ops(ate: i8) -> Script {
 
 
 pub(crate) fn hint_point_ops(
-    sig: &mut Sig,
-    sec_out: Link,
-    sec_in: Vec<Link>,
     hint_t: ElemG2PointAcc,
     hint_px: ElemFq,
     hint_py: ElemFq,
@@ -1142,8 +1112,8 @@ pub(crate) fn hint_point_ops(
     hint_q4y0: ElemFq,
     hint_q4y1: ElemFq,
     ate: i8,
-) -> (ElemG2PointAcc, Script, bool) {
-    assert_eq!(sec_in.len(), 7);
+) -> (ElemG2PointAcc, Script) {
+    // assert_eq!(sec_in.len(), 7);
     let (t, p, hash_le_aux) = (hint_t.t, ark_bn254::G1Affine::new_unchecked(hint_px, hint_py), hint_t.hash_le());
     let q = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0, hint_q4x1), ark_bn254::Fq2::new(hint_q4y0, hint_q4y1));
     let mut qq = q.clone();
@@ -1249,19 +1219,6 @@ pub(crate) fn hint_point_ops(
     let aux_hash_le = extern_nibbles_to_limbs(hash_le_aux);
     let hash_input = extern_hash_nibbles(vec![hash_t, hash_le_aux], true);
 
-    let tup = vec![
-        (sec_in[6], pdash_x),
-        (sec_in[5], pdash_y),
-        (sec_in[4], qdash_x0),
-        (sec_in[3], qdash_x1),
-        (sec_in[2], qdash_y0),
-        (sec_in[1], qdash_y1),
-        (sec_in[0], hash_input),
-        (sec_out, hash_root_claim),
-    ];
-
-    let (bc_elems, should_validate) = tup_to_scr(sig, tup);
-
     let simulate_stack_input = script! {
         // tmul_hints
         for hint in all_qs {
@@ -1280,7 +1237,7 @@ pub(crate) fn hint_point_ops(
         }
 
         // bit commits
-        { bc_elems }
+        // { bc_elems }
     };
 
     let hint_out = ElemG2PointAcc {
@@ -1290,15 +1247,12 @@ pub(crate) fn hint_point_ops(
         // hash: hash_root_claim,
     };
 
-    (hint_out, simulate_stack_input, should_validate)
+    (hint_out, simulate_stack_input)
 }
 
 // DOUBLE EVAL
 
 pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
-    sig: &mut Sig,
-    sec_out: Link,
-    sec_in: Vec<Link>,
     hint_in_p2x: ElemFq,
     hint_in_p2y: ElemFq,
     hint_in_p3x: ElemFq,
@@ -1306,8 +1260,8 @@ pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
     
     hint_in_t2: ark_bn254::G2Affine,
     hint_in_t3: ark_bn254::G2Affine,
-) -> (ElemSparseEval, Script, bool) {
-    assert_eq!(sec_in.len(), 4);
+) -> (ElemSparseEval, Script) {
+    // assert_eq!(sec_in.len(), 4);
     let (t2, t3) = (hint_in_t2, hint_in_t3);
     let (p2, p3) = (ark_bn254::G1Affine::new_unchecked(hint_in_p2x, hint_in_p2y), ark_bn254::G1Affine::new_unchecked(hint_in_p3x, hint_in_p3y));
     // First
@@ -1372,22 +1326,13 @@ pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
     let p3dash_x = extern_fq_to_nibbles(p3.x);
     let p3dash_y = extern_fq_to_nibbles(p3.y);
 
-    let tup = vec![
-        (sec_in[3], p2dash_x),
-        (sec_in[2], p2dash_y),
-        (sec_in[1], p3dash_x),
-        (sec_in[0], p3dash_y),
-        (sec_out, b_hash),
-    ];
-
-    let (bc_elems, should_validate) = tup_to_scr(sig, tup);
 
     let simulate_stack_input = script! {
         for hint in hints {
             { hint.push() }
         }
 
-        { bc_elems }
+        // { bc_elems }
 
     };
 
@@ -1397,7 +1342,7 @@ pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
         f: ElemFp12Acc { f: b, hash: b_hash }
     };
 
-    (hint_out, simulate_stack_input, should_validate)
+    (hint_out, simulate_stack_input)
 }
 
 pub(crate) fn tap_double_eval_mul_for_fixed_Qs(
@@ -1504,9 +1449,6 @@ pub(crate) fn tap_double_eval_mul_for_fixed_Qs(
 // ADD EVAL
 
 pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
-    sig: &mut Sig,
-    sec_out: Link,
-    sec_in: Vec<Link>,
     hint_in_p2x: ElemFq,
     hint_in_p2y: ElemFq,
     hint_in_p3x: ElemFq,
@@ -1517,8 +1459,7 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
     hint_in_q2: ark_bn254::G2Affine,
     hint_in_q3: ark_bn254::G2Affine,
     ate: i8,
-) -> (ElemSparseEval, Script, bool) {
-    assert_eq!(sec_in.len(), 4);
+) -> (ElemSparseEval, Script) {
     let (t2, t3, qq2, qq3) = (
         hint_in_t2, hint_in_t3,  hint_in_q2, hint_in_q3,
     );
@@ -1587,22 +1528,12 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
     let p3dash_x = extern_fq_to_nibbles(p3.x);
     let p3dash_y = extern_fq_to_nibbles(p3.y);
 
-    let tup = vec![
-        (sec_in[3], p2dash_x),
-        (sec_in[2], p2dash_y),
-        (sec_in[1], p3dash_x),
-        (sec_in[0], p3dash_y),
-        (sec_out, b_hash),
-    ];
-
-    let (bc_elems, should_validate) = tup_to_scr(sig, tup);
-
     let simulate_stack_input = script! {
         for hint in hints {
             { hint.push() }
         }
         // bit commits
-        { bc_elems }
+        // { bc_elems }
     };
 
     let hint_out = ElemSparseEval {
@@ -1611,7 +1542,7 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
         f: ElemFp12Acc { f: b, hash: b_hash }
     };
 
-    (hint_out, simulate_stack_input, should_validate)
+    (hint_out, simulate_stack_input)
 }
 
 pub(crate) fn tap_add_eval_mul_for_fixed_Qs(
@@ -1769,9 +1700,6 @@ pub(crate) fn add_with_frob(q: ark_bn254::G2Affine, t: ark_bn254::G2Affine, ate:
 }
 
 pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
-    sig: &mut Sig,
-    sec_out: Link,
-    sec_in: Vec<Link>,
     hint_in_p2x: ElemFq,
     hint_in_p2y: ElemFq,
     hint_in_p3x: ElemFq,
@@ -1782,8 +1710,7 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
     hint_in_q2: ark_bn254::G2Affine,
     hint_in_q3: ark_bn254::G2Affine,
     ate: i8,
-) -> (ElemSparseEval, Script, bool) {
-    assert_eq!(sec_in.len(), 4);
+) -> (ElemSparseEval, Script) {
 
     let (t2, t3, qq2, qq3) = (
         hint_in_t2, hint_in_t3,  hint_in_q2, hint_in_q3,
@@ -1899,22 +1826,12 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
     let p3dash_x = extern_fq_to_nibbles(p3.x);
     let p3dash_y = extern_fq_to_nibbles(p3.y);
 
-    let tup = vec![
-        (sec_in[3], p2dash_x),
-        (sec_in[2], p2dash_y),
-        (sec_in[1], p3dash_x),
-        (sec_in[0], p3dash_y),
-        (sec_out, b_hash),
-    ];
-
-    let (bc_elems, should_validate) = tup_to_scr(sig, tup);
-
     let simulate_stack_input = script! {
         for hint in hints {
             { hint.push() }
         }
         // bit commits
-        { bc_elems }
+        // { bc_elems }
     };
 
     let hint_out = ElemSparseEval {
@@ -1923,7 +1840,7 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
         f: ElemFp12Acc { f: b, hash: b_hash }
     };
 
-    (hint_out, simulate_stack_input, should_validate)
+    (hint_out, simulate_stack_input)
 }
 
 pub(crate) fn tap_add_eval_mul_for_fixed_Qs_with_frob(
@@ -2118,24 +2035,14 @@ pub(crate) fn tap_hash_c() -> Script {
 
 
 pub(crate) fn hint_hash_c(
-    sig: &mut Sig,
-    sec_out: Link,
-    sec_in: Vec<Link>,
     hint_in_c: Vec<ElemFq>,
-) -> (ElemFp12Acc, Script, bool) {
+) -> (ElemFp12Acc, Script) {
     let fvec = hint_in_c;
     let fhash = extern_hash_fps(fvec.clone(), false);
 
-    let mut tups = vec![];
-    for i in 0..12 {
-        tups.push((sec_in[11 - i], extern_fq_to_nibbles(fvec[i])));
-    }
-    tups.push((sec_out, fhash));
-    let (bc_elems, should_validate) = tup_to_scr(sig, tups);
-
     let simulate_stack_input = script! {
         // bit commits raw
-        { bc_elems }
+        // { bc_elems }
     };
     let f = ark_bn254::Fq12::new(
         ark_bn254::Fq6::new(
@@ -2155,7 +2062,6 @@ pub(crate) fn hint_hash_c(
             hash: fhash,
         },
         simulate_stack_input,
-        should_validate
     )
 }
 
@@ -2188,11 +2094,8 @@ pub(crate) fn tap_hash_c2() -> Script {
 }
 
 pub(crate) fn hint_hash_c2(
-    sig: &mut Sig,
-    sec_out: Link,
-    sec_in: Vec<Link>,
     hint_in_c: ElemFp12Acc,
-) -> (ElemFp12Acc, Script, bool) {
+) -> (ElemFp12Acc, Script) {
     let f = hint_in_c.f;
     let f = vec![
         f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
@@ -2201,15 +2104,12 @@ pub(crate) fn hint_hash_c2(
     let inhash = extern_hash_fps(f.clone(), false);
     let outhash = extern_hash_fps(f.clone(), true);
 
-    let tups = vec![(sec_in[0], inhash), (sec_out, outhash)];
-    let (bc_elems, should_validate) = tup_to_scr(sig, tups);
-
     let simulate_stack_input = script! {
         // bit commits raw
         {fq12_push_not_montgomery(hint_in_c.f)}
         // hash
         // hash192
-        { bc_elems }
+        // { bc_elems }
     };
     (
         ElemFp12Acc {
@@ -2217,7 +2117,6 @@ pub(crate) fn hint_hash_c2(
             hash: outhash,
         },
         simulate_stack_input,
-        should_validate
     )
 }
 
@@ -2302,14 +2201,11 @@ pub(crate) fn tap_precompute_Py() -> Script {
 }
 
 pub(crate) fn hints_precompute_Px(
-    sig: &mut Sig,
-    sec_out: Link,
-    sec_in: Vec<Link>,
     hint_in_px: ark_bn254::Fq,
     hint_in_py: ark_bn254::Fq,
     hint_in_pdy: ark_bn254::Fq,
-) -> (ark_bn254::Fq, Script, bool) {
-    assert_eq!(sec_in.len(), 3);
+) -> (ark_bn254::Fq, Script) {
+    // assert_eq!(sec_in.len(), 3);
     let p =  ark_bn254::G1Affine::new_unchecked(hint_in_px, hint_in_py);
     let pdy = hint_in_pdy;
     // if p.y.inverse().is_some() {
@@ -2325,14 +2221,6 @@ pub(crate) fn hints_precompute_Px(
 
     let (_, on_curve_hint) = crate::bn254::curves::G1Affine::hinted_is_on_curve(p.x, p.y);
 
-    let tups = vec![
-        (sec_in[2], pdash_y),
-        (sec_in[1], p_x),
-        (sec_in[0], p_y),
-        (sec_out, pdash_x),
-    ];
-    let (bc_elems, should_validate) = tup_to_scr(sig, tups);
-
     let simulate_stack_input = script! {
         for hint in on_curve_hint {
             { hint.push() }
@@ -2341,18 +2229,16 @@ pub(crate) fn hints_precompute_Px(
             { hint.push() }
         }
         // bit commits raw
-        { bc_elems }
+        // { bc_elems }
     };
-    (pdx, simulate_stack_input, should_validate)
+    (pdx, simulate_stack_input)
 }
 
 pub(crate) fn hints_precompute_Py(
-    sig: &mut Sig,
-    sec_out: Link,
-    sec_in: Vec<Link>,
+
     hint_in_p: ark_bn254::Fq,
-) -> (ark_bn254::Fq, Script, bool) {
-    assert_eq!(sec_in.len(), 1);
+) -> (ark_bn254::Fq, Script) {
+    // assert_eq!(sec_in.len(), 1);
     let p = hint_in_p.clone();
 
     let mut pdy = ark_bn254::Fq::ONE;
@@ -2367,8 +2253,6 @@ pub(crate) fn hints_precompute_Py(
 
     let p_y = extern_fq_to_nibbles(p);
 
-    let tups = vec![(sec_in[0], p_y), (sec_out, pdash_y)];
-    let (bc_elems, should_validate) = tup_to_scr(sig, tups);
 
     let simulate_stack_input = script! {
         for hint in hints {
@@ -2377,9 +2261,9 @@ pub(crate) fn hints_precompute_Py(
         {fq_push_not_montgomery(pdy)} // calc pdy
 
         // bit commits raw
-        { bc_elems }
+        // { bc_elems }
     };
-    (pdy, simulate_stack_input, should_validate)
+    (pdy, simulate_stack_input)
 }
 
 // hash T4
@@ -2421,27 +2305,14 @@ pub(crate) fn tap_initT4() -> Script {
 }
 
 pub(crate) fn hint_init_T4(
-    sig: &mut Sig,
-    sec_out: Link,
-    sec_in: Vec<Link>,
     hint_q4x0: ElemFq,
     hint_q4x1: ElemFq,
     hint_q4y0: ElemFq,
     hint_q4y1: ElemFq,
-) -> (ElemG2PointAcc, Script, bool) {
-    assert_eq!(sec_in.len(), 4);
+) -> (ElemG2PointAcc, Script) {
     let t4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0, hint_q4x1), ark_bn254::Fq2::new(hint_q4y0, hint_q4y1));
     let t4hash = extern_hash_fps(vec![t4.x.c0, t4.x.c1, t4.y.c0, t4.y.c1], false);
     let t4hash = extern_hash_nibbles(vec![t4hash, [0u8; 64]], true);
-
-    let tups = vec![
-        (sec_in[3], extern_fq_to_nibbles(t4.x.c0)),
-        (sec_in[2], extern_fq_to_nibbles(t4.x.c1)),
-        (sec_in[1], extern_fq_to_nibbles(t4.y.c0)),
-        (sec_in[0], extern_fq_to_nibbles(t4.y.c1)),
-        (sec_out, t4hash),
-    ];
-    let (bc_elems, should_validate) = tup_to_scr(sig, tups);
 
     let (_, hints) = bn254::curves::G2Affine::hinted_is_on_curve(t4.x, t4.y);
 
@@ -2450,7 +2321,6 @@ pub(crate) fn hint_init_T4(
         for hint in hints {
             {hint.push()}
         }
-        { bc_elems }
     };
     let hint_out: ElemG2PointAcc = ElemG2PointAcc {
         t: t4,
@@ -2458,7 +2328,7 @@ pub(crate) fn hint_init_T4(
         add_le: None,
         // hash: t4hash,
     };
-    (hint_out, simulate_stack_input, should_validate)
+    (hint_out, simulate_stack_input)
 }
 
 // POST MILLER
@@ -2493,13 +2363,9 @@ pub(crate) fn tap_frob_fp12(power: usize) -> Script {
 }
 
 pub(crate) fn hints_frob_fp12(
-    sig: &mut Sig,
-    sec_out: Link,
-    sec_in: Vec<Link>,
     hint_in_f: ElemFp12Acc,
     power: usize,
-) -> (ElemFp12Acc, Script, bool) {
-    assert_eq!(sec_in.len(), 1);
+) -> (ElemFp12Acc, Script) {
     let f = hint_in_f.f;
     let (_, hints_frobenius_map) = Fq12::hinted_frobenius_map(power, f);
 
@@ -2520,15 +2386,11 @@ pub(crate) fn hints_frob_fp12(
         false,
     );
 
-    let tups = vec![(sec_in[0], fhash), (sec_out, ghash)];
-    let (bc_elems, should_validate) = tup_to_scr(sig, tups);
-
     let simulate_stack_input = script! {
         for hint in hints_frobenius_map {
             { hint.push() }
         }
         { fq12_push_not_montgomery(f) }
-        { bc_elems }
     };
-    (ElemFp12Acc { f: g, hash: ghash }, simulate_stack_input, should_validate)
+    (ElemFp12Acc { f: g, hash: ghash }, simulate_stack_input)
 }
