@@ -133,19 +133,3 @@ pub fn read_scripts_from_file(file: &str) -> HashMap<u32, Vec<Script>> {
     }
     scr
 }
-
-#[cfg(test)]
-mod test {
-    use std::{collections::HashMap, io, ops::Neg};
-
-    use ark_ec::{AffineRepr, CurveGroup};
-    use bitcoin_script::script;
-
-    use crate::{
-        chunk::{
-            taps::{bitcom_precompute_Py, tap_precompute_Py},
-        },
-        groth16::offchain_checker::compute_c_wi,
-    };
-
-}

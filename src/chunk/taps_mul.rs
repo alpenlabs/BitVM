@@ -7,7 +7,7 @@ use crate::chunk::primitves::{
     extern_hash_nibbles,  extern_nibbles_to_limbs, hash_fp12,
     hash_fp12_with_hints, hash_fp2, hash_fp4, hash_fp6, 
 };
-use crate::chunk::taps::{tup_to_scr, wots_locking_script};
+use crate::chunk::taps::{gen_bitcom, tup_to_scr, wots_locking_script};
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
@@ -85,25 +85,6 @@ pub(crate) fn tap_sparse_dense_mul(dbl_blk: bool) -> Script {
         OP_TRUE
     };
     scr
-}
-
-pub(crate) fn bitcom_sparse_dense_mul(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 2);
-
-    let bitcomms_script = script! {
-        {wots_locking_script(sec_out, link_ids)} // hash_out
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)} // hash_dense_in
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[1], link_ids)} // hash_sparse_in
-        {Fq::toaltstack()}
-        // Stack: [...,hash_out, hash_in1, hash_in2]
-    };
-    bitcomms_script
 }
 
 pub(crate) fn hint_sparse_dense_mul(
@@ -262,25 +243,6 @@ pub(crate) fn tap_dense_dense_mul0() -> Script {
     scr
 }
 
-pub(crate) fn bitcom_dense_dense_mul0(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 2);
-
-    let bitcom_scr = script! {
-        {wots_locking_script(sec_out, link_ids)} // od
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)} // d // SD or DD output
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[1], link_ids)} // s // SS or c' output
-        {Fq::toaltstack()}
-    };
-    // Alt: [od, d, s]
-    bitcom_scr
-}
-
 pub(crate) fn hints_dense_dense_mul0(
     sig: &mut Sig,
     sec_out: Link,
@@ -402,26 +364,6 @@ pub(crate) fn tap_dense_dense_mul1() -> Script {
         OP_TRUE
     };
     scr
-}
-
-pub(crate) fn bitcom_dense_dense_mul1(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 3);
-
-    let bitcom_scr = script! {
-        {wots_locking_script(sec_out, link_ids)} // g
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)} // f // SD or DD output
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[1], link_ids)}// c // SS or c' output
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[2], link_ids)} // c // dense0 output
-        {Fq::toaltstack()}
-    };
-    bitcom_scr
 }
 
 pub(crate) fn hints_dense_dense_mul1(
@@ -550,22 +492,6 @@ pub(crate) fn hint_squaring(
     return (hint_out, simulate_stack_input, should_validate);
 }
 
-pub(crate) fn bitcom_squaring(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 1);
-
-    script! {
-        {wots_locking_script(sec_out, link_ids)}
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)}
-        {Fq::toaltstack()}
-    }
-    // stack: [hash_out, hash_in]
-}
-
 pub(crate) fn tap_squaring() -> Script {
     let (sq_script, _) = Fq12::hinted_square(ark_bn254::Fq12::ONE);
     let hash_sc = script! {
@@ -655,24 +581,6 @@ pub(crate) fn tap_dense_dense_mul0_by_constant(g: ark_bn254::Fq12) -> Script {
     scr
 }
 
-pub(crate) fn bitcom_dense_dense_mul0_by_constant(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 1);
-
-    let bitcom_scr = script! {
-        {wots_locking_script(sec_out, link_ids)} // od
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)} // d // SD or DD output
-        {Fq::toaltstack()}
-        // {wots_locking_script(sec_in[1], link_ids)} // s // SS or c' output
-        // {Fq::toaltstack()}
-    };
-    // Alt: [od, d, s]
-    bitcom_scr
-}
 
 pub(crate) fn hints_dense_dense_mul0_by_constant(
     sig: &mut Sig,
@@ -808,27 +716,6 @@ pub(crate) fn tap_dense_dense_mul1_by_constant(g: ark_bn254::Fq12) -> Script {
     scr
 }
 
-pub(crate) fn bitcom_dense_dense_mul1_by_constant(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 2);
-
-    let bitcom_scr = script! {
-        {wots_locking_script(sec_out, link_ids)} // g
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)} // f // SD or DD output
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[1], link_ids)}// c // SS or c' output
-        {Fq::toaltstack()}
-        // {wots_locking_script(sec_in[2], link_ids)} // c // dense0 output
-        // {Fq::toaltstack()}
-    };
-    bitcom_scr
-}
-
-
 pub(crate) fn hints_dense_dense_mul1_by_constant(
     sig: &mut Sig,
     sec_out: Link,
@@ -963,24 +850,6 @@ pub(crate) fn tap_dense_dense_mul0_by_hash() -> Script {
     scr
 }
 
-pub(crate) fn bitcom_dense_dense_mul0_by_hash(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 2);
-
-    let bitcom_scr = script! {
-        {wots_locking_script(sec_out, link_ids)} // od
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)} // d // SD or DD output
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[1], link_ids)} // s // SS or c' output
-        {Fq::toaltstack()}
-    };     // [h, f, g]
-    // Alt: [od, d, s]
-    bitcom_scr
-}
 
 pub(crate) fn hints_dense_dense_mul0_by_hash(
     sig: &mut Sig,
@@ -1114,28 +983,6 @@ pub(crate) fn tap_dense_dense_mul1_by_hash() -> Script {
     };
     scr
 }
-
-pub(crate) fn bitcom_dense_dense_mul1_by_hash(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 3);
-
-    let bitcom_scr = script! {
-        {wots_locking_script(sec_out, link_ids)} // g
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)} // f // SD or DD output
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[1], link_ids)}// c // SS or c' output
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[2], link_ids)} // c // dense0 output
-        {Fq::toaltstack()}
-    };
-    bitcom_scr
-}
-
-
 
 
 pub(crate) fn hints_dense_dense_mul1_by_hash(

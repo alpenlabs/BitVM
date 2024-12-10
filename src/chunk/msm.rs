@@ -17,7 +17,7 @@ use num_traits::One;
 
 use super::hint_models::{ElemFq, ElemFr, ElemG1Point};
 use super::primitves::hash_fp2;
-use super::taps::{HashBytes, Link, Sig};
+use super::taps::{gen_bitcom, HashBytes, Link, Sig};
 use super::wots::WOTSPubKey;
 use crate::bn254::fq2::Fq2;
 use crate::bn254::utils::Hint;
@@ -544,25 +544,6 @@ pub(crate) fn hint_msm(
     (hint_out, simulate_stack_input, should_validate)
 }
 
-pub(crate) fn bitcom_msm(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    // if i == 0, sec_in.len() == num_pubs
-    // if i > 0, sec_in.len() == num_pubs + 1
-    script! {
-        {wots_locking_script(sec_out, link_ids)} // hash_acc_out
-        {Fq::toaltstack()}
-        for i in 0..sec_in.len() { // scalars, hash_acc_in
-            {wots_locking_script(sec_in[sec_in.len()-1-i], link_ids)}
-            {Fq::toaltstack()}
-        }
-    }
-    // altstack: [hash_acc_out, hash_acc_in, k2, k1, k0]
-    // stack: []
-}
-
 pub fn try_msm(qs: Vec<ark_bn254::G1Affine>, scalars: Vec<ark_bn254::Fr>) {
     // constants
     let num_bits: usize = 256;
@@ -608,7 +589,7 @@ pub fn try_msm(qs: Vec<ark_bn254::G1Affine>, scalars: Vec<ark_bn254::Fr>) {
             let last = msec_in.pop().unwrap();
             msec_in.push((last.0, false));
         }
-        let bitcomms_tapscript = bitcom_msm(&pub_scripts, msec_out, msec_in.clone());
+        let bitcomms_tapscript = script!(); // bitcom_msm(&pub_scripts, msec_out, msec_in.clone());
         let msm_ops = tap_msm(window, i, qs.clone());
 
         let (aux, stack_data, maybe_wrong) = hint_msm(
@@ -717,29 +698,6 @@ pub(crate) fn tap_hash_p(q: G1Affine) -> Script {
     sc
 }
 
-pub(crate) fn bitcom_hash_p(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 3);
-
-    let bitcom_scr = script! {
-
-        {wots_locking_script(sec_out, link_ids)} // zeroth
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[2], link_ids)} // gp3x // R
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[1], link_ids)} // gp3y
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)} // msm_P_hash // T
-        {Fq::toaltstack()}
-        // P + vkY0 ?= gp3
-
-        // Altstack:[identity, gpx, gpy, th]
-    };
-    bitcom_scr
-}
 
 pub(crate) fn hint_hash_p(
     sig: &mut Sig,
@@ -1028,7 +986,7 @@ mod test {
         // let sec_out = (sec_out, false);
 
         let sec_in_arr = vec![(sec_in[0],false), (sec_in[1], true), (sec_in[2], true)];
-        let bitcom_scr = bitcom_hash_p(&pub_scripts, (sec_out, false), sec_in_arr.clone());
+        let bitcom_scr = script!{}; // bitcom_hash_p(&pub_scripts, (sec_out, false), sec_in_arr.clone());
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);

@@ -1,7 +1,7 @@
 
 use crate::treepp;
 
-use super::{hint_models::Element, msm::{bitcom_hash_p, bitcom_msm, tap_hash_p, tap_msm}, wots::WOTSPubKey};
+use super::{hint_models::Element, msm::{ tap_hash_p, tap_msm}, wots::WOTSPubKey};
 
 pub type SegmentID = u32;
 pub type SegmentOutputType = bool;

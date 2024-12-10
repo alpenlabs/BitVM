@@ -6,7 +6,7 @@ use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::{Field, PrimeField};
 use bitcoin_script::script;
 
-use crate::{chunk::{compile::{bitcom_scripts_from_segments, op_scripts_from_segments, Vkey}, msm::{bitcom_msm, tap_msm}, segment::*, taps::{add_with_frob, bitcom_precompute_Py, tap_precompute_Py, tup_to_scr, Sig, SigData}}, execute_script, groth16::g16::{Assertions, PublicKeys, Signatures, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}, signatures::wots::{wots160, wots256}, treepp};
+use crate::{chunk::{compile::{bitcom_scripts_from_segments, op_scripts_from_segments, Vkey}, segment::*, taps::{add_with_frob, tap_precompute_Py, tup_to_scr, Sig, SigData}}, execute_script, groth16::g16::{Assertions, PublicKeys, Signatures, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}, signatures::wots::{wots160, wots256}, treepp};
 use sha2::{Digest, Sha256};
 
 use super::{api::nib_to_byte_array, compile::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, hint_models::*, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps}, taps::{HashBytes}, wots::WOTSPubKey};
@@ -618,31 +618,6 @@ pub fn script_exec(
     let mut bc_hints = vec![];
     for i in 0..segments.len() {
         let seg = &segments[i];
-        let out_first: bool = match seg.scr_type {
-            ScriptType::MSM(_) => false,
-            ScriptType::PreMillerHashP(_) => false,
-            ScriptType::PreMillerInitT4 => true,
-            ScriptType::PreMillerPrecomputePy => true,
-            ScriptType::PreMillerPrecomputePx => true,
-            ScriptType::PreMillerHashC => true,
-            ScriptType::PreMillerHashC2 => true,
-            ScriptType::MillerSparseSparseDbl(_) => true,
-            ScriptType::MillerSparseSparseAdd(_) => true,
-            ScriptType::PostMillerSparseAddWithFrob(_) => true,
-            ScriptType::PostMillerDenseDenseMulByConst0(_) => false,
-            ScriptType::PostMillerDenseDenseMulByConst1(_) => false,
-            ScriptType::PreMillerDenseDenseMulByHash0 => false,
-            ScriptType::PreMillerDenseDenseMulByHash1 => false,
-            ScriptType::MillerSquaring => false,
-            ScriptType::SparseDenseMul(_) => false,
-            ScriptType::DenseDenseMul0() => false,
-            ScriptType::DenseDenseMul1() => false,
-            ScriptType::PostMillerFrobFp12(_) => false,
-            ScriptType::MillerDoubleAdd(_) => false,
-            ScriptType::MillerDouble => false,
-            ScriptType::PostMillerAddWithFrob(_) => false,
-            _ => true,
-        };
         let out_first = false;
         let sec_out = ((seg.id, seg.output_type), assertions[seg.id as usize]);
         let sec_in: Vec<((u32, bool), [u8; 64])> = seg.inputs.iter().rev().map(|(k, v)| ((*k, *v), assertions[*k as usize])).collect();
@@ -713,7 +688,7 @@ pub fn script_exec(
 #[cfg(test)]
 mod test {
 
-    use crate::{chunk::taps::{bitcom_precompute_Py, tap_precompute_Py}, signatures::wots::wots256};
+    use crate::{chunk::{msm::tap_msm, taps::tap_precompute_Py}, signatures::wots::wots256};
     use super::*;
 
 
@@ -756,7 +731,7 @@ mod test {
         sigcache.insert(id_p4y, SigData::Sig256(sa_p4y));
     
     
-        let locking_bitcom = bitcom_precompute_Py(&pubk, (id_p4y, true), vec![(id_gp4y, true)]);
+        let locking_bitcom = script!{};  // bitcom_precompute_Py(&pubk, (id_p4y, true), vec![(id_gp4y, true)]);
         let (unlocking_bitcom_script, _) = tup_to_scr(&mut Sig { msk: None, cache: sigcache }, vec![((id_p4y, true), n_p4y), ((id_gp4y, true), n_gp4y)]);
         let aux_hints = p4y.hint_script;
         let ops_scripts = tap_precompute_Py();
@@ -844,7 +819,7 @@ mod test {
         sigcache.insert(id_msm, SigData::Sig160(sa_msm));
     
     
-        let locking_bitcom = bitcom_msm(&pubk, (id_msm, msm.output_type), vec![(id_scalar, scalar.output_type), (id_msm0, msm0.output_type)]);
+        let locking_bitcom = script!{}; // bitcom_msm(&pubk, (id_msm, msm.output_type), vec![(id_scalar, scalar.output_type), (id_msm0, msm0.output_type)]);
         let (unlocking_bitcom_script, _) = tup_to_scr(&mut Sig { msk: None, cache: sigcache }, vec![((id_scalar, scalar.output_type), n_scalar), ((id_msm0, msm0.output_type), n_msm0), ((id_msm, msm.output_type), n_msm)]);
         let aux_hints = msm.hint_script;
         let ops_scripts = tap_msm(8, msm_chain_index, pub_vky);

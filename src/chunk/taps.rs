@@ -89,16 +89,24 @@ pub(crate) fn tup_to_scr(sig: &mut Sig, tup: Vec<(Link, [u8; 64])>) -> (Script, 
 
 pub(crate) fn wots_locking_script(link: Link, link_ids: &HashMap<u32, WOTSPubKey>) -> Script {
     wots_compact_checksig_verify_with_pubkey(link_ids.get(&link.0).unwrap())
-    // if link.1 {
-    //     script! {
-    //         {wots_compact_checksig_verify_with_pubkey(link_ids.get(&link.0).unwrap())}
-    //     }
-    // } else {
-    //     script! {
-    //         {wots_compact_hash_checksig_verify_with_pubkey(link_ids.get(&link.0).unwrap())}
-    //     }
-    // }
 }
+
+pub(crate) fn gen_bitcom(
+    link_ids: &HashMap<u32, WOTSPubKey>,
+    sec_out: Link,
+    sec_ins: Vec<Link>,
+) -> Script {
+    let mut tot_script = script!();
+    tot_script = tot_script.push_script(wots_locking_script(sec_out, link_ids).compile());  // hash_in
+    tot_script = tot_script.push_script({Fq::toaltstack()}.compile());
+    // [px, py, qx0, qx1, qy0, qy1, in, out]
+    for sec_in in sec_ins {
+        tot_script = tot_script.push_script(wots_locking_script(sec_in, link_ids).compile());  // hash_in
+        tot_script = tot_script.push_script({Fq::toaltstack()}.compile());
+    }
+    tot_script
+}
+
 
 // POINT DBL
 pub(crate) fn tap_point_dbl() -> Script {
@@ -278,24 +286,6 @@ pub(crate) fn tap_point_dbl() -> Script {
     sc
 }
 
-pub(crate) fn bitcom_point_dbl(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 3);
-
-    script! {
-        {wots_locking_script(sec_out, link_ids)} // hash_out
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)} // hash_in
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[1], link_ids)} // pdash_y
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[2], link_ids)} // pdash_x
-        {Fq::toaltstack()}
-    }
-}
 
 pub(crate) fn hint_point_dbl(
     sig: &mut Sig,
@@ -661,36 +651,6 @@ pub(crate) fn tap_point_add_with_frob(ate: i8) -> Script {
     sc
 }
 
-pub(crate) fn bitcom_point_add_with_frob(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 7);
-
-    let bitcomms_script = script! {
-        {wots_locking_script(sec_out, link_ids)} // hash_root_claim
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)} // hash_in
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[1], link_ids)} // qdash_y1
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[2], link_ids)} // qdash_y0
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[3], link_ids)} // qdash_x1
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[4], link_ids)} // qdash_x0
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[5], link_ids)} // pdash_y
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[6], link_ids)} // pdash_x
-        {Fq::toaltstack()}
-
-        // [px, py, qx0, qx1, qy0, qy1, in, out]
-    };
-    bitcomms_script
-}
-
 pub(crate) fn hint_point_add_with_frob(
     sig: &mut Sig,
     sec_out: Link,
@@ -879,6 +839,36 @@ pub(crate) fn hint_point_add_with_frob(
 pub(crate) fn tap_point_ops(ate: i8) -> Script {
     assert!(ate == 1 || ate == -1);
 
+    let mut ate_unsigned_bit = 1;
+    if ate == -1 {
+        ate_unsigned_bit = 0;
+    }
+    let ate_mul_y_toaltstack = script! {
+        {ate_unsigned_bit}
+        1 OP_NUMEQUAL
+        OP_IF
+            {Fq::toaltstack()}
+        OP_ELSE // -1
+            {Fq::neg(0)}
+            {Fq::toaltstack()}
+        OP_ENDIF
+    };
+    let precompute_scr = script!{
+        {Fq::fromaltstack()}
+        {Fq::fromaltstack()}
+        {Fq::fromaltstack()}
+        {Fq::fromaltstack()}
+        {Fq::fromaltstack()}
+        {Fq::fromaltstack()}
+
+        {ate_mul_y_toaltstack.clone()}
+        {ate_mul_y_toaltstack}
+
+        {Fq::toaltstack()}
+        {Fq::toaltstack()}
+        {Fq::toaltstack()}
+        {Fq::toaltstack()}
+    };
     let (hinted_double_line, _) = new_hinted_affine_double_line(
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
@@ -925,6 +915,8 @@ pub(crate) fn tap_point_ops(ate: i8) -> Script {
 
     let bcsize = 6 + 3;
     let ops_script = script! {
+        {precompute_scr}
+        
         // bring back from altstack
         for _ in 0..8 {
             {Fq::fromaltstack()}
@@ -1137,51 +1129,6 @@ pub(crate) fn tap_point_ops(ate: i8) -> Script {
     sc
 }
 
-pub(crate) fn bitcom_point_ops(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-    ate: i8,
-) -> Script {
-    assert!(ate == 1 || ate == -1);
-    assert_eq!(sec_in.len(), 7);
-    let mut ate_unsigned_bit = 1;
-    if ate == -1 {
-        ate_unsigned_bit = 0;
-    }
-
-    let ate_mul_y_toaltstack = script! {
-        {ate_unsigned_bit}
-        1 OP_NUMEQUAL
-        OP_IF
-            {Fq::toaltstack()}
-        OP_ELSE // -1
-            {Fq::neg(0)}
-            {Fq::toaltstack()}
-        OP_ENDIF
-    };
-
-    let bitcomms_script = script! {
-        {wots_locking_script(sec_out, link_ids)}// hash_root_claim
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)} // hash_in
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[1], link_ids)} // qdash_y1
-        {ate_mul_y_toaltstack.clone()}
-        {wots_locking_script(sec_in[2], link_ids)} // qdash_y0
-        {ate_mul_y_toaltstack}
-        {wots_locking_script(sec_in[3], link_ids)} // qdash_x1
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[4], link_ids)} // qdash_x0
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[5], link_ids)} // pdash_y
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[6], link_ids)} // pdash_x
-        {Fq::toaltstack()}
-    };
-
-    bitcomms_script
-}
 
 pub(crate) fn hint_point_ops(
     sig: &mut Sig,
@@ -1554,30 +1501,6 @@ pub(crate) fn tap_double_eval_mul_for_fixed_Qs(
     )
 }
 
-pub(crate) fn bitcom_double_eval_mul_for_fixed_Qs(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 4);
-
-    let bitcomms_script = script! {
-        {wots_locking_script(sec_out, link_ids)} // bhash
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)} // P3y
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[1], link_ids)} // P3x
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[2], link_ids)} // P2y
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[3], link_ids)} // P2x
-        {Fq::toaltstack()}
-
-        // Altstack: [bhash, P3y, P3x, P2y, P2x]
-    };
-    bitcomms_script
-}
-
 // ADD EVAL
 
 pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
@@ -1792,28 +1715,6 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs(
     )
 }
 
-pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 4);
-
-    let bitcomms_script = script! {
-        {wots_locking_script(sec_out, link_ids)} // bhash
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)} // P3y
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[1], link_ids)} // P3x
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[2], link_ids)} // P2y
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[3], link_ids)} // P2x
-        {Fq::toaltstack()}
-        // Alt: [bhash, P3y, P3x, P2y, P2x]
-    };
-    bitcomms_script
-}
 
 pub(crate) fn add_with_frob(q: ark_bn254::G2Affine, t: ark_bn254::G2Affine, ate: i8) -> ark_bn254::G2Affine {
     let beta_12x = BigUint::from_str(
@@ -2174,27 +2075,6 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs_with_frob(
     )
 }
 
-pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs_with_frob(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 4);
-
-    let bitcomms_script = script! {
-        {wots_locking_script(sec_out, link_ids)} // bhash
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)} // P3y
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[1], link_ids)} // P3x
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[2], link_ids)} // P2y
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[3], link_ids)} // P2x
-        {Fq::toaltstack()}
-    };
-    bitcomms_script
-}
 
 // HASH_C
 pub(crate) fn tap_hash_c() -> Script {
@@ -2236,23 +2116,6 @@ pub(crate) fn tap_hash_c() -> Script {
     sc
 }
 
-pub(crate) fn bitcom_hash_c(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 12);
-
-    let bitcom_scr = script! {
-        {wots_locking_script(sec_out, link_ids)}  // f_hash
-        {Fq::toaltstack()}
-        for i in 0..12 { // 0->msb to lsb
-            {wots_locking_script(sec_in[i], link_ids)} // f11 MSB
-            {Fq::toaltstack()}
-        }
-    };
-    bitcom_scr
-}
 
 pub(crate) fn hint_hash_c(
     sig: &mut Sig,
@@ -2322,22 +2185,6 @@ pub(crate) fn tap_hash_c2() -> Script {
         OP_TRUE
     };
     sc
-}
-
-pub(crate) fn bitcom_hash_c2(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 1);
-
-    let bitcom_scr = script! {
-        {wots_locking_script(sec_out, link_ids)}  // f_hash
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)}  // f11 MSB
-        {Fq::toaltstack()}
-    };
-    bitcom_scr
 }
 
 pub(crate) fn hint_hash_c2(
@@ -2424,26 +2271,6 @@ pub(crate) fn tap_precompute_Px() -> Script {
     }
 }
 
-pub(crate) fn bitcom_precompute_Px(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 3);
-
-    let bitcomms_script = script! {
-        {wots_locking_script(sec_out, link_ids)}  // pxd
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)}  // py
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[1], link_ids)}  // px
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[2], link_ids)}  // pyd
-        {Fq::toaltstack()}
-    };
-    bitcomms_script
-}
-
 // precompute P
 pub(crate) fn tap_precompute_Py() -> Script {
     let (y_eval_scr, _) = new_hinted_y_from_eval_point(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE);
@@ -2472,26 +2299,6 @@ pub(crate) fn tap_precompute_Py() -> Script {
         {ops_scr}
         OP_TRUE
     }
-}
-
-pub(crate) fn bitcom_precompute_Py(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 1);
-
-    let bitcomms_script = script! {
-        {wots_locking_script(sec_out, link_ids)}  // pyd_claim
-        {Fq::toaltstack()} 
-        {wots_locking_script(sec_in[0], link_ids)}  // py_claim
-        {Fq::toaltstack()}
-
-        // Stack: [hints, pyd_calc]
-        // Altstack: [pyd_claim, py_claim]
-
-    };
-    bitcomms_script
 }
 
 pub(crate) fn hints_precompute_Px(
@@ -2613,28 +2420,6 @@ pub(crate) fn tap_initT4() -> Script {
     sc
 }
 
-pub(crate) fn bitcom_initT4(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    assert_eq!(sec_in.len(), 4);
-
-    let bitcom_scr = script! {
-        {wots_locking_script(sec_out, link_ids)} // f_hash
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)} // y1
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[1], link_ids)} // y0
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[2], link_ids)} // x1
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[3], link_ids)} // x0
-        {Fq::toaltstack()}
-    };
-    bitcom_scr
-}
-
 pub(crate) fn hint_init_T4(
     sig: &mut Sig,
     sec_out: Link,
@@ -2705,21 +2490,6 @@ pub(crate) fn tap_frob_fp12(power: usize) -> Script {
         OP_TRUE
     };
     sc
-}
-
-pub(crate) fn bitcom_frob_fp12(
-    link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
-    sec_in: Vec<Link>,
-) -> Script {
-    let bitcom_scr = script! {
-        {wots_locking_script(sec_out, link_ids)} // hashout
-        {Fq::toaltstack()}
-        {wots_locking_script(sec_in[0], link_ids)} // hashin
-        {Fq::toaltstack()}
-        // AltStack:[sec_out,sec_in]
-    };
-    bitcom_scr
 }
 
 pub(crate) fn hints_frob_fp12(
