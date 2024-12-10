@@ -626,11 +626,14 @@ pub fn script_exec(
             ScriptType::PreMillerPrecomputePx => true,
             ScriptType::PreMillerHashC => true,
             ScriptType::PreMillerHashC2 => true,
+            ScriptType::MillerSparseSparseDbl(_) => true,
+            ScriptType::MillerSparseSparseAdd(_) => true,
+            ScriptType::PostMillerSparseAddWithFrob(_) => true,
             ScriptType::PostMillerDenseDenseMulByConst0(_) => false,
             ScriptType::PostMillerDenseDenseMulByConst1(_) => false,
             ScriptType::PreMillerDenseDenseMulByHash0 => false,
             ScriptType::PreMillerDenseDenseMulByHash1 => false,
-            ScriptType::MillerSquaring => true,
+            ScriptType::MillerSquaring => false,
             ScriptType::SparseDenseMul(_) => false,
             ScriptType::DenseDenseMul0() => false,
             ScriptType::DenseDenseMul1() => false,
@@ -638,11 +641,9 @@ pub fn script_exec(
             ScriptType::MillerDoubleAdd(_) => false,
             ScriptType::MillerDouble => false,
             ScriptType::PostMillerAddWithFrob(_) => false,
-            ScriptType::MillerSparseSparseDbl(_) => true,
-            ScriptType::MillerSparseSparseAdd(_) => true,
-            ScriptType::PostMillerSparseAddWithFrob(_) => true,
             _ => true,
         };
+        let out_first = false;
         let sec_out = ((seg.id, seg.output_type), assertions[seg.id as usize]);
         let sec_in: Vec<((u32, bool), [u8; 64])> = seg.inputs.iter().rev().map(|(k, v)| ((*k, *v), assertions[*k as usize])).collect();
         let mut tot: Vec<((u32, bool), [u8;64])> = vec![];

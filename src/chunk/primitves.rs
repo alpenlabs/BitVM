@@ -1,16 +1,13 @@
 use ark_ff::{BigInt, BigInteger};
 
 use crate::bigint::U254;
-use crate::bn254::fq::bigint_to_u32_limbs;
 use crate::chunk::blake3compiled;
 use crate::pseudo::NMUL;
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
 };
-use std::cmp::min;
 
-use super::taps::HashBytes;
 
 fn split_digit(window: u32, index: u32) -> Script {
     script! {
@@ -598,6 +595,7 @@ mod test {
     use crate::{
         bn254::utils::{fq_push_not_montgomery, fq_to_bits}, chunk, execute_script, u4::u4_std::u4_hex_to_nibbles
     };
+    use std::cmp::min;
 
     #[test]
     fn test_fq_from_nibbles() {

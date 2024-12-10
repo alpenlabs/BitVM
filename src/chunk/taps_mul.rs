@@ -532,7 +532,7 @@ pub(crate) fn hint_squaring(
     );
    //assert_eq!(hint_in.ahash, a_hash);
 
-    let tup = vec![(sec_out, b_hash), (sec_in[0], a_hash)];
+    let tup = vec![(sec_in[0], a_hash), (sec_out, b_hash)];
     let (bc_elems, should_validate) = tup_to_scr(sig, tup);
 
     // data passed to stack in runtime
@@ -558,12 +558,12 @@ pub(crate) fn bitcom_squaring(
     assert_eq!(sec_in.len(), 1);
 
     script! {
-        {wots_locking_script(sec_in[0], link_ids)}
-        {Fq::toaltstack()}
         {wots_locking_script(sec_out, link_ids)}
         {Fq::toaltstack()}
+        {wots_locking_script(sec_in[0], link_ids)}
+        {Fq::toaltstack()}
     }
-    // stack: [hash_in, hash_out]
+    // stack: [hash_out, hash_in]
 }
 
 pub(crate) fn tap_squaring() -> Script {
@@ -572,14 +572,14 @@ pub(crate) fn tap_squaring() -> Script {
         { hash_fp12() }
         { Fq::toaltstack() }
         { hash_fp12() }
-        //Alt:[hash_in, hash_out, hash_calc_out]
+        //Alt:[hash_out, hash_in, hash_calc_out]
         //Main:[hash_calc_in]
         { Fq::fromaltstack() }
         { Fq::fromaltstack() }
         { Fq::fromaltstack() }
         //Alt:[]
-        //Main:[hash_calc_in, hash_calc_out, hash_out, hash_in]
-        { Fq::equalverify(3, 0)}
+        //Main:[hash_calc_in, hash_calc_out, hash_in, hash_out]
+        { Fq::equalverify(3, 1)}
         { Fq::equal(1, 0)} // 1 if matches, 0 doesn't match
         OP_NOT // 0 if matches, 1 doesn't match
         OP_VERIFY // verify that output doesn't match

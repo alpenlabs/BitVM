@@ -124,6 +124,12 @@ pub(crate) fn tap_point_dbl() -> Script {
     let hash_128b_168k = blake3compiled::hash_128b_168k();
 
     let ops_script = script! {
+        {Fq::fromaltstack()}
+        {Fq::fromaltstack()} // py
+        // {Fq::fromaltstack()} // in
+        // {Fq::fromaltstack()} // out
+        // [x, y, in, out]
+
         // { fq2_push_not_montgomery(alpha_tangent)}
         // { fq2_push_not_montgomery(bias_minus_tangent)}
         // { fq2_push_not_montgomery(t.x) }
@@ -139,8 +145,8 @@ pub(crate) fn tap_point_dbl() -> Script {
         // { hash_out_claim } // hash
 
         // move aux hash to MOVE_AUX_HASH_HERE
-        {Fq::toaltstack()} // hash out
-        {Fq::toaltstack()} // hash in
+        // {Fq::toaltstack()} // hash out
+        // {Fq::toaltstack()} // hash in
         {Fq::roll(2)}
         {Fq::toaltstack()} // hash aux in
 
@@ -287,11 +293,7 @@ pub(crate) fn bitcom_point_dbl(
         {wots_locking_script(sec_in[1], link_ids)} // pdash_y
         {Fq::toaltstack()}
         {wots_locking_script(sec_in[2], link_ids)} // pdash_x
-
-        {Fq::fromaltstack()} // py
-        {Fq::fromaltstack()} // in
-        {Fq::fromaltstack()} // out
-        // [x, y, in, out]
+        {Fq::toaltstack()}
     }
 }
 
@@ -619,6 +621,11 @@ pub(crate) fn tap_point_add_with_frob(ate: i8) -> Script {
     let (beta22_mul, _) = Fq2::hinted_mul(2, ark_bn254::Fq2::one(), 0, beta_22);
 
     let precompute_script = script! {
+        // bring back from altstack
+        for _ in 0..8 {
+            {Fq::fromaltstack()}
+        }
+
         // Input: [px, py, qx0, qx1, qy0, qy1, in, out]
         {Fq::toaltstack()}
         {Fq::toaltstack()}
@@ -677,11 +684,8 @@ pub(crate) fn bitcom_point_add_with_frob(
         {wots_locking_script(sec_in[5], link_ids)} // pdash_y
         {Fq::toaltstack()}
         {wots_locking_script(sec_in[6], link_ids)} // pdash_x
+        {Fq::toaltstack()}
 
-        // bring back from altstack
-        for _ in 0..7 {
-            {Fq::fromaltstack()}
-        }
         // [px, py, qx0, qx1, qy0, qy1, in, out]
     };
     bitcomms_script
@@ -921,6 +925,10 @@ pub(crate) fn tap_point_ops(ate: i8) -> Script {
 
     let bcsize = 6 + 3;
     let ops_script = script! {
+        // bring back from altstack
+        for _ in 0..8 {
+            {Fq::fromaltstack()}
+        }
         // Altstack is empty
         // View of stack:
         // aux
@@ -1169,11 +1177,7 @@ pub(crate) fn bitcom_point_ops(
         {wots_locking_script(sec_in[5], link_ids)} // pdash_y
         {Fq::toaltstack()}
         {wots_locking_script(sec_in[6], link_ids)} // pdash_x
-
-        // bring back from altstack
-        for _ in 0..7 {
-            {Fq::fromaltstack()}
-        }
+        {Fq::toaltstack()}
     };
 
     bitcomms_script
@@ -1422,11 +1426,11 @@ pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
     let p3dash_y = extern_fq_to_nibbles(p3.y);
 
     let tup = vec![
-        (sec_out, b_hash),
         (sec_in[3], p2dash_x),
         (sec_in[2], p2dash_y),
         (sec_in[1], p3dash_x),
         (sec_in[0], p3dash_y),
+        (sec_out, b_hash),
     ];
 
     let (bc_elems, should_validate) = tup_to_scr(sig, tup);
@@ -1492,6 +1496,12 @@ pub(crate) fn tap_double_eval_mul_for_fixed_Qs(
     );
 
     let ops_scr = script! {
+        // Altstack: [bhash, P3y, P3x, P2y, P2x]
+        for _ in 0..4 {
+            {Fq::fromaltstack()}
+        }
+        // Altstack: [bhash: out]
+        // Stack: [P2x, P2y, P3x, P3y]
         // tmul hints
         // Bitcommits:
         // claimed_fp12_output
@@ -1528,6 +1538,7 @@ pub(crate) fn tap_double_eval_mul_for_fixed_Qs(
 
     let hash_scr = script! {
         { hash_fp12_192() }
+        { Fq::fromaltstack() } // bhash:out
         {Fq::equal(1, 0)} OP_NOT OP_VERIFY
     };
 
@@ -1551,6 +1562,8 @@ pub(crate) fn bitcom_double_eval_mul_for_fixed_Qs(
     assert_eq!(sec_in.len(), 4);
 
     let bitcomms_script = script! {
+        {wots_locking_script(sec_out, link_ids)} // bhash
+        {Fq::toaltstack()}
         {wots_locking_script(sec_in[0], link_ids)} // P3y
         {Fq::toaltstack()}
         {wots_locking_script(sec_in[1], link_ids)} // P3x
@@ -1559,11 +1572,8 @@ pub(crate) fn bitcom_double_eval_mul_for_fixed_Qs(
         {Fq::toaltstack()}
         {wots_locking_script(sec_in[3], link_ids)} // P2x
         {Fq::toaltstack()}
-        {wots_locking_script(sec_out, link_ids)} // bhash
-        for _ in 0..4 {
-            {Fq::fromaltstack()}
-        }
-        // Stack: [bhash, P2x, P2y, P3x, P3y]
+
+        // Altstack: [bhash, P3y, P3x, P2y, P2x]
     };
     bitcomms_script
 }
@@ -1655,11 +1665,11 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
     let p3dash_y = extern_fq_to_nibbles(p3.y);
 
     let tup = vec![
-        (sec_out, b_hash),
         (sec_in[3], p2dash_x),
         (sec_in[2], p2dash_y),
         (sec_in[1], p3dash_x),
         (sec_in[0], p3dash_y),
+        (sec_out, b_hash),
     ];
 
     let (bc_elems, should_validate) = tup_to_scr(sig, tup);
@@ -1727,6 +1737,11 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs(
     );
 
     let ops_scr = script! {
+        // Alt: [bhash]
+        // Stack: [P2x, P2y, P3x, P3y]
+        for _ in 0..4 {
+            {Fq::fromaltstack()}
+        }
         // tmul hints
         // P2
         // P3
@@ -1761,6 +1776,7 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs(
 
     let hash_scr = script! {
         { hash_fp12_192() }
+        { Fq::fromaltstack() }
         {Fq::equal(1, 0)}
         OP_NOT OP_VERIFY
     };
@@ -1784,6 +1800,8 @@ pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs(
     assert_eq!(sec_in.len(), 4);
 
     let bitcomms_script = script! {
+        {wots_locking_script(sec_out, link_ids)} // bhash
+        {Fq::toaltstack()}
         {wots_locking_script(sec_in[0], link_ids)} // P3y
         {Fq::toaltstack()}
         {wots_locking_script(sec_in[1], link_ids)} // P3x
@@ -1792,11 +1810,7 @@ pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs(
         {Fq::toaltstack()}
         {wots_locking_script(sec_in[3], link_ids)} // P2x
         {Fq::toaltstack()}
-        {wots_locking_script(sec_out, link_ids)} // bhash
-        for _ in 0..4 {
-            {Fq::fromaltstack()}
-        }
-        // Stack: [bhash, P2x, P2y, P3x, P3y]
+        // Alt: [bhash, P3y, P3x, P2y, P2x]
     };
     bitcomms_script
 }
@@ -1985,11 +1999,11 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
     let p3dash_y = extern_fq_to_nibbles(p3.y);
 
     let tup = vec![
-        (sec_out, b_hash),
         (sec_in[3], p2dash_x),
         (sec_in[2], p2dash_y),
         (sec_in[1], p3dash_x),
         (sec_in[0], p3dash_y),
+        (sec_out, b_hash),
     ];
 
     let (bc_elems, should_validate) = tup_to_scr(sig, tup);
@@ -2104,6 +2118,11 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs_with_frob(
     );
 
     let ops_scr = script! {
+        for _ in 0..4 {
+            {Fq::fromaltstack()}
+        }
+        // Stack: [P2x, P2y, P3x, P3y]
+        // Altstack: [bhash]
         // tmul hints
         // P2
         // P3
@@ -2138,6 +2157,7 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs_with_frob(
 
     let hash_scr = script! {
         { hash_fp12_192() }
+        {Fq::fromaltstack()}
         {Fq::equal(1, 0)}
         OP_NOT OP_VERIFY
     };
@@ -2162,6 +2182,8 @@ pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs_with_frob(
     assert_eq!(sec_in.len(), 4);
 
     let bitcomms_script = script! {
+        {wots_locking_script(sec_out, link_ids)} // bhash
+        {Fq::toaltstack()}
         {wots_locking_script(sec_in[0], link_ids)} // P3y
         {Fq::toaltstack()}
         {wots_locking_script(sec_in[1], link_ids)} // P3x
@@ -2170,11 +2192,6 @@ pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs_with_frob(
         {Fq::toaltstack()}
         {wots_locking_script(sec_in[3], link_ids)} // P2x
         {Fq::toaltstack()}
-        {wots_locking_script(sec_out, link_ids)} // bhash
-        for _ in 0..4 {
-            {Fq::fromaltstack()}
-        }
-        // Stack: [bhash, P2x, P2y, P3x, P3y]
     };
     bitcomms_script
 }
@@ -2182,6 +2199,11 @@ pub(crate) fn bitcom_add_eval_mul_for_fixed_Qs_with_frob(
 // HASH_C
 pub(crate) fn tap_hash_c() -> Script {
     let hash_scr = script! {
+        for _ in 0..12 {
+            {Fq::fromaltstack()}
+        }
+        // Stack:[f0, ..,f11]
+        // Altstack: [f_hash_claim]
         for _ in 0..12 {
             {Fq::roll(11)}
             {Fq::copy(0)}
@@ -2197,11 +2219,14 @@ pub(crate) fn tap_hash_c() -> Script {
         }
         OP_IF // all less than p
             { hash_fp12_192() }
+            {Fq::fromaltstack()}
             {Fq::equal(1, 0)} OP_NOT OP_VERIFY
         OP_ELSE
-            for _ in 0..13 {
+            for _ in 0..12 {
                 {Fq::drop()}
             }
+            {Fq::fromaltstack()}
+            {Fq::drop()}
         OP_ENDIF
     };
     let sc = script! {
@@ -2219,15 +2244,12 @@ pub(crate) fn bitcom_hash_c(
     assert_eq!(sec_in.len(), 12);
 
     let bitcom_scr = script! {
+        {wots_locking_script(sec_out, link_ids)}  // f_hash
+        {Fq::toaltstack()}
         for i in 0..12 { // 0->msb to lsb
             {wots_locking_script(sec_in[i], link_ids)} // f11 MSB
             {Fq::toaltstack()}
         }
-        {wots_locking_script(sec_out, link_ids)}  // f_hash
-        for _ in 0..12 {
-            {Fq::fromaltstack()}
-        }
-        // Stack:[f_hash_claim, f0, ..,f11]
     };
     bitcom_scr
 }
@@ -2241,10 +2263,11 @@ pub(crate) fn hint_hash_c(
     let fvec = hint_in_c;
     let fhash = extern_hash_fps(fvec.clone(), false);
 
-    let mut tups = vec![(sec_out, fhash)];
+    let mut tups = vec![];
     for i in 0..12 {
         tups.push((sec_in[11 - i], extern_fq_to_nibbles(fvec[i])));
     }
+    tups.push((sec_out, fhash));
     let (bc_elems, should_validate) = tup_to_scr(sig, tups);
 
     let simulate_stack_input = script! {
@@ -2276,8 +2299,13 @@ pub(crate) fn hint_hash_c(
 // HASH_C
 pub(crate) fn tap_hash_c2() -> Script {
     let hash_scr = script! {
-        {Fq::toaltstack()}
-        {Fq::toaltstack()}
+
+        // {Fq::fromaltstack()} 
+        // {Fq::fromaltstack()}
+        // // Stack:[f_hash_claim, hash_in]
+
+        // {Fq::toaltstack()}
+        // {Fq::toaltstack()}
         {Fq12::copy(0)}
         { hash_fp12() }
         {Fq::toaltstack()}
@@ -2286,7 +2314,7 @@ pub(crate) fn tap_hash_c2() -> Script {
         {Fq::fromaltstack()}
         {Fq::fromaltstack()}
         //[calc_192, calc_12, claim_12, inp_192]
-        {Fq::equalverify(3, 0)}
+        {Fq::equalverify(3, 1)}
         {Fq::equal(1, 0)} OP_NOT OP_VERIFY
     };
     let sc = script! {
@@ -2304,11 +2332,10 @@ pub(crate) fn bitcom_hash_c2(
     assert_eq!(sec_in.len(), 1);
 
     let bitcom_scr = script! {
+        {wots_locking_script(sec_out, link_ids)}  // f_hash
+        {Fq::toaltstack()}
         {wots_locking_script(sec_in[0], link_ids)}  // f11 MSB
         {Fq::toaltstack()}
-        {wots_locking_script(sec_out, link_ids)}  // f_hash
-        {Fq::fromaltstack()}
-        // Stack:[f_hash_claim, hash_in]
     };
     bitcom_scr
 }
@@ -2327,7 +2354,7 @@ pub(crate) fn hint_hash_c2(
     let inhash = extern_hash_fps(f.clone(), false);
     let outhash = extern_hash_fps(f.clone(), true);
 
-    let tups = vec![(sec_out, outhash), (sec_in[0], inhash)];
+    let tups = vec![(sec_in[0], inhash), (sec_out, outhash)];
     let (bc_elems, should_validate) = tup_to_scr(sig, tups);
 
     let simulate_stack_input = script! {
@@ -2357,25 +2384,36 @@ pub(crate) fn tap_precompute_Px() -> Script {
     let (on_curve_scr, _) =
         crate::bn254::curves::G1Affine::hinted_is_on_curve(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE);
     let ops_scr = script! {
+        {Fq::fromaltstack()} // pyd
+        {Fq::fromaltstack()} // px
+        {Fq::fromaltstack()} // py
+        // {Fq::fromaltstack()} // pxd
+
+        // Stack: [hints, pxd, pyd, px, py]
+        // UpdatedStack: [hints, pyd, px, py]
+        // Altstack: [pxd]
         {Fq::copy(0)}
         {fq_push_not_montgomery(ark_bn254::Fq::ZERO)}
         {Fq::equal(1, 0)}
         OP_IF
-            for _ in 0..9 {
+            for _ in 0..8 {
                 {Fq::drop()}
             }
+            {Fq::fromaltstack()} {Fq::drop()}
         OP_ELSE
-            // Stack: [hints, pxd, pyd, px, py]
+            // Stack: [hints, pyd, px, py]
             {Fq2::copy(0)}
-            // Stack: [hints, pxd, pyd, px, py, px, py]
+            // Stack: [hints, pyd, px, py, px, py]
             {on_curve_scr}
             OP_IF
                 {eval_x}
+                {Fq::fromaltstack()} // pxd
                 {Fq::equal(1, 0)} OP_NOT OP_VERIFY
             OP_ELSE
                 {Fq2::drop()}
                 {Fq2::drop()}
-                {Fq2::drop()}
+                {Fq::drop()}
+                {Fq::fromaltstack()} {Fq::drop()}
             OP_ENDIF
         OP_ENDIF
     };
@@ -2394,19 +2432,14 @@ pub(crate) fn bitcom_precompute_Px(
     assert_eq!(sec_in.len(), 3);
 
     let bitcomms_script = script! {
+        {wots_locking_script(sec_out, link_ids)}  // pxd
+        {Fq::toaltstack()}
         {wots_locking_script(sec_in[0], link_ids)}  // py
         {Fq::toaltstack()}
         {wots_locking_script(sec_in[1], link_ids)}  // px
         {Fq::toaltstack()}
         {wots_locking_script(sec_in[2], link_ids)}  // pyd
         {Fq::toaltstack()}
-        {wots_locking_script(sec_out, link_ids)}  // pxd
-
-        {Fq::fromaltstack()} // pyd
-        {Fq::fromaltstack()} // px
-        {Fq::fromaltstack()} // py
-
-        // Stack: [hints, pxd, pyd, px, py]
     };
     bitcomms_script
 }
@@ -2415,8 +2448,14 @@ pub(crate) fn bitcom_precompute_Px(
 pub(crate) fn tap_precompute_Py() -> Script {
     let (y_eval_scr, _) = new_hinted_y_from_eval_point(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE);
 
-    // Stack: [hints, pyd_calc, pyd_claim, py_claim]
     let ops_scr = script! {
+
+        {Fq::fromaltstack()}
+        {Fq::fromaltstack()}
+        // Stack: [hints, pyd_calc, py_claim, pyd_claim]
+        {Fq::roll(1)}
+        // Stack: [hints, pyd_calc, pyd_claim, py_claim]
+
         {Fq::copy(0)}
         {fq_push_not_montgomery(ark_bn254::Fq::ZERO)}
         {Fq::equal(1, 0)}
@@ -2443,11 +2482,14 @@ pub(crate) fn bitcom_precompute_Py(
     assert_eq!(sec_in.len(), 1);
 
     let bitcomms_script = script! {
+        {wots_locking_script(sec_out, link_ids)}  // pyd_claim
+        {Fq::toaltstack()} 
         {wots_locking_script(sec_in[0], link_ids)}  // py_claim
         {Fq::toaltstack()}
-        {wots_locking_script(sec_out, link_ids)}  // pyd_claim
-        {Fq::fromaltstack()} // py
-        // Stack: [hints, pyd_calc, pyd_claim, py_claim]
+
+        // Stack: [hints, pyd_calc]
+        // Altstack: [pyd_claim, py_claim]
+
     };
     bitcomms_script
 }
@@ -2477,10 +2519,10 @@ pub(crate) fn hints_precompute_Px(
     let (_, on_curve_hint) = crate::bn254::curves::G1Affine::hinted_is_on_curve(p.x, p.y);
 
     let tups = vec![
-        (sec_out, pdash_x),
         (sec_in[2], pdash_y),
         (sec_in[1], p_x),
         (sec_in[0], p_y),
+        (sec_out, pdash_x),
     ];
     let (bc_elems, should_validate) = tup_to_scr(sig, tups);
 
@@ -2518,14 +2560,14 @@ pub(crate) fn hints_precompute_Py(
 
     let p_y = extern_fq_to_nibbles(p);
 
-    let tups = vec![(sec_out, pdash_y), (sec_in[0], p_y)];
+    let tups = vec![(sec_in[0], p_y), (sec_out, pdash_y)];
     let (bc_elems, should_validate) = tup_to_scr(sig, tups);
 
     let simulate_stack_input = script! {
         for hint in hints {
             { hint.push() }
         }
-            {fq_push_not_montgomery(pdy)} // calc pdy
+        {fq_push_not_montgomery(pdy)} // calc pdy
 
         // bit commits raw
         { bc_elems }
@@ -2539,6 +2581,11 @@ pub(crate) fn tap_initT4() -> Script {
         bn254::curves::G2Affine::hinted_is_on_curve(ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE);
 
     let hash_scr = script! {
+        for _ in 0..4 {
+            {Fq::fromaltstack()}
+        }
+        // Stack:[f_hash_claim, x0,x1,y0,y1]
+        // Altstack : [f_hash]
         {Fq2::copy(2)}
         {Fq2::copy(2)}
         {on_curve_scr}
@@ -2549,11 +2596,12 @@ pub(crate) fn tap_initT4() -> Script {
             }
             {pack_nibbles_to_limbs()}
             {hash_fp2()}
+            {Fq::fromaltstack()}
             {Fq::equal(1, 0)} OP_NOT OP_VERIFY
         OP_ELSE
             {Fq2::drop()}
             {Fq2::drop()}
-            {Fq::drop()}
+            {Fq::fromaltstack()} {Fq::drop()}
         OP_ENDIF
         // if the point is not on curve
     };
@@ -2573,6 +2621,8 @@ pub(crate) fn bitcom_initT4(
     assert_eq!(sec_in.len(), 4);
 
     let bitcom_scr = script! {
+        {wots_locking_script(sec_out, link_ids)} // f_hash
+        {Fq::toaltstack()}
         {wots_locking_script(sec_in[0], link_ids)} // y1
         {Fq::toaltstack()}
         {wots_locking_script(sec_in[1], link_ids)} // y0
@@ -2581,11 +2631,6 @@ pub(crate) fn bitcom_initT4(
         {Fq::toaltstack()}
         {wots_locking_script(sec_in[3], link_ids)} // x0
         {Fq::toaltstack()}
-        {wots_locking_script(sec_out, link_ids)} // f_hash
-        for _ in 0..4 {
-            {Fq::fromaltstack()}
-        }
-        // Stack:[f_hash_claim, x0,x1,y0,y1]
     };
     bitcom_scr
 }
@@ -2605,11 +2650,11 @@ pub(crate) fn hint_init_T4(
     let t4hash = extern_hash_nibbles(vec![t4hash, [0u8; 64]], true);
 
     let tups = vec![
-        (sec_out, t4hash),
         (sec_in[3], extern_fq_to_nibbles(t4.x.c0)),
         (sec_in[2], extern_fq_to_nibbles(t4.x.c1)),
         (sec_in[1], extern_fq_to_nibbles(t4.y.c0)),
         (sec_in[0], extern_fq_to_nibbles(t4.y.c1)),
+        (sec_out, t4hash),
     ];
     let (bc_elems, should_validate) = tup_to_scr(sig, tups);
 
