@@ -5,6 +5,7 @@ use crate::chunk::acc::{groth16, hint_to_data, Pubs};
 use crate::chunk::compile::{compile_ops, compile_taps, Vkey};
 use crate::chunk::compile::{ NUM_PUBS, NUM_U160, NUM_U256};
 use crate::chunk::hint_models::{ElemG1Point, EvalIns, G1PointExt};
+use crate::chunk::primitves::{extern_hash_fps, fp12_to_vec};
 use crate::chunk::segment::Segment;
 use crate::chunk::taps::{Sig, SigData};
 use crate::chunk::wots::WOTSPubKey;
@@ -155,7 +156,7 @@ pub fn generate_assertions(
         c,
         s,
         ks: msm_scalar.clone(),
-        cinv: c.inverse().unwrap(),
+        cinv: extern_hash_fps(fp12_to_vec(c.inverse().unwrap()), false),
     };
 
     let pubs: Pubs = Pubs {
@@ -191,10 +192,10 @@ pub fn validate_assertions(
     if passed {
         println!("assertion passed, running full script execution now");
         let exec_result = script_exec(segments, signed_asserts, inpubkeys, disprove_scripts);
-        assert!(exec_result.is_none());
-        return None;
+        //assert!(exec_result.is_none());
+        return exec_result;
     }
-    println!("assertion failed, return faulty script segments acc {:?}", segments.len());
+    println!("assertion failed, return faulty script segments acc {:?} at {:?}", segments.len(), segments[segments.len()-1].scr_type);
     let exec_result = script_exec(segments, signed_asserts, inpubkeys, disprove_scripts);
     assert!(exec_result.is_some());
     return exec_result;

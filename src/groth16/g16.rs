@@ -68,7 +68,7 @@ mod test {
     use ark_ff::Field;
     use rand::Rng;
 
-    use crate::{chunk::{api::mock_pubkeys, hint_models::EvalIns, test_utils::{read_scripts_from_file, write_map_to_file, write_scripts_to_file, write_scripts_to_separate_files}}, groth16::offchain_checker::compute_c_wi};
+    use crate::{chunk::{api::mock_pubkeys, hint_models::EvalIns, primitves::{extern_hash_fps, fp12_to_vec}, test_utils::{read_scripts_from_file, write_map_to_file, write_scripts_to_file, write_scripts_to_separate_files}}, groth16::offchain_checker::compute_c_wi};
 
     use crate::chunk::{compile::NUM_PUBS, test_utils::read_map_from_file};
 
@@ -378,36 +378,21 @@ mod test {
         let verifier_scripts = generate_disprove_scripts(mock_pubks, &ops_scripts);
 
 
-        for i in 91..92 {//N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES {
+        for i in 80..100 {//N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES {
             println!("ITERATION {:?}", i);
             let mut proof_asserts = read_asserts_from_file("chunker_data/assert.json");
             corrupt(&mut proof_asserts, Some(i));
             let signed_asserts = sign_assertions(proof_asserts);
     
             let fault = verify_signed_assertions(mock_vk.clone(), mock_pubks, signed_asserts, &verifier_scripts);
-            //assert!(fault.is_some());
+            assert!(fault.is_some());
             if fault.is_some() {
                 let (index, hint_script) = fault.unwrap();
                 println!("taproot index {:?}", index);
-                println!("vs len {:?} and hs len {:?}", verifier_scripts[index].len(), hint_script.len());
                 let scr = script!(
                     {hint_script.clone()}
                     {verifier_scripts[index].clone()}
                 );
-                let mut hasher = Sha256::new();
-
-                hasher.update(hint_script.clone().compile().as_bytes());
-            
-                let hashed_value = hasher.finalize();
-        
-                println!("hint_script hashed value {:?}", hashed_value);
-                let mut hasher = Sha256::new();
-        
-                hasher.update(verifier_scripts[index].clone().compile().as_bytes());
-            
-                let hashed_value = hasher.finalize();
-        
-                println!("lock_script hashed value {:?}", hashed_value);
                 let res = execute_script(scr);
                 for i in 0..res.final_stack.len() {
                     println!("{i:} {:?}", res.final_stack.get(i));
@@ -502,7 +487,7 @@ mod test {
             c,
             s,
             ks: msm_scalar.clone(),
-            cinv: c.inverse().unwrap(),
+            cinv: extern_hash_fps(fp12_to_vec(c.inverse().unwrap()), false),
         };
     
         let pubs: Pubs = Pubs {

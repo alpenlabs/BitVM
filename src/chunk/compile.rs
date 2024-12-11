@@ -7,7 +7,7 @@ use bitcoin_script::script;
 
 use crate::{chunk::hint_models::{ElemG1Point, G1PointExt}, treepp};
 
-use super::{acc::{groth16, Pubs},  hint_models::{ElemFp12Acc, ElemFr, ElemG2PointAcc, ElemeFrTrait, EvalIns}, msm::{tap_hash_p, tap_msm}, segment::{ScriptType, Segment}, taps::*, taps_mul::*, wots::WOTSPubKey};
+use super::{acc::{groth16, Pubs}, hint_models::{ElemFp12Acc, ElemFr, ElemG2PointAcc, ElemeFrTrait, EvalIns}, msm::{tap_hash_p, tap_msm}, primitves::{extern_hash_fps, fp12_to_vec}, segment::{ScriptType, Segment}, taps::*, taps_mul::*, wots::WOTSPubKey};
 
 pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 pub const NUM_PUBS: usize = 1;
@@ -79,7 +79,7 @@ fn segments_from_pubs(vk: Vkey) -> Vec<Segment> {
     let fr = ElemFr::mock();
     let s = ElemFp12Acc::mock();
     let c = ElemFp12Acc::mock();
-    let cinv = c.f.inverse().unwrap();
+    let cinv = extern_hash_fps(fp12_to_vec(c.f.inverse().unwrap()), false);
     let eval_ins: EvalIns = EvalIns { p2: g1, p3: g1, p4: g1, q4: g2, c: c.f, s: s.f, ks: vec![fr], cinv };
 
     let pubs: Pubs = Pubs { q2: vk.q2, q3: vk.q3, fixed_acc: vk.p1q1, ks_vks: vk.p3vk, vky0: vk.vky0 };
@@ -202,14 +202,6 @@ pub(crate) fn bitcom_scripts_from_segments(segments: &Vec<Segment>, pubkeys_map:
             ScriptType::NonDeterministic => {
                 bitcom_scripts.push(script!());
             },
-            ScriptType::MSM(_) => {
-                println!("bitcom_scripts_from_segments msm sec_in {:?}", sec_in);
-                bitcom_scripts.push(gen_bitcom(&pubkeys_map, sec_out, sec_in));
-            },
-            ScriptType::PreMillerHashP(_) => {
-                println!("bitcom_scripts_from_segments phashp sec_in {:?}", sec_in);
-                bitcom_scripts.push(gen_bitcom(&pubkeys_map, sec_out, sec_in));                
-            }
             _ => {
                 bitcom_scripts.push(gen_bitcom(&pubkeys_map, sec_out, sec_in));
             }

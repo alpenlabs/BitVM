@@ -160,37 +160,15 @@ pub(crate) fn groth16(
     all_output_hints.extend_from_slice(&temp_q4);
     let (q4xc0, q4xc1, q4yc0, q4yc1) = (&temp_q4[0], &temp_q4[1], &temp_q4[2], &temp_q4[3]);
 
-    let tmp_cvinv = eval_ins.c.inverse().unwrap();
-    let tmp_cvinv: ElemFp12Acc = ElemFp12Acc {
-        f: tmp_cvinv,
-        hash: extern_hash_fps(
-            vec![
-                tmp_cvinv.c0.c0.c0,
-                tmp_cvinv.c0.c0.c1,
-                tmp_cvinv.c0.c1.c0,
-                tmp_cvinv.c0.c1.c1,
-                tmp_cvinv.c0.c2.c0,
-                tmp_cvinv.c0.c2.c1,
-                tmp_cvinv.c1.c0.c0,
-                tmp_cvinv.c1.c0.c1,
-                tmp_cvinv.c1.c1.c0,
-                tmp_cvinv.c1.c1.c1,
-                tmp_cvinv.c1.c2.c0,
-                tmp_cvinv.c1.c2.c1,
-            ],
-            false,
-        )
-    };
-
-    let gcinv = Segment {
+    let gcinvhash = Segment {
         id: all_output_hints.len() as u32,
         output_type: false,
         inputs: vec![],
-        output: Element::Fp12(tmp_cvinv),
+        output: Element::HashBytes(eval_ins.cinv),
         hint_script: script!(),
         scr_type: ScriptType::NonDeterministic
     };
-    all_output_hints.push(gcinv.clone());
+    all_output_hints.push(gcinvhash.clone());
 
     let vky = pubs.ks_vks;
     let vky0 = pubs.vky0;
@@ -215,11 +193,11 @@ pub(crate) fn groth16(
     let c2 = wrap_hint_hash_c2(is_compile_mode, all_output_hints.len(), &c);
     push_compare_or_return!(c2);
 
-    let dmul0 = wrap_hints_dense_dense_mul0_by_hash(is_compile_mode, all_output_hints.len(), &c2, &gcinv);
+    let dmul0 = wrap_hints_dense_dense_mul0_by_hash(is_compile_mode, all_output_hints.len(), &c2, &gcinvhash);
     push_compare_or_return!(dmul0);
 
-    let dmul1 = wrap_hints_dense_dense_mul1_by_hash(is_compile_mode, all_output_hints.len(), &c2, &gcinv, &dmul0);
-    push_compare_or_return!(dmul1);
+    let gcinv = wrap_hints_dense_dense_mul1_by_hash(is_compile_mode, all_output_hints.len(), &c2, &gcinvhash, &dmul0);
+    push_compare_or_return!(gcinv);
 
     let cinv2 = wrap_hint_hash_c2(is_compile_mode, all_output_hints.len(), &gcinv);
     push_compare_or_return!(cinv2);
@@ -497,7 +475,7 @@ pub(crate) fn get_proof(asserts: &TypedAssertions) -> EvalIns { // EvalIns
             ark_bn254::Fq2::new(numfqs[step+10], numfqs[step+11]),
         ),
     );
-    let cinv = c.inverse().unwrap();
+    let cinv = asserts.2[0];
 
     let step = step + 12;
     let q4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(numfqs[step + 0], numfqs[step + 1]), ark_bn254::Fq2::new(numfqs[step + 2], numfqs[step + 3]));
@@ -647,7 +625,6 @@ pub fn script_exec(
             {hint_script.clone()}
             {disprove_scripts[tap_script_index].clone()}
         };
-        println!("Executing script {:?}", tap_script_index);
         let exec_result = execute_script(total_script);
         if exec_result.final_stack.len() > 1 {
             for i in 0..exec_result.final_stack.len() {
@@ -657,6 +634,7 @@ pub fn script_exec(
         if !exec_result.success {
             assert!(exec_result.final_stack.len() == 1);
         } else {
+            println!("disprove script {}: tapindex {}, {:?}",i,tap_script_index, segments[i].scr_type);
             let disprove_hint = (
                 tap_script_index,
                 hint_script,

@@ -383,6 +383,12 @@ fn replace_first_n_with_zero(hex_string: &str, n: usize) -> String {
     result
 }
 
+pub(crate) fn fp12_to_vec(f: ark_bn254::Fq12) -> Vec<ark_bn254::Fq> {
+        vec![f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1,
+        f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0, f.c1.c0.c1,
+        f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1]
+}
+
 pub(crate) fn extern_hash_fps(fqs: Vec<ark_bn254::Fq>, mode: bool) -> [u8; 64] {
     let mut msgs: Vec<[u8; 64]> = Vec::new();
     for fq in fqs {

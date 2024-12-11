@@ -16,7 +16,7 @@ use ark_ff::{AdditiveGroup, Field, Zero};
 use num_traits::One;
 
 use super::primitves::{extern_hash_fps, hash_fp12_192};
-use super::taps::{Link, Sig};
+use super::taps::{HashBytes, Link, Sig};
 use super::hint_models::*;
 // SPARSE DENSE
 
@@ -786,9 +786,9 @@ pub(crate) fn tap_dense_dense_mul0_by_hash() -> Script {
 
 pub(crate) fn hints_dense_dense_mul0_by_hash(
     hint_in_a: ElemFp12Acc,
-    hint_in_bhash: ElemFp12Acc,
+    hint_in_bhash: ElemHashBytes,
 ) -> (ElemFp12Acc, Script) {
-    let (f, hash_g) = (hint_in_a.f, hint_in_bhash.hash);
+    let (f, hash_g) = (hint_in_a.f, hint_in_bhash);
     let g = f.inverse().unwrap();
     let h = ark_bn254::Fq12::ONE;
 
@@ -836,8 +836,8 @@ pub(crate) fn hints_dense_dense_mul0_by_hash(
 
     (
         ElemFp12Acc {
-            f: h,
-            hash: hash_h,
+            f: g,
+            hash: hash_g,
         },
         simulate_stack_input,
     )
@@ -905,10 +905,10 @@ pub(crate) fn tap_dense_dense_mul1_by_hash() -> Script {
 
 pub(crate) fn hints_dense_dense_mul1_by_hash(
     hint_in_a: ElemFp12Acc,
-    hint_in_bhash: ElemFp12Acc,
+    hint_in_bhash: HashBytes,
     hint_in_c0: ElemFp12Acc,
 ) -> (ElemFp12Acc, Script) {
-    let (f, hash_g) = (hint_in_a.f, hint_in_bhash.hash);
+    let (f, hash_g) = (hint_in_a.f, hint_in_bhash);
     let g = f.inverse().unwrap();
     let h = ark_bn254::Fq12::ONE;
 
@@ -922,13 +922,13 @@ pub(crate) fn hints_dense_dense_mul1_by_hash(
         ],
         true,
     );
-    // let hash_g = emulate_extern_hash_fps(
-    //     vec![
-    //         g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-    //         g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
-    //     ],
-    //     false,
-    // );
+    let hash_g_calc = extern_hash_fps(
+        vec![
+            g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
+            g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
+        ],
+        false,
+    );
 
     // let hash_c0 = extern_hash_fps( // dense0 has already assured this value is correct
     //     vec![
@@ -965,8 +965,8 @@ pub(crate) fn hints_dense_dense_mul1_by_hash(
     };
     (
         ElemFp12Acc {
-            f: h,
-            hash: hash_c,
+            f: g,
+            hash: hash_g,
         },
         simulate_stack_input,
     )
