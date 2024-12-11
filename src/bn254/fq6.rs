@@ -1,8 +1,11 @@
+use std::ops::MulAssign;
+
 use crate::bn254::fp254impl::Fp254Impl;
 use crate::bn254::fq::Fq;
 use crate::bn254::fq2::Fq2;
+use crate::bn254::utils::fq_push_not_montgomery;
 use crate::treepp::{script, Script};
-use ark_ff::{Field, Fp6Config};
+use ark_ff::{Field, Fp6Config, MontFp};
 use num_bigint::BigUint;
 
 use super::utils::Hint;
@@ -1115,7 +1118,148 @@ impl Fq6 {
             // compute final c2 = s2 * t6
             { Fq2::mul(6, 4) }
         }
+    
     }
+
+    pub fn hinted_inv(a: ark_bn254::Fq6) -> (Script, Vec<Hint>) { 
+        const NONRESIDUE: ark_bn254::Fq2 = ark_bn254::Fq2::new(MontFp!("9"), ark_bn254::Fq::ONE);
+
+        let t0 = a.c0 * a.c0;
+        let t1 = a.c1 * a.c1;
+        let t2 = a.c2 * a.c2;
+
+        let t3 = a.c0 * a.c1;
+        let t4 = a.c0 * a.c2;
+        let t5 = a.c1 * a.c2;
+
+        let s0 = t0 - t5 * NONRESIDUE;
+        let s1 = t2 * NONRESIDUE - t3;
+        let s2 = t1 - t4;
+
+        let a1 = a.c2 * s1;
+        let a2 = a.c1 * s2;
+        let a3 = (a1 + a2) * NONRESIDUE;
+
+        let t6 = a.c0 * s0 + a3;
+        let t6inv = t6.inverse().unwrap();
+
+        let c0 = s0 * t6inv;
+        let c1 = s1 * t6inv;
+        let c2 = s2 * t6inv;
+
+        let (s_t0, h_t0) = Fq2::hinted_square(a.c0);
+        let (s_t1, h_t1) = Fq2::hinted_square(a.c1);
+        let (s_t2, h_t2) = Fq2::hinted_square(a.c2);
+        let (s_t3, h_t3) = Fq2::hinted_mul(0, a.c1, 2, a.c0);
+        let (s_t4, h_t4) = Fq2::hinted_mul(0, a.c2, 2, a.c0);
+        let (s_t5, h_t5) = Fq2::hinted_mul(0, a.c2, 2, a.c1);
+
+        let (s_a1, h_a1) = Fq2::hinted_mul(0, s1, 8, a.c2);
+        let (s_a2, h_a2) = Fq2::hinted_mul(0, s2, 10, a.c1);
+        
+        let (s_t6, h_t6) = Fq2::hinted_mul(0, s0, 10, a.c0);
+        let (s_t6inv, h_t6inv) = Fq2::hinted_inv(t6);
+        let t6aux = (t6.c0 * t6.c0 + t6.c1 *t6.c1).inverse().unwrap();
+
+        let (s_c0, h_c0) = Fq2::hinted_mul(0, t6inv, 8, s0);
+        let (s_c1, h_c1) = Fq2::hinted_mul(0, t6inv, 8, s1);
+        let (s_c2, h_c2) = Fq2::hinted_mul(4, t6inv, 6, s2);
+
+        let mut hints: Vec<Hint> = vec![];
+        for hint in vec![h_t0, h_t1, h_t2, h_t3, h_t4, h_t5, h_a1, h_a2, h_t6, h_t6inv, h_c0, h_c1, h_c2] {
+            hints.extend_from_slice(&hint);
+        }
+        // let (s_t3, h_t3) = Fq2::hinted_mul(2, a.c0, 0, a.c1);
+        // let (s_t4, h_t4) = Fq2::hinted_mul(2, a.c0, 0, a.c2);
+        // let (s_t5, h_t5) = Fq2::hinted_mul(2, a.c1, 0, a.c2);
+
+        let scr = script! {
+            // [a0, a1, a2]
+            // compute t0 = c0^2, t1 = c1^2, t2 = c2^2
+            { Fq2::copy(4) }
+            { s_t0 }
+            { Fq2::copy(4) }
+            { s_t1 }
+            { Fq2::copy(4) }
+            { s_t2 }
+             // [a0, a1, a2, t0, t1, t2, t3, t4,t5]
+
+            // compute t3 = c0 * c1, t4 = c0 * c2, t5 = c1 * c2
+            { Fq2::copy(10) }
+            { Fq2::copy(10) }
+            { s_t3 }
+            { Fq2::copy(12) }
+            { Fq2::copy(10) }
+            { s_t4 }
+            { Fq2::copy(12) }
+            { Fq2::copy(12) }
+            { s_t5 }
+
+            // [a0, a1, a2, t0, t1, t2, t3, t4, t5]
+            // update t5 = t5 * beta
+            { Fq6::mul_fq2_by_nonresidue() }
+
+            // compute s0 = t0 - t5
+            { Fq2::sub(10, 0) }
+            // [a0, a1, a2, t1, t2, t3, t4, s0]
+
+            // compute s1 = t2 * beta - t3
+            { Fq2::roll(6) }
+            { Fq6::mul_fq2_by_nonresidue() }
+            { Fq2::sub(0, 6) }
+            // [a0, a1, a2, t1, t4, s0, s1]
+
+            // compute s2 = t1 - t4
+            { Fq2::sub(6, 4) }
+            // [c0, c1, c2, s0, s1, s2]
+
+            // compute a1 = c2 * s1
+            { Fq2::copy(2) }
+            { s_a1 }
+            // [c0, c1, s0, s1, s2, a1]
+
+            // compute a2 = c1 * s2
+            { Fq2::copy(2) }
+            { s_a2 }
+            // [c0, s0, s1, s2, a1, a2]
+
+            // compute a3 = beta * (a1 + a2)
+            { Fq2::add(2, 0) }
+            { Fq6::mul_fq2_by_nonresidue() }
+            // [c0, s0, s1, s2, a3]
+
+            // compute t6 = c0 * s0 + a3
+            { Fq2::copy(6) }
+            // [c0, s0, s1, s2, a3, s0]
+            { s_t6 }
+            { Fq2::add(2, 0) }
+            // [s0, s1, s2, t6]
+
+            // inverse t6
+            {Fq2::toaltstack()}
+            {fq_push_not_montgomery(t6aux)}
+            {Fq2::fromaltstack()}
+            { s_t6inv }
+            // [s0, s1, s2, t6]
+
+            // compute final c0 = s0 * t6
+            { Fq2::copy(0) }
+            { s_c0 }
+            // [s1, s2, t6, c0]
+
+            // compute final c1 = s1 * t6
+            { Fq2::copy(2) }
+            { s_c1 }
+            // [s2, t6, c0, c1]
+
+            // compute final c2 = s2 * t6
+            { s_c2 }
+            // [c0, c1, c2]
+        };
+    
+        return (scr, hints);
+    }
+
 
     pub fn frobenius_map(i: usize) -> Script {
         script! {
@@ -1288,9 +1432,17 @@ mod test {
             let (hinted_mul, hints) = Fq6::hinted_mul(6, a, 0, b);
 
             let script = script! {
+                for hint in hints.clone() { 
+                    { hint.push() }
+                }
                 for hint in hints { 
                     { hint.push() }
                 }
+                { fq6_push_not_montgomery(a) }
+                { fq6_push_not_montgomery(b) }
+                { hinted_mul.clone() }
+                { fq6_push_not_montgomery(c) }
+                { Fq6::equalverify() }
                 { fq6_push_not_montgomery(a) }
                 { fq6_push_not_montgomery(b) }
                 { hinted_mul.clone() }
@@ -1430,6 +1582,35 @@ mod test {
                 OP_TRUE
             };
             run(script);
+        }
+    }
+
+    #[test]
+    fn test_bn254_fq6_hinted_inv() {
+        println!("Fq6.inv: {} bytes", Fq6::inv().len());
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+
+        for _ in 0..1 {
+            let a = ark_bn254::Fq6::rand(&mut prng);
+            let b = a.inverse().unwrap();
+            let (scr, hints) = Fq6::hinted_inv(a);
+
+            let script = script! {
+                for hint in hints {
+                    {hint.push()}
+                }
+                { fq6_push_not_montgomery(a) }
+                { scr }
+                { fq6_push_not_montgomery(b) }
+                { Fq6::equalverify() }
+                OP_TRUE
+            };
+            let len = script.len();
+            let res = execute_script(script);
+            for i in 0..res.final_stack.len() {
+                println!("{i:3}: {:?}", res.final_stack.get(i));
+            }
+            println!("fq2 inv len {} and stack {}", len, res.stats.max_nb_stack_items);
         }
     }
 

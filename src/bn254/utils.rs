@@ -963,15 +963,67 @@ pub fn hinted_check_line_through_point(x: ark_bn254::Fq2, c3: ark_bn254::Fq2, c4
 }
 
 
+
+pub fn new_hinted_check_tangent_line(
+    t: ark_bn254::G2Affine,
+    c3: ark_bn254::Fq2,
+    c4: ark_bn254::Fq2,
+) -> (Script, Vec<Hint>) {
+    let mut hints = Vec::new();
+
+    let (hinted_script1, hint1) = Fq2::hinted_mul(2, t.y.double(), 0, c3);
+    let (hinted_script2, hint2) = Fq2::hinted_square(t.x);
+    let (hinted_script3, hint3) = new_hinted_check_line_through_point(t.x, c3, c4);
+
+    // [a, b, x, y]
+    let script_lines = vec![
+        // alpha * (2 * T.y) = 3 * T.x^2
+        Fq2::copy(0),
+        Fq2::double(0),
+        // [a, b, x, y, 2y]
+        Fq2::copy(8),
+        // [a, b, x, y, 2y, a]
+        hinted_script1,
+        // [T.x, T.y, alpha * (2 * T.y)]
+        Fq2::copy(4),
+        hinted_script2,
+        Fq2::copy(0),
+        Fq2::double(0),
+        Fq2::add(2, 0),
+        // [T.x, T.y, alpha * (2 * T.y), 3 * T.x^2]
+        Fq2::neg(0),
+        Fq2::add(2, 0),
+        Fq2::push_zero(),
+        Fq2::equalverify(),
+        // [T.x, T.y]
+
+        // check: T.y - alpha * T.x - bias = 0
+        hinted_script3,
+        // []
+    ];
+
+    let mut script = script! {};
+    for script_line in script_lines {
+        script = script.push_script(script_line.compile());
+    }
+    hints.extend(hint1);
+    hints.extend(hint2);
+    hints.extend(hint3);
+
+    (script, hints)
+}
+
+
+
 pub fn new_hinted_check_line_through_point(x: ark_bn254::Fq2, c3: ark_bn254::Fq2, c4: ark_bn254::Fq2) -> (Script, Vec<Hint>) {
     let mut hints: Vec<Hint> = Vec::new();
     
     let (hinted_script1, hint1) = Fq2::hinted_mul(2, x,0, c3);
 
     let script_lines = vec![
-        // [alpha, bias, y, x ]
-        Fq2::roll(2),
         // [alpha, bias, x, y ]
+        Fq2::roll(2),
+        // [alpha, bias, y, x ]
         Fq2::roll(6),
         hinted_script1,
         // [bias, y, alpha * x]
@@ -1974,12 +2026,14 @@ mod test {
         let bias_minus = alpha * t.x - t.y;
         assert_eq!(alpha * t.x - t.y, bias_minus);
 
-        let (hinted_check_line, hints) = hinted_check_line_through_point(t.x, alpha, bias_minus);
+        let (hinted_check_line, hints) = new_hinted_check_tangent_line(t, alpha, bias_minus);
 
         let script = script! {
             for hint in hints {
                 { hint.push() }
             }
+            { fq2_push_not_montgomery(alpha) }
+            { fq2_push_not_montgomery(bias_minus) }
             { fq2_push_not_montgomery(t.x) }
             { fq2_push_not_montgomery(t.y) }
             { hinted_check_line.clone() }

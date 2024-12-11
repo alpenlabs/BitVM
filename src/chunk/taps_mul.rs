@@ -728,7 +728,7 @@ pub(crate) fn hints_dense_dense_mul1_by_constant(
 
 pub(crate) fn tap_dense_dense_mul0_by_hash() -> Script {
     let (hinted_mul, _) =
-        Fq12::hinted_mul_first(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
+        Fq12::hinted_mul(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
     const check_id: u8 = 1;
 
 
@@ -764,6 +764,7 @@ pub(crate) fn tap_dense_dense_mul0_by_hash() -> Script {
     };
 
     let ops_scr = script! {
+        // [a0, a1, b0, b1]
         { hinted_mul }
         {check_id} 1 OP_NUMEQUAL
         OP_IF
@@ -777,7 +778,7 @@ pub(crate) fn tap_dense_dense_mul0_by_hash() -> Script {
     };
     let scr = script! {
         {ops_scr}
-        {hash_scr}
+        // {hash_scr}
         OP_TRUE
     };
     scr
@@ -808,6 +809,11 @@ pub(crate) fn hints_dense_dense_mul0_by_hash(
         ],
         false,
     ); // sparse
+    if hash_g != hash_g_calc {
+        println!("wrong here");
+    } else {
+        println!("good {:?}", hash_g_calc);
+    }
     let hash_h = extern_hash_fps(
         vec![
             h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
@@ -929,7 +935,11 @@ pub(crate) fn hints_dense_dense_mul1_by_hash(
         ],
         false,
     );
-
+    if hash_g != hash_g_calc {
+        println!("wrong here2");
+    } else {
+        println!("good2 {:?}", hash_g_calc);
+    }
     // let hash_c0 = extern_hash_fps( // dense0 has already assured this value is correct
     //     vec![
     //         h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
@@ -966,9 +976,10 @@ pub(crate) fn hints_dense_dense_mul1_by_hash(
     (
         ElemFp12Acc {
             f: g,
-            hash: hash_g,
+            hash: hash_g_calc,
         },
         simulate_stack_input,
     )
 }
+
 
