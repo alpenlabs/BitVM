@@ -6,7 +6,7 @@ use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::{Field, PrimeField};
 use bitcoin_script::script;
 
-use crate::{chunk::{compile::{bitcom_scripts_from_segments, op_scripts_from_segments, Vkey}, segment::*, taps::{add_with_frob, tap_precompute_Py, tup_to_scr, Sig, SigData}}, execute_script, groth16::g16::{Assertions, PublicKeys, Signatures, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}, signatures::wots::{wots160, wots256}, treepp};
+use crate::{chunk::{compile::{bitcom_scripts_from_segments, op_scripts_from_segments, Vkey}, segment::*, taps::{add_with_frob, tap_precompute_Py, tup_to_scr, Sig, SigData}}, execute_script, groth16::g16::{Assertions, PublicKeys, Signatures, N_TAPLEAVES, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}, signatures::wots::{wots160, wots256}, treepp};
 use sha2::{Digest, Sha256};
 
 use super::{api::nib_to_byte_array, compile::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, hint_models::*, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps}, taps::{HashBytes}, wots::WOTSPubKey};
@@ -190,7 +190,7 @@ pub(crate) fn groth16(
         hint_script: script!(),
         scr_type: ScriptType::NonDeterministic
     };
-    push_compare_or_return!(gcinv);
+    all_output_hints.push(gcinv.clone());
 
     let vky = pubs.ks_vks;
     let vky0 = pubs.vky0;
@@ -497,18 +497,19 @@ pub(crate) fn get_proof(asserts: &TypedAssertions) -> EvalIns { // EvalIns
             ark_bn254::Fq2::new(numfqs[step+10], numfqs[step+11]),
         ),
     );
+    let cinv = c.inverse().unwrap();
 
     let step = step + 12;
     let q4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(numfqs[step + 0], numfqs[step + 1]), ark_bn254::Fq2::new(numfqs[step + 2], numfqs[step + 3]));
 
-    let eval_ins: EvalIns = EvalIns { p2, p3, p4, q4, c, s, ks: asserts.0.to_vec() };
+    let eval_ins: EvalIns = EvalIns { p2, p3, p4, q4, c, s, ks: asserts.0.to_vec(), cinv };
     eval_ins
 }
 
 pub(crate) fn get_intermediates(asserts: &TypedAssertions) -> Intermediates { // Intermediates
     let mut fqs = asserts.1[6..12].to_vec();
     fqs.reverse();
-    let mut hashes= asserts.2.to_vec();
+    let mut hashes= asserts.2[1..].to_vec();
     hashes.reverse();
     (fqs, hashes)
 }
@@ -576,6 +577,7 @@ pub fn script_exec(
     segments: Vec<Segment>, 
     signed_asserts: Signatures,
     inpubkeys: PublicKeys,
+    disprove_scripts: &[treepp::Script; N_TAPLEAVES],
 ) -> Option<(usize, treepp::Script)> {
     let mut sigcache: HashMap<u32, SigData> = HashMap::new();
 
@@ -618,17 +620,11 @@ pub fn script_exec(
     let mut bc_hints = vec![];
     for i in 0..segments.len() {
         let seg = &segments[i];
-        let out_first = false;
         let sec_out = ((seg.id, seg.output_type), assertions[seg.id as usize]);
         let sec_in: Vec<((u32, bool), [u8; 64])> = seg.inputs.iter().rev().map(|(k, v)| ((*k, *v), assertions[*k as usize])).collect();
         let mut tot: Vec<((u32, bool), [u8;64])> = vec![];
-        if out_first {
-            tot.push(sec_out);
-            tot.extend_from_slice(&sec_in);
-        } else {
-            tot.extend_from_slice(&sec_in);
-            tot.push(sec_out);
-        }
+        tot.extend_from_slice(&sec_in);
+        tot.push(sec_out);
         let (bcelems, should_validate) = tup_to_scr(&mut sig, tot);
         if should_validate == true {
             println!("index {:?} bcelems len {:?}  should_validate {}",i, bcelems.len(), should_validate);
@@ -636,32 +632,22 @@ pub fn script_exec(
         bc_hints.push(bcelems);
     }
 
-    println!("generating op_scripts_from_segments");
-    let locking_ops = op_scripts_from_segments(&segments);
-    println!("generating bitcom_scripts_from_segments");
-
-    let locking_bitcoms = bitcom_scripts_from_segments(&segments, pubkeys);
-
     let aux_hints: Vec<treepp::Script> = segments.iter().map(|f| f.hint_script.clone()).collect();
-
-    assert!(aux_hints.len() == bc_hints.len() && locking_bitcoms.len() == locking_ops.len() && bc_hints.len() == locking_bitcoms.len());
 
     let mut tap_script_index = 0;
     for i in 0..aux_hints.len() {
-        if locking_ops[i].len() == 0  {
+        if segments[i].scr_type == ScriptType::NonDeterministic  {
             continue;
         }
-        println!("Executing script {:?}", i);
         let hint_script = script!{
             {aux_hints[i].clone()}
             {bc_hints[i].clone()}
         };
         let total_script = script!{
             {hint_script.clone()}
-            {locking_bitcoms[i].clone()}
-            {locking_ops[i].clone()}
+            {disprove_scripts[tap_script_index].clone()}
         };
-
+        println!("Executing script {:?}", tap_script_index);
         let exec_result = execute_script(total_script);
         if exec_result.final_stack.len() > 1 {
             for i in 0..exec_result.final_stack.len() {

@@ -82,13 +82,13 @@ pub(crate) fn wrap_hint_msm(
         acc = prev_msm.output.into();
         input_segment_info.push((prev_msm.id, prev_msm.output_type));
     }
+    input_segment_info.reverse();
 
     let (mut hout_msm, mut hint_script) = (ElemG1Point::mock(), script!());
     if !skip {
         (hout_msm, hint_script) = hint_msm(
             // sig, (segment_id as u32, output_type), input_segment_info.clone(), 
             acc, hint_scalars, msm_chain_index, pub_vky.clone());
-        input_segment_info.reverse();
     }
     Segment { id: segment_id as u32 as u32, output_type, inputs: input_segment_info, output: Element::MSMG1(hout_msm), hint_script, scr_type: ScriptType::MSM((msm_chain_index, pub_vky)) }
 
@@ -107,13 +107,12 @@ pub(crate) fn wrap_hint_hash_p(
     input_segment_info.push((hint_in_t.id, hint_in_t.output_type));
     input_segment_info.push((hint_in_ry.id, hint_in_ry.output_type));
     input_segment_info.push((hint_in_rx.id, hint_in_rx.output_type));
+    input_segment_info.reverse();
 
     let (mut h, mut hint_script) = ([0u8;64], script!());
     if !skip {
         (h, hint_script) = hint_hash_p(
-            // sig, (segment_id as u32, output_type), input_segment_info.clone(),
              hint_in_rx.output.into(), hint_in_ry.output.into(), hint_in_t.output.into(), pub_vky0.clone());
-        input_segment_info.reverse();
     }
     Segment { id: segment_id as u32, output_type, inputs: input_segment_info, output: Element::HashBytes(h), hint_script, scr_type: ScriptType::PreMillerHashP(pub_vky0) }
 }

@@ -55,8 +55,9 @@ pub fn verify_signed_assertions(
     vk: VerifyingKey,
     public_keys: PublicKeys,
     signatures: Signatures,
+    disprove_scripts: &[Script; N_TAPLEAVES],
 ) -> Option<(usize, Script)> {
-    chunk::api::validate_assertions(&vk,signatures,public_keys)
+    chunk::api::validate_assertions(&vk,signatures,public_keys, disprove_scripts)
 }
 
 #[cfg(test)]
@@ -277,12 +278,29 @@ mod test {
         let (proof, public_inputs) = mock::generate_proof();
 
         assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1);
+
+        let mut op_scripts = vec![];
+        println!("load scripts from file");
+        for index in 0..N_TAPLEAVES {
+            let read = read_scripts_from_file(&format!("chunker_data/tapnode_{index}.json"));
+            let read_scr = read.get(&(index as u32)).unwrap();
+            assert_eq!(read_scr.len(), 1);
+            let tap_node = read_scr[0].clone();
+            op_scripts.push(tap_node);
+        }
+        println!("done");
+        let ops_scripts: [Script; N_TAPLEAVES] = op_scripts.try_into().unwrap();
+
+       let mock_pubks = mock_pubkeys(MOCK_SECRET);
+       let verifier_scripts = generate_disprove_scripts(mock_pubks, &ops_scripts);
+
         // let proof_asserts = generate_proof_assertions(mock_vk.clone(), proof, public_inputs);
         let proof_asserts = read_asserts_from_file("chunker_data/assert.json");
         let signed_asserts = sign_assertions(proof_asserts);
         let mock_pubks = mock_pubkeys(MOCK_SECRET);
 
-        let fault = verify_signed_assertions(mock_vk, mock_pubks, signed_asserts);
+        println!("verify_signed_assertions");
+        let fault = verify_signed_assertions(mock_vk, mock_pubks, signed_asserts, &verifier_scripts);
         assert!(fault.is_none());
     }
 
@@ -359,7 +377,6 @@ mod test {
         let mock_pubks = mock_pubkeys(MOCK_SECRET);
         let verifier_scripts = generate_disprove_scripts(mock_pubks, &ops_scripts);
 
-        verifier_scripts.iter().enumerate().for_each(|f| println!("{} and {}", f.0, f.1.len()));
 
         for i in 91..92 {//N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES {
             println!("ITERATION {:?}", i);
@@ -367,7 +384,7 @@ mod test {
             corrupt(&mut proof_asserts, Some(i));
             let signed_asserts = sign_assertions(proof_asserts);
     
-            let fault = verify_signed_assertions(mock_vk.clone(), mock_pubks, signed_asserts);
+            let fault = verify_signed_assertions(mock_vk.clone(), mock_pubks, signed_asserts, &verifier_scripts);
             //assert!(fault.is_some());
             if fault.is_some() {
                 let (index, hint_script) = fault.unwrap();
@@ -485,6 +502,7 @@ mod test {
             c,
             s,
             ks: msm_scalar.clone(),
+            cinv: c.inverse().unwrap(),
         };
     
         let pubs: Pubs = Pubs {

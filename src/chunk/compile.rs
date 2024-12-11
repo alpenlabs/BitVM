@@ -2,6 +2,7 @@
 use std::collections::HashMap;
 
 use ark_ec::bn::BnConfig;
+use ark_ff::Field;
 use bitcoin_script::script;
 
 use crate::{chunk::hint_models::{ElemG1Point, G1PointExt}, treepp};
@@ -78,7 +79,8 @@ fn segments_from_pubs(vk: Vkey) -> Vec<Segment> {
     let fr = ElemFr::mock();
     let s = ElemFp12Acc::mock();
     let c = ElemFp12Acc::mock();
-    let eval_ins: EvalIns = EvalIns { p2: g1, p3: g1, p4: g1, q4: g2, c: c.f, s: s.f, ks: vec![fr] };
+    let cinv = c.f.inverse().unwrap();
+    let eval_ins: EvalIns = EvalIns { p2: g1, p3: g1, p4: g1, q4: g2, c: c.f, s: s.f, ks: vec![fr], cinv };
 
     let pubs: Pubs = Pubs { q2: vk.q2, q3: vk.q3, fixed_acc: vk.p1q1, ks_vks: vk.p3vk, vky0: vk.vky0 };
     groth16(true, &mut segments, eval_ins, pubs, &mut None);
@@ -200,6 +202,14 @@ pub(crate) fn bitcom_scripts_from_segments(segments: &Vec<Segment>, pubkeys_map:
             ScriptType::NonDeterministic => {
                 bitcom_scripts.push(script!());
             },
+            ScriptType::MSM(_) => {
+                println!("bitcom_scripts_from_segments msm sec_in {:?}", sec_in);
+                bitcom_scripts.push(gen_bitcom(&pubkeys_map, sec_out, sec_in));
+            },
+            ScriptType::PreMillerHashP(_) => {
+                println!("bitcom_scripts_from_segments phashp sec_in {:?}", sec_in);
+                bitcom_scripts.push(gen_bitcom(&pubkeys_map, sec_out, sec_in));                
+            }
             _ => {
                 bitcom_scripts.push(gen_bitcom(&pubkeys_map, sec_out, sec_in));
             }

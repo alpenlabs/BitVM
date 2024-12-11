@@ -155,6 +155,7 @@ pub fn generate_assertions(
         c,
         s,
         ks: msm_scalar.clone(),
+        cinv: c.inverse().unwrap(),
     };
 
     let pubs: Pubs = Pubs {
@@ -177,6 +178,7 @@ pub fn validate_assertions(
     vk: &ark_groth16::VerifyingKey<Bn254>,
     signed_asserts: Signatures,
     inpubkeys: PublicKeys,
+    disprove_scripts: &[Script; N_TAPLEAVES],
 ) -> Option<(usize, Script)> {
     let asserts = get_assertions(signed_asserts);
     let eval_ins = get_proof(&asserts);
@@ -188,12 +190,12 @@ pub fn validate_assertions(
     let passed = groth16(false, &mut segments, eval_ins, get_pubs(vk), &mut Some(intermediates));
     if passed {
         println!("assertion passed, running full script execution now");
-        let exec_result = script_exec(segments, signed_asserts, inpubkeys);
+        let exec_result = script_exec(segments, signed_asserts, inpubkeys, disprove_scripts);
         assert!(exec_result.is_none());
         return None;
     }
     println!("assertion failed, return faulty script segments acc {:?}", segments.len());
-    let exec_result = script_exec(segments, signed_asserts, inpubkeys);
+    let exec_result = script_exec(segments, signed_asserts, inpubkeys, disprove_scripts);
     assert!(exec_result.is_some());
     return exec_result;
 }
