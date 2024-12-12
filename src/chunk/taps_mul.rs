@@ -1,6 +1,6 @@
 use crate::bn254::fq6::Fq6;
 use crate::bn254::utils::{
-    fq12_push_not_montgomery, fq2_push_not_montgomery, fq_push_not_montgomery,
+    fq12_push_not_montgomery, fq2_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery, Hint
 };
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::primitves::{
@@ -12,10 +12,11 @@ use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
 };
-use ark_ff::{AdditiveGroup, Field, Zero};
+use ark_ff::{AdditiveGroup, Field, MontFp, Zero};
+use bitcoin::opcodes::OP_TRUE;
 use num_traits::One;
 
-use super::primitves::{extern_hash_fps, hash_fp12_192};
+use super::primitves::{extern_hash_fps, fp12_to_vec, hash_fp12_192};
 use super::taps::{HashBytes, Link, Sig};
 use super::hint_models::*;
 // SPARSE DENSE
@@ -982,4 +983,365 @@ pub(crate) fn hints_dense_dense_mul1_by_hash(
     )
 }
 
+// INVERSE
+fn tap_inv0(a: ElemFp12Acc) -> Script {
 
+    let a = a.f;
+
+    let (s_t1, _) = Fq6::hinted_square(a.c1);
+    let (s_t0, _) = Fq6::hinted_square(a.c0);
+
+    let ops_scr = script!{
+        // [c0, c1]
+       { Fq6::copy(0) }
+
+        // compute beta * v1 = beta * c1^2
+        { s_t1 }
+        { Fq12::mul_fq6_by_nonresidue() }
+        // [c0, beta * c1^2]
+
+        // copy c0
+        { Fq6::copy(12) }
+
+        // compute v0 = c0^2 + beta * v1
+        { s_t0 }
+        // [yt1, t0]
+        { Fq6::sub(0, 6) }
+        // [c0, c1, t0]
+    };
+
+    let hash_scr = script!{
+        {hash_fp6()}
+        {Fq::toaltstack()}
+        {hash_fp12()}
+        {Fq::fromaltstack()}
+        // [Hc, Ht0]
+        { Fq::fromaltstack() }
+        { Fq::fromaltstack() }
+        // [Hc, Ht0, HKc, HKt0]
+        {Fq::equalverify(1, 3)}
+        {Fq::equal(1, 0)} OP_VERIFY
+    };
+
+    let scr = script!{
+        {ops_scr}
+        {hash_scr}
+        OP_TRUE
+    };
+    scr
+}
+
+fn tap_inv1(a: ElemFp12Acc) -> Script {
+    let t0 = a.f.c0;
+
+    let (s_t0inv, _) = Fq6::hinted_inv(t0);
+
+    let ops_scr = script!{
+        {Fq6::copy(0)}
+        {s_t0inv}
+    }; // [t0, t1]
+    let hash_scr = script!{
+        {hash_fp6()}
+        {Fq::toaltstack()}
+        {hash_fp6()}
+        {Fq::fromaltstack()}
+        // [Ht0, Ht1]
+        { Fq::fromaltstack() }
+        { Fq::fromaltstack() }
+        // [Ht0, Ht1, HKt0, Hkt1]
+        {Fq::equalverify(1, 3)}
+        {Fq::equal(1, 0)} OP_VERIFY
+    };
+    let scr = script!{
+        {ops_scr}
+        {hash_scr}
+        OP_TRUE
+    };
+    scr
+}
+
+fn tap_inv2(a: ElemFp12Acc, t1: ElemFp12Acc) -> Script {
+    let t1 = t1.f.c0;
+    let a = a.f;
+
+    let (s_c0, _) = Fq6::hinted_mul(0, t1, 18, a.c0);
+    let (s_c1, _) = Fq6::hinted_mul(0, -a.c1, 12, t1);
+
+    let ops_scr = script!{
+        {Fq12::copy(6)}
+        // [c0, c1, t1]
+        { Fq6::copy(12) }
+        // [c0, c1, t1, c0, c1, t1]
+
+        // dup inv v0
+        { Fq6::copy(0) }
+        // [c0, c1, t1, t1]
+
+        // compute c0
+        { s_c0 }
+        // [c1, t1, d0]
+
+        // compute c1
+        { Fq6::neg(12) }
+        // [t1, d0, -c1]
+        { s_c1 }
+        // [c0, c1, t1, d0, d1]
+    };
+    let hash_scr = script!{
+
+        {Fq12::toaltstack()}
+        {hash_fp6()}
+        {Fq::toaltstack()}
+        {hash_fp12()}
+        {Fq::fromaltstack()}
+        {Fq12::fromaltstack()}
+        {hash_fp12_192()}
+        // [Hc, Ht, Hd]
+
+        {Fq::fromaltstack()}
+        {Fq::fromaltstack()}
+        {Fq::fromaltstack()}
+        // // [Hc, Ht, Hd, HKc, HKt, HKd]
+
+        {Fq::equalverify(1, 4)}
+        {Fq::equalverify(1, 3)}
+        {Fq::equal(1, 0)} OP_VERIFY
+    };
+    let scr = script!{
+        {ops_scr}
+        {hash_scr}
+        OP_TRUE
+    };
+    scr
+}
+
+fn hint_inv2(
+    a: ElemFp12Acc,
+    t1: ElemFp12Acc,
+) -> (ElemFp12Acc, Script) {
+    let t1 = t1.f.c0;
+    let a = a.f;
+
+    let c0 = a.c0 * t1;
+    let c1 = -a.c1 * t1;
+
+
+    let (_, h_c0) = Fq6::hinted_mul(0, t1, 18, a.c0);
+    let (_, h_c1) = Fq6::hinted_mul(0, -a.c1, 12, t1);
+
+    let mut hints: Vec<Hint> = vec![];
+    for hint in vec![h_c0, h_c1] {
+        hints.extend_from_slice(&hint);
+    }
+
+    let simulate_stack_input = script! {
+        // quotients for tmul
+        for hint in hints {
+            { hint.push() }
+        }
+        {fq12_push_not_montgomery(a)}
+        {fq6_push_not_montgomery(t1)}
+    };
+
+    let hash_h = extern_hash_fps(
+        fp12_to_vec(ark_bn254::Fq12::new(c0, c1)),
+        false,
+    );
+
+    let hout: ElemFp12Acc = ElemFp12Acc { f: ark_bn254::Fq12::new(c0, c1), hash: hash_h };
+    (
+        hout,
+        simulate_stack_input,
+    )
+}
+
+fn hint_inv1(
+    a: ElemFp12Acc
+) -> (ElemFp12Acc, Script) {
+    let t0 = a.f.c0;
+    let t1 = t0.inverse().unwrap();
+
+    let (_, h_t0inv) = Fq6::hinted_inv(t0);
+
+    let hash_h = extern_hash_fps(
+        vec![
+            t1.c0.c0, t1.c0.c1, t1.c1.c0, t1.c1.c1, t1.c2.c0, t1.c2.c1,
+        ],
+        true,
+    );
+
+    let simulate_stack_input = script! {
+        // quotients for tmul
+        for hint in h_t0inv {
+            { hint.push() }
+        }
+        {fq6_push_not_montgomery(t0)}
+    };
+
+    let hout: ElemFp12Acc = ElemFp12Acc { f: ark_bn254::Fq12::new(t1, ark_bn254::Fq6::ZERO), hash: hash_h };
+    (
+        hout,
+        simulate_stack_input,
+    )
+}
+
+fn hint_inv0(
+    a: ElemFp12Acc
+) -> (ElemFp12Acc, Script) {
+    let a = a.f;
+
+    fn mul_fp6_by_nonresidue_in_place(fe: ark_bn254::Fq6) -> ark_bn254::Fq6 {
+        let mut fe = fe.clone();
+        const NONRESIDUE: ark_bn254::Fq2 = ark_bn254::Fq2::new(MontFp!("9"), ark_bn254::Fq::ONE);
+        let old_c1 = fe.c1;
+        fe.c1 = fe.c0;
+        fe.c0 = fe.c2 * NONRESIDUE;
+        fe.c2 = old_c1;
+        fe
+    }
+
+    let t1 = a.c1 * a.c1;
+    let t0 = a.c0 * a.c0;
+    let yt1 = mul_fp6_by_nonresidue_in_place(t1);
+    let t0 = t0-yt1;
+
+    let (_, h_t1) = Fq6::hinted_square(a.c1);
+    let (_, h_t0) = Fq6::hinted_square(a.c0);
+
+    let mut hints: Vec<Hint> = vec![];
+    for hint in vec![h_t1, h_t0] {
+        hints.extend_from_slice(&hint);
+    }
+
+    // data passed to stack in runtime
+    let simulate_stack_input = script! {
+        // quotients for tmul
+        for hint in hints {
+            { hint.push() }
+        }
+        {fq12_push_not_montgomery(a)}
+    };
+
+    let hash_h = extern_hash_fps(
+        vec![
+            t0.c0.c0, t0.c0.c1, t0.c1.c0, t0.c1.c1, t0.c2.c0, t0.c2.c1,
+        ],
+        true,
+    );
+
+    let hout: ElemFp12Acc = ElemFp12Acc { f: ark_bn254::Fq12::new(t0, ark_bn254::Fq6::ZERO), hash: hash_h };
+    (
+        hout,
+        simulate_stack_input,
+    )
+}
+
+
+#[cfg(test)]
+mod test {
+    use ark_ff::UniformRand;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
+
+    use crate::{chunk::primitves::pack_nibbles_to_limbs, execute_script_without_stack_limit};
+
+    use super::*;
+
+
+     #[test]
+    fn test_bn254_fq12_hinted_inv() {
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+
+            let a = ark_bn254::Fq12::rand(&mut prng);
+
+            let hash_in = extern_hash_fps(fp12_to_vec(a), true);
+            let (hout0, hscr0) = hint_inv0(ElemFp12Acc { f: a, hash: hash_in });
+            let tscr0 = tap_inv0(ElemFp12Acc { f: a, hash: hash_in });
+            let bscr0 = script!{
+                for h in hout0.hash {
+                    {h}
+                }
+                {pack_nibbles_to_limbs()}
+                {Fq::toaltstack()}
+                for h in hash_in {
+                    {h}
+                }
+                {pack_nibbles_to_limbs()}
+                {Fq::toaltstack()}
+            };
+            let script = script! {
+                { hscr0 }
+                { bscr0 }
+                { tscr0 }
+            };
+            let len = script.len();
+            let res = execute_script(script);
+            for i in 0..res.final_stack.len() {
+                println!("{i:3}: {:?}", res.final_stack.get(i));
+            }
+            println!("inv0 len {} and stack {}", len, res.stats.max_nb_stack_items);
+
+
+            let (hout1, hscr1) = hint_inv1(hout0);
+            let tscr1 = tap_inv1(hout0);
+            let bscr1 = script!{
+                for h in hout1.hash {
+                    {h}
+                }
+                {pack_nibbles_to_limbs()}
+                {Fq::toaltstack()}
+                for h in hout0.hash {
+                    {h}
+                }
+                {pack_nibbles_to_limbs()}
+                {Fq::toaltstack()}
+            };
+
+            let script = script! {
+                { hscr1 }
+                { bscr1 }
+                { tscr1 }
+            };
+            let len = script.len();
+            let res = execute_script(script);
+            for i in 0..res.final_stack.len() {
+                println!("{i:3}: {:?}", res.final_stack.get(i));
+            }
+            println!("inv1 len {} and stack {}", len, res.stats.max_nb_stack_items);
+
+
+
+            let (hout2, hscr2) = hint_inv2(ElemFp12Acc { f: a, hash: hash_in }, hout1);
+            let tscr2 = tap_inv2(ElemFp12Acc { f: a, hash: hash_in }, hout1);
+            assert_eq!(hout2.f, a.inverse().unwrap());
+            let bscr2 = script!{
+                for h in hout2.hash {
+                    {h}
+                }
+                {pack_nibbles_to_limbs()}
+                {Fq::toaltstack()}
+                for h in hout1.hash {
+                    {h}
+                }
+                {pack_nibbles_to_limbs()}
+                {Fq::toaltstack()}                
+                for h in hash_in {
+                    {h}
+                }
+                {pack_nibbles_to_limbs()}
+                {Fq::toaltstack()}
+            };
+
+            let script = script! {
+                { bscr2 }
+                { hscr2 }
+                { tscr2 }
+            };
+            let len = script.len();
+            let res = execute_script_without_stack_limit(script);
+            for i in 0..res.final_stack.len() {
+                println!("{i:3}: {:?}", res.final_stack.get(i));
+            }
+            println!("inv2 len {} and stack {}", len, res.stats.max_nb_stack_items);
+    }   
+}
