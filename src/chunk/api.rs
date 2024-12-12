@@ -156,7 +156,6 @@ pub fn generate_assertions(
         c,
         s,
         ks: msm_scalar.clone(),
-        cinv: extern_hash_fps(fp12_to_vec(c.inverse().unwrap()), false),
     };
 
     let pubs: Pubs = Pubs {

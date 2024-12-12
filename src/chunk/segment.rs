@@ -27,8 +27,9 @@ pub enum ScriptType {
     PreMillerPrecomputePx,
     PreMillerHashC,
     PreMillerHashC2,
-    PreMillerDenseDenseMulByHash0,
-    PreMillerDenseDenseMulByHash1,
+    PreMillerInv0,
+    PreMillerInv1,
+    PreMillerInv2,
     PreMillerHashP(ark_bn254::G1Affine),
 
     MillerSquaring,
@@ -203,40 +204,56 @@ pub(crate) fn wrap_hint_hash_c2(
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(c2), hint_script, scr_type: ScriptType::PreMillerHashC2 }
 }
 
-pub(crate) fn wrap_hints_dense_dense_mul0_by_hash(
+pub(crate) fn wrap_inv0(
     skip: bool,
     segment_id: usize,
-    hint_in_a: &Segment, hint_in_bhash: &Segment
+    hint_in_a: &Segment,
 ) -> Segment {
     let output_type = false;
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     input_segment_info.push((hint_in_a.id, hint_in_a.output_type));
-    input_segment_info.push((hint_in_bhash.id, hint_in_bhash.output_type));
 
     let (mut dmul0, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul0, hint_script) = hints_dense_dense_mul0_by_hash(hint_in_a.output.into(), hint_in_bhash.output.into());
+        (dmul0, hint_script) = hint_inv0(hint_in_a.output.into());
     }
-    Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(dmul0), hint_script, scr_type: ScriptType::PreMillerDenseDenseMulByHash0 }
+    Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(dmul0), hint_script, scr_type: ScriptType::PreMillerInv0 }
 }
 
-pub(crate) fn wrap_hints_dense_dense_mul1_by_hash(
+pub(crate) fn wrap_inv1(
     skip: bool,
     segment_id: usize,
-    hint_in_a: &Segment, hint_in_bhash: &Segment, hint_in_c0: &Segment,
+    hint_in_a: &Segment,
 ) -> Segment {
     let output_type = false;
     let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     input_segment_info.push((hint_in_a.id, hint_in_a.output_type));
-    input_segment_info.push((hint_in_bhash.id, hint_in_bhash.output_type));
-    input_segment_info.push((hint_in_c0.id, hint_in_c0.output_type));
 
-    let (mut dmul1, mut hint_script) = (ElemFp12Acc::mock(), script!());
+    let (mut dmul0, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul1, hint_script) = hints_dense_dense_mul1_by_hash( hint_in_a.output.into(), hint_in_bhash.output.into(), hint_in_c0.output.into());
+        (dmul0, hint_script) = hint_inv1(hint_in_a.output.into());
     }
-    Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(dmul1), hint_script, scr_type: ScriptType::PreMillerDenseDenseMulByHash1 }
+    Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(dmul0), hint_script, scr_type: ScriptType::PreMillerInv1 }
 }
+
+pub(crate) fn wrap_inv2(
+    skip: bool,
+    segment_id: usize,
+    hint_in_t1: &Segment,
+    hint_in_a: &Segment,
+) -> Segment {
+    let output_type = false;
+    let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
+    input_segment_info.push((hint_in_t1.id, hint_in_t1.output_type));
+    input_segment_info.push((hint_in_a.id, hint_in_a.output_type));
+
+    let (mut dmul0, mut hint_script) = (ElemFp12Acc::mock(), script!());
+    if !skip {
+        (dmul0, hint_script) = hint_inv2(hint_in_t1.output.into(), hint_in_a.output.into());
+    }
+    Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(dmul0), hint_script, scr_type: ScriptType::PreMillerInv2 }
+}
+
 
 pub(crate) fn wrap_hint_init_T4(
     skip: bool,
@@ -955,3 +972,34 @@ pub(crate) fn wrap_hints_dense_dense_mul1_by_constant(
     }
 }
 
+#[cfg(test)]
+mod test {
+    use bitcoin_script::script;
+
+    use crate::chunk::primitves::fp12_to_vec;
+
+    use super::*;
+
+
+    #[test]
+    fn test_wrap_cinv() {
+        let f = ark_bn254::Fq12::ONE + ark_bn254::Fq12::ONE +  ark_bn254::Fq12::ONE;
+        let hash = extern_hash_fps(fp12_to_vec(f), true);
+        let c = ElemFp12Acc {f, hash};
+        let seg = Segment {
+            id: 0,
+            output_type: false,
+            inputs: vec![],
+            output: Element::Fp12(c),
+            hint_script: script!(),
+            scr_type: ScriptType::NonDeterministic,
+        };
+
+        let inv0 = wrap_inv0(false, 1, &seg);
+        let inv1 = wrap_inv1(false, 1, &inv0);
+        let inv2 = wrap_inv2(false, 1, &inv1, &seg);
+
+        let out: ElemFp12Acc = inv2.output.into();
+        println!("match {}", out.f == f.inverse().unwrap());
+    }
+}

@@ -1121,6 +1121,32 @@ impl Fq6 {
     
     }
 
+    pub fn calc_fp2_inv_aux(a: ark_bn254::Fq6) -> ark_bn254::Fq {
+        const NONRESIDUE: ark_bn254::Fq2 = ark_bn254::Fq2::new(MontFp!("9"), ark_bn254::Fq::ONE);
+        
+        let t0 = a.c0 * a.c0;
+        let t1 = a.c1 * a.c1;
+        let t2 = a.c2 * a.c2;
+
+        let t3 = a.c0 * a.c1;
+        let t4 = a.c0 * a.c2;
+        let t5 = a.c1 * a.c2;
+
+        let s0 = t0 - t5 * NONRESIDUE;
+        let s1 = t2 * NONRESIDUE - t3;
+        let s2 = t1 - t4;
+
+        let a1 = a.c2 * s1;
+        let a2 = a.c1 * s2;
+        let a3 = (a1 + a2) * NONRESIDUE;
+
+        let t6 = a.c0 * s0 + a3;
+
+        let t6aux = (t6.c0 * t6.c0 + t6.c1 *t6.c1).inverse().unwrap();
+
+        t6aux
+    }
+
     pub fn hinted_inv(a: ark_bn254::Fq6) -> (Script, Vec<Hint>) { 
         const NONRESIDUE: ark_bn254::Fq2 = ark_bn254::Fq2::new(MontFp!("9"), ark_bn254::Fq::ONE);
 
@@ -1174,7 +1200,7 @@ impl Fq6 {
         // let (s_t5, h_t5) = Fq2::hinted_mul(2, a.c1, 0, a.c2);
 
         let scr = script! {
-            // [a0, a1, a2]
+            // [t6aux, a0, a1, a2]
             // compute t0 = c0^2, t1 = c1^2, t2 = c2^2
             { Fq2::copy(4) }
             { s_t0 }
@@ -1233,11 +1259,11 @@ impl Fq6 {
             // [c0, s0, s1, s2, a3, s0]
             { s_t6 }
             { Fq2::add(2, 0) }
-            // [s0, s1, s2, t6]
+            // [t6aux, s0, s1, s2, t6]
 
             // inverse t6
             {Fq2::toaltstack()}
-            {fq_push_not_montgomery(t6aux)}
+            {Fq::roll(6)}
             {Fq2::fromaltstack()}
             { s_t6inv }
             // [s0, s1, s2, t6]
@@ -1335,7 +1361,7 @@ impl Fq6 {
 #[cfg(test)]
 mod test {
     use crate::bn254::fq6::Fq6;
-    use crate::bn254::utils::{fq2_push, fq2_push_not_montgomery, fq6_push, fq6_push_not_montgomery};
+    use crate::bn254::utils::{fq2_push, fq2_push_not_montgomery, fq6_push, fq6_push_not_montgomery, fq_push_not_montgomery};
     use crate::treepp::*;
     use ark_ff::Field;
     use ark_std::UniformRand;
@@ -1593,12 +1619,15 @@ mod test {
         for _ in 0..1 {
             let a = ark_bn254::Fq6::rand(&mut prng);
             let b = a.inverse().unwrap();
-            let (scr, hints) = Fq6::hinted_inv(a);
+            let (_, hints) = Fq6::hinted_inv(a);
+            let (scr, _) = Fq6::hinted_inv(ark_bn254::Fq6::ONE);
+            let aux_t6 = Fq6::calc_fp2_inv_aux(a);
 
             let script = script! {
                 for hint in hints {
                     {hint.push()}
                 }
+                { fq_push_not_montgomery(aux_t6) }
                 { fq6_push_not_montgomery(a) }
                 { scr }
                 { fq6_push_not_montgomery(b) }

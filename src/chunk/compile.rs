@@ -80,7 +80,7 @@ fn segments_from_pubs(vk: Vkey) -> Vec<Segment> {
     let s = ElemFp12Acc::mock();
     let c = ElemFp12Acc::mock();
     let cinv = extern_hash_fps(fp12_to_vec(c.f.inverse().unwrap()), false);
-    let eval_ins: EvalIns = EvalIns { p2: g1, p3: g1, p4: g1, q4: g2, c: c.f, s: s.f, ks: vec![fr], cinv };
+    let eval_ins: EvalIns = EvalIns { p2: g1, p3: g1, p4: g1, q4: g2, c: c.f, s: s.f, ks: vec![fr] };
 
     let pubs: Pubs = Pubs { q2: vk.q2, q3: vk.q3, fixed_acc: vk.p1q1, ks_vks: vk.p3vk, vky0: vk.vky0 };
     groth16(true, &mut segments, eval_ins, pubs, &mut None);
@@ -105,8 +105,6 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
     let tap_precompute_Px = tap_precompute_Px();
     let tap_hash_c = tap_hash_c();
     let tap_hash_c2 = tap_hash_c2();
-    let tap_dense_dense_mul0_by_hash = tap_dense_dense_mul0_by_hash();
-    let tap_dense_dense_mul1_by_hash = tap_dense_dense_mul1_by_hash();
     let tap_squaring = tap_squaring();
     let tap_point_dbl = tap_point_dbl();
     let tap_dense_dense_mul0 = tap_dense_dense_mul0();
@@ -136,11 +134,14 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
             ScriptType::PreMillerHashC2 => {
                 op_scripts.push(tap_hash_c2.clone());
             },
-            ScriptType::PreMillerDenseDenseMulByHash0 => {
-                op_scripts.push(tap_dense_dense_mul0_by_hash.clone());
+            ScriptType::PreMillerInv0 => {
+                op_scripts.push(tap_inv0());
             },
-            ScriptType::PreMillerDenseDenseMulByHash1 => {
-                op_scripts.push(tap_dense_dense_mul1_by_hash.clone());
+            ScriptType::PreMillerInv1 => {
+                op_scripts.push(tap_inv1());
+            },
+            ScriptType::PreMillerInv2 => {
+                op_scripts.push(tap_inv2());
             },
             ScriptType::MillerSquaring => {
                 op_scripts.push(tap_squaring.clone());

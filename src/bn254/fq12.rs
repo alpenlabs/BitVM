@@ -3,6 +3,7 @@ use crate::bn254::fq::Fq;
 use crate::bn254::fq2::Fq2;
 use crate::bn254::fq6::Fq6;
 use crate::bn254::fr::Fr;
+use crate::bn254::utils::fq_push_not_montgomery;
 use crate::treepp::{script, Script};
 use ark_ff::{Field, Fp12Config, MontFp};
 use num_bigint::BigUint;
@@ -745,6 +746,8 @@ impl Fq12 {
         let (s_t1, h_t1) = Fq6::hinted_square(a.c1);
         let (s_t0, h_t0) = Fq6::hinted_square(a.c0);
         let (s_t0inv, h_t0inv) = Fq6::hinted_inv(t0);
+        let aux = Fq6::calc_fp2_inv_aux(t0);
+
         let (s_c0, h_c0) = Fq6::hinted_mul(0, t1, 18, a.c0);
         let (s_c1, h_c1) = Fq6::hinted_mul(0, -a.c1, 12, t1);
 
@@ -752,6 +755,7 @@ impl Fq12 {
         for hint in vec![h_t1, h_t0, h_t0inv, h_c0, h_c1] {
             hints.extend_from_slice(&hint);
         }
+
 
         let scr = script!{
             // [c0, c1]
@@ -772,6 +776,9 @@ impl Fq12 {
 
             // [c0, c1, t0]
             // compute inv v0
+            {Fq6::toaltstack()}
+            {fq_push_not_montgomery(aux)}
+            {Fq6::fromaltstack()}
             { s_t0inv }
             // [c0, c1, t1]
 

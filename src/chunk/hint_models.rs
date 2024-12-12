@@ -22,7 +22,6 @@ pub(crate) struct EvalIns {
     pub(crate) p4: G1Affine,
     pub(crate) q4: G2Affine,
     pub(crate) c: ark_bn254::Fq12,
-    pub(crate) cinv: HashBytes,
     pub(crate) s: ark_bn254::Fq12,
     pub(crate) ks: Vec<ark_bn254::Fr>,
 }

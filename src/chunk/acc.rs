@@ -160,15 +160,15 @@ pub(crate) fn groth16(
     all_output_hints.extend_from_slice(&temp_q4);
     let (q4xc0, q4xc1, q4yc0, q4yc1) = (&temp_q4[0], &temp_q4[1], &temp_q4[2], &temp_q4[3]);
 
-    let gcinvhash = Segment {
-        id: all_output_hints.len() as u32,
-        output_type: false,
-        inputs: vec![],
-        output: Element::HashBytes(eval_ins.cinv),
-        hint_script: script!(),
-        scr_type: ScriptType::NonDeterministic
-    };
-    all_output_hints.push(gcinvhash.clone());
+    // let gcinvhash = Segment {
+    //     id: all_output_hints.len() as u32,
+    //     output_type: false,
+    //     inputs: vec![],
+    //     output: Element::HashBytes(eval_ins.cinv),
+    //     hint_script: script!(),
+    //     scr_type: ScriptType::NonDeterministic
+    // };
+    // all_output_hints.push(gcinvhash.clone());
 
     let vky = pubs.ks_vks;
     let vky0 = pubs.vky0;
@@ -193,10 +193,13 @@ pub(crate) fn groth16(
     let c2 = wrap_hint_hash_c2(is_compile_mode, all_output_hints.len(), &c);
     push_compare_or_return!(c2);
 
-    let dmul0 = wrap_hints_dense_dense_mul0_by_hash(is_compile_mode, all_output_hints.len(), &c2, &gcinvhash);
+    let dmul0 = wrap_inv0(is_compile_mode, all_output_hints.len(), &c2);
     push_compare_or_return!(dmul0);
 
-    let gcinv = wrap_hints_dense_dense_mul1_by_hash(is_compile_mode, all_output_hints.len(), &c2, &gcinvhash, &dmul0);
+    let dmul1 = wrap_inv1(is_compile_mode, all_output_hints.len(), &dmul0);
+    push_compare_or_return!(dmul1);
+
+    let gcinv = wrap_inv2(is_compile_mode, all_output_hints.len(), &dmul1, &c2);
     push_compare_or_return!(gcinv);
 
     let cinv2 = wrap_hint_hash_c2(is_compile_mode, all_output_hints.len(), &gcinv);
@@ -480,14 +483,14 @@ pub(crate) fn get_proof(asserts: &TypedAssertions) -> EvalIns { // EvalIns
     let step = step + 12;
     let q4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(numfqs[step + 0], numfqs[step + 1]), ark_bn254::Fq2::new(numfqs[step + 2], numfqs[step + 3]));
 
-    let eval_ins: EvalIns = EvalIns { p2, p3, p4, q4, c, s, ks: asserts.0.to_vec(), cinv };
+    let eval_ins: EvalIns = EvalIns { p2, p3, p4, q4, c, s, ks: asserts.0.to_vec() };
     eval_ins
 }
 
 pub(crate) fn get_intermediates(asserts: &TypedAssertions) -> Intermediates { // Intermediates
     let mut fqs = asserts.1[6..12].to_vec();
     fqs.reverse();
-    let mut hashes= asserts.2[1..].to_vec();
+    let mut hashes= asserts.2.to_vec();
     hashes.reverse();
     (fqs, hashes)
 }

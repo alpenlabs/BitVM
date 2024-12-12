@@ -723,268 +723,10 @@ pub(crate) fn hints_dense_dense_mul1_by_constant(
 }
 
 
-// DENSE DENSE MUL BY HASH
-
-
-
-pub(crate) fn tap_dense_dense_mul0_by_hash() -> Script {
-    let (hinted_mul, _) =
-        Fq12::hinted_mul(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
-    const check_id: u8 = 1;
-
-
-    let hash_scr = script! {
-        {hash_fp6()} // c
-        { Fq::toaltstack()}
-
-        {Fq12::roll(12)}
-        { hash_fp12()} //
-        { Fq::toaltstack()}
-
-        {hash_fp12_192()} // Hash_g
-        { Fq::fromaltstack()} // Hash_f
-        { Fq::fromaltstack()} // Hash_c
-        // Alt: [od, d, s], [c0, d, s]
-        // Stack: [gc, fc, hc, gk, fk, hk]
-        { Fq::fromaltstack()} // Hash_c
-        { Fq::fromaltstack()} // Hash_f
-        { Fq::fromaltstack()} // Hash_g
-
-        // Disprove either if the user did not claim that the output is identity
-        // or claimed wrong value of input hash
-        {Fq::equal(0, 3)} // identity hash was not used as claimed output
-        OP_NOT OP_IF 
-            for _ in 0..4{
-                {Fq::drop()}
-            }
-        OP_ELSE 
-            // Stack: [gc, fc, gk, fk]
-            {Fq::equalverify(0, 2)}
-            {Fq::equal(0, 1)} OP_NOT OP_VERIFY
-        OP_ENDIF
-    };
-
-    let ops_scr = script! {
-        // [a0, a1, b0, b1]
-        { hinted_mul }
-        {check_id} 1 OP_NUMEQUAL
-        OP_IF
-            {Fq6::copy(0)}
-            {fq_push_not_montgomery(ark_bn254::Fq::one())}
-            for _ in 0..5 {
-                {fq_push_not_montgomery(ark_bn254::Fq::zero())}
-            }
-            {Fq6::equalverify()}
-        OP_ENDIF
-    };
-    let scr = script! {
-        {ops_scr}
-        // {hash_scr}
-        OP_TRUE
-    };
-    scr
-}
-
-
-pub(crate) fn hints_dense_dense_mul0_by_hash(
-    hint_in_a: ElemFp12Acc,
-    hint_in_bhash: ElemHashBytes,
-) -> (ElemFp12Acc, Script) {
-    let (f, hash_g) = (hint_in_a.f, hint_in_bhash);
-    let g = f.inverse().unwrap();
-    let h = ark_bn254::Fq12::ONE;
-
-    let (_, mul_hints) = Fq12::hinted_mul_first(12, f, 0, g);
-
-    let hash_f = extern_hash_fps(
-        vec![
-            f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-            f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-        ],
-        true,
-    ); // dense
-    let hash_g_calc = extern_hash_fps(
-        vec![
-            g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-            g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
-        ],
-        false,
-    ); // sparse
-    if hash_g != hash_g_calc {
-        println!("wrong here");
-    } else {
-        println!("good {:?}", hash_g_calc);
-    }
-    let hash_h = extern_hash_fps(
-        vec![
-            h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
-        ],
-        true,
-    );
-
-
-    // data passed to stack in runtime
-    let simulate_stack_input = script! {
-        // quotients for tmul
-        for hint in mul_hints {
-            { hint.push() }
-        }
-        // aux_a
-        {fq12_push_not_montgomery(f)}
-        {fq12_push_not_montgomery(g)}
-
-        // aux_hashes
-        // bit commit hashes
-        // in2: SS or c' link
-        // in1: SD or DD1 link
-        // out
-        // { bc_elems }
-    };
-
-    (
-        ElemFp12Acc {
-            f: g,
-            hash: hash_g,
-        },
-        simulate_stack_input,
-    )
-}
-
-pub(crate) fn tap_dense_dense_mul1_by_hash() -> Script {
-    const check_id: u8 = 1;
-
-    let (hinted_mul, _) =
-        Fq12::hinted_mul_second(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
-
-    let hash_scr = script! {
-        {Fq::fromaltstack()} // Hc0
-        {hash_fp12_with_hints()} // Hc
-        { Fq::toaltstack()}
-
-        {Fq12::roll(12)}
-        { hash_fp12()} //
-        { Fq::toaltstack()}
-
-        {hash_fp12_192()} // Hash_g
-        { Fq::fromaltstack()} // Hash_f
-        { Fq::fromaltstack()} // Hash_c
-
-        { Fq::fromaltstack()} // Hash_c
-        { Fq::fromaltstack()} // Hash_f
-        { Fq::fromaltstack()} // Hash_g
-        // [gc, fc, hc,  gk, fk, hk]
-
-
-        // Disprove either if the user did not claim that the output is identity
-        // or claimed wrong value of input hash
-        {Fq::equal(0, 3)} // identity hash was not used as claimed output
-        OP_NOT OP_IF 
-            for _ in 0..4{
-                {Fq::drop()}
-            }
-            {1} OP_VERIFY
-        OP_ELSE 
-            // Stack: [gc, fc, gk, fk]
-            {Fq::equalverify(0, 2)}
-            {Fq::equal(0, 1)} OP_NOT OP_VERIFY
-        OP_ENDIF
-    };
-
-    let ops_scr = script! {
-        { hinted_mul }
-        {check_id} 1 OP_NUMEQUAL
-        OP_IF
-            {Fq6::copy(0)}
-            for _ in 0..6 {
-                {fq_push_not_montgomery(ark_bn254::Fq::zero())}
-            }
-            {Fq6::equalverify()}
-        OP_ENDIF
-    };
-    let scr = script! {
-        {ops_scr}
-        {hash_scr}
-        OP_TRUE
-    };
-    scr
-}
-
-
-pub(crate) fn hints_dense_dense_mul1_by_hash(
-    hint_in_a: ElemFp12Acc,
-    hint_in_bhash: HashBytes,
-    hint_in_c0: ElemFp12Acc,
-) -> (ElemFp12Acc, Script) {
-    let (f, hash_g) = (hint_in_a.f, hint_in_bhash);
-    let g = f.inverse().unwrap();
-    let h = ark_bn254::Fq12::ONE;
-
-    let (_, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
-
-
-    let hash_f = extern_hash_fps(
-        vec![
-            f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-            f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-        ],
-        true,
-    );
-    let hash_g_calc = extern_hash_fps(
-        vec![
-            g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-            g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
-        ],
-        false,
-    );
-    if hash_g != hash_g_calc {
-        println!("wrong here2");
-    } else {
-        println!("good2 {:?}", hash_g_calc);
-    }
-    // let hash_c0 = extern_hash_fps( // dense0 has already assured this value is correct
-    //     vec![
-    //         h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
-    //     ],
-    //     true,
-    // );
-    let hash_c = extern_hash_fps(
-        vec![
-            h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1, h.c1.c0.c0,
-            h.c1.c0.c1, h.c1.c1.c0, h.c1.c1.c1, h.c1.c2.c0, h.c1.c2.c1,
-        ],
-        true,
-    );
-
-    // data passed to stack in runtime
-    let simulate_stack_input = script! {
-        // quotients for tmul
-        for hint in mul_hints {
-            { hint.push() }
-        }
-        // aux_a
-        {fq12_push_not_montgomery(f)}
-        {fq12_push_not_montgomery(g)}
-
-        // aux_hashes
-        // bit commit hashes
-
-        // in3: links to DD0
-        // in2: SS or c' link
-        // in1: SD or DD1 link
-        // out
-        // { bc_elems }
-    };
-    (
-        ElemFp12Acc {
-            f: g,
-            hash: hash_g_calc,
-        },
-        simulate_stack_input,
-    )
-}
-
 // INVERSE
-fn tap_inv0(a: ElemFp12Acc) -> Script {
+pub(crate) fn tap_inv0() -> Script {
+
+    let a = ElemFp12Acc::mock();
 
     let a = a.f;
 
@@ -1020,7 +762,7 @@ fn tap_inv0(a: ElemFp12Acc) -> Script {
         { Fq::fromaltstack() }
         // [Hc, Ht0, HKc, HKt0]
         {Fq::equalverify(1, 3)}
-        {Fq::equal(1, 0)} OP_VERIFY
+        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
     };
 
     let scr = script!{
@@ -1031,14 +773,20 @@ fn tap_inv0(a: ElemFp12Acc) -> Script {
     scr
 }
 
-fn tap_inv1(a: ElemFp12Acc) -> Script {
+pub(crate) fn tap_inv1() -> Script {
+    let a = ElemFp12Acc::mock();
     let t0 = a.f.c0;
 
     let (s_t0inv, _) = Fq6::hinted_inv(t0);
 
     let ops_scr = script!{
+        // [aux, t0]
         {Fq6::copy(0)}
+        // [aux, t0, t0]
+        {Fq6::toaltstack()}
         {s_t0inv}
+        {Fq6::fromaltstack()}
+        {Fq6::roll(6)}
     }; // [t0, t1]
     let hash_scr = script!{
         {hash_fp6()}
@@ -1050,7 +798,7 @@ fn tap_inv1(a: ElemFp12Acc) -> Script {
         { Fq::fromaltstack() }
         // [Ht0, Ht1, HKt0, Hkt1]
         {Fq::equalverify(1, 3)}
-        {Fq::equal(1, 0)} OP_VERIFY
+        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
     };
     let scr = script!{
         {ops_scr}
@@ -1060,7 +808,8 @@ fn tap_inv1(a: ElemFp12Acc) -> Script {
     scr
 }
 
-fn tap_inv2(a: ElemFp12Acc, t1: ElemFp12Acc) -> Script {
+pub(crate) fn tap_inv2() -> Script {
+    let (a, t1) = (ElemFp12Acc::mock(), ElemFp12Acc::mock());
     let t1 = t1.f.c0;
     let a = a.f;
 
@@ -1105,7 +854,7 @@ fn tap_inv2(a: ElemFp12Acc, t1: ElemFp12Acc) -> Script {
 
         {Fq::equalverify(1, 4)}
         {Fq::equalverify(1, 3)}
-        {Fq::equal(1, 0)} OP_VERIFY
+        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
     };
     let scr = script!{
         {ops_scr}
@@ -1115,16 +864,15 @@ fn tap_inv2(a: ElemFp12Acc, t1: ElemFp12Acc) -> Script {
     scr
 }
 
-fn hint_inv2(
-    a: ElemFp12Acc,
+pub(crate) fn hint_inv2(
     t1: ElemFp12Acc,
+    a: ElemFp12Acc,
 ) -> (ElemFp12Acc, Script) {
     let t1 = t1.f.c0;
     let a = a.f;
 
     let c0 = a.c0 * t1;
     let c1 = -a.c1 * t1;
-
 
     let (_, h_c0) = Fq6::hinted_mul(0, t1, 18, a.c0);
     let (_, h_c1) = Fq6::hinted_mul(0, -a.c1, 12, t1);
@@ -1155,13 +903,14 @@ fn hint_inv2(
     )
 }
 
-fn hint_inv1(
+pub(crate) fn hint_inv1(
     a: ElemFp12Acc
 ) -> (ElemFp12Acc, Script) {
     let t0 = a.f.c0;
     let t1 = t0.inverse().unwrap();
 
     let (_, h_t0inv) = Fq6::hinted_inv(t0);
+    let aux_t6 = Fq6::calc_fp2_inv_aux(t0);
 
     let hash_h = extern_hash_fps(
         vec![
@@ -1175,6 +924,7 @@ fn hint_inv1(
         for hint in h_t0inv {
             { hint.push() }
         }
+        {fq_push_not_montgomery(aux_t6)}
         {fq6_push_not_montgomery(t0)}
     };
 
@@ -1185,7 +935,7 @@ fn hint_inv1(
     )
 }
 
-fn hint_inv0(
+pub(crate) fn hint_inv0(
     a: ElemFp12Acc
 ) -> (ElemFp12Acc, Script) {
     let a = a.f;
@@ -1256,7 +1006,7 @@ mod test {
 
             let hash_in = extern_hash_fps(fp12_to_vec(a), true);
             let (hout0, hscr0) = hint_inv0(ElemFp12Acc { f: a, hash: hash_in });
-            let tscr0 = tap_inv0(ElemFp12Acc { f: a, hash: hash_in });
+            let tscr0 = tap_inv0();
             let bscr0 = script!{
                 for h in hout0.hash {
                     {h}
@@ -1283,7 +1033,7 @@ mod test {
 
 
             let (hout1, hscr1) = hint_inv1(hout0);
-            let tscr1 = tap_inv1(hout0);
+            let tscr1 = tap_inv1();
             let bscr1 = script!{
                 for h in hout1.hash {
                     {h}
@@ -1312,7 +1062,7 @@ mod test {
 
 
             let (hout2, hscr2) = hint_inv2(ElemFp12Acc { f: a, hash: hash_in }, hout1);
-            let tscr2 = tap_inv2(ElemFp12Acc { f: a, hash: hash_in }, hout1);
+            let tscr2 = tap_inv2();
             assert_eq!(hout2.f, a.inverse().unwrap());
             let bscr2 = script!{
                 for h in hout2.hash {

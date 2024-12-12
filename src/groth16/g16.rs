@@ -7,7 +7,7 @@ pub const N_VERIFIER_PUBLIC_INPUTS: usize = 1;
 pub const N_VERIFIER_FQS: usize = 40;
 pub const N_VERIFIER_HASHES: usize = 574;
 
-pub const N_TAPLEAVES: usize = 579;
+pub const N_TAPLEAVES: usize = 580;
 
 pub type Proof = ark_groth16::Proof<Bn254>;
 pub type VerifyingKey = ark_groth16::VerifyingKey<Bn254>;
@@ -378,7 +378,8 @@ mod test {
         let verifier_scripts = generate_disprove_scripts(mock_pubks, &ops_scripts);
 
 
-        for i in 80..100 {//N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES {
+        let total = N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES;
+        for i in total-50..total {
             println!("ITERATION {:?}", i);
             let mut proof_asserts = read_asserts_from_file("chunker_data/assert.json");
             corrupt(&mut proof_asserts, Some(i));
@@ -487,7 +488,6 @@ mod test {
             c,
             s,
             ks: msm_scalar.clone(),
-            cinv: extern_hash_fps(fp12_to_vec(c.inverse().unwrap()), false),
         };
     
         let pubs: Pubs = Pubs {
