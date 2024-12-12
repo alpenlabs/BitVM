@@ -1,9 +1,6 @@
 use crate::bigint::U254;
 use crate::bn254::utils::{
-    fq12_push_not_montgomery, fq2_push_not_montgomery, fq_push_not_montgomery,
-    new_hinted_affine_add_line, new_hinted_affine_double_line, new_hinted_check_line_through_point,
-    new_hinted_ell_by_constant_affine, new_hinted_x_from_eval_point, new_hinted_y_from_eval_point,
-    Hint,
+    fq12_push_not_montgomery, fq2_push_not_montgomery, fq_push_not_montgomery, new_hinted_affine_add_line, new_hinted_affine_double_line, new_hinted_check_line_through_point, new_hinted_check_tangent_line, new_hinted_ell_by_constant_affine, new_hinted_x_from_eval_point, new_hinted_y_from_eval_point, Hint
 };
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::primitves::*;
@@ -115,8 +112,8 @@ pub(crate) fn tap_point_dbl() -> Script {
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
     );
-    let (hinted_check_tangent, _) = new_hinted_check_line_through_point(
-        ark_bn254::Fq2::one(),
+    let (hinted_check_tangent, _) = new_hinted_check_tangent_line(
+        ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE),
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
     );
@@ -312,7 +309,7 @@ pub(crate) fn hint_point_dbl(
     let (_, hints_double_line) =
         new_hinted_affine_double_line(t.x, alpha_tangent, bias_minus_tangent);
     let (_, hints_check_tangent) =
-        new_hinted_check_line_through_point(t.x, alpha_tangent, bias_minus_tangent);
+        new_hinted_check_tangent_line(t, alpha_tangent, bias_minus_tangent);
 
     // affine mode as well
     let mut dbl_le0 = alpha_tangent;
@@ -847,8 +844,8 @@ pub(crate) fn tap_point_ops(ate: i8) -> Script {
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
     );
-    let (hinted_check_tangent, _) = new_hinted_check_line_through_point(
-        ark_bn254::Fq2::one(),
+    let (hinted_check_tangent, _) = new_hinted_check_tangent_line(
+        ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE),
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
     );
@@ -1136,7 +1133,7 @@ pub(crate) fn hint_point_ops(
     let (_, hints_double_line) =
         new_hinted_affine_double_line(t.x, alpha_tangent, bias_minus_tangent);
     let (_, hints_check_tangent) =
-        new_hinted_check_line_through_point(t.x, alpha_tangent, bias_minus_tangent);
+        new_hinted_check_tangent_line(t, alpha_tangent, bias_minus_tangent);
 
     let tt = G2Affine::new_unchecked(tx, ty);
 

@@ -24,8 +24,8 @@ use crate::bn254::utils::Hint;
 
 pub(crate) fn tap_msm(window: usize, msm_tap_index: usize, qs: Vec<ark_bn254::G1Affine>) -> Script {
     assert!(qs.len() > 0);
-    let (hinted_check_tangent, _) = hinted_check_line_through_point_g1(
-        ark_bn254::Fq::one(),
+    let (hinted_check_tangent, _) = hinted_check_tangent_line_g1(
+        ark_bn254::G1Affine::new_unchecked(ark_bn254::Fq::one(), ark_bn254::Fq::one()),
         ark_bn254::Fq::one(),
         ark_bn254::Fq::one(),
     );
@@ -342,6 +342,56 @@ fn hinted_affine_double_line_g1(
     (script, hints)
 }
 
+pub fn hinted_check_tangent_line_g1(
+    t: ark_bn254::G1Affine,
+    c3: ark_bn254::Fq,
+    c4: ark_bn254::Fq,
+) -> (Script, Vec<Hint>) {
+    let mut hints = Vec::new();
+
+    let (hinted_script1, hint1) = Fq::hinted_mul(1, t.y.double(), 0, c3);
+    let (hinted_script2, hint2) = Fq::hinted_square(t.x);
+    let (hinted_script3, hint3) = hinted_check_line_through_point_g1(t.x, c3, c4);
+
+    // [a, b, x, y]
+    let script_lines = vec![
+        // alpha * (2 * T.y) = 3 * T.x^2
+        Fq::copy(0),
+        Fq::double(0),
+        // [a, b, x, y, 2y]
+        Fq::copy(4),
+        // [a, b, x, y, 2y, a]
+        hinted_script1,
+        // [T.x, T.y, alpha * (2 * T.y)]
+        Fq::copy(2),
+        hinted_script2,
+        Fq::copy(0),
+        Fq::double(0),
+        Fq::add(1, 0),
+        // [T.x, T.y, alpha * (2 * T.y), 3 * T.x^2]
+        Fq::neg(0),
+        Fq::add(1, 0),
+        fq_push_not_montgomery(ark_bn254::Fq::ZERO),
+        Fq::equalverify(1, 0),
+        // [T.x, T.y]
+        // check: T.y - alpha * T.x - bias = 0
+        hinted_script3,
+        // []
+    ];
+
+    let mut script = script! {};
+    for script_line in script_lines {
+        script = script.push_script(script_line.compile());
+    }
+    hints.extend(hint1);
+    hints.extend(hint2);
+    hints.extend(hint3);
+
+    (script, hints)
+}
+
+
+
 fn hinted_check_line_through_point_g1(
     x: ark_bn254::Fq,
     c3: ark_bn254::Fq,
@@ -438,7 +488,7 @@ pub(crate) fn hint_msm(
             let new_ty = bias_minus - alpha * new_tx;
 
             let (_, hints_check_tangent) =
-                hinted_check_line_through_point_g1(t.x, alpha, bias_minus);
+                hinted_check_tangent_line_g1(t, alpha, bias_minus);
             let (_, hints_double_line) = hinted_affine_double_line_g1(t.x, alpha, bias_minus);
 
             t.x = new_tx;
@@ -834,7 +884,7 @@ mod test {
         let nx = alpha.square() - t.x.double();
         let ny = bias_minus - alpha * nx;
 
-        let (hinted_check_line, hints) = hinted_check_line_through_point_g1(t.x, alpha, bias_minus);
+        let (hinted_check_line, hints) = hinted_check_tangent_line_g1(t, alpha, bias_minus);
         let (hinted_double_line, hintsd) = hinted_affine_double_line_g1(t.x, alpha, bias_minus);
 
         let script = script! {
@@ -919,7 +969,6 @@ mod test {
             exec_result.stats.max_nb_stack_items
         );
     }
-
 
 
     #[test]
