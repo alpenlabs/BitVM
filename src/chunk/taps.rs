@@ -2172,21 +2172,22 @@ pub(crate) fn tap_precompute_Py() -> Script {
     let (y_eval_scr, _) = new_hinted_y_from_eval_point(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE);
 
     let ops_scr = script! {
-
+        // [hints, pyd_calc] A:[pyd_claim, py]
+        {Fq::copy(0)}
         {Fq::fromaltstack()}
-        {Fq::fromaltstack()}
-        // Stack: [hints, pyd_calc, py_claim, pyd_claim]
-        {Fq::roll(1)}
-        // Stack: [hints, pyd_calc, pyd_claim, py_claim]
-
+        // [hints, pyd_calc, pyd_calc, py] A:[pyd_claim]
         {Fq::copy(0)}
         {fq_push_not_montgomery(ark_bn254::Fq::ZERO)}
         {Fq::equal(1, 0)}
         OP_IF
             {Fq2::drop()}
-            {Fq2::drop()}
+            {Fq::drop()}
+            {Fq::fromaltstack()} {Fq::drop()}
         OP_ELSE
+            // Stack: [hints, pyd_calc, pyd_calc, py]
             {y_eval_scr}
+            // [hints, pyd_calc]
+            {Fq::fromaltstack()}
             {Fq::equal(1, 0)} OP_NOT OP_VERIFY
         OP_ENDIF
     };
