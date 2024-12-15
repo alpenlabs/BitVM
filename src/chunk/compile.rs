@@ -13,7 +13,6 @@ pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 pub const NUM_PUBS: usize = 1;
 pub const NUM_U256: usize = 40;
 pub const NUM_U160: usize = 574;
-pub const PUB_ID: &str = "k0";
 
 
 pub(crate) struct Vkey {
@@ -79,7 +78,6 @@ fn segments_from_pubs(vk: Vkey) -> Vec<Segment> {
     let fr = ElemFr::mock();
     let s = ElemFp12Acc::mock();
     let c = ElemFp12Acc::mock();
-    let cinv = extern_hash_fps(fp12_to_vec(c.f.inverse().unwrap()), false);
     let eval_ins: EvalIns = EvalIns { p2: g1, p3: g1, p4: g1, q4: g2, c: c.f, s: s.f, ks: vec![fr] };
 
     let pubs: Pubs = Pubs { q2: vk.q2, q3: vk.q3, fixed_acc: vk.p1q1, ks_vks: vk.p3vk, vky0: vk.vky0 };

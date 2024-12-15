@@ -1,7 +1,7 @@
 use crate::chunk::primitves::extern_hash_nibbles;
 use ark_bn254::{G1Affine, G2Affine};
 use ark_ff::{AdditiveGroup, Field, MontFp};
-use super::primitves::extern_hash_fps;
+use super::primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps};
 use super::taps::HashBytes;
 
 #[derive(Debug, Clone, Copy)]
@@ -116,6 +116,11 @@ impl ElemFp12Acc {
         );
         ElemFp12Acc { f, hash }
     }
+
+    pub(crate) fn ret_type(&self) -> bool {
+        false // is not field
+    }
+
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -174,6 +179,11 @@ impl ElemG2PointAcc {
         let t = ark_bn254::G2Affine::new(ark_bn254::Fq2::new(q4xc0, q4xc1), ark_bn254::Fq2::new(q4yc0, q4yc1));
         ElemG2PointAcc { t, dbl_le: None, add_le: None }
     }
+
+    pub(crate) fn ret_type(&self) -> bool {
+        false // is not field
+    }
+
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -192,6 +202,10 @@ impl ElemSparseEval {
         let t = ark_bn254::G2Affine::identity();
         Self { t2: t, t3: t, f: ElemFp12Acc::mock() }
     }
+
+    pub(crate) fn ret_type(&self) -> bool {
+        false // is not field
+    }
 }
 
 // Define the type alias
@@ -200,7 +214,8 @@ pub type ElemG1Point = ark_bn254::G1Affine;
 // Define a trait to extend the functionality
 pub(crate) trait G1PointExt {
     fn out(&self) -> HashBytes;
-    fn mock() -> ark_bn254::G1Affine;
+    fn mock() -> ElemG1Point;
+    fn ret_type(&self) -> bool;
 }
 
 // Implement the trait for ark_bn254::G1Affine
@@ -209,37 +224,66 @@ impl G1PointExt for ElemG1Point {
         extern_hash_fps(vec![self.x, self.y], true)
     }
 
-    fn mock() -> ark_bn254::G1Affine {
+    fn mock() -> ElemG1Point {
         let g1x: ark_bn254::Fq = MontFp!("5567084537907487155917146166615783238769284480674905823618779044732684151587");
         let g1y: ark_bn254::Fq = MontFp!("6500138522353517220105129525103627482682148482121078429366182801568786680416");
         ark_bn254::G1Affine::new(g1x, g1y)
+    }
+    fn ret_type(&self) -> bool {
+        false // is not field
     }
 }
 
 pub(crate) trait ElemeFqTrait {
     fn mock() -> ark_bn254::Fq;
+    fn ret_type(&self) -> bool;
+    fn out(&self) -> HashBytes;
 }
 
 impl ElemeFqTrait for ElemFq {
     fn mock() -> ark_bn254::Fq {
         ark_bn254::Fq::ONE
     }
+    fn ret_type(&self) -> bool {
+        true
+    }
+    fn out(&self) -> HashBytes {
+        extern_fq_to_nibbles(*self)
+    }
 }
 
 pub(crate) trait ElemeFrTrait {
     fn mock() -> ark_bn254::Fr;
+    fn ret_type(&self) -> bool;
+    fn out(&self) -> HashBytes;
+
 }
 impl ElemeFrTrait for ElemFr {
     fn mock() -> ark_bn254::Fr {
         ark_bn254::Fr::ONE
     }
+    fn ret_type(&self) -> bool {
+        true
+    }
+
+    fn out(&self) -> HashBytes {
+        extern_fr_to_nibbles(*self)
+    }
 }
 
 pub(crate) trait HashBytesTrait {
     fn mock() -> HashBytes;
+    fn ret_type(&self) -> bool;
+    fn out(&self) -> HashBytes;
 }
 impl HashBytesTrait for HashBytes {
     fn mock() -> HashBytes {
         [0u8; 64]
+    }
+    fn ret_type(&self) -> bool {
+        false
+    }
+    fn out(&self) -> HashBytes {
+        *self
     }
 }

@@ -104,19 +104,19 @@ pub(crate) fn groth16(
     let p4y = wrap_hints_precompute_Py(is_compile_mode, all_output_hints.len(), &gp4y);
     push_compare_or_return!(p4y);
 
-    let p4x = wrap_hints_precompute_Px(is_compile_mode, all_output_hints.len(), &gp4x, &gp4y, &p4y);
+    let p4x = wrap_hints_precompute_Px(is_compile_mode, all_output_hints.len(), &gp4y, &gp4x, &p4y);
     push_compare_or_return!(p4x);
 
     let p3y = wrap_hints_precompute_Py(is_compile_mode, all_output_hints.len(), &gp3y);
     push_compare_or_return!(p3y);
 
-    let p3x = wrap_hints_precompute_Px(is_compile_mode, all_output_hints.len(), &gp3x, &gp3y, &p3y);
+    let p3x = wrap_hints_precompute_Px(is_compile_mode, all_output_hints.len(), &gp3y, &gp3x, &p3y);
     push_compare_or_return!(p3x);
 
     let p2y = wrap_hints_precompute_Py(is_compile_mode, all_output_hints.len(), &gp2y);
     push_compare_or_return!(p2y);
 
-    let p2x = wrap_hints_precompute_Px(is_compile_mode, all_output_hints.len(), &gp2x, &gp2y, &p2y);
+    let p2x = wrap_hints_precompute_Px(is_compile_mode, all_output_hints.len(), &gp2y, &gp2x, &p2y);
     push_compare_or_return!(p2x);
 
     let gc: Vec<Segment> = vec![
@@ -181,7 +181,7 @@ pub(crate) fn groth16(
         push_compare_or_return!(msm);
     }
 
-    let hp = wrap_hint_hash_p(is_compile_mode, all_output_hints.len(), &gp3x, &gp3y, &msm, vky0);
+    let hp = wrap_hint_hash_p(is_compile_mode, all_output_hints.len(), &msm, &gp3y, &gp3x, vky0);
     push_compare_or_return!(hp);
 
     let c = wrap_hint_hash_c(is_compile_mode, all_output_hints.len(), gc);
@@ -205,7 +205,7 @@ pub(crate) fn groth16(
     let cinv2 = wrap_hint_hash_c2(is_compile_mode, all_output_hints.len(), &gcinv);
     push_compare_or_return!(cinv2);
 
-    let mut t4 = wrap_hint_init_T4(is_compile_mode, all_output_hints.len(), &q4xc0, &q4xc1, &q4yc0, &q4yc1);
+    let mut t4 = wrap_hint_init_T4(is_compile_mode, all_output_hints.len(), &q4yc1, &q4yc0, &q4xc1, &q4xc0);
     push_compare_or_return!(t4);
 
     let (mut t2, mut t3) = (pubs.q2, pubs.q3);
@@ -221,11 +221,11 @@ pub(crate) fn groth16(
         f_acc = sq;
 
         if ate == 0 {
-            let dbl = wrap_hint_point_dbl(is_compile_mode, all_output_hints.len(), &t4, &p4x, &p4y);
+            let dbl = wrap_hint_point_dbl(is_compile_mode, all_output_hints.len(), &t4, &p4y, &p4x);
             push_compare_or_return!(dbl);
             t4 = dbl;
         } else {
-            let dbladd = wrap_hint_point_ops(is_compile_mode, all_output_hints.len(), &t4, &p4x, &p4y, &q4xc0, &q4xc1, &q4yc0, &q4yc1, ate);
+            let dbladd = wrap_hint_point_ops(is_compile_mode, all_output_hints.len(), &t4, &q4yc1, &q4yc0, &q4xc1, &q4xc0, &p4y, &p4x, ate);
             push_compare_or_return!(dbladd);
             t4 = dbladd;
         }
@@ -234,7 +234,7 @@ pub(crate) fn groth16(
         push_compare_or_return!(sdmul);
         f_acc = sdmul;
 
-        let leval = wrap_hint_double_eval_mul_for_fixed_Qs(is_compile_mode, all_output_hints.len(), &p2x, &p2y, &p3x, &p3y, t2, t3);
+        let leval = wrap_hint_double_eval_mul_for_fixed_Qs(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3);
         push_compare_or_return!(leval);
         (t2, t3) = ((t2 + t2).into_affine(), (t3 + t3).into_affine());
 
@@ -263,7 +263,7 @@ pub(crate) fn groth16(
         push_compare_or_return!(sdmul);
         f_acc = sdmul;
 
-        let leval = wrap_hint_add_eval_mul_for_fixed_Qs(is_compile_mode, all_output_hints.len(), &p2x, &p2y, &p3x, &p3y, t2, t3, pubs.q2, pubs.q3, ate);
+        let leval = wrap_hint_add_eval_mul_for_fixed_Qs(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, ate);
         push_compare_or_return!(leval);
         if ate == 1 {
             (t2, t3) = ((t2 + pubs.q2).into_affine(), (t3 + pubs.q3).into_affine());
@@ -316,7 +316,7 @@ pub(crate) fn groth16(
     push_compare_or_return!(dmul1);
     f_acc = dmul1;
 
-    let addf = wrap_hint_point_add_with_frob(is_compile_mode, all_output_hints.len(), &t4, &p4x, &p4y, &q4xc0, &q4xc1, &q4yc0, &q4yc1, 1);
+    let addf = wrap_hint_point_add_with_frob(is_compile_mode, all_output_hints.len(), &t4, &q4yc1, &q4yc0, &q4xc1, &q4xc0, &p4y, &p4x, 1);
     push_compare_or_return!(addf);
     t4 = addf;
 
@@ -324,7 +324,7 @@ pub(crate) fn groth16(
     push_compare_or_return!(sdmul);
     f_acc = sdmul;
 
-    let leval = wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(is_compile_mode, all_output_hints.len(), &p2x, &p2y, &p3x, &p3y, t2, t3, pubs.q2, pubs.q3, 1);
+    let leval = wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, 1);
     push_compare_or_return!(leval);
     // (t2, t3) = (le.t2, le.t3);
     t2 = add_with_frob(pubs.q2, t2, 1);
@@ -338,7 +338,7 @@ pub(crate) fn groth16(
     push_compare_or_return!(dmul1);
     f_acc = dmul1;
 
-    let addf = wrap_hint_point_add_with_frob(is_compile_mode, all_output_hints.len(), &t4, &p4x, &p4y, &q4xc0, &q4xc1, &q4yc0, &q4yc1, -1);
+    let addf = wrap_hint_point_add_with_frob(is_compile_mode, all_output_hints.len(), &t4, &q4yc1, &q4yc0, &q4xc1, &q4xc0, &p4y, &p4x, -1);
     push_compare_or_return!(addf);
     t4 = addf;
 
@@ -346,7 +346,7 @@ pub(crate) fn groth16(
     push_compare_or_return!(sdmul);
     f_acc = sdmul;
 
-    let leval = wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(is_compile_mode, all_output_hints.len(), &p2x, &p2y, &p3x, &p3y, t2, t3, pubs.q2, pubs.q3, -1);
+    let leval = wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, -1);
     push_compare_or_return!(leval);
     t2 = add_with_frob(pubs.q2, t2, -1);
     t3 = add_with_frob(pubs.q3, t3, -1);
@@ -382,11 +382,11 @@ pub(crate) fn hint_to_data(segments: Vec<Segment>) -> Assertions {
         let x = match v.output {
             Element::G2Acc(r) => r.out(),
             Element::Fp12(r) => r.out(),
-            Element::FieldElem(f) => extern_fq_to_nibbles(f),
+            Element::FieldElem(f) => f.out(),
             Element::MSMG1(r) => r.out(),
-            Element::ScalarElem(r) => extern_fr_to_nibbles(r),
+            Element::ScalarElem(r) => r.out(),
             Element::SparseEval(r) => r.out(),
-            Element::HashBytes(r) => r,
+            Element::HashBytes(r) => r.out(),
         };
         vs.push(x);
     }
