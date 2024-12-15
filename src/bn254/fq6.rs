@@ -1378,7 +1378,7 @@ mod test {
         for _ in 0..50 {
             let a = ark_bn254::Fq6::rand(&mut prng);
             let b = ark_bn254::Fq6::rand(&mut prng);
-            let c = &a + &b;
+            let c = a + b;
 
             let script = script! {
                 { fq6_push(a) }
@@ -1400,7 +1400,7 @@ mod test {
         for _ in 0..50 {
             let a = ark_bn254::Fq6::rand(&mut prng);
             let b = ark_bn254::Fq6::rand(&mut prng);
-            let c = &a - &b;
+            let c = a - b;
 
             let script = script! {
                 { fq6_push(a) }
