@@ -67,6 +67,18 @@ pub(crate) fn tap_msm(window: usize, msm_tap_index: usize, qs: Vec<ark_bn254::G1
     };
 
     let ops_script = script! {
+
+        // reverse scalar order
+        for _ in 0..qs.len() {
+            {Fq::fromaltstack()}
+        }
+        for i in 0..qs.len() {
+            {Fq::roll(i as u32)}
+        }
+        for _ in 0..qs.len() {
+            {Fq::toaltstack()}
+        }
+
         {msm_tap_index} 0 OP_NUMEQUAL
         OP_IF
             {Fq2::copy(0)}
@@ -667,6 +679,14 @@ pub(crate) fn tap_hash_p(q: G1Affine) -> Script {
     );
 
     let ops_script = script!{
+        // Altstack:[identity, th, gpy, gpx]
+        {Fq::fromaltstack()} {Fq::fromaltstack()} {Fq::fromaltstack()}
+        // Stack:[..gpx, gpy, th]
+        {Fq::roll(1)} {Fq::roll(2)}
+        // Stack:[..th, gpy, gpx]
+        {Fq::toaltstack()} {Fq::toaltstack()} {Fq::toaltstack()}
+        // Altstack:[identity, gpx, gpy, th]
+
         //[hinttqa, alpha, bias, tx, ty]
         { Fq2::copy(2)}
         //[hinttqa, alpha, bias, tx, ty, alpha, bias]
@@ -726,10 +746,9 @@ pub(crate) fn tap_hash_p(q: G1Affine) -> Script {
 
 
 pub(crate) fn hint_hash_p(
-
-    hint_in_rx: ElemFq,
-    hint_in_ry: ElemFq,
     hint_in_t: ElemG1Point,
+    hint_in_ry: ElemFq,
+    hint_in_rx: ElemFq,
     hint_in_q: ark_bn254::G1Affine,
 ) -> (HashBytes, Script) {
     // r (gp3) = t(msm) + q(vk0)
@@ -1035,7 +1054,7 @@ mod test {
         };
         let (_, simulate_stack_input) = hint_hash_p(
             // &mut sig, (sec_out, false), sec_in_arr, 
-            r.x, r.y, t, q);
+             t, r.y, r.x,q);
 
         let tap_len = hash_c_scr.len();
         let script = script! {

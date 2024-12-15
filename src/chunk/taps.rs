@@ -286,8 +286,8 @@ pub(crate) fn tap_point_dbl() -> Script {
 
 pub(crate) fn hint_point_dbl(
     hint_t: ElemG2PointAcc,
-    hint_px: ElemFq,
     hint_py: ElemFq,
+    hint_px: ElemFq,
 ) -> (ElemG2PointAcc, Script) {
     // assert_eq!(sec_in.len(), 3);
     let t = hint_t.t;
@@ -640,12 +640,12 @@ pub(crate) fn tap_point_add_with_frob(ate: i8) -> Script {
 
 pub(crate) fn hint_point_add_with_frob(
     hint_t: ElemG2PointAcc,
-    hint_px: ElemFq,
-    hint_py: ElemFq,
-    hint_q4x0: ElemFq,
-    hint_q4x1: ElemFq,
-    hint_q4y0: ElemFq,
     hint_q4y1: ElemFq,
+    hint_q4y0: ElemFq,
+    hint_q4x1: ElemFq,
+    hint_q4x0: ElemFq,
+    hint_py: ElemFq,
+    hint_px: ElemFq,
     ate: i8,
 ) -> (ElemG2PointAcc, Script) {
     assert!(ate == 1 || ate == -1);
@@ -1102,12 +1102,12 @@ pub(crate) fn tap_point_ops(ate: i8) -> Script {
 
 pub(crate) fn hint_point_ops(
     hint_t: ElemG2PointAcc,
-    hint_px: ElemFq,
-    hint_py: ElemFq,
-    hint_q4x0: ElemFq,
-    hint_q4x1: ElemFq,
-    hint_q4y0: ElemFq,
     hint_q4y1: ElemFq,
+    hint_q4y0: ElemFq,
+    hint_q4x1: ElemFq,
+    hint_q4x0: ElemFq,
+    hint_py: ElemFq,
+    hint_px: ElemFq,
     ate: i8,
 ) -> (ElemG2PointAcc, Script) {
     // assert_eq!(sec_in.len(), 7);
@@ -1250,10 +1250,10 @@ pub(crate) fn hint_point_ops(
 // DOUBLE EVAL
 
 pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
-    hint_in_p2x: ElemFq,
-    hint_in_p2y: ElemFq,
-    hint_in_p3x: ElemFq,
     hint_in_p3y: ElemFq,
+    hint_in_p3x: ElemFq,
+    hint_in_p2y: ElemFq,
+    hint_in_p2x: ElemFq,
     
     hint_in_t2: ark_bn254::G2Affine,
     hint_in_t3: ark_bn254::G2Affine,
@@ -1446,10 +1446,10 @@ pub(crate) fn tap_double_eval_mul_for_fixed_Qs(
 // ADD EVAL
 
 pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
-    hint_in_p2x: ElemFq,
-    hint_in_p2y: ElemFq,
-    hint_in_p3x: ElemFq,
     hint_in_p3y: ElemFq,
+    hint_in_p3x: ElemFq,
+    hint_in_p2y: ElemFq,
+    hint_in_p2x: ElemFq,
     
     hint_in_t2: ark_bn254::G2Affine,
     hint_in_t3: ark_bn254::G2Affine,
@@ -1697,10 +1697,10 @@ pub(crate) fn add_with_frob(q: ark_bn254::G2Affine, t: ark_bn254::G2Affine, ate:
 }
 
 pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
-    hint_in_p2x: ElemFq,
-    hint_in_p2y: ElemFq,
-    hint_in_p3x: ElemFq,
     hint_in_p3y: ElemFq,
+    hint_in_p3x: ElemFq,
+    hint_in_p2y: ElemFq,
+    hint_in_p2x: ElemFq,
     
     hint_in_t2: ark_bn254::G2Affine,
     hint_in_t3: ark_bn254::G2Affine,
@@ -1996,10 +1996,10 @@ pub(crate) fn tap_hash_c() -> Script {
         for _ in 0..12 {
             {Fq::fromaltstack()}
         }
-        // Stack:[f0, ..,f11]
+        // Stack:[f11 ..,f0]
         // Altstack: [f_hash_claim]
-        for _ in 0..12 {
-            {Fq::roll(11)}
+        for i in 0..12 {
+            {Fq::roll(i)} // reverses order [f0..f11]
             {Fq::copy(0)}
             { Fq::push_hex_not_montgomery(Fq::MODULUS) }
             { U254::lessthan(1, 0) } // a < p
@@ -2198,8 +2198,8 @@ pub(crate) fn tap_precompute_Py() -> Script {
 }
 
 pub(crate) fn hints_precompute_Px(
-    hint_in_px: ark_bn254::Fq,
     hint_in_py: ark_bn254::Fq,
+    hint_in_px: ark_bn254::Fq,
     hint_in_pdy: ark_bn254::Fq,
 ) -> (ark_bn254::Fq, Script) {
     // assert_eq!(sec_in.len(), 3);
@@ -2232,7 +2232,6 @@ pub(crate) fn hints_precompute_Px(
 }
 
 pub(crate) fn hints_precompute_Py(
-
     hint_in_p: ark_bn254::Fq,
 ) -> (ark_bn254::Fq, Script) {
     // assert_eq!(sec_in.len(), 1);
@@ -2302,10 +2301,10 @@ pub(crate) fn tap_initT4() -> Script {
 }
 
 pub(crate) fn hint_init_T4(
-    hint_q4x0: ElemFq,
-    hint_q4x1: ElemFq,
-    hint_q4y0: ElemFq,
     hint_q4y1: ElemFq,
+    hint_q4y0: ElemFq,
+    hint_q4x1: ElemFq,
+    hint_q4x0: ElemFq,
 ) -> (ElemG2PointAcc, Script) {
     let t4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0, hint_q4x1), ark_bn254::Fq2::new(hint_q4y0, hint_q4y1));
     let t4hash = extern_hash_fps(vec![t4.x.c0, t4.x.c1, t4.y.c0, t4.y.c1], false);
