@@ -762,10 +762,13 @@ pub(crate) fn tap_inv0() -> Script {
     };
 
     let hash_scr = script!{
-        {hash_fp6()}
-        {Fq::toaltstack()}
+        {Fq6::toaltstack()}
         {hash_fp12()}
+        {Fq6::fromaltstack()}
+        {Fq::roll(6)} {Fq::toaltstack()}
+        {hash_fp6()}
         {Fq::fromaltstack()}
+        {Fq::roll(1)}
         // [Hc, Ht0]
         { Fq::fromaltstack() }
         { Fq::fromaltstack() }
@@ -798,14 +801,17 @@ pub(crate) fn tap_inv1() -> Script {
         {Fq6::roll(6)}
     }; // [t0, t1]
     let hash_scr = script!{
+        {Fq6::toaltstack()}
         {hash_fp6()}
-        {Fq::toaltstack()}
+        {Fq6::fromaltstack()}
+        {Fq::roll(6)} {Fq::toaltstack()}
         {hash_fp6()}
         {Fq::fromaltstack()}
-        // [Ht0, Ht1]
+        {Fq::roll(1)}
+        // [Hc, Ht0]
         { Fq::fromaltstack() }
         { Fq::fromaltstack() }
-        // [Ht0, Ht1, HKt0, Hkt1]
+        // [Hc, Ht0, HKc, HKt0]
         {Fq::equalverify(1, 3)}
         {Fq::equal(1, 0)} OP_NOT OP_VERIFY
     };
@@ -846,23 +852,27 @@ pub(crate) fn tap_inv2() -> Script {
         // [c0, c1, t1, d0, d1]
     };
     let hash_scr = script!{
-
         {Fq12::toaltstack()}
-        {hash_fp6()}
-        {Fq::toaltstack()}
+        {Fq6::toaltstack()}
         {hash_fp12()}
-        {Fq::fromaltstack()}
+
+        {Fq6::fromaltstack()}
+        {Fq::roll(6)} {Fq::toaltstack()}
+        {hash_fp6()} {Fq::fromaltstack()}
+
         {Fq12::fromaltstack()}
-        {hash_fp12_192()}
-        // [Hc, Ht, Hd]
+        {Fq2::roll(12)} {Fq2::toaltstack()}
+        {hash_fp12_192()} {Fq2::fromaltstack()}
+
+        // [Hd, Ht, Hc]
 
         {Fq::fromaltstack()}
         {Fq::fromaltstack()}
         {Fq::fromaltstack()}
-        // // [Hc, Ht, Hd, HKc, HKt, HKd]
+        // // [Hd, Ht, Hc, HKc, HKt, HKd]
 
         {Fq::equalverify(1, 4)}
-        {Fq::equalverify(1, 3)}
+        {Fq::equalverify(1, 2)}
         {Fq::equal(1, 0)} OP_NOT OP_VERIFY
     };
     let scr = script!{
@@ -1007,9 +1017,10 @@ mod test {
     use super::*;
 
 
+
      #[test]
     fn test_bn254_fq12_hinted_inv() {
-        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
 
             let a = ark_bn254::Fq12::rand(&mut prng);
 
@@ -1042,6 +1053,7 @@ mod test {
 
 
             let (hout1, hscr1) = hint_inv1(hout0);
+
             let tscr1 = tap_inv1();
             let bscr1 = script!{
                 for h in hout1.hash {
@@ -1070,7 +1082,7 @@ mod test {
 
 
 
-            let (hout2, hscr2) = hint_inv2(ElemFp12Acc { f: a, hash: hash_in }, hout1);
+            let (hout2, hscr2) = hint_inv2(hout1, ElemFp12Acc { f: a, hash: hash_in });
             let tscr2 = tap_inv2();
             assert_eq!(hout2.f, a.inverse().unwrap());
             let bscr2 = script!{
