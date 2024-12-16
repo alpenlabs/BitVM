@@ -1,8 +1,7 @@
 use std::collections::HashMap;
-
 use crate::bn254::utils::fq_push_not_montgomery;
 use crate::chunk::primitves::{
-    extern_hash_fps, extern_fq_to_nibbles, extern_fr_to_nibbles, unpack_limbs_to_nibbles
+    extern_hash_fps, unpack_limbs_to_nibbles
 };
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
@@ -15,7 +14,6 @@ use num_traits::One;
 
 use super::hint_models::{ElemFq, ElemFr, ElemG1Point};
 use super::primitves::{hash_fp2, HashBytes};
-use super::wots::WOTSPubKey;
 use crate::bn254::fq2::Fq2;
 use crate::bn254::utils::Hint;
 

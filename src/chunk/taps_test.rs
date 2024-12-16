@@ -6,10 +6,12 @@ mod test {
     use crate::bn254::fq::Fq;
     use crate::bn254::utils::fq_push_not_montgomery;
     use crate::chunk::hint_models::*;
+    use crate::chunk::primitves::{fp12_to_vec, pack_nibbles_to_limbs};
     use crate::chunk::taps_point_ops::*;
     use crate::chunk::primitves::{extern_hash_fps, extern_nibbles_to_limbs};
     use crate::chunk::taps_mul::*;
     use crate::chunk::taps_premiller::*;
+    use crate::execute_script_without_stack_limit;
     use ark_ec::CurveGroup;
     use ark_ff::AdditiveGroup;
     use ark_ff::Field;
@@ -920,5 +922,106 @@ mod test {
         assert!(!res.success && res.final_stack.len() == 1);
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
+
+
+    #[test]
+    fn test_bn254_fq12_hinted_inv() {
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+
+            let a = ark_bn254::Fq12::rand(&mut prng);
+
+            let hash_in = extern_hash_fps(fp12_to_vec(a), true);
+            let (hout0, hscr0) = hint_inv0(ElemFp12Acc { f: a, hash: hash_in });
+            let tscr0 = tap_inv0();
+            let bscr0 = script!{
+                for h in hout0.hash {
+                    {h}
+                }
+                {pack_nibbles_to_limbs()}
+                {Fq::toaltstack()}
+                for h in hash_in {
+                    {h}
+                }
+                {pack_nibbles_to_limbs()}
+                {Fq::toaltstack()}
+            };
+            let script = script! {
+                { hscr0 }
+                { bscr0 }
+                { tscr0 }
+            };
+            let len = script.len();
+            let res = execute_script(script);
+            for i in 0..res.final_stack.len() {
+                println!("{i:3}: {:?}", res.final_stack.get(i));
+            }
+            println!("inv0 len {} and stack {}", len, res.stats.max_nb_stack_items);
+
+
+            let (hout1, hscr1) = hint_inv1(hout0);
+
+            let tscr1 = tap_inv1();
+            let bscr1 = script!{
+                for h in hout1.hash {
+                    {h}
+                }
+                {pack_nibbles_to_limbs()}
+                {Fq::toaltstack()}
+                for h in hout0.hash {
+                    {h}
+                }
+                {pack_nibbles_to_limbs()}
+                {Fq::toaltstack()}
+            };
+
+            let script = script! {
+                { hscr1 }
+                { bscr1 }
+                { tscr1 }
+            };
+            let len = script.len();
+            let res = execute_script(script);
+            for i in 0..res.final_stack.len() {
+                println!("{i:3}: {:?}", res.final_stack.get(i));
+            }
+            println!("inv1 len {} and stack {}", len, res.stats.max_nb_stack_items);
+
+
+
+            let (hout2, hscr2) = hint_inv2(hout1, ElemFp12Acc { f: a, hash: hash_in });
+            let tscr2 = tap_inv2();
+            assert_eq!(hout2.f, a.inverse().unwrap());
+            let bscr2 = script!{
+                for h in hout2.hash {
+                    {h}
+                }
+                {pack_nibbles_to_limbs()}
+                {Fq::toaltstack()}
+                for h in hout1.hash {
+                    {h}
+                }
+                {pack_nibbles_to_limbs()}
+                {Fq::toaltstack()}                
+                for h in hash_in {
+                    {h}
+                }
+                {pack_nibbles_to_limbs()}
+                {Fq::toaltstack()}
+            };
+
+            let script = script! {
+                { bscr2 }
+                { hscr2 }
+                { tscr2 }
+            };
+            let len = script.len();
+            let res = execute_script_without_stack_limit(script);
+            for i in 0..res.final_stack.len() {
+                println!("{i:3}: {:?}", res.final_stack.get(i));
+            }
+            println!("inv2 len {} and stack {}", len, res.stats.max_nb_stack_items);
+    }   
+
+
 }
 
