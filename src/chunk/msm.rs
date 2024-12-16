@@ -4,7 +4,7 @@ use crate::bn254::utils::fq_push_not_montgomery;
 use crate::chunk::primitves::{
     extern_hash_fps, extern_fq_to_nibbles, extern_fr_to_nibbles, unpack_limbs_to_nibbles
 };
-use crate::chunk::taps::{tup_to_scr, wots_locking_script};
+use crate::chunk::taps::{wots_locking_script};
 use crate::chunk::wots::{wots_p256_get_pub_key, wots_p160_get_pub_key};
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},

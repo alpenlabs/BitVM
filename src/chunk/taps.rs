@@ -1884,25 +1884,23 @@ pub(crate) fn hint_hash_c(
 
 // HASH_C
 pub(crate) fn tap_hash_c2() -> Script {
+
     let hash_scr = script! {
-
-        // {Fq::fromaltstack()} 
-        // {Fq::fromaltstack()}
-        // // Stack:[f_hash_claim, hash_in]
-
-        // {Fq::toaltstack()}
-        // {Fq::toaltstack()}
         {Fq12::copy(0)}
+        {Fq12::toaltstack()}
         { hash_fp12() }
-        {Fq::toaltstack()}
+        {Fq12::fromaltstack()}
+        { Fq::roll(12) } { Fq::toaltstack() }
         {hash_fp12_192()}
+
         {Fq::fromaltstack()}
         {Fq::fromaltstack()}
         {Fq::fromaltstack()}
-        //[calc_192, calc_12, claim_12, inp_192]
+        // [calc_192, calc_12, claim_12, inp_192]
         {Fq::equalverify(3, 1)}
         {Fq::equal(1, 0)} OP_NOT OP_VERIFY
     };
+
     let sc = script! {
         {hash_scr}
         OP_TRUE
@@ -1924,9 +1922,6 @@ pub(crate) fn hint_hash_c2(
     let simulate_stack_input = script! {
         // bit commits raw
         {fq12_push_not_montgomery(hint_in_c.f)}
-        // hash
-        // hash192
-        // { bc_elems }
     };
     (
         ElemFp12Acc {
@@ -2162,13 +2157,16 @@ pub(crate) fn tap_frob_fp12(power: usize) -> Script {
         // [f, g]
     };
     let hash_scr = script! {
-        {Fq12::roll(12)}
-        // [g,f]
+        {Fq12::toaltstack()}
+        { hash_fp12_192() }
+        {Fq12::fromaltstack()}
+        { Fq::roll(12) } {Fq::toaltstack()}
         { hash_fp12_192() }
         {Fq::fromaltstack()}
-        {Fq::equalverify(1, 0)}
-        { hash_fp12_192() }
-        {Fq::fromaltstack()}
+
+        {Fq::fromaltstack()} {Fq::fromaltstack()}
+
+        {Fq::equalverify(1, 2)}
         {Fq::equal(1, 0)} OP_NOT OP_VERIFY
     };
     let sc = script! {

@@ -7,20 +7,17 @@ use crate::chunk::primitves::{
     extern_hash_nibbles,  extern_nibbles_to_limbs, hash_fp12,
     hash_fp12_with_hints, hash_fp2, hash_fp4, hash_fp6, 
 };
-use crate::chunk::taps::{tup_to_scr};
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
 };
 use ark_ff::{AdditiveGroup, Field, MontFp, Zero};
-use bitcoin::opcodes::OP_TRUE;
 use num_traits::One;
 
 use super::primitves::{extern_hash_fps, fp12_to_vec, hash_fp12_192};
-use super::taps::{HashBytes, Link, Sig};
 use super::hint_models::*;
-// SPARSE DENSE
 
+// SPARSE DENSE
 pub(crate) fn tap_sparse_dense_mul(dbl_blk: bool) -> Script {
     let (hinted_script, _) = Fq12::hinted_mul_by_34(
         ark_bn254::Fq12::one(),
@@ -48,35 +45,46 @@ pub(crate) fn tap_sparse_dense_mul(dbl_blk: bool) -> Script {
         // Stack [f, dbl_le0, dbl_le1, f1]
         // Fq_equal verify
     };
-    let hash_script = script! {
-        {hash_fp12()}
-        // Stack [f, dbl_le0, dbl_le1, Hf1]
 
-        {Fq2::roll(3)}
-        {Fq2::roll(3)}
-        {hash_fp4()} // hash_le
-        {Fq::fromaltstack()} // addle
-        // {Fq::fromaltstack()}
+    let hash_script = script! {
+        {Fq12::toaltstack()}
+        {Fq2::toaltstack()} {Fq2::toaltstack()}
+        {hash_fp12()}
+
+        // // Stack [f, dbl_le0, dbl_le1, Hf1]
+
+        {Fq2::fromaltstack()} {Fq2::fromaltstack()}
+        {Fq::roll(4)} {Fq::toaltstack()}
+        { hash_fp4() } {Fq::fromaltstack()}
+
+        {Fq12::fromaltstack()}
+        {Fq2::roll(12)} {Fq2::toaltstack()}
+        { hash_fp12() } {Fq2::fromaltstack()}
+
+        // [f1H, dblH, fH]
+        {Fq::fromaltstack()}
+        // [f1H, dblH, fH, addH]
+        { Fq::roll(1) } { Fq::roll(3) }
+        // [dblH, addH, fH, f1H]
+        { Fq2::toaltstack()}
+
         {add} 1 OP_NUMEQUAL
         OP_IF
             {Fq::roll(1)}
         OP_ENDIF
-
         {hash_fp2()}
-        {Fq::fromaltstack()} // T_le
+
+        { Fq2::fromaltstack()} { Fq::fromaltstack() }
+        // [Hle, fH, f1H, T_le]
+        {Fq2::roll(1)} {Fq2::toaltstack()}
         {Fq::roll(1)}
-        {hash_fp2()}
+        {hash_fp2()} {Fq2::fromaltstack()}
+        // [ HT, fH, f1H ]
+        {Fq::fromaltstack()} {Fq::fromaltstack()} {Fq::fromaltstack()}
 
-        {Fq::fromaltstack()} // hash_in_sparse
-        {Fq::equalverify(1, 0)}
-
-        {Fq::toaltstack()} // Hf1 to altstack
-        {hash_fp12()} // Hash_calcin
-        {Fq::fromaltstack()} // Hash_calcout
-        {Fq::fromaltstack()} // Hash_claimin
-        {Fq::fromaltstack()} // Hash_claimout
-        {Fq::equalverify(3, 1)}
-        {Fq::equal(1,0)} OP_NOT OP_VERIFY
+        {Fq::equalverify(2, 5)}
+        {Fq::equalverify(1, 3)}
+        {Fq::equal(0, 1)} OP_NOT OP_VERIFY
     };
     let scr = script! {
         {ops_script}
@@ -192,25 +200,24 @@ pub(crate) fn tap_dense_dense_mul0() -> Script {
     }
 
     let hash_scr = script! {
-        {hash_fp6()} // c
-        { Fq::toaltstack()}
+        {Fq6::toaltstack()}
+        {Fq12::toaltstack()}
+        {hash_fp12()}
 
-        {Fq12::roll(12)}
-        { hash_fp12()} //
-        { Fq::toaltstack()}
+        {Fq12::fromaltstack()}
+        {Fq::roll(12)} {Fq::toaltstack()}
+        {hash_fp12_192()} { Fq::fromaltstack() }
 
-        {hash_fp12_192()} // Hash_g
-        { Fq::fromaltstack()} // Hash_f
-        { Fq::fromaltstack()} // Hash_c
-        // Alt: [od, d, s], [c0, d, s]
-        // Stack: [gc, fc, hc, gk, fk, hk]
-        { Fq::fromaltstack()} // Hash_c
-        { Fq::fromaltstack()} // Hash_f
-        { Fq::fromaltstack()} // Hash_g
+        {Fq6::fromaltstack()}
+        {Fq2::roll(6)} {Fq2::toaltstack()}
+        {hash_fp6()} {Fq2::fromaltstack()}
 
-        {Fq::equalverify(1, 4)}
+        // [Hc0, Hg, Hf]
+        {Fq::fromaltstack()} {Fq::fromaltstack()} {Fq::fromaltstack()}
+        // [Hc0, Hg, Hf, Hkg, Hkf, Hkc0]
         {Fq::equalverify(1, 3)}
-        {Fq::equal(0, 1)} OP_NOT OP_VERIFY
+        {Fq::equalverify(1, 2)}
+        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
     };
 
     let ops_scr = script! {
@@ -303,25 +310,25 @@ pub(crate) fn tap_dense_dense_mul1() -> Script {
         Fq12::hinted_mul_second(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
 
     let hash_scr = script! {
+        {Fq6::toaltstack()}
+        {Fq12::toaltstack()}
+        {hash_fp12()}
+
+        {Fq12::fromaltstack()}
+        {Fq::roll(12)} {Fq::toaltstack()}
+        {hash_fp12_192()} { Fq::fromaltstack() }
+
+        {Fq6::fromaltstack()} 
         {Fq::fromaltstack()} // Hc0
-        {hash_fp12_with_hints()} // Hc
-        { Fq::toaltstack()}
+        {Fq2::roll(7)} {Fq2::toaltstack()}
+        {hash_fp12_with_hints()} {Fq2::fromaltstack()}
 
-        {Fq12::roll(12)}
-        { hash_fp12()} //
-        { Fq::toaltstack()}
-
-        {hash_fp12_192()} // Hash_g
-        { Fq::fromaltstack()} // Hash_f
-        { Fq::fromaltstack()} // Hash_c
-
-        { Fq::fromaltstack()} // Hash_c
-        { Fq::fromaltstack()} // Hash_f
-        { Fq::fromaltstack()} // Hash_g
-        // [gc, fc, hc,  gk, fk, hk]
-        {Fq::equalverify(1, 4)}
+        // [Hc0, Hg, Hf]
+        {Fq::fromaltstack()} {Fq::fromaltstack()} {Fq::fromaltstack()}
+        // [Hc0, Hg, Hf, Hkg, Hkf, Hkc0]
         {Fq::equalverify(1, 3)}
-        {Fq::equal(0, 1)} OP_NOT OP_VERIFY
+        {Fq::equalverify(1, 2)}
+        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
     };
 
     let ops_scr = script! {
@@ -456,12 +463,15 @@ pub(crate) fn hint_squaring(
 pub(crate) fn tap_squaring() -> Script {
     let (sq_script, _) = Fq12::hinted_square(ark_bn254::Fq12::ONE);
     let hash_sc = script! {
+        {Fq12::toaltstack()}
         { hash_fp12() }
-        { Fq::toaltstack() }
-        { hash_fp12() }
+        {Fq12::fromaltstack()}
+        {Fq::roll(12)} {Fq::toaltstack()}
+        { hash_fp12() } 
         //Alt:[hash_out, hash_in, hash_calc_out]
         //Main:[hash_calc_in]
         { Fq::fromaltstack() }
+        {Fq::roll(1)}
         { Fq::fromaltstack() }
         { Fq::fromaltstack() }
         //Alt:[]
@@ -496,25 +506,24 @@ pub(crate) fn tap_dense_dense_mul0_by_constant(g: ark_bn254::Fq12) -> Script {
     }
 
     let hash_scr = script! {
-        {hash_fp6()} // c
-        { Fq::toaltstack()}
+        {Fq6::toaltstack()}
+        {Fq12::toaltstack()}
+        {hash_fp12()}
 
-        {Fq12::roll(12)}
-        { hash_fp12()} //
-        { Fq::toaltstack()}
+        {Fq12::fromaltstack()}
+        {Fq::roll(12)} {Fq::toaltstack()}
+        {hash_fp12_192()} { Fq::fromaltstack() }
 
-        {hash_fp12_192()} // Hash_g
-        { Fq::fromaltstack()} // Hash_f
-        { Fq::fromaltstack()} // Hash_c
-        // Alt: [od, d, s], [c0, d, s]
-        // Stack: [gc, fc, hc, gk, fk, hk]
-        { Fq::fromaltstack()} // Hash_c
-        { Fq::fromaltstack()} // Hash_f
-        { Fq::fromaltstack()} // Hash_g
+        {Fq6::fromaltstack()}
+        {Fq2::roll(6)} {Fq2::toaltstack()}
+        {hash_fp6()} {Fq2::fromaltstack()}
 
-        {Fq::equalverify(1, 4)}
+        // [Hc0, Hg, Hf]
+        {Fq::fromaltstack()} {Fq::fromaltstack()} {Fq::fromaltstack()}
+        // [Hc0, Hg, Hf, Hkg, Hkf, Hkc0]
         {Fq::equalverify(1, 3)}
-        {Fq::equal(0, 1)} OP_NOT OP_VERIFY
+        {Fq::equalverify(1, 2)}
+        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
     };
 
     let ops_scr = script! {
@@ -617,25 +626,25 @@ pub(crate) fn tap_dense_dense_mul1_by_constant(g: ark_bn254::Fq12) -> Script {
 
 
     let hash_scr = script! {
+        {Fq6::toaltstack()}
+        {Fq12::toaltstack()}
+        {hash_fp12()}
+
+        {Fq12::fromaltstack()}
+        {Fq::roll(12)} {Fq::toaltstack()}
+        {hash_fp12_192()} { Fq::fromaltstack() }
+
+        {Fq6::fromaltstack()} 
         {Fq::fromaltstack()} // Hc0
-        {hash_fp12_with_hints()} // Hc
-        { Fq::toaltstack()}
+        {Fq2::roll(7)} {Fq2::toaltstack()}
+        {hash_fp12_with_hints()} {Fq2::fromaltstack()}
 
-        {Fq12::roll(12)}
-        { hash_fp12()} //
-        { Fq::toaltstack()}
-
-        {hash_fp12_192()} // Hash_g
-        { Fq::fromaltstack()} // Hash_f
-        { Fq::fromaltstack()} // Hash_c
-
-        { Fq::fromaltstack()} // Hash_c
-        { Fq::fromaltstack()} // Hash_f
-        { Fq::fromaltstack()} // Hash_g
-        // [gc, fc, hc,  gk, fk, hk]
-        {Fq::equalverify(1, 4)}
+        // [Hc0, Hg, Hf]
+        {Fq::fromaltstack()} {Fq::fromaltstack()} {Fq::fromaltstack()}
+        // [Hc0, Hg, Hf, Hkg, Hkf, Hkc0]
         {Fq::equalverify(1, 3)}
-        {Fq::equal(0, 1)} OP_NOT OP_VERIFY
+        {Fq::equalverify(1, 2)}
+        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
     };
 
     let ops_scr = script! {

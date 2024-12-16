@@ -635,7 +635,11 @@ pub fn script_exec(
             }
         }
         if !exec_result.success {
-            assert!(exec_result.final_stack.len() == 1);
+            if exec_result.final_stack.len() != 1 {
+                println!("final {:?}", i);
+                println!("final {:?}", segments[i].scr_type);
+                assert!(false);
+            }
         } else {
             println!("disprove script {}: tapindex {}, {:?}",i,tap_script_index, segments[i].scr_type);
             let disprove_hint = (
