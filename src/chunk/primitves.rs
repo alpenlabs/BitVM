@@ -1,14 +1,97 @@
+use std::collections::HashMap;
+
 use ark_ff::{BigInt, BigInteger};
 
 use crate::bigint::U254;
 use crate::bn254::fq2::Fq2;
 use crate::chunk::blake3compiled::{hash_128b, hash_192b, hash_64b};
 use crate::pseudo::NMUL;
+use crate::signatures::wots::{wots160, wots256};
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
 };
 
+use super::wots::{wots_compact_checksig_verify_with_pubkey, WOTSPubKey};
+
+pub(crate) type HashBytes = [u8; 64];
+
+pub type Link = (u32, bool);
+
+#[derive(Debug, Clone)]
+pub enum SigData {
+    Sig256(wots256::Signature),
+    Sig160(wots160::Signature),
+}
+
+#[derive(Debug, Clone)]
+pub struct Sig {
+    pub(crate) cache: HashMap<u32, SigData>,
+}
+
+pub(crate) fn tup_to_scr(sig: &mut Sig, tup: Vec<(Link, [u8; 64])>) -> (Script, bool) {
+    let mut compact_bc_scripts = script!();
+    let mut execute: bool = false;
+    if !sig.cache.is_empty() {
+        for (skey, elem) in tup {
+            let bcelem = sig.cache.get(&skey.0).unwrap();
+            let scr = match bcelem {
+                SigData::Sig160(signature) => {
+                    let s = script! {
+                        for (sig, _) in signature {
+                            { sig.to_vec() }
+                        }
+                    };
+                    let msg: Vec<u8> = signature.iter().map(|(_, c)| *c).collect();
+                    let mut msg: [u8; 40] = msg[0..40].try_into().unwrap();
+                    msg.reverse();
+                    let mut padded_nibs = [0u8; 64]; 
+                    padded_nibs[24..64].copy_from_slice(&msg[0..40]);
+                    if padded_nibs != elem {
+                        execute = true;
+                    }
+                    s
+                }
+                SigData::Sig256(signature) => {
+                    let s = script! {
+                        for (sig, _) in signature {
+                            { sig.to_vec() }
+                        }
+                    };
+                    let msg: Vec<u8> = signature.iter().map(|(_, c)| *c).collect();
+                    let mut msg: [u8; 64] = msg[0..64].try_into().unwrap();
+                    msg.reverse();
+                    if msg != elem {
+                        execute = true;
+                    }
+                    s
+                }
+            };
+            compact_bc_scripts = compact_bc_scripts.push_script(scr.compile());
+        }        
+    }
+    (compact_bc_scripts, execute)
+}
+
+pub(crate) fn wots_locking_script(link: Link, link_ids: &HashMap<u32, WOTSPubKey>) -> Script {
+    wots_compact_checksig_verify_with_pubkey(link_ids.get(&link.0).unwrap())
+}
+
+pub(crate) fn gen_bitcom(
+    link_ids: &HashMap<u32, WOTSPubKey>,
+    sec_out: Link,
+    sec_ins: Vec<Link>,
+) -> Script {
+    let mut tot_script = script!();
+    tot_script = tot_script.push_script(wots_locking_script(sec_out, link_ids).compile());  // hash_in
+    tot_script = tot_script.push_script({Fq::toaltstack()}.compile());
+    // [px, py, qx0, qx1, qy0, qy1, in, out]
+    for sec_in in sec_ins {
+        tot_script = tot_script.push_script(wots_locking_script(sec_in, link_ids).compile());  // hash_in
+        tot_script = tot_script.push_script({Fq::toaltstack()}.compile());
+    }
+    tot_script
+}
 
 fn split_digit(window: u32, index: u32) -> Script {
     script! {

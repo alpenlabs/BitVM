@@ -1,8 +1,7 @@
 use crate::chunk::primitves::extern_hash_nibbles;
 use ark_bn254::{G1Affine, G2Affine};
 use ark_ff::{AdditiveGroup, Field, MontFp};
-use super::primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps};
-use super::taps::HashBytes;
+use super::primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps, HashBytes};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Element {

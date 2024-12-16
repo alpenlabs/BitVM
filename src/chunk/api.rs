@@ -3,11 +3,9 @@ use std::ops::Neg;
 
 use crate::chunk::acc::{groth16, hint_to_data, Pubs};
 use crate::chunk::compile::{compile_ops, compile_taps, Vkey};
-use crate::chunk::compile::{ NUM_PUBS, NUM_U160, NUM_U256};
+use crate::chunk::compile::{ NUM_PUBS};
 use crate::chunk::hint_models::{ElemG1Point, EvalIns, G1PointExt};
-use crate::chunk::primitves::{extern_hash_fps, fp12_to_vec};
 use crate::chunk::segment::Segment;
-use crate::chunk::taps::{Sig, SigData};
 use crate::chunk::wots::WOTSPubKey;
 use crate::groth16::g16::{
     N_VERIFIER_FQS, Assertions, PublicKeys, Signatures, N_TAPLEAVES, N_VERIFIER_HASHES,
