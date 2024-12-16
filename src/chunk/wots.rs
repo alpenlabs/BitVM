@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use bitcoin_script::script;
 
 use crate::chunk::primitves::{pack_nibbles_to_limbs};
@@ -45,8 +43,4 @@ pub(crate) fn wots_compact_checksig_verify_with_pubkey(pub_key: &WOTSPubKey) -> 
 pub enum WOTSPubKey {
     P160(wots160::PublicKey),
     P256(wots256::PublicKey)
-}
-pub struct AssertPublicKeys {
-    pub p160: HashMap<u32, wots160::PublicKey>,
-    pub p256: HashMap<u32, wots256::PublicKey>,
 }
