@@ -71,7 +71,7 @@ mod test {
     use crate::{chunk::{api::mock_pubkeys, hint_models::EvalIns}, groth16::{g16::test::test_utils::{read_scripts_from_file, write_scripts_to_file, write_scripts_to_separate_files}, offchain_checker::compute_c_wi}};
 
 
-    use self::{chunk::{ acc::{self, script_exec, Pubs}, compile::NUM_PUBS, hint_models::Element, segment::Segment}, test_utils::{read_map_from_file, write_map_to_file}};
+    use self::{chunk::{ assert::{self, script_exec, Pubs}, compile::NUM_PUBS, hint_models::Element, segment::Segment}, test_utils::{read_map_from_file, write_map_to_file}};
 
     use super::*;
 
@@ -575,7 +575,7 @@ mod test {
 
         println!("eval_ins {:?}", eval_ins);
         println!("pubs {:?}", pubs);
-        acc::groth16(true, &mut segments, eval_ins, pubs, &mut None);
+        assert::groth16(true, &mut segments, eval_ins, pubs, &mut None);
 
         // let proof_asserts = acc::hint_to_data(segments.clone());
         // let signed_asserts = sign_assertions(proof_asserts);

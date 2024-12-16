@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ops::Neg;
 
-use crate::chunk::acc::{groth16, hint_to_data, Pubs};
+use crate::chunk::assert::{groth16, hint_to_data, Pubs};
 use crate::chunk::compile::{compile_ops, compile_taps, Vkey};
 use crate::chunk::compile::{ NUM_PUBS};
 use crate::chunk::hint_models::{ElemG1Point, EvalIns, G1PointExt};
@@ -19,7 +19,7 @@ use ark_ec::pairing::Pairing;
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::Field;
 
-use super::acc::{script_exec, get_assertions, get_intermediates, get_proof, get_pubs};
+use super::assert::{script_exec, get_assertions, get_intermediates, get_proof, get_pubs};
 
 
 pub fn api_compile(vk: &ark_groth16::VerifyingKey<Bn254>) -> Vec<Script> {

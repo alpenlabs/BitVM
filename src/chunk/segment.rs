@@ -1,7 +1,7 @@
 
 use crate::treepp;
 
-use super::{hint_models::Element};
+use super::{hint_models::Element, taps_premiller::*};
 
 pub type SegmentID = u32;
 pub type SegmentOutputType = bool;
@@ -53,7 +53,7 @@ pub enum ScriptType {
 use ark_ff::{AdditiveGroup, Field};
 use bitcoin_script::script;
 
-use super::{hint_models::*, msm::{hint_hash_p, hint_msm}, primitves::extern_hash_fps,  taps::*, taps_mul::*};
+use super::{hint_models::*, taps_msm::{hint_hash_p, hint_msm}, primitves::extern_hash_fps,  taps_point_ops::*, taps_mul::*};
 
 pub(crate) fn wrap_hint_msm(
     skip: bool,
