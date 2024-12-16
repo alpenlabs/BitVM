@@ -553,13 +553,16 @@ pub fn get_flags_for_block(i: u32, num_blocks: u32) -> u32 {
 
 // final rounds: 8 => 32 bytes hash
 // final rounds: 5 => 20 bytes hash (blake_160)
-pub fn blake3(stack: &mut StackTracker, mut msg_len: u32, final_rounds: u8) {
+pub fn blake3(stack: &mut StackTracker, mut msg_len: u32, final_rounds: u8, use_full_tables_override: Option<bool>) {
     assert!(
         msg_len <= 288,
         "This blake3 implementation supports up to 288 bytes"
     );
 
-    let use_full_tables = msg_len <= 232;
+    let mut use_full_tables = msg_len <= 232;
+    if let Some(v) = use_full_tables_override {
+        use_full_tables = v;
+    }
 
     let num_blocks = msg_len.div_ceil(64);
     let mut num_padding_bytes = num_blocks * 64 - msg_len;
@@ -709,7 +712,7 @@ mod tests {
         let start = stack.get_script().len();
         let optimized_start = optimize(stack.get_script().compile()).len();
 
-        blake3(&mut stack, 64, 8);
+        blake3(&mut stack, 64, 8, None);
         let end = stack.get_script().len();
         println!("Blake3 size: {}", end - start);
 
@@ -750,7 +753,7 @@ mod tests {
         );
 
         let start = stack.get_script().len();
-        blake3(&mut stack, 40, 5);
+        blake3(&mut stack, 40, 5, None);
         let end = stack.get_script().len();
         println!("Blake3 size: {}", end - start);
 
@@ -781,7 +784,7 @@ mod tests {
 
         let start = stack.get_script().len();
         let start_optimized = optimize(stack.get_script().compile()).len();
-        blake3(&mut stack, repeat * 4, 8);
+        blake3(&mut stack, repeat * 4, 8, None);
         let end = stack.get_script().len();
         println!("Blake3 size: {} for: {} bytes", end - start, repeat * 4);
 
@@ -861,7 +864,7 @@ mod tests {
 
 
         let start = stack.get_script_len();
-        blake3(&mut stack, (msg_len/2) as u32, 8);
+        blake3(&mut stack, (msg_len/2) as u32, 8, None);
         let end = stack.get_script_len();
         println!("Blake3 size: {} for: {} bytes", end - start, (msg_len/2) as u32);
 
@@ -944,7 +947,7 @@ mod tests {
         );
 
         let start = stack.get_script_len();
-        blake3(&mut stack, repeat * 4, 8);
+        blake3(&mut stack, repeat * 4, 8, None);
         let end = stack.get_script_len();
         println!("Blake3 size: {} for: {} bytes", end - start, repeat * 4);
 

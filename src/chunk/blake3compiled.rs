@@ -1,15 +1,10 @@
-use crate::treepp::*;
-use bitcoin::ScriptBuf;
+use crate::{hash::blake3_u4, treepp::*};
+use bitcoin_script_stack::stack::StackTracker;
 
-pub const BLAKE3_64B_75K_BIN: &[u8] = include_bytes!("blake3_bin/blake3_64b_75k.bin");
-pub const BLAKE3_64B_84K_BIN: &[u8] = include_bytes!("blake3_bin/blake3_64b_84k.bin");
-pub const BLAKE3_128B_150K_BIN: &[u8] = include_bytes!("blake3_bin/blake3_128b_150k.bin");
-pub const BLAKE3_128B_168K_BIN: &[u8] = include_bytes!("blake3_bin/blake3_128b_168k.bin");
-pub const BLAKE3_192B_252K_BIN: &[u8] = include_bytes!("blake3_bin/blake3_192b_252k.bin");
 
-fn wrap(data: &[u8]) -> Script {
+fn wrap_scr(scr: Script) -> Script {
     script! {
-        { script!().push_script(ScriptBuf::from_bytes(data.to_vec())) }
+        { scr }
         for _ in 0..40 { OP_TOALTSTACK }
         for _ in 0..(64-40)/2 { OP_2DROP }
         for _ in 0..(64-40) { 0 }
@@ -17,22 +12,20 @@ fn wrap(data: &[u8]) -> Script {
     }
 }
 
-pub fn hash_64b_75k() -> Script {
-    wrap(&BLAKE3_64B_75K_BIN)
+pub fn hash_64b() -> Script {
+    let mut stack = StackTracker::new();
+    blake3_u4::blake3(&mut stack, 64, 8, Some(true));
+    wrap_scr(stack.get_script())
 }
 
-pub fn hash_64b_84k() -> Script {
-    wrap(&BLAKE3_64B_84K_BIN)
+pub fn hash_128b() -> Script {
+    let mut stack = StackTracker::new();
+    blake3_u4::blake3(&mut stack, 128, 8, Some(false));
+    wrap_scr(stack.get_script())
 }
 
-pub fn hash_128b_150k() -> Script {
-    wrap(&BLAKE3_128B_150K_BIN)
-}
-
-pub fn hash_128b_168k() -> Script {
-    wrap(&BLAKE3_128B_168K_BIN)
-}
-
-pub fn hash_192b_252k() -> Script {
-    wrap(&BLAKE3_192B_252K_BIN)
+pub fn hash_192b() -> Script {
+    let mut stack = StackTracker::new();
+    blake3_u4::blake3(&mut stack, 192, 8, Some(false));
+    wrap_scr(stack.get_script())
 }

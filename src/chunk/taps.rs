@@ -22,7 +22,7 @@ use std::str::FromStr;
 
 use super::primitves::{extern_hash_fps, hash_fp12_192};
 use super::wots::WOTSPubKey;
-use super::{blake3compiled, hint_models::*};
+use super::{hint_models::*};
 
 pub(crate) type HashBytes = [u8; 64];
 
@@ -125,33 +125,10 @@ pub(crate) fn tap_point_dbl() -> Script {
         ark_bn254::Fq2::one(),
     );
 
-    let hash_64b_75k = blake3compiled::hash_64b_75k();
-    let hash_128b_168k = blake3compiled::hash_128b_168k();
 
     let ops_script = script! {
         {Fq::fromaltstack()}
         {Fq::fromaltstack()} // py
-        // {Fq::fromaltstack()} // in
-        // {Fq::fromaltstack()} // out
-        // [x, y, in, out]
-
-        // { fq2_push_not_montgomery(alpha_tangent)}
-        // { fq2_push_not_montgomery(bias_minus_tangent)}
-        // { fq2_push_not_montgomery(t.x) }
-        // { fq2_push_not_montgomery(t.y) }
-        // { fq_push_not_montgomery(aux_hash) }
-
-        // {hash_aux}
-
-        // { fq_push_not_montgomery(p_dash_x) }
-        // { fq_push_not_montgomery(p_dash_y) }
-
-        // { hash_in } // hash
-        // { hash_out_claim } // hash
-
-        // move aux hash to MOVE_AUX_HASH_HERE
-        // {Fq::toaltstack()} // hash out
-        // {Fq::toaltstack()} // hash in
         {Fq::roll(2)}
         {Fq::toaltstack()} // hash aux in
 
@@ -192,87 +169,38 @@ pub(crate) fn tap_point_dbl() -> Script {
         //Altstack: [hash_out, hash_in, hash_inaux]
         //Stack: [tx, ty, Rx, Ry, le0, le1]
         //T
-        {Fq2::roll(10)}
-        {Fq2::roll(10)}
+        {Fq2::toaltstack()} {Fq2::toaltstack()}
+        {Fq2::toaltstack()} {Fq2::toaltstack()}
+        {hash_fp4()} // HT
 
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-
-        {unpack_limbs_to_nibbles()} // 0
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_128b_168k.clone()}
-        //{pack_nibbles_to_limbs()}
-        //[T, R, le]
-
-        { Fq::fromaltstack()} // inaux
-        {unpack_limbs_to_nibbles()}
-        {hash_64b_75k.clone()}
-        {pack_nibbles_to_limbs()}
-        {Fq::fromaltstack()} //input_hash
-        {Fq::equalverify(1, 0)}
-
-        // // [HashOut]
-        // // [Rx, Ry, le0, le1]
-
-        {Fq2::roll(6)}
-        {Fq2::roll(6)}
-        // // [HashOut]
-        // // [le, R]
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        {unpack_limbs_to_nibbles()} // 0
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_128b_168k.clone()}
-        {pack_nibbles_to_limbs()}
+        {Fq2::fromaltstack()} {Fq2::fromaltstack()}
+        {Fq::roll(4)} 
         {Fq::toaltstack()}
+        {hash_fp4()} // HR
 
-        // // [HashOut, HashR]
-        // // [le]
+        { Fq::fromaltstack()} // [HR, HT]
+        {Fq2::fromaltstack()} {Fq2::fromaltstack()}
+        {Fq2::roll(4)} 
+        {Fq2::toaltstack()}
+        {hash_fp4()} // Hle
+        // [Hle]
 
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        {unpack_limbs_to_nibbles()} // 0
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_128b_168k.clone()}
-        // // [HashOut, HashR]
-        // // [Hashle]
-        for _ in 0..64 {
+        for _ in 0..9 {
             {0}
         }
-        {hash_64b_75k.clone()}
-        {pack_nibbles_to_limbs()}
+        {hash_fp2()}
 
-        {Fq::fromaltstack()}
-        // // [HashOut]
-        // // [Hashle, HashR]
-        {unpack_limbs_to_nibbles()}
-        for _ in 0..9 {
-            {64 + 8} OP_ROLL
-        }
-        {unpack_limbs_to_nibbles()}
-        {hash_64b_75k.clone()}
-        {pack_nibbles_to_limbs()}
-        {Fq::fromaltstack()}
-        {Fq::equal(1, 0)}
-        OP_NOT OP_VERIFY
+        { Fq::fromaltstack() } // [ Hle, HR ]
+        { Fq::roll(1) }
+        {hash_fp2()}
+        // [Hout]
+
+        {Fq::fromaltstack()} {Fq::fromaltstack()} // [Hout, HT, Hinaux]
+        {Fq::roll(2)} {Fq::toaltstack()} // [HT, inaux]
+        {hash_fp2()}
+        {Fq::fromaltstack()} {Fq::fromaltstack()} {Fq::fromaltstack()} //[Hin_calc, Hout_calc, hash_in_claim, Hout_claimed]
+        {Fq::equalverify(1, 3)}
+        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
     };
 
     let sc = script! {
@@ -407,9 +335,6 @@ pub(crate) fn tap_point_add_with_frob(ate: i8) -> Script {
         ark_bn254::Fq2::one(),
     );
 
-    let hash_64b_75k = blake3compiled::hash_64b_75k();
-    let hash_128b_168k = blake3compiled::hash_128b_168k();
-
     let ops_script = script! {
         // [a,b,tx,ty, aux_in]
         // [px, py, qx, qy, in, out]
@@ -466,92 +391,39 @@ pub(crate) fn tap_point_add_with_frob(ate: i8) -> Script {
         //Altstack: [hash_out, hash_in, hash_inaux]
         //Stack: [tx, ty, Rx, Ry, le0, le1]
         //T
-        {Fq2::roll(10)}
-        {Fq2::roll(10)}
+        {Fq2::toaltstack()} {Fq2::toaltstack()}
+        {Fq2::toaltstack()} {Fq2::toaltstack()}
+        {hash_fp4()} // HT
 
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-
-        {unpack_limbs_to_nibbles()} // 0
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_128b_168k.clone()}
-        //{pack_nibbles_to_limbs()}
-        //[T, R, le]
-
-        { Fq::fromaltstack()} // inaux
-        {unpack_limbs_to_nibbles()}
-        {hash_64b_75k.clone()}
-        {pack_nibbles_to_limbs()}
-        {Fq::fromaltstack()} //input_hash
-        {Fq::equalverify(1, 0)}
-
-        // // [HashOut]
-        // // [Rx, Ry, le0, le1]
-
-        {Fq2::roll(6)}
-        {Fq2::roll(6)}
-        // [HashOut]
-        // [le, R]
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        {unpack_limbs_to_nibbles()} // 0
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_128b_168k.clone()}
-        {pack_nibbles_to_limbs()}
+        {Fq2::fromaltstack()} {Fq2::fromaltstack()}
+        {Fq::roll(4)} 
         {Fq::toaltstack()}
+        {hash_fp4()} // HR
 
-        // // // [HashOut, HashR]
-        // // // [le]
+        { Fq::fromaltstack()} // [HR, HT]
+        {Fq2::fromaltstack()} {Fq2::fromaltstack()}
+        {Fq2::roll(4)} 
+        {Fq2::toaltstack()}
+        {hash_fp4()} // Hle
+        // [Hle]
 
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        {unpack_limbs_to_nibbles()} // 0
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_128b_168k.clone()}
-        {pack_nibbles_to_limbs()}
-        // // [HashOut, HashR]
-        // // [Hashle]
-        for _ in 0..64 {
+        for _ in 0..9 {
             {0}
         }
-        for _ in 0..9 {
-            {64 + 8} OP_ROLL
-        }
-        {unpack_limbs_to_nibbles()}
-        {hash_64b_75k.clone()}
-        {pack_nibbles_to_limbs()}
+        {Fq::roll(1)}
+        {hash_fp2()}
 
-        {Fq::fromaltstack()}
-        // // [HashOut]
-        // // [Hashle, HashR]
-        {unpack_limbs_to_nibbles()}
-        for _ in 0..9 {
-            {64 + 8} OP_ROLL
-        }
-        {unpack_limbs_to_nibbles()}
-        {hash_64b_75k.clone()}
-        {pack_nibbles_to_limbs()}
-        {Fq::fromaltstack()}
-        {Fq::equal(1, 0)}
-        OP_NOT OP_VERIFY
+        { Fq::fromaltstack() } // [ Hle, HR ]
+        { Fq::roll(1) }
+        {hash_fp2()}
+        // [Hout]
+
+        {Fq::fromaltstack()} {Fq::fromaltstack()} // [Hout, HT, Hinaux]
+        {Fq::roll(2)} {Fq::toaltstack()} // [HT, inaux]
+        {hash_fp2()}
+        {Fq::fromaltstack()} {Fq::fromaltstack()} {Fq::fromaltstack()} //[Hin_calc, Hout_calc, hash_in_claim, Hout_claimed]
+        {Fq::equalverify(1, 3)}
+        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
     };
 
     let beta_12x = BigUint::from_str(
@@ -880,9 +752,6 @@ pub(crate) fn tap_point_ops(ate: i8) -> Script {
         ark_bn254::Fq2::one(),
     );
 
-    let hash_64b_75k = blake3compiled::hash_64b_75k();
-    let hash_128b_168k = blake3compiled::hash_128b_168k();
-
     let bcsize = 6 + 3;
     let ops_script = script! {
         {precompute_scr}
@@ -990,104 +859,55 @@ pub(crate) fn tap_point_ops(ate: i8) -> Script {
     };
 
     let hash_script = script! {
-
+        // Altstack: [dbl_le, R, add_le, hash_out, hash_in, hash_inaux]
+        // Stack: [t]
         //T
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-
-        {unpack_limbs_to_nibbles()} // 0
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_128b_168k.clone()}
+        {hash_fp4()}
 
         { Fq::fromaltstack()} // inaux
-        {unpack_limbs_to_nibbles()}
-        {hash_64b_75k.clone()}
-        {pack_nibbles_to_limbs()}
+        {hash_fp2()}
         {Fq::fromaltstack()} //input_hash
         {Fq::equalverify(1, 0)}
 
 
         // Altstack: [dbl_le, R, add_le, hash_out]
-        // Stack: [t]
-        for i in 0..13 {
-            {Fq::fromaltstack()}
-        }
-
-        // Altstack: []
-        // Stack: [hash_out, add_le, R, dbl_le]
-
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        {unpack_limbs_to_nibbles()} // 0
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_128b_168k.clone()}
-        {pack_nibbles_to_limbs()}
-        {Fq::toaltstack()}
-
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        {unpack_limbs_to_nibbles()} // 0
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_128b_168k.clone()}
-        {pack_nibbles_to_limbs()}
-        {Fq::toaltstack()}
-
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        {unpack_limbs_to_nibbles()} // 0
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_128b_168k.clone()}
-        {pack_nibbles_to_limbs()}
-        {Fq::toaltstack()}
-
-        // Altstack: [HD, HR, HA]
-        // Stack: [hash_out]
+        // Stack: []
         {Fq::fromaltstack()}
-        {Fq::fromaltstack()}
-        {Fq::fromaltstack()}
-        // Altstack: []
-        // Stack: [hash_out, HA, HR, HD]
-        {Fq::roll(2)}
-        // Stack: [hash_out, HR, HD, HA]
-        {Fq::toaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_64b_75k.clone()}
-        {pack_nibbles_to_limbs()}
+        {Fq2::fromaltstack()} {Fq2::fromaltstack()}
+        {Fq::roll(4)} {Fq::toaltstack()}
+        {hash_fp4()}
+        // Altstack: [dbl_le, R, hash_out]
+        // Stack: [Hadd_le]
 
-        // Altstack: []
-        // Stack: [hash_out, HR, Hle]
-        {Fq::toaltstack()}
-        {unpack_limbs_to_nibbles()}
         {Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_64b_75k.clone()}
-        {pack_nibbles_to_limbs()}
+        {Fq2::fromaltstack()} {Fq2::fromaltstack()}
+        {Fq2::roll(4)} {Fq2::toaltstack()}
+        {hash_fp4()}
+        // Altstack: [dbl_le, hash_out, Hadd_le]
+        // Stack: [HR]
+
+        {Fq2::fromaltstack()}
+        // [HR, Hadd_le, hash_out]
+        {Fq2::fromaltstack()} {Fq2::fromaltstack()}
+        {Fq::roll(4)} {Fq::toaltstack()}
+        {Fq::roll(4)} {Fq::toaltstack()}
+        {Fq::roll(4)} {Fq::toaltstack()}
+        {hash_fp4()}
+
+        // Altstack: [hash_out, Hadd_le, HR]
+        // Stack: [Hdbl_le]
+
+        { Fq::fromaltstack() }
+        { Fq::fromaltstack() }
+        // Stack: [Hdbl_le, HR, Hadd_le]
+        { Fq::roll(1)} {Fq::toaltstack()}
+        { hash_fp2() }
+        // [Hash_le]
+        { Fq::fromaltstack() }
+        { Fq::roll(1) }
+        { hash_fp2() }
+        { Fq::fromaltstack() }
+
         {Fq::equal(1, 0)} OP_NOT OP_VERIFY
     };
 
