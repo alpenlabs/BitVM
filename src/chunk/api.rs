@@ -4,7 +4,8 @@ use std::ops::Neg;
 use crate::chunk::assert::{groth16, hint_to_data, Pubs};
 use crate::chunk::compile::{compile_ops, compile_taps, Vkey};
 use crate::chunk::compile::{ NUM_PUBS};
-use crate::chunk::hint_models::{ElemG1Point, EvalIns, G1PointExt};
+use crate::chunk::hint_models::{ElemG1Point, EvalIns};
+use crate::chunk::hint_models::ElemTraitExt;
 use crate::chunk::segment::Segment;
 use crate::chunk::wots::WOTSPubKey;
 use crate::groth16::g16::{

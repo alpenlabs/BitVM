@@ -712,14 +712,14 @@ pub(crate) fn hint_hash_p(
 mod test {
 
     use crate::{
-        bn254::{fq2::Fq2, utils::fr_push_not_montgomery}, chunk::{hint_models::G1PointExt, primitves::extern_nibbles_to_limbs},
+        bn254::{fq2::Fq2, utils::fr_push_not_montgomery}, chunk::{primitves::extern_nibbles_to_limbs},
     };
     use super::*;
     use ark_bn254::{G1Affine};
     use ark_ff::UniformRand;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
-
+    use crate::chunk::hint_models::ElemTraitExt;
 
     #[test]
     fn test_precompute_table() {

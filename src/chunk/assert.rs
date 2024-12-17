@@ -42,15 +42,17 @@ fn compare(hint_out: &Element, claimed_assertions: &mut Option<Intermediates>) -
             panic!()
         }
     }
+
     let (x, is_field) = match hint_out {
-        Element::G2Acc(r) => (r.out(), false),
-        Element::Fp12(r) => (r.out(), false),
-        Element::FieldElem(f) => (extern_fq_to_nibbles(*f), true),
-        Element::MSMG1(r) => (r.out(), false),
-        Element::ScalarElem(r) => (extern_fr_to_nibbles(*r), true),
-        Element::SparseEval(r) => (r.out(), false),
-        Element::HashBytes(r) => (*r, false),
+        Element::G2Acc(r) => (r.out(), r.ret_type()),
+        Element::Fp12(r) => (r.out(), r.ret_type()),
+        Element::FieldElem(f) => (f.out(), f.ret_type()),
+        Element::MSMG1(r) => (r.out(), r.ret_type()),
+        Element::ScalarElem(r) => (r.out(), r.ret_type()),
+        Element::SparseEval(r) => (r.out(), r.ret_type()),
+        Element::HashBytes(r) => (r.out(), r.ret_type()),
     };
+
     let matches = if is_field {
         let r = get_fq(claimed_assertions);
         extern_fq_to_nibbles(r) == x
@@ -365,7 +367,7 @@ pub(crate) fn groth16(
     push_compare_or_return!(dmul1);
     f_acc = dmul1;
 
-    let result: ElemFp12Acc = f_acc.output.into();
+    let result: ElemFp12Acc = f_acc.output.try_into().unwrap();
     if result.f != ark_bn254::Fq12::ONE {
         return false;
     }
@@ -678,9 +680,9 @@ mod test {
         let p4y = wrap_hints_precompute_Py(false, id_p4y as usize, &gp4y);
     
         // assertioons
-        let n_gp4y = extern_fq_to_nibbles(gp4y.output.into());
+        let n_gp4y = extern_fq_to_nibbles(gp4y.output.try_into().unwrap());
         let a_gp4y = nib_to_byte_array(&n_gp4y);
-        let n_p4y = extern_fq_to_nibbles(p4y.output.into());
+        let n_p4y = extern_fq_to_nibbles(p4y.output.try_into().unwrap());
         let a_p4y = nib_to_byte_array(&n_p4y);
     
         // signature
@@ -755,14 +757,14 @@ mod test {
         let msm = wrap_hint_msm(false, id_msm as usize, Some(msm0.clone()), vec![scalar.clone()], msm_chain_index, pub_vky.clone());
     
         // assertioons
-        let n_scalar = extern_fr_to_nibbles(scalar.output.into());
+        let n_scalar = extern_fr_to_nibbles(scalar.output.try_into().unwrap());
         let a_scalar = nib_to_byte_array(&n_scalar);
-        let n_msm: ElemG1Point = msm.output.into();
+        let n_msm: ElemG1Point = msm.output.try_into().unwrap();
         let n_msm = extern_hash_fps(vec![n_msm.x, n_msm.y], true);
         let a_msm: [u8; 32] = nib_to_byte_array(&n_msm).try_into().unwrap();
         let a_msm: [u8; 20] = a_msm[12..32].try_into().unwrap();
     
-        let n_msm0: ElemG1Point = msm0.output.into();
+        let n_msm0: ElemG1Point = msm0.output.try_into().unwrap();
         let n_msm0 = extern_hash_fps(vec![n_msm0.x, n_msm0.y], true);
         let a_msm0: [u8; 32] = nib_to_byte_array(&n_msm0).try_into().unwrap();
         let a_msm0: [u8; 20] = a_msm0[12..32].try_into().unwrap();
