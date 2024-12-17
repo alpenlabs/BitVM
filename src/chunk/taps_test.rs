@@ -11,6 +11,7 @@ mod test {
     use crate::chunk::primitves::{extern_hash_fps, extern_nibbles_to_limbs};
     use crate::chunk::taps_mul::*;
     use crate::chunk::taps_premiller::*;
+    use crate::chunk::taps_point_eval::*;
     use crate::execute_script_without_stack_limit;
     use ark_ec::CurveGroup;
     use ark_ff::AdditiveGroup;
@@ -906,7 +907,7 @@ mod test {
 
         let (tap_scr, nt2, nt3) = tap_add_eval_mul_for_fixed_Qs_with_frob(t2, t3, q2, q3, ate);
 
-        assert_eq!( (nt2, nt3), (add_with_frob(q2, t2, ate), add_with_frob(q3, t3, ate)));
+        assert_eq!( (nt2, nt3), (get_hint_for_add_with_frob(q2, t2, ate), get_hint_for_add_with_frob(q3, t3, ate)));
 
 
         let tap_len = tap_scr.len();

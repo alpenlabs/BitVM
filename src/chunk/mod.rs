@@ -11,3 +11,4 @@ mod wots;
 pub mod assert;
 pub mod segment;
 mod taps_premiller;
+mod taps_point_eval;

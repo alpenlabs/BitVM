@@ -1,7 +1,7 @@
 
 use crate::treepp;
 
-use super::{hint_models::Element, taps_premiller::*};
+use super::{hint_models::Element, taps_point_eval::*, taps_premiller::*};
 
 pub type SegmentID = u32;
 pub type SegmentOutputType = bool;

@@ -6,7 +6,7 @@ use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::{Field, PrimeField};
 use bitcoin_script::script;
 
-use crate::{chunk::{compile::{bitcom_scripts_from_segments, op_scripts_from_segments, Vkey}, primitves::{tup_to_scr, HashBytes, Sig, SigData}, segment::*, taps_point_ops::{add_with_frob}}, execute_script, groth16::g16::{Assertions, PublicKeys, Signatures, N_TAPLEAVES, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}, signatures::wots::{wots160, wots256}, treepp};
+use crate::{chunk::{compile::{bitcom_scripts_from_segments, op_scripts_from_segments, Vkey}, primitves::{tup_to_scr, HashBytes, Sig, SigData}, segment::*, taps_point_eval::{get_hint_for_add_with_frob}}, execute_script, groth16::g16::{Assertions, PublicKeys, Signatures, N_TAPLEAVES, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}, signatures::wots::{wots160, wots256}, treepp};
 use sha2::{Digest, Sha256};
 
 use super::{api::nib_to_byte_array, compile::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, hint_models::*, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps},  wots::WOTSPubKey};
@@ -329,8 +329,8 @@ pub(crate) fn groth16(
     let leval = wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, 1);
     push_compare_or_return!(leval);
     // (t2, t3) = (le.t2, le.t3);
-    t2 = add_with_frob(pubs.q2, t2, 1);
-    t3 = add_with_frob(pubs.q3, t3, 1);
+    t2 = get_hint_for_add_with_frob(pubs.q2, t2, 1);
+    t3 = get_hint_for_add_with_frob(pubs.q3, t3, 1);
 
 
     let dmul0 = wrap_hints_dense_le_mul0(is_compile_mode, all_output_hints.len(), &f_acc, &leval);
@@ -350,8 +350,8 @@ pub(crate) fn groth16(
 
     let leval = wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, -1);
     push_compare_or_return!(leval);
-    t2 = add_with_frob(pubs.q2, t2, -1);
-    t3 = add_with_frob(pubs.q3, t3, -1);
+    t2 = get_hint_for_add_with_frob(pubs.q2, t2, -1);
+    t3 = get_hint_for_add_with_frob(pubs.q3, t3, -1);
 
     let dmul0 = wrap_hints_dense_le_mul0(is_compile_mode, all_output_hints.len(), &f_acc, &leval);
     push_compare_or_return!(dmul0);
