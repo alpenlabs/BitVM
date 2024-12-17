@@ -203,8 +203,9 @@ pub(crate) fn tap_precompute_Py() -> Script {
         {Fq::equal(1, 0)}
         OP_IF
             {Fq2::drop()}
+            {Fq2::drop()}
+            {Fq::fromaltstack()} 
             {Fq::drop()}
-            {Fq::fromaltstack()} {Fq::drop()}
         OP_ELSE
             // Stack: [hints, pyd_calc, pyd_calc, py]
             {y_eval_scr}
