@@ -117,7 +117,7 @@ pub(crate) fn tap_point_dbl() -> Script {
         ark_bn254::Fq2::one(),
     );
 
-    let (hinted_ell_tangent, _) = new_hinted_ell_by_constant_affine(
+    let (hinted_ell_tangent, _) = hinted_ell_by_constant_affine(
         ark_bn254::Fq::one(),
         ark_bn254::Fq::one(),
         ark_bn254::Fq2::one(),
@@ -227,7 +227,7 @@ pub(crate) fn hint_point_dbl(
     dbl_le1.mul_assign_by_fp(&p.y);
 
     let (_, hints_ell_tangent) =
-        new_hinted_ell_by_constant_affine(p.x, p.y, alpha_tangent, bias_minus_tangent);
+        hinted_ell_by_constant_affine(p.x, p.y, alpha_tangent, bias_minus_tangent);
 
     let mut all_qs = vec![];
     for hint in hints_check_tangent {
@@ -308,7 +308,7 @@ pub(crate) fn tap_point_add_with_frob(ate: i8) -> Script {
         ark_bn254::Fq2::one(),
     );
 
-    let (hinted_ell_chord, _) = new_hinted_ell_by_constant_affine(
+    let (hinted_ell_chord, _) = hinted_ell_by_constant_affine(
         ark_bn254::Fq::one(),
         ark_bn254::Fq::one(),
         ark_bn254::Fq2::one(),
@@ -572,7 +572,7 @@ pub(crate) fn hint_point_add_with_frob(
     add_le1.mul_assign_by_fp(&p.y);
 
     let (_, hints_ell_chord) =
-        new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_chord, bias_minus_chord);
+        hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_chord, bias_minus_chord);
 
     let mut all_qs = vec![];
     for hint in frob_hint {
@@ -699,13 +699,13 @@ pub(crate) fn tap_point_ops(ate: i8) -> Script {
         ark_bn254::Fq2::one(),
     );
 
-    let (hinted_ell_tangent, _) = new_hinted_ell_by_constant_affine(
+    let (hinted_ell_tangent, _) = hinted_ell_by_constant_affine(
         ark_bn254::Fq::one(),
         ark_bn254::Fq::one(),
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
     );
-    let (hinted_ell_chord, _) = new_hinted_ell_by_constant_affine(
+    let (hinted_ell_chord, _) = hinted_ell_by_constant_affine(
         ark_bn254::Fq::one(),
         ark_bn254::Fq::one(),
         ark_bn254::Fq2::one(),
@@ -919,9 +919,9 @@ pub(crate) fn hint_point_ops(
     add_le1.mul_assign_by_fp(&p.y);
 
     let (_, hints_ell_tangent) =
-        new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_tangent, bias_minus_tangent);
+        hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_tangent, bias_minus_tangent);
     let (_, hints_ell_chord) =
-        new_hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_chord, bias_minus_chord);
+        hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_chord, bias_minus_chord);
 
     let mut all_qs = vec![];
     for hint in hints_check_tangent {

@@ -66,8 +66,8 @@ pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
     b.mul_by_034(&ark_bn254::Fq2::ONE, &c3x, &c3y);
 
     let mut hints = vec![];
-    let (_, hint_ell_t2) = new_hinted_ell_by_constant_affine(p2.x, p2.y, alpha_t2, bias_t2);
-    let (_, hint_ell_t3) = new_hinted_ell_by_constant_affine(p3.x, p3.y, alpha_t3, bias_t3);
+    let (_, hint_ell_t2) = hinted_ell_by_constant_affine(p2.x, p2.y, alpha_t2, bias_t2);
+    let (_, hint_ell_t3) = hinted_ell_by_constant_affine(p3.x, p3.y, alpha_t3, bias_t3);
     let (_, hint_sparse_dense_mul) = Fq12::hinted_mul_by_34(f, c3x, c3y);
 
     for hint in hint_ell_t3 {
@@ -135,13 +135,13 @@ pub(crate) fn tap_double_eval_mul_for_fixed_Qs(
     let x3 = alpha_t3.square() - t3.x.double();
     let y3 = bias_t3 - alpha_t3 * x3;
 
-    let (hinted_ell_t2, _) = new_hinted_ell_by_constant_affine(
+    let (hinted_ell_t2, _) = hinted_ell_by_constant_affine(
         ark_bn254::Fq::one(),
         ark_bn254::Fq::one(),
         alpha_t2,
         bias_t2,
     );
-    let (hinted_ell_t3, _) = new_hinted_ell_by_constant_affine(
+    let (hinted_ell_t3, _) = hinted_ell_by_constant_affine(
         ark_bn254::Fq::one(),
         ark_bn254::Fq::one(),
         alpha_t2,
@@ -268,8 +268,8 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
     b.mul_by_034(&ark_bn254::Fq2::ONE, &c3x, &c3y);
 
     let mut hints = vec![];
-    let (_, hint_ell_t2) = new_hinted_ell_by_constant_affine(p2.x, p2.y, alpha_t2, bias_t2);
-    let (_, hint_ell_t3) = new_hinted_ell_by_constant_affine(p3.x, p3.y, alpha_t3, bias_t3);
+    let (_, hint_ell_t2) = hinted_ell_by_constant_affine(p2.x, p2.y, alpha_t2, bias_t2);
+    let (_, hint_ell_t3) = hinted_ell_by_constant_affine(p3.x, p3.y, alpha_t3, bias_t3);
     let (_, hint_sparse_dense_mul) = Fq12::hinted_mul_by_34(f, c3x, c3y);
 
     for hint in hint_ell_t3 {
@@ -338,13 +338,13 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs(
     let x3 = alpha_t3.square() - t3.x - qq3.x;
     let y3 = bias_t3 - alpha_t3 * x3;
 
-    let (hinted_ell_t2, _) = new_hinted_ell_by_constant_affine(
+    let (hinted_ell_t2, _) = hinted_ell_by_constant_affine(
         ark_bn254::Fq::one(),
         ark_bn254::Fq::one(),
         alpha_t2,
         bias_t2,
     );
-    let (hinted_ell_t3, _) = new_hinted_ell_by_constant_affine(
+    let (hinted_ell_t3, _) = hinted_ell_by_constant_affine(
         ark_bn254::Fq::one(),
         ark_bn254::Fq::one(),
         alpha_t3,
@@ -566,8 +566,8 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
     b.mul_by_034(&ark_bn254::Fq2::ONE, &c3x, &c3y);
 
     let mut hints = vec![];
-    let (_, hint_ell_t2) = new_hinted_ell_by_constant_affine(p2.x, p2.y, alpha_t2, bias_t2);
-    let (_, hint_ell_t3) = new_hinted_ell_by_constant_affine(p3.x, p3.y, alpha_t3, bias_t3);
+    let (_, hint_ell_t2) = hinted_ell_by_constant_affine(p2.x, p2.y, alpha_t2, bias_t2);
+    let (_, hint_ell_t3) = hinted_ell_by_constant_affine(p3.x, p3.y, alpha_t3, bias_t3);
     let (_, hint_sparse_dense_mul) = Fq12::hinted_mul_by_34(f, c3x, c3y);
 
     for hint in hint_ell_t3 {
@@ -683,13 +683,13 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs_with_frob(
     let x3 = alpha_t3.square() - t3.x - qq.x;
     let y3 = bias_t3 - alpha_t3 * x3;
 
-    let (hinted_ell_t2, _) = new_hinted_ell_by_constant_affine(
+    let (hinted_ell_t2, _) = hinted_ell_by_constant_affine(
         ark_bn254::Fq::one(),
         ark_bn254::Fq::one(),
         alpha_t2,
         bias_t2,
     );
-    let (hinted_ell_t3, _) = new_hinted_ell_by_constant_affine(
+    let (hinted_ell_t3, _) = hinted_ell_by_constant_affine(
         ark_bn254::Fq::one(),
         ark_bn254::Fq::one(),
         alpha_t3,
