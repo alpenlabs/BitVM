@@ -141,7 +141,7 @@ pub(crate) fn hint_hash_c2(
 
 // precompute P
 pub(crate) fn tap_precompute_Px() -> Script {
-    let (eval_x, _) = new_hinted_x_from_eval_point(
+    let (eval_x, _) = hinted_x_from_eval_point(
         G1Affine::new_unchecked(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE),
         ark_bn254::Fq::ONE,
     );
@@ -191,7 +191,7 @@ pub(crate) fn tap_precompute_Px() -> Script {
 
 // precompute P
 pub(crate) fn tap_precompute_Py() -> Script {
-    let (y_eval_scr, _) = new_hinted_y_from_eval_point(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE);
+    let (y_eval_scr, _) = hinted_y_from_eval_point(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE);
 
     let ops_scr = script! {
         // [hints, pyd_calc] A:[pyd_claim, py]
@@ -233,7 +233,7 @@ pub(crate) fn hints_precompute_Px(
     //     pdy = p.y.inverse().unwrap();
     // }
     let pdx = -p.x * pdy;
-    let (_, hints) = { new_hinted_x_from_eval_point(p, pdy) };
+    let (_, hints) = { hinted_x_from_eval_point(p, pdy) };
 
     let pdash_x = extern_fq_to_nibbles(pdx);
     let pdash_y = extern_fq_to_nibbles(pdy);
@@ -269,7 +269,7 @@ pub(crate) fn hints_precompute_Py(
     }
     let pdash_y = extern_fq_to_nibbles(pdy);
 
-    let (_, hints) = new_hinted_y_from_eval_point(p, pdy);
+    let (_, hints) = hinted_y_from_eval_point(p, pdy);
 
     let p_y = extern_fq_to_nibbles(p);
 

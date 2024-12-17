@@ -352,15 +352,15 @@ pub fn collect_line_coeffs(
 
     for i in (1..ark_bn254::Config::ATE_LOOP_COUNT.len()).rev() {
         let mut line_coeffs = vec![];
-        for j in 0..constants.len() {
+        for constant in &mut constant_iters {
             // double line coeff
             let mut line_coeff = vec![];
-            line_coeff.push(*constant_iters[j].next().unwrap());
+            line_coeff.push(*constant.next().unwrap());
             // add line coeff
             if ark_bn254::Config::ATE_LOOP_COUNT[i - 1] == 1
                 || ark_bn254::Config::ATE_LOOP_COUNT[i - 1] == -1
             {
-                line_coeff.push(*constant_iters[j].next().unwrap());
+                line_coeff.push(*constant.next().unwrap());
             }
             // line coeff for single point
             line_coeffs.push(line_coeff);
@@ -370,22 +370,22 @@ pub fn collect_line_coeffs(
     }
     {
         let mut line_coeffs = vec![];
-        for j in 0..constants.len() {
+        for constant in &mut constant_iters {
             // add line coeff
-            line_coeffs.push(vec![*constant_iters[j].next().unwrap()]);
+            line_coeffs.push(vec![*constant.next().unwrap()]);
         }
         all_line_coeffs.push(line_coeffs);
     }
     {
         let mut line_coeffs = vec![];
-        for j in 0..constants.len() {
+        for constant in &mut constant_iters {
             // add line coeff
-            line_coeffs.push(vec![*constant_iters[j].next().unwrap()]);
+            line_coeffs.push(vec![*constant.next().unwrap()]);
         }
         all_line_coeffs.push(line_coeffs);
     }
-    for i in 0..constant_iters.len() {
-        assert_eq!(constant_iters[i].next(), None);
+    for constant in &mut constant_iters {
+        assert_eq!(constant.next(), None);
     }
     assert_eq!(
         all_line_coeffs.len(),
@@ -430,13 +430,14 @@ pub fn from_eval_point(p: ark_bn254::G1Affine) -> Script {
     }
 }
 
+
 /// input of func (params):
 ///      p.x, p.y
 /// Input Hints On Stack
 ///      tmul hints, p.y_inverse
 /// output on stack:
 ///      x' = -p.x / p.y
-pub fn new_hinted_x_from_eval_point(p: ark_bn254::G1Affine, py_inv: ark_bn254::Fq) -> (Script, Vec<Hint>) {
+pub fn hinted_x_from_eval_point(p: ark_bn254::G1Affine, py_inv: ark_bn254::Fq) -> (Script, Vec<Hint>) {
     let mut hints = Vec::new();
 
     let (hinted_script1, hint1) = Fq::hinted_mul(1, p.y, 0, py_inv);
@@ -470,7 +471,7 @@ pub fn new_hinted_x_from_eval_point(p: ark_bn254::G1Affine, py_inv: ark_bn254::F
 ///      tmul hints, p.y_inverse
 /// output on stack:
 ///      []
-pub fn new_hinted_y_from_eval_point(py: ark_bn254::Fq, py_inv: ark_bn254::Fq) -> (Script, Vec<Hint>) {
+pub fn hinted_y_from_eval_point(py: ark_bn254::Fq, py_inv: ark_bn254::Fq) -> (Script, Vec<Hint>) {
     let mut hints = Vec::new();
 
 
@@ -490,7 +491,6 @@ pub fn new_hinted_y_from_eval_point(py: ark_bn254::Fq, py_inv: ark_bn254::Fq) ->
     (script, hints)
 }
 
-
 /// input of func (params):
 ///      p.x, p.y
 /// Input Hints On Stack
@@ -503,8 +503,8 @@ pub fn hinted_from_eval_point(p: ark_bn254::G1Affine) -> (Script, Vec<Hint>) {
 
     let py_inv = p.y().unwrap().inverse().unwrap();
 
-    let (hinted_script1, hint1) = new_hinted_y_from_eval_point(p.y, py_inv);
-    let (hinted_script2, hint2) = new_hinted_x_from_eval_point(p, py_inv);
+    let (hinted_script1, hint1) = hinted_y_from_eval_point(p.y, py_inv);
+    let (hinted_script2, hint2) = hinted_x_from_eval_point(p, py_inv);
 
     let script_lines = vec![
         // [hints, yinv, x, y]
@@ -1730,9 +1730,9 @@ mod test {
             }
             { fq12_push_not_montgomery(f) }
 
-            {fq_push_not_montgomery(p.y.inverse().unwrap())}
-            {fq_push_not_montgomery(p.x)}
-            {fq_push_not_montgomery(p.y)}
+            { fq_push_not_montgomery(p.y.inverse().unwrap()) }
+            { fq_push_not_montgomery(p.x) }
+            { fq_push_not_montgomery(p.y) }
             { from_eval_point_script }
 
             { ell_by_constant_affine_script.clone() }
@@ -1788,7 +1788,7 @@ mod test {
     fn test_new_hintedx_from_eval_point() {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let p = ark_bn254::G1Affine::rand(&mut prng);
-        let (ell_by_constant_affine_script, hints) = new_hinted_x_from_eval_point(p, p.y.inverse().unwrap());
+        let (ell_by_constant_affine_script, hints) = hinted_x_from_eval_point(p, p.y.inverse().unwrap());
         let script = script! {
             for tmp in hints { 
                 { tmp.push() }
@@ -1809,7 +1809,7 @@ mod test {
     fn test_new_hintedy_from_eval_point() {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let p = ark_bn254::G1Affine::rand(&mut prng);
-        let (ell_by_constant_affine_script, hints) = new_hinted_y_from_eval_point(p.y, p.y.inverse().unwrap());
+        let (ell_by_constant_affine_script, hints) = hinted_y_from_eval_point(p.y, p.y.inverse().unwrap());
         let script = script! {
             for tmp in hints { 
                 { tmp.push() }
