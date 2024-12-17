@@ -106,12 +106,12 @@ pub(crate) fn hash_g2acc_with_hashed_t(is_dbl: bool) -> Script {
 
 // POINT DBL
 pub(crate) fn tap_point_dbl() -> Script {
-    let (hinted_double_line, _) = new_hinted_affine_double_line(
+    let (hinted_double_line, _) = hinted_affine_double_line(
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
     );
-    let (hinted_check_tangent, _) = new_hinted_check_tangent_line(
+    let (hinted_check_tangent, _) = hinted_check_tangent_line(
         ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE),
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
@@ -147,12 +147,12 @@ pub(crate) fn tap_point_dbl() -> Script {
         { Fq2::toaltstack() } // le.1
 
         //[a, b, tx, ty]
-        { Fq2::roll(4)} // bias
-        //[a, tx, ty, b]
         { Fq2::roll(6)} // alpha
-        //[tx, ty, b, a]
+        //[a, tx, ty, a]
+        { Fq2::roll(6)} // bias
+        //[tx, ty, a, b]
         { Fq2::copy(6)} // t.x
-        //[tx, ty, b, a, tx]
+        //[tx, ty, a, b, tx]
         { hinted_double_line } // R
         // [t, R]
 
@@ -215,9 +215,9 @@ pub(crate) fn hint_point_dbl(
     let new_tx = alpha_tangent.square() - t.x.double();
     let new_ty = bias_minus_tangent - alpha_tangent * new_tx;
     let (_, hints_double_line) =
-        new_hinted_affine_double_line(t.x, alpha_tangent, bias_minus_tangent);
+        hinted_affine_double_line(t.x, alpha_tangent, bias_minus_tangent);
     let (_, hints_check_tangent) =
-        new_hinted_check_tangent_line(t, alpha_tangent, bias_minus_tangent);
+        hinted_check_tangent_line(t, alpha_tangent, bias_minus_tangent);
 
     // affine mode as well
     let mut dbl_le0 = alpha_tangent;
@@ -291,17 +291,17 @@ pub(crate) fn tap_point_add_with_frob(ate: i8) -> Script {
         ate_unsigned_bit = 0;
     }
 
-    let (hinted_check_chord_t, _) = new_hinted_check_line_through_point(
+    let (hinted_check_chord_t, _) = hinted_check_line_through_point(
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
     );
-    let (hinted_check_chord_q, _) = new_hinted_check_line_through_point(
+    let (hinted_check_chord_q, _) = hinted_check_line_through_point(
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
     );
-    let (hinted_add_line, _) = new_hinted_affine_add_line(
+    let (hinted_add_line, _) = hinted_affine_add_line(
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
@@ -347,10 +347,10 @@ pub(crate) fn tap_point_add_with_frob(ate: i8) -> Script {
         { Fq2::toaltstack() } // le.1
 
         //[a, b, tx, ty, qx, qy]
-        { Fq2::roll(8) } // bias
-        //[a, tx, ty, qx, qy, b]
         { Fq2::roll(10) } // alpha
-        //[tx, ty, qx, qy, b, a]
+        //[a, tx, ty, qx, qy, b]
+        { Fq2::roll(10) } // bias
+        //[tx, ty, qx, qy, a, b]
         { Fq2::roll(6) } //q.x
         //[tx, ty, qy, b, a, qx]
         { Fq2::copy(10) } // t.x from altstack
@@ -560,10 +560,10 @@ pub(crate) fn hint_point_add_with_frob(
     let p_dash_y = p.y;
 
     let (_, hints_check_chord_t) =
-        new_hinted_check_line_through_point(tt.x, alpha_chord, bias_minus_chord);
+        hinted_check_line_through_point(tt.x, alpha_chord, bias_minus_chord);
     let (_, hints_check_chord_q) =
-        new_hinted_check_line_through_point(qq.x, alpha_chord, bias_minus_chord);
-    let (_, hints_add_line) = new_hinted_affine_add_line(tt.x, qq.x, alpha_chord, bias_minus_chord);
+        hinted_check_line_through_point(qq.x, alpha_chord, bias_minus_chord);
+    let (_, hints_add_line) = hinted_affine_add_line(tt.x, qq.x, alpha_chord, bias_minus_chord);
 
     let mut add_le0 = alpha_chord;
     add_le0.mul_assign_by_fp(&p.x);
@@ -671,28 +671,28 @@ pub(crate) fn tap_point_ops(ate: i8) -> Script {
         {Fq::toaltstack()}
         {Fq::toaltstack()}
     };
-    let (hinted_double_line, _) = new_hinted_affine_double_line(
+    let (hinted_double_line, _) = hinted_affine_double_line(
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
     );
-    let (hinted_check_tangent, _) = new_hinted_check_tangent_line(
+    let (hinted_check_tangent, _) = hinted_check_tangent_line(
         ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE),
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
     );
 
-    let (hinted_check_chord_t, _) = new_hinted_check_line_through_point(
+    let (hinted_check_chord_t, _) = hinted_check_line_through_point(
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
     );
-    let (hinted_check_chord_q, _) = new_hinted_check_line_through_point(
+    let (hinted_check_chord_q, _) = hinted_check_line_through_point(
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
     );
-    let (hinted_add_line, _) = new_hinted_affine_add_line(
+    let (hinted_add_line, _) = hinted_affine_add_line(
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
         ark_bn254::Fq2::one(),
@@ -761,8 +761,8 @@ pub(crate) fn tap_point_ops(ate: i8) -> Script {
         { Fq2::toaltstack() } // le.1
 
 
-        { Fq2::copy(bcsize+4)} // bias
-        { Fq2::copy(bcsize+8)} // alpha
+        { Fq2::copy(bcsize+6)} // alpha
+        { Fq2::copy(bcsize+6)} // bias
         { Fq2::copy(bcsize+6)} // t.x
         { hinted_double_line }
         { Fq2::toaltstack() }
@@ -793,8 +793,8 @@ pub(crate) fn tap_point_ops(ate: i8) -> Script {
         { Fq2::copy(10+1) } // p_dash
         { hinted_ell_chord }
 
-        { Fq2::roll(4+bcsize+4) } // bias
         { Fq2::roll(6+bcsize+4) } // alpha
+        { Fq2::roll(6+bcsize+4) } // bias
         { Fq2::copy(4+4+4+1) } //q.x
         { Fq2::fromaltstack() } // t.x from altstack
         { hinted_add_line } // alpha, bias chord consumed
@@ -881,9 +881,9 @@ pub(crate) fn hint_point_ops(
     let tx = alpha_tangent.square() - t.x.double();
     let ty = bias_minus_tangent - alpha_tangent * tx;
     let (_, hints_double_line) =
-        new_hinted_affine_double_line(t.x, alpha_tangent, bias_minus_tangent);
+        hinted_affine_double_line(t.x, alpha_tangent, bias_minus_tangent);
     let (_, hints_check_tangent) =
-        new_hinted_check_tangent_line(t, alpha_tangent, bias_minus_tangent);
+        hinted_check_tangent_line(t, alpha_tangent, bias_minus_tangent);
 
     let tt = G2Affine::new_unchecked(tx, ty);
 
@@ -900,10 +900,10 @@ pub(crate) fn hint_point_ops(
     let p_dash_y = p.y;
 
     let (_, hints_check_chord_t) =
-        new_hinted_check_line_through_point(tt.x, alpha_chord, bias_minus_chord);
+        hinted_check_line_through_point(tt.x, alpha_chord, bias_minus_chord);
     let (_, hints_check_chord_q) =
-        new_hinted_check_line_through_point(qq.x, alpha_chord, bias_minus_chord);
-    let (_, hints_add_line) = new_hinted_affine_add_line(tt.x, qq.x, alpha_chord, bias_minus_chord);
+        hinted_check_line_through_point(qq.x, alpha_chord, bias_minus_chord);
+    let (_, hints_add_line) = hinted_affine_add_line(tt.x, qq.x, alpha_chord, bias_minus_chord);
 
     // affine mode as well
     let mut dbl_le0 = alpha_tangent;
