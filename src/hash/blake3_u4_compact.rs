@@ -6,8 +6,9 @@ pub use bitcoin_script::builder::StructuredScript as Script;
 pub use bitcoin_script::script;
 
 use crate::bigint::U254;
+use crate::execute_script;
 use crate::pseudo::NMUL;
-use crate::u4::{u4_add_stack::*, u4_logic_stack::*, u4_shift_stack::*, u4_std::u4_repeat_number};
+use crate::u4::{u4_add_stack::*, u4_logic_stack::*, u4_shift_stack::*};
 
 const IV: [u32; 8] = [
     0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
@@ -637,9 +638,11 @@ pub fn pack_nibbles_to_limbs() -> Script {
 }
 
 // assumes that you have the message of 64 byte in compact form.
-pub fn blake3_u4_64bytes(stack: &mut StackTracker) {
-    stack.define(9, "msg0p1");
-    stack.define(9, "msg0p0");
+pub fn blake3_u4_64bytes(stack: &mut StackTracker, define_var: bool) {
+    if define_var {
+        stack.define(9, "msg0p1");
+        stack.define(9, "msg0p0");
+    }
 
     stack.custom(
         script!(
@@ -664,7 +667,7 @@ pub fn blake3_u4_64bytes(stack: &mut StackTracker) {
         1,
         false,
         0,
-        "unpack msg0p2",
+        "unpack msg0p0",
     );
 
     //make a hashmap of msgs
@@ -702,11 +705,13 @@ pub fn blake3_u4_64bytes(stack: &mut StackTracker) {
 }
 
 // assumes that you have the message of 128 byte in compact form.
-pub fn blake3_u4_128bytes(stack: &mut StackTracker) {
-    stack.define(9, "msg1p1");
-    stack.define(9, "msg1p0");
-    stack.define(9, "msg0p1");
-    stack.define(9, "msg0p0");
+pub fn blake3_u4_128bytes(stack: &mut StackTracker, define_var: bool) {
+    if define_var {
+        stack.define(9, "msg1p1");
+        stack.define(9, "msg1p0");
+        stack.define(9, "msg0p1");
+        stack.define(9, "msg0p0");
+    }
 
     stack.custom(
         script!(
@@ -718,7 +723,7 @@ pub fn blake3_u4_128bytes(stack: &mut StackTracker) {
         1,
         false,
         0,
-        "unpack msg0p1",
+        "unpack msg0p0",
     );
 
     stack.custom(
@@ -731,7 +736,7 @@ pub fn blake3_u4_128bytes(stack: &mut StackTracker) {
         1,
         false,
         0,
-        "unpack msg0p2",
+        "unpack msg0p1",
     );
 
     //make a hashmap of msgs
@@ -777,7 +782,7 @@ pub fn blake3_u4_128bytes(stack: &mut StackTracker) {
         1,
         false,
         0,
-        "unpack msg1p1",
+        "unpack msg1p0",
     );
 
     stack.custom(
@@ -790,7 +795,7 @@ pub fn blake3_u4_128bytes(stack: &mut StackTracker) {
         1,
         false,
         0,
-        "unpack msg0p2",
+        "unpack msg0p1",
     );
 
     //make a hashmap of msgs
@@ -828,13 +833,15 @@ pub fn blake3_u4_128bytes(stack: &mut StackTracker) {
 }
 
 // assumes that you have the message of 192 byte in compact form.
-pub fn blake3_u4_192bytes(stack: &mut StackTracker) {
-    stack.define(9, "msg2p1");
-    stack.define(9, "msg2p0");
-    stack.define(9, "msg1p1");
-    stack.define(9, "msg1p0");
-    stack.define(9, "msg0p1");
-    stack.define(9, "msg0p0");
+pub fn blake3_u4_192bytes(stack: &mut StackTracker, define_var: bool) {
+    if define_var {
+        stack.define(9, "msg2p1");
+        stack.define(9, "msg2p0");
+        stack.define(9, "msg1p1");
+        stack.define(9, "msg1p0");
+        stack.define(9, "msg0p1");
+        stack.define(9, "msg0p0");
+    }
 
     stack.custom(
         script!(
@@ -1019,8 +1026,9 @@ mod tests {
 
     use std::collections::HashMap;
 
+    use ark_std::perf_trace::Colorize;
     use bitcoin::{
-        opcodes::all::{OP_FROMALTSTACK, OP_TOALTSTACK},
+        opcodes::all::{OP_EQUALVERIFY, OP_FROMALTSTACK, OP_TOALTSTACK},
         script,
     };
     pub use bitcoin_script::script;
@@ -1031,97 +1039,6 @@ mod tests {
 
     use super::*;
     use crate::{execute_script, u4::u4_std::u4_hex_to_nibbles};
-
-    // pub fn verify_blake3_hash(result: &str) -> Script {
-    //     script! {
-    //         { u4_hex_to_nibbles(result)}
-    //         for _ in 0..result.len() {
-    //             OP_TOALTSTACK
-    //         }
-
-    //         for i in 1..result.len() {
-    //             {i}
-    //             OP_ROLL
-    //         }
-
-    //         for _ in 0..result.len() {
-    //             OP_FROMALTSTACK
-    //             OP_EQUALVERIFY
-    //         }
-
-    //     }
-    // }
-
-    // #[test]
-    // fn test_blake3() {
-    //     let hex_out = "86ca95aefdee3d969af9bcc78b48a5c1115be5d66cafc2fc106bbd982d820e70";
-
-    //     let mut stack = StackTracker::new();
-
-    //     let hex_in = "00000001".repeat(16);
-    //     stack.custom(
-    //         script! { { u4_hex_to_nibbles(&hex_in) } },
-    //         0,
-    //         false,
-    //         0,
-    //         "msg",
-    //     );
-
-    //     let start = stack.get_script_len();
-    //     blake3(&mut stack, 64, 8);
-    //     let end = stack.get_script_len();
-    //     println!("Blake3 size: {}", end - start);
-
-    //     // stack.custom(
-    //     //     script! { {verify_blake3_hash(hex_out)}},
-    //     //     1,
-    //     //     false,
-    //     //     0,
-    //     //     "verify",
-    //     // );
-
-    //     // stack.op_true();
-
-    //     interactive(&stack);
-
-    //     assert!(stack.run().success);
-    // }
-
-    // fn test_long_blakes(repeat: u32, hex_out: &str) {
-    //     let mut stack = StackTracker::new();
-
-    //     let hex_in = "00000001".repeat(repeat as usize);
-    //     stack.custom(
-    //         script! { { u4_hex_to_nibbles(&hex_in) } },
-    //         0,
-    //         false,
-    //         0,
-    //         "msg",
-    //     );
-
-    //     let start = stack.get_script().len();
-    //     blake3(&mut stack, repeat * 4, 8);
-    //     let end = stack.get_script().len();
-    //     println!("Blake3 size: {} for: {} bytes", end - start, repeat * 4);
-
-    //     stack.custom(
-    //         script! { {verify_blake3_hash(hex_out)}},
-    //         1,
-    //         false,
-    //         0,
-    //         "verify",
-    //     );
-
-    //     stack.op_true();
-
-    //     println!(
-    //         "Max Stack Size: {} for: {} bytes",
-    //         stack.get_max_stack_size(),
-    //         repeat * 4
-    //     );
-
-    //     assert!(stack.run().success);
-    // }
 
     #[test]
     fn test_rrot7() {
@@ -1255,10 +1172,8 @@ mod tests {
         );
 
         let start = stack.get_script().len();
-        blake3_u4_64bytes(&mut stack);
+        blake3_u4_64bytes(&mut stack, true);
         let end = stack.get_script().len();
-
-        stack.debug();
 
         println!("\n \n Script Size for 64 bytes: {}", end - start);
         println!("Max Stack Use for 64 bytes: {}", stack.get_max_stack_size());
@@ -1313,10 +1228,8 @@ mod tests {
         );
 
         let start = stack.get_script().len();
-        blake3_u4_128bytes(&mut stack);
+        blake3_u4_128bytes(&mut stack, true);
         let end = stack.get_script().len();
-
-        stack.debug();
 
         println!("\n \n Script Size for 128 bytes: {}", end - start);
         println!(
@@ -1393,15 +1306,322 @@ mod tests {
         );
 
         let start = stack.get_script().len();
-        blake3_u4_192bytes(&mut stack);
+        blake3_u4_192bytes(&mut stack, true);
         let end = stack.get_script().len();
-
-        stack.debug();
 
         println!("\n \n Script Size for 192 bytes: {}", end - start);
         println!(
             "Max Stack Use for 192 bytes: {}",
             stack.get_max_stack_size()
         );
+    }
+
+    #[test]
+    fn test_blake3_u4_64byte_randominputs() {
+        let mut stack = StackTracker::new();
+
+        // generate 64 random bytes as 16 u32 numbers.
+        let mut prng = ChaCha20Rng::seed_from_u64(42);
+        let nu32_arr: Vec<u32> = (0..16).into_iter().map(|_| prng.gen()).collect();
+        let nu32_byte_arr = nu32_arr
+            .iter()
+            .flat_map(|i| (i).to_le_bytes())
+            .collect::<Vec<_>>();
+        let input_hex_string = hex::encode(&nu32_byte_arr);
+
+        let input_str_processed = hex::encode(
+            nu32_arr
+                .iter()
+                .flat_map(|i| (i).to_be_bytes())
+                .collect::<Vec<_>>(),
+        );
+
+        println!("Input Hex String :: {}", input_hex_string);
+        println!("Input Hex String processed:: {}", input_str_processed);
+
+        // compute the hash using the official implementation
+        let expected_hex_out = blake3::hash(
+            &nu32_arr
+                .iter()
+                .flat_map(|i| (i).to_le_bytes())
+                .collect::<Vec<_>>(),
+        )
+        .to_string();
+
+        println!("Expected Hash :: {}", expected_hex_out);
+
+        // push the random u32 numbers as nibbles and pack them
+
+        stack.var(
+            9,
+            script! {
+                {u4_hex_to_nibbles(&input_str_processed[0..64])}
+                {pack_nibbles_to_limbs()}
+            },
+            "msg0p0",
+        );
+
+        stack.var(
+            9,
+            script! {
+                {u4_hex_to_nibbles(&input_str_processed[64..128])}
+                {pack_nibbles_to_limbs()}
+            },
+            "msg0p1",
+        );
+
+        blake3_u4_64bytes(&mut stack, false);
+
+        //push the expected hash
+        stack.var(
+            64,
+            script! {
+                    // for _ in 0..64{
+                    //     OP_TOALTSTACK
+                    // }
+                {u4_hex_to_nibbles(&expected_hex_out.chars().rev().collect::<String>())}
+            },
+            "expected-hash",
+        );
+
+        stack.custom(
+            script! {
+                for _ in 0..64{
+                    OP_FROMALTSTACK
+                    OP_EQUALVERIFY
+                }
+            },
+            1,
+            false,
+            0,
+            "verify",
+        );
+
+        stack.op_true();
+
+        assert!(stack.run().success);
+    }
+
+    #[test]
+    fn test_blake3_u4_128byte_randominputs() {
+        let mut stack = StackTracker::new();
+
+        // generate 64 random bytes as 32 u32 numbers.
+        let mut prng = ChaCha20Rng::seed_from_u64(42);
+        let nu32_arr: Vec<u32> = (0..32).into_iter().map(|_| prng.gen()).collect();
+        let nu32_byte_arr = nu32_arr
+            .iter()
+            .flat_map(|i| (i).to_le_bytes())
+            .collect::<Vec<_>>();
+        let input_hex_string = hex::encode(&nu32_byte_arr);
+
+        let input_str_processed = hex::encode(
+            nu32_arr
+                .iter()
+                .flat_map(|i| (i).to_be_bytes())
+                .collect::<Vec<_>>(),
+        );
+
+        println!("Input Hex String :: {}", input_hex_string);
+        println!("Input Hex String processed:: {}", input_str_processed);
+
+        // compute the hash using the official implementation
+        let expected_hex_out = blake3::hash(
+            &nu32_arr
+                .iter()
+                .flat_map(|i| (i).to_le_bytes())
+                .collect::<Vec<_>>(),
+        )
+        .to_string();
+
+        println!("Expected Hash :: {}", expected_hex_out);
+
+        // push the random u32 numbers as nibbles and pack them
+
+        stack.var(
+            9,
+            script! {
+                {u4_hex_to_nibbles(&input_str_processed[128..192])}
+                {pack_nibbles_to_limbs()}
+            },
+            "msg1p0",
+        );
+
+        stack.var(
+            9,
+            script! {
+                {u4_hex_to_nibbles(&input_str_processed[192..256])}
+                {pack_nibbles_to_limbs()}
+            },
+            "msg1p1",
+        );
+
+        stack.var(
+            9,
+            script! {
+                {u4_hex_to_nibbles(&input_str_processed[0..64])}
+                {pack_nibbles_to_limbs()}
+            },
+            "msg0p0",
+        );
+
+        stack.var(
+            9,
+            script! {
+                {u4_hex_to_nibbles(&input_str_processed[64..128])}
+                {pack_nibbles_to_limbs()}
+            },
+            "msg0p1",
+        );
+
+        blake3_u4_128bytes(&mut stack, false);
+
+        //push the expected hash
+        stack.var(
+            64,
+            script! {
+                    // for _ in 0..64{
+                    //     OP_TOALTSTACK
+                    // }
+                {u4_hex_to_nibbles(&expected_hex_out.chars().rev().collect::<String>())}
+            },
+            "expected-hash",
+        );
+
+        stack.custom(
+            script! {
+                for _ in 0..64{
+                    OP_FROMALTSTACK
+                    OP_EQUALVERIFY
+                }
+            },
+            1,
+            false,
+            0,
+            "verify",
+        );
+
+        stack.op_true();
+
+        assert!(stack.run().success);
+    }
+
+    #[test]
+    fn test_blake3_u4_192byte_randominputs() {
+        let mut stack = StackTracker::new();
+
+        // generate 64 random bytes as 48 u32 numbers.
+        let mut prng = ChaCha20Rng::seed_from_u64(42);
+        let nu32_arr: Vec<u32> = (0..48).into_iter().map(|_| prng.gen()).collect();
+        let nu32_byte_arr = nu32_arr
+            .iter()
+            .flat_map(|i| (i).to_le_bytes())
+            .collect::<Vec<_>>();
+        let input_hex_string = hex::encode(&nu32_byte_arr);
+
+        let input_str_processed = hex::encode(
+            nu32_arr
+                .iter()
+                .flat_map(|i| (i).to_be_bytes())
+                .collect::<Vec<_>>(),
+        );
+
+        println!("Input Hex String :: {}", input_hex_string);
+        println!("Input Hex String processed:: {}", input_str_processed);
+
+        // compute the hash using the official implementation
+        let expected_hex_out = blake3::hash(
+            &nu32_arr
+                .iter()
+                .flat_map(|i| (i).to_le_bytes())
+                .collect::<Vec<_>>(),
+        )
+        .to_string();
+
+        println!("Expected Hash :: {}", expected_hex_out);
+
+        // push the random u32 numbers as nibbles and pack them
+
+        stack.var(
+            9,
+            script! {
+                {u4_hex_to_nibbles(&input_str_processed[256..320])}
+                {pack_nibbles_to_limbs()}
+            },
+            "msg2p0",
+        );
+
+        stack.var(
+            9,
+            script! {
+                {u4_hex_to_nibbles(&input_str_processed[320..384])}
+                {pack_nibbles_to_limbs()}
+            },
+            "msg2p1",
+        );
+
+        stack.var(
+            9,
+            script! {
+                {u4_hex_to_nibbles(&input_str_processed[128..192])}
+                {pack_nibbles_to_limbs()}
+            },
+            "msg1p0",
+        );
+
+        stack.var(
+            9,
+            script! {
+                {u4_hex_to_nibbles(&input_str_processed[192..256])}
+                {pack_nibbles_to_limbs()}
+            },
+            "msg1p1",
+        );
+
+        stack.var(
+            9,
+            script! {
+                {u4_hex_to_nibbles(&input_str_processed[0..64])}
+                {pack_nibbles_to_limbs()}
+            },
+            "msg0p0",
+        );
+
+        stack.var(
+            9,
+            script! {
+                {u4_hex_to_nibbles(&input_str_processed[64..128])}
+                {pack_nibbles_to_limbs()}
+            },
+            "msg0p1",
+        );
+
+        blake3_u4_192bytes(&mut stack, false);
+
+        //push the expected hash
+        stack.var(
+            64,
+            script! {
+                {u4_hex_to_nibbles(&expected_hex_out.chars().rev().collect::<String>())}
+            },
+            "expected-hash",
+        );
+
+        stack.custom(
+            script! {
+                for _ in 0..64{
+                    OP_FROMALTSTACK
+                    OP_EQUALVERIFY
+                }
+            },
+            1,
+            false,
+            0,
+            "verify",
+        );
+
+        stack.op_true();
+
+        assert!(stack.run().success);
     }
 }
