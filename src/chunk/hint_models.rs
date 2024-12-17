@@ -131,10 +131,14 @@ pub(crate) struct ElemG2PointAcc {
 
 impl ElemG2PointAcc {
     pub(crate) fn out(&self) -> HashBytes {
-        let hash_t = extern_hash_fps(vec![self.t.x.c0, self.t.x.c1, self.t.y.c0, self.t.y.c1], true);
+        let hash_t = self.hash_t();
         let hash_le = self.hash_le();
         let hash = extern_hash_nibbles(vec![hash_t, hash_le], true);
         hash
+    }
+
+    pub(crate) fn hash_t(&self) -> HashBytes {
+        extern_hash_fps(vec![self.t.x.c0, self.t.x.c1, self.t.y.c0, self.t.y.c1], true)
     }
 
     pub(crate) fn hash_le(&self) -> HashBytes {

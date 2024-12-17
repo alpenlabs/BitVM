@@ -4,7 +4,7 @@ mod test {
 
     use crate::bn254::fp254impl::Fp254Impl;
     use crate::bn254::fq::Fq;
-    use crate::bn254::utils::fq_push_not_montgomery;
+    use crate::bn254::utils::{fq2_push_not_montgomery, fq_push_not_montgomery};
     use crate::chunk::hint_models::*;
     use crate::chunk::primitves::{fp12_to_vec, pack_nibbles_to_limbs};
     use crate::chunk::taps_point_ops::*;
@@ -1023,5 +1023,123 @@ mod test {
     }   
 
 
+
+    // TEST G2PointAcc Hasher
+
+    #[test]
+    fn test_hash_t_with_hashed_le() {
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let t = ark_bn254::G2Affine::rand(&mut prng);
+        
+        let dbl_le = Some((ark_bn254::Fq2::rand(&mut prng), ark_bn254::Fq2::rand(&mut prng)));
+        let add_le = Some((ark_bn254::Fq2::rand(&mut prng), ark_bn254::Fq2::rand(&mut prng)));
+        let t = ElemG2PointAcc { t, dbl_le, add_le };
+
+        // [t, hashed_le, hash_result]
+        let scr = script!{
+            {fq2_push_not_montgomery(t.t.x)}
+            {fq2_push_not_montgomery(t.t.y)}
+            for i in extern_nibbles_to_limbs(t.hash_le()) {
+                {i}
+            }
+            for i in extern_nibbles_to_limbs(t.out()) {
+                {i}
+            }
+            {hash_g2acc_with_hashed_le()}
+        };
+
+        let res = execute_script(scr);
+        for i in 0..res.final_stack.len() {
+            println!("{i:3}: {:?}", res.final_stack.get(i));
+        }
+        assert!(res.success);
+    }
+
+    #[test]
+    fn test_hash_t_with_dbl_le() {
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let t = ark_bn254::G2Affine::rand(&mut prng);
+        
+        let dbl_le = Some((ark_bn254::Fq2::rand(&mut prng), ark_bn254::Fq2::rand(&mut prng)));
+        let add_le = None;
+        let t = ElemG2PointAcc { t, dbl_le, add_le };
+
+        // [t, dbl_le, hash_result]
+        let scr = script!{
+            {fq2_push_not_montgomery(t.t.x)}
+            {fq2_push_not_montgomery(t.t.y)}
+            {fq2_push_not_montgomery(t.dbl_le.unwrap().0)}
+            {fq2_push_not_montgomery(t.dbl_le.unwrap().1)}
+
+            for i in extern_nibbles_to_limbs(t.out()) {
+                {i}
+            }
+            {hash_g2acc_with_raw_le(true)}
+        };
+        let res = execute_script(scr);
+        for i in 0..res.final_stack.len() {
+            println!("{i:3}: {:?}", res.final_stack.get(i));
+        }
+        assert!(res.success);
+    }
+
+    #[test]
+    fn test_hash_t_with_add_le() {
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let t = ark_bn254::G2Affine::rand(&mut prng);
+
+        let dbl_le = None;
+        let add_le = Some((ark_bn254::Fq2::rand(&mut prng), ark_bn254::Fq2::rand(&mut prng)));
+        let t = ElemG2PointAcc { t, dbl_le, add_le };
+
+        // [t, dbl_le, hash_result]
+        let scr = script!{
+            {fq2_push_not_montgomery(t.t.x)}
+            {fq2_push_not_montgomery(t.t.y)}
+            {fq2_push_not_montgomery(t.add_le.unwrap().0)}
+            {fq2_push_not_montgomery(t.add_le.unwrap().1)}
+
+            for i in extern_nibbles_to_limbs(t.out()) {
+                {i}
+            }
+            {hash_g2acc_with_raw_le(false)}
+        };
+        let res = execute_script(scr);
+        for i in 0..res.final_stack.len() {
+            println!("{i:3}: {:?}", res.final_stack.get(i));
+        }
+        assert!(res.success);
+    }
+
+    #[test]
+    fn test_hash_t_with_aux_t() {
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let t = ark_bn254::G2Affine::rand(&mut prng);
+
+        let dbl_le = Some((ark_bn254::Fq2::rand(&mut prng), ark_bn254::Fq2::rand(&mut prng)));;
+        let add_le = Some((ark_bn254::Fq2::rand(&mut prng), ark_bn254::Fq2::rand(&mut prng)));
+        let t = ElemG2PointAcc { t, dbl_le, add_le };
+
+        //Stack: [Ht, cur_le, Hother_le, hash_result]
+        let scr = script!{
+            for i in extern_nibbles_to_limbs(t.hash_t()) {
+                {i}
+            }
+            {fq2_push_not_montgomery(t.dbl_le.unwrap().0)}
+            {fq2_push_not_montgomery(t.dbl_le.unwrap().1)}
+            for i in extern_nibbles_to_limbs(t.hash_other_le(true)) {
+                {i}
+            }
+            for i in extern_nibbles_to_limbs(t.out()) {
+                {i}
+            }
+            {hash_g2acc_with_hashed_t(true)}
+        };
+        let res = execute_script(scr);
+        for i in 0..res.final_stack.len() {
+            println!("{i:3}: {:?}", res.final_stack.get(i));
+        }
+        assert!(res.success);
+    }
 }
 

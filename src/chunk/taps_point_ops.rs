@@ -19,7 +19,93 @@ use super::primitves::{extern_hash_fps, hash_fp12_192};
 use super::hint_models::*;
 
 
+pub(crate) fn hash_g2acc_with_hashed_le() -> Script {
+    script! {
+        //Stack: [tx, ty, hash_inaux, hash_result]
+        //T
+        {Fq2::toaltstack()} 
+        {hash_fp4()} // HT
 
+        {Fq::fromaltstack()}
+        {hash_fp2()}
+
+        { Fq::fromaltstack()}
+        {Fq::equal(1, 0)}
+    }
+}
+
+pub(crate) fn hash_g2acc_with_raw_le(is_dbl:bool) -> Script {
+    script!{
+         // Stack: [tx, ty, dbl_le, hash_result]
+        {Fq::toaltstack()} {Fq2::toaltstack()} {Fq2::toaltstack()}
+        {hash_fp4()} {Fq2::fromaltstack()} {Fq2::fromaltstack()}  // [HT, dbl_le]
+        {Fq::roll(4)} {Fq::toaltstack()} // [dbl_le]
+        {hash_fp4()} // [Hdbl_le]
+        for _ in 0..9 {
+            {0}
+        }
+        if !is_dbl {
+            {Fq::roll(1)}
+        }
+        {hash_fp2()} // [Hle]
+        {Fq::fromaltstack()} // [Hle, HT]
+        {Fq::roll(1)}
+        {hash_fp2()} // [Hash_calc]
+        {Fq::fromaltstack()}
+        {Fq::equal(1, 0)}
+    }
+}
+
+pub(crate) fn hash_g2acc_with_both_raw_le() -> Script {
+    script!{
+        //Stack: [tx, ty, dbl_le, add_le, hash_result]
+        {Fq::toaltstack()} 
+        {Fq2::toaltstack()} {Fq2::toaltstack()}
+        {Fq2::toaltstack()} {Fq2::toaltstack()}
+        {hash_fp4()} 
+        {Fq2::fromaltstack()} {Fq2::fromaltstack()} // [HT, dbl_le]
+        {Fq::roll(4)} {Fq::toaltstack()} // [dbl_le]
+        {hash_fp4()} // [Hdbl_le]
+        {Fq::fromaltstack()} // [Hdbl_le, HT]
+        {Fq2::fromaltstack()} {Fq2::fromaltstack()} // [Hdbl_le, HT, add_le]
+        {Fq2::roll(4)} {Fq2::toaltstack()} // [add_le]
+        {hash_fp4()} // [Hadd_le]
+        {Fq::fromaltstack()} // [Hadd_le, Hdbl_le]
+        {Fq::roll(1)}
+        {hash_fp2()} // [Hle]
+        {Fq::fromaltstack()} // [Hle, HT]
+        {Fq::roll(1)}
+        {hash_fp2()} // [HTcacl]
+        {Fq::fromaltstack()}
+        {Fq::equal(1, 0)}
+    }
+}
+
+pub(crate) fn hash_g2acc_with_hashed_t(is_dbl: bool) -> Script {
+    script!{
+        //Stack: [Ht, cur_le, Hother_le, hash_result]
+        {Fq::toaltstack()} 
+        {Fq::roll(5)} {Fq::toaltstack()} 
+        {Fq::toaltstack()}
+        // A:[hash_result, Ht, Hother_le]
+        // M:[cur_le]
+        {hash_fp4()} 
+
+        {Fq::fromaltstack()}
+        // [HC_le, HO_le]
+        if !is_dbl {
+            {Fq::roll(1)}
+        }
+        {hash_fp2()}
+        // [Hle]
+        {Fq::fromaltstack()}
+        // [Hle, HT]
+        {Fq::roll(1)}
+        {hash_fp2()}
+        {Fq::fromaltstack()}
+        {Fq::equal(1, 0)}
+    }
+}
 
 // POINT DBL
 pub(crate) fn tap_point_dbl() -> Script {
@@ -84,39 +170,20 @@ pub(crate) fn tap_point_dbl() -> Script {
     let hash_script = script! {
         //Altstack: [hash_out, hash_in, hash_inaux]
         //Stack: [tx, ty, Rx, Ry, le0, le1]
-        //T
-        {Fq2::toaltstack()} {Fq2::toaltstack()}
-        {Fq2::toaltstack()} {Fq2::toaltstack()}
-        {hash_fp4()} // HT
+        {Fq::fromaltstack()} {Fq::fromaltstack()}
+        //Stack: [tx, ty, Rx, Ry, le0, le1, hash_inaux, hash_in]
+        {Fq2::roll(8)} {Fq2::roll(8)} {Fq2::roll(8)} {Fq2::roll(8)}
+        // [tx, ty, hash_inaux, hash_in, Rx, Ry, le0, le1]
+        {Fq2::toaltstack()} {Fq2::toaltstack()} {Fq2::toaltstack()} {Fq2::toaltstack()}
+        // [tx, ty, hash_inaux, hash_in]
+        {hash_g2acc_with_hashed_le()} //[1]
+        OP_VERIFY
 
-        {Fq2::fromaltstack()} {Fq2::fromaltstack()}
-        {Fq::roll(4)} 
-        {Fq::toaltstack()}
-        {hash_fp4()} // HR
-
-        { Fq::fromaltstack()} // [HR, HT]
-        {Fq2::fromaltstack()} {Fq2::fromaltstack()}
-        {Fq2::roll(4)} 
-        {Fq2::toaltstack()}
-        {hash_fp4()} // Hle
-        // [Hle]
-
-        for _ in 0..9 {
-            {0}
-        }
-        {hash_fp2()}
-
-        { Fq::fromaltstack() } // [ Hle, HR ]
-        { Fq::roll(1) }
-        {hash_fp2()}
-        // [Hout]
-
-        {Fq::fromaltstack()} {Fq::fromaltstack()} // [Hout, HT, Hinaux]
-        {Fq::roll(2)} {Fq::toaltstack()} // [HT, inaux]
-        {hash_fp2()}
-        {Fq::fromaltstack()} {Fq::fromaltstack()} {Fq::fromaltstack()} //[Hin_calc, Hout_calc, hash_in_claim, Hout_claimed]
-        {Fq::equalverify(1, 3)}
-        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+        {Fq2::fromaltstack()} {Fq2::fromaltstack()} {Fq2::fromaltstack()} {Fq2::fromaltstack()}
+        {Fq::fromaltstack()}
+        // [Rx, Ry, le0, le1, hash_out]
+        {hash_g2acc_with_raw_le(true)}
+        OP_NOT OP_VERIFY
     };
 
     let sc = script! {
@@ -306,40 +373,20 @@ pub(crate) fn tap_point_add_with_frob(ate: i8) -> Script {
     let hash_script = script! {
         //Altstack: [hash_out, hash_in, hash_inaux]
         //Stack: [tx, ty, Rx, Ry, le0, le1]
-        //T
-        {Fq2::toaltstack()} {Fq2::toaltstack()}
-        {Fq2::toaltstack()} {Fq2::toaltstack()}
-        {hash_fp4()} // HT
+        {Fq::fromaltstack()} {Fq::fromaltstack()}
+        //Stack: [tx, ty, Rx, Ry, le0, le1, hash_inaux, hash_in]
+        {Fq2::roll(8)} {Fq2::roll(8)} {Fq2::roll(8)} {Fq2::roll(8)}
+        // [tx, ty, hash_inaux, hash_in, Rx, Ry, le0, le1]
+        {Fq2::toaltstack()} {Fq2::toaltstack()} {Fq2::toaltstack()} {Fq2::toaltstack()}
+        // [tx, ty, hash_inaux, hash_in]
+        {hash_g2acc_with_hashed_le()} //[1]
+        OP_VERIFY
 
-        {Fq2::fromaltstack()} {Fq2::fromaltstack()}
-        {Fq::roll(4)} 
-        {Fq::toaltstack()}
-        {hash_fp4()} // HR
-
-        { Fq::fromaltstack()} // [HR, HT]
-        {Fq2::fromaltstack()} {Fq2::fromaltstack()}
-        {Fq2::roll(4)} 
-        {Fq2::toaltstack()}
-        {hash_fp4()} // Hle
-        // [Hle]
-
-        for _ in 0..9 {
-            {0}
-        }
-        {Fq::roll(1)}
-        {hash_fp2()}
-
-        { Fq::fromaltstack() } // [ Hle, HR ]
-        { Fq::roll(1) }
-        {hash_fp2()}
-        // [Hout]
-
-        {Fq::fromaltstack()} {Fq::fromaltstack()} // [Hout, HT, Hinaux]
-        {Fq::roll(2)} {Fq::toaltstack()} // [HT, inaux]
-        {hash_fp2()}
-        {Fq::fromaltstack()} {Fq::fromaltstack()} {Fq::fromaltstack()} //[Hin_calc, Hout_calc, hash_in_claim, Hout_claimed]
-        {Fq::equalverify(1, 3)}
-        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+        {Fq2::fromaltstack()} {Fq2::fromaltstack()} {Fq2::fromaltstack()} {Fq2::fromaltstack()}
+        {Fq::fromaltstack()}
+        // [Rx, Ry, le0, le1, hash_out]
+        {hash_g2acc_with_raw_le(false)}
+        OP_NOT OP_VERIFY
     };
 
     let beta_12x = BigUint::from_str(
@@ -777,54 +824,24 @@ pub(crate) fn tap_point_ops(ate: i8) -> Script {
     let hash_script = script! {
         // Altstack: [dbl_le, R, add_le, hash_out, hash_in, hash_inaux]
         // Stack: [t]
-        //T
-        {hash_fp4()}
-
-        { Fq::fromaltstack()} // inaux
-        {hash_fp2()}
-        {Fq::fromaltstack()} //input_hash
-        {Fq::equalverify(1, 0)}
-
-
-        // Altstack: [dbl_le, R, add_le, hash_out]
-        // Stack: []
-        {Fq::fromaltstack()}
-        {Fq2::fromaltstack()} {Fq2::fromaltstack()}
-        {Fq::roll(4)} {Fq::toaltstack()}
-        {hash_fp4()}
-        // Altstack: [dbl_le, R, hash_out]
-        // Stack: [Hadd_le]
+        
+        {Fq::fromaltstack()} {Fq::fromaltstack()}
+        // [tx, ty, hash_inaux, hash_in]
+        {hash_g2acc_with_hashed_le()} //[1]
+        OP_VERIFY
 
         {Fq::fromaltstack()}
         {Fq2::fromaltstack()} {Fq2::fromaltstack()}
-        {Fq2::roll(4)} {Fq2::toaltstack()}
-        {hash_fp4()}
-        // Altstack: [dbl_le, hash_out, Hadd_le]
-        // Stack: [HR]
-
-        {Fq2::fromaltstack()}
-        // [HR, Hadd_le, hash_out]
         {Fq2::fromaltstack()} {Fq2::fromaltstack()}
-        {Fq::roll(4)} {Fq::toaltstack()}
-        {Fq::roll(4)} {Fq::toaltstack()}
-        {Fq::roll(4)} {Fq::toaltstack()}
-        {hash_fp4()}
-
-        // Altstack: [hash_out, Hadd_le, HR]
-        // Stack: [Hdbl_le]
-
-        { Fq::fromaltstack() }
-        { Fq::fromaltstack() }
-        // Stack: [Hdbl_le, HR, Hadd_le]
-        { Fq::roll(1)} {Fq::toaltstack()}
-        { hash_fp2() }
-        // [Hash_le]
-        { Fq::fromaltstack() }
-        { Fq::roll(1) }
-        { hash_fp2() }
-        { Fq::fromaltstack() }
-
-        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+        {Fq2::fromaltstack()} {Fq2::fromaltstack()}
+        
+        //[hash_out, add_le, R, dbl_le]
+        {Fq2::roll(10)} {Fq2::roll(10)}
+        // [hash_out, R, dbl_le, add_le]
+        {Fq::roll(12)}
+        // [R, dbl_le, add_le, hash_out]
+        {hash_g2acc_with_both_raw_le()}
+        OP_NOT OP_VERIFY
     };
 
     let sc = script! {

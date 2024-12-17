@@ -14,6 +14,7 @@ use ark_ff::{AdditiveGroup, Field, MontFp};
 
 use super::primitves::{extern_hash_fps, hash_fp12_192};
 use super::hint_models::*;
+use super::taps_point_ops::hash_g2acc_with_hashed_le;
 
 
 // HASH_C
@@ -299,14 +300,12 @@ pub(crate) fn tap_initT4() -> Script {
         {Fq2::copy(2)}
         {on_curve_scr}
         OP_IF
-            { hash_fp4() }
-            for _ in 0..64 {
+            for _ in 0..9 { // aux_le
                 {0}
             }
-            {pack_nibbles_to_limbs()}
-            {hash_fp2()}
             {Fq::fromaltstack()}
-            {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+            {hash_g2acc_with_hashed_le()}
+            OP_NOT OP_VERIFY
         OP_ELSE
             {Fq2::drop()}
             {Fq2::drop()}
