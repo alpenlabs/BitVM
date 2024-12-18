@@ -1,3 +1,4 @@
+#![allow(clippy::reversed_empty_ranges)]
 use num_bigint::BigInt;
 use num_traits::{FromPrimitive, Num, ToPrimitive};
 
@@ -53,12 +54,6 @@ impl Fq {
     pub fn tmul_lc2() -> Script {
         script!{ 
             { <Fq as Fp254Mul2LC>::tmul() }
-        }
-    }
-
-    pub fn tmul_lc2_2() -> Script {
-        script!{ 
-            { <Fq as Fp254Mul2LC2>::tmul() }
         }
     }
     
@@ -126,8 +121,8 @@ macro_rules! fp_lc_mul {
 
                     // N_BITS for the extended number used during intermediate computation
                     const MAIN_LOOP_END: u32 = {
-                        let n_bits_mod_width = ((N_BITS + MOD_WIDTH - 1) / MOD_WIDTH) * MOD_WIDTH;
-                        let n_bits_var_width = ((N_BITS + VAR_WIDTH - 1) / VAR_WIDTH) * VAR_WIDTH;
+                        let n_bits_mod_width = N_BITS.div_ceil(MOD_WIDTH) * MOD_WIDTH;
+                        let n_bits_var_width = N_BITS.div_ceil(VAR_WIDTH) * VAR_WIDTH;
                         let mut u = n_bits_mod_width;
                         if n_bits_var_width > u {
                             u = n_bits_var_width;
@@ -156,7 +151,7 @@ macro_rules! fp_lc_mul {
                     // Initialize the lookup table
                     fn init_table(window: u32) -> Script {
                         assert!(
-                            1 <= window && window <= 6,
+                            (1..=6).contains(&window),
                             "expected 1<=window<=6; got window={}",
                             window
                         );
@@ -405,7 +400,7 @@ macro_rules! fp_lc_mul {
 
 fp_lc_mul!(Mul, 4, 4, [true]);
 fp_lc_mul!(Mul2LC, 3, 3, [true, true]);
-fp_lc_mul!(Mul2LC2, 4, 4, [true, true]);
+
 
 #[cfg(test)]
 mod test {
@@ -910,6 +905,7 @@ mod test {
         }
     }
 
+    #[allow(unused)]
     fn rand_bools<const SIZE: usize>(seed: u64) -> [bool; SIZE] {
         let mut bools = [true; SIZE];
         let mut prng: ChaCha20Rng = ChaCha20Rng::seed_from_u64(seed);

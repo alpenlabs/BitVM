@@ -1,7 +1,7 @@
 
 use crate::treepp;
 
-use super::{hint_models::Element};
+use super::{hint_models::Element, taps_point_eval::*, taps_premiller::*};
 
 pub type SegmentID = u32;
 pub type SegmentOutputType = bool;
@@ -53,7 +53,7 @@ pub enum ScriptType {
 use ark_ff::{AdditiveGroup, Field};
 use bitcoin_script::script;
 
-use super::{hint_models::*, msm::{hint_hash_p, hint_msm}, primitves::extern_hash_fps,  taps::*, taps_mul::*};
+use super::{hint_models::*, taps_msm::{hint_hash_p, hint_msm}, primitves::extern_hash_fps,  taps_point_ops::*, taps_mul::*};
 
 pub(crate) fn wrap_hint_msm(
     skip: bool,
@@ -69,7 +69,7 @@ pub(crate) fn wrap_hint_msm(
     let mut acc = ark_bn254::G1Affine::identity();
     if prev_msm.is_some() {
         let prev_msm = prev_msm.unwrap();
-        acc = prev_msm.output.into();
+        acc = prev_msm.output.try_into().unwrap();
         input_segment_info.push((prev_msm.id, prev_msm.output_type));
     }
 
@@ -77,7 +77,7 @@ pub(crate) fn wrap_hint_msm(
     .iter()
     .map(|f| {
         input_segment_info.push((f.id, f.output_type));
-        f.output.into()
+        f.output.try_into().unwrap()
     })
     .collect();
 
@@ -113,9 +113,9 @@ pub(crate) fn wrap_hint_hash_p(
     let (mut h, mut hint_script) = ([0u8;64], script!());
     if !skip {
         (h, hint_script) = hint_hash_p(
-            in_t.output.into(),
-            in_ry.output.into(),
-            in_rx.output.into(),
+            in_t.output.try_into().unwrap(),
+            in_ry.output.try_into().unwrap(),
+            in_rx.output.try_into().unwrap(),
             pub_vky0.clone(),
         );
     }
@@ -134,7 +134,7 @@ pub(crate) fn wrap_hint_hash_c(
     .iter()
     .map(|f| {
         input_segment_info.push((f.id, f.output_type));
-        f.output.into()
+        f.output.try_into().unwrap()
     })
     .collect();
 
@@ -165,9 +165,9 @@ pub(crate) fn wrap_hints_precompute_Px(
     let (mut p4x, mut hint_script) = (ElemFq::mock(), script!());
     if !skip {
         (p4x, hint_script) = hints_precompute_Px(
-            in_py.output.into(),
-            in_px.output.into(),
-            in_pdy.output.into());
+            in_py.output.try_into().unwrap(),
+            in_px.output.try_into().unwrap(),
+            in_pdy.output.try_into().unwrap());
     }
     let output_type = p4x.ret_type();
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::FieldElem(p4x), hint_script, scr_type: ScriptType::PreMillerPrecomputePx }
@@ -185,7 +185,7 @@ pub(crate) fn wrap_hints_precompute_Py(
     let (mut p3y, mut hint_script) = (ElemFq::mock(), script!());
     if !skip {
         (p3y, hint_script) = hints_precompute_Py(
-            in_p.output.into());
+            in_p.output.try_into().unwrap());
     }
     let output_type = p3y.ret_type();
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::FieldElem(p3y), hint_script, scr_type: ScriptType::PreMillerPrecomputePy }
@@ -202,7 +202,7 @@ pub(crate) fn wrap_hint_hash_c2(
 
     let (mut c2, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (c2, hint_script) = hint_hash_c2(in_c.output.into());
+        (c2, hint_script) = hint_hash_c2(in_c.output.try_into().unwrap());
     }
     let output_type = c2.ret_type();
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(c2), hint_script, scr_type: ScriptType::PreMillerHashC2 }
@@ -219,7 +219,7 @@ pub(crate) fn wrap_inv0(
 
     let (mut dmul0, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul0, hint_script) = hint_inv0(in_a.output.into());
+        (dmul0, hint_script) = hint_inv0(in_a.output.try_into().unwrap());
     }
     let output_type = dmul0.ret_type();
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(dmul0), hint_script, scr_type: ScriptType::PreMillerInv0 }
@@ -236,7 +236,7 @@ pub(crate) fn wrap_inv1(
 
     let (mut dmul0, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul0, hint_script) = hint_inv1(in_a.output.into());
+        (dmul0, hint_script) = hint_inv1(in_a.output.try_into().unwrap());
     }
     let output_type = dmul0.ret_type();
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(dmul0), hint_script, scr_type: ScriptType::PreMillerInv1 }
@@ -255,7 +255,7 @@ pub(crate) fn wrap_inv2(
 
     let (mut dmul0, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul0, hint_script) = hint_inv2(in_t1.output.into(), in_a.output.into());
+        (dmul0, hint_script) = hint_inv2(in_t1.output.try_into().unwrap(), in_a.output.try_into().unwrap());
     }
     let output_type = dmul0.ret_type();
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(dmul0), hint_script, scr_type: ScriptType::PreMillerInv2 }
@@ -278,10 +278,10 @@ pub(crate) fn wrap_hint_init_T4(
         (in_q4xc0.id, in_q4xc0.output_type),
     ];
 
-    let q4xc0: ark_bn254::Fq = in_q4xc0.output.into();
-    let q4xc1: ark_bn254::Fq = in_q4xc1.output.into();
-    let q4yc0: ark_bn254::Fq = in_q4yc0.output.into();
-    let q4yc1: ark_bn254::Fq = in_q4yc1.output.into();
+    let q4xc0: ark_bn254::Fq = in_q4xc0.output.try_into().unwrap();
+    let q4xc1: ark_bn254::Fq = in_q4xc1.output.try_into().unwrap();
+    let q4yc0: ark_bn254::Fq = in_q4yc0.output.try_into().unwrap();
+    let q4yc1: ark_bn254::Fq = in_q4yc1.output.try_into().unwrap();
 
     let (mut tmpt4, mut hint_script) = (ElemG2PointAcc::mock(), script!());
     if !skip {
@@ -311,7 +311,7 @@ pub(crate) fn wrap_hint_squaring(
     
     let input_segment_info = vec![(in_a.id, in_a.output_type)];
 
-    let f_acc: ElemFp12Acc = in_a.output.into();
+    let f_acc: ElemFp12Acc = in_a.output.try_into().unwrap();
 
     let (mut sq, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
@@ -345,9 +345,9 @@ pub(crate) fn wrap_hint_point_dbl(
         (in_p4x.id, in_p4x.output_type),
     ];
 
-    let t4: ElemG2PointAcc = in_t4.output.into();
-    let p4x: ark_bn254::Fq = in_p4x.output.into();
-    let p4y: ark_bn254::Fq = in_p4y.output.into();
+    let t4: ElemG2PointAcc = in_t4.output.try_into().unwrap();
+    let p4x: ark_bn254::Fq = in_p4x.output.try_into().unwrap();
+    let p4y: ark_bn254::Fq = in_p4y.output.try_into().unwrap();
 
     let (mut dbl, mut hint_script) = (ElemG2PointAcc::mock(), script!());
     if !skip {
@@ -394,13 +394,13 @@ pub(crate) fn wrap_hint_point_ops(
         (in_p4x.id, in_p4x.output_type),
     ];
 
-    let t4: ElemG2PointAcc = in_t4.output.into();
-    let p4x: ark_bn254::Fq = in_p4x.output.into();
-    let p4y: ark_bn254::Fq = in_p4y.output.into();
-    let q4xc0: ark_bn254::Fq = in_q4xc0.output.into();
-    let q4xc1: ark_bn254::Fq = in_q4xc1.output.into();
-    let q4yc0: ark_bn254::Fq = in_q4yc0.output.into();
-    let q4yc1: ark_bn254::Fq = in_q4yc1.output.into();
+    let t4: ElemG2PointAcc = in_t4.output.try_into().unwrap();
+    let p4x: ark_bn254::Fq = in_p4x.output.try_into().unwrap();
+    let p4y: ark_bn254::Fq = in_p4y.output.try_into().unwrap();
+    let q4xc0: ark_bn254::Fq = in_q4xc0.output.try_into().unwrap();
+    let q4xc1: ark_bn254::Fq = in_q4xc1.output.try_into().unwrap();
+    let q4yc0: ark_bn254::Fq = in_q4yc0.output.try_into().unwrap();
+    let q4yc1: ark_bn254::Fq = in_q4yc1.output.try_into().unwrap();
 
     let (mut dbladd, mut hint_script) = (ElemG2PointAcc::mock(), script!());
     if !skip {
@@ -442,8 +442,8 @@ pub(crate) fn wrap_hint_sparse_dense_mul(
         (in_g.id, in_g.output_type),
     ];
 
-    let f_acc: ElemFp12Acc = in_a.output.into();
-    let t4: ElemG2PointAcc = in_g.output.into();
+    let f_acc: ElemFp12Acc = in_a.output.try_into().unwrap();
+    let t4: ElemG2PointAcc = in_g.output.try_into().unwrap();
 
     let (mut temp, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
@@ -483,10 +483,10 @@ pub(crate) fn wrap_hint_double_eval_mul_for_fixed_Qs(
         (in_p2x.id, in_p2x.output_type),
     ];
 
-    let p2x: ark_bn254::Fq = in_p2x.output.into();
-    let p2y: ark_bn254::Fq = in_p2y.output.into();
-    let p3x: ark_bn254::Fq = in_p3x.output.into();
-    let p3y: ark_bn254::Fq = in_p3y.output.into();
+    let p2x: ark_bn254::Fq = in_p2x.output.try_into().unwrap();
+    let p2y: ark_bn254::Fq = in_p2y.output.try_into().unwrap();
+    let p3x: ark_bn254::Fq = in_p3x.output.try_into().unwrap();
+    let p3y: ark_bn254::Fq = in_p3y.output.try_into().unwrap();
 
     let (mut leval, mut hint_script) = (ElemSparseEval::mock(), script!());
     if !skip {
@@ -525,8 +525,8 @@ pub(crate) fn wrap_hints_dense_dense_mul0(
         (in_b.id, in_b.output_type),
     ];
 
-    let a: ElemFp12Acc = in_a.output.into();
-    let b: ElemFp12Acc = in_b.output.into();
+    let a: ElemFp12Acc = in_a.output.try_into().unwrap();
+    let b: ElemFp12Acc = in_b.output.try_into().unwrap();
 
     
     let (mut dmul0, mut hint_script) = (ElemFp12Acc::mock(), script!());
@@ -561,9 +561,9 @@ pub(crate) fn wrap_hints_dense_dense_mul1(
         (in_c.id, in_c.output_type),
     ];
 
-    let a: ElemFp12Acc = in_a.output.into();
-    let b: ElemFp12Acc = in_b.output.into();
-    let c: ElemFp12Acc = in_c.output.into();
+    let a: ElemFp12Acc = in_a.output.try_into().unwrap();
+    let b: ElemFp12Acc = in_b.output.try_into().unwrap();
+    let c: ElemFp12Acc = in_c.output.try_into().unwrap();
 
     
 
@@ -600,8 +600,8 @@ pub(crate) fn wrap_hints_dense_le_mul0(
         (in_b.id, in_b.output_type),
     ];
 
-    let a: ElemFp12Acc = in_a.output.into();
-    let b: ElemSparseEval = in_b.output.into();
+    let a: ElemFp12Acc = in_a.output.try_into().unwrap();
+    let b: ElemSparseEval = in_b.output.try_into().unwrap();
 
     
 
@@ -637,9 +637,9 @@ pub(crate) fn wrap_hints_dense_le_mul1(
         (in_c.id, in_c.output_type),
     ];
 
-    let a: ElemFp12Acc = in_a.output.into();
-    let b: ElemSparseEval = in_b.output.into();
-    let c: ElemFp12Acc = in_c.output.into();
+    let a: ElemFp12Acc = in_a.output.try_into().unwrap();
+    let b: ElemSparseEval = in_b.output.try_into().unwrap();
+    let c: ElemFp12Acc = in_c.output.try_into().unwrap();
 
     
 
@@ -686,10 +686,10 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs(
         (in_p2x.id, in_p2x.output_type),
     ];
 
-    let p2x: ark_bn254::Fq = in_p2x.output.into();
-    let p2y: ark_bn254::Fq = in_p2y.output.into();
-    let p3x: ark_bn254::Fq = in_p3x.output.into();
-    let p3y: ark_bn254::Fq = in_p3y.output.into();
+    let p2x: ark_bn254::Fq = in_p2x.output.try_into().unwrap();
+    let p2y: ark_bn254::Fq = in_p2y.output.try_into().unwrap();
+    let p3x: ark_bn254::Fq = in_p3x.output.try_into().unwrap();
+    let p3y: ark_bn254::Fq = in_p3y.output.try_into().unwrap();
 
     let (mut leval, mut hint_script) = (ElemSparseEval::mock(), script!());
     if !skip {
@@ -727,7 +727,7 @@ pub(crate) fn wrap_hints_frob_fp12(
 
     let input_segment_info = vec![(in_f.id, in_f.output_type)];
 
-    let f = in_f.output.into();
+    let f = in_f.output.try_into().unwrap();
 
     
 
@@ -773,13 +773,13 @@ pub(crate) fn wrap_hint_point_add_with_frob(
         (in_p4x.id, in_p4x.output_type),
     ];
 
-    let t4: ElemG2PointAcc = in_t4.output.into();
-    let p4x: ark_bn254::Fq = in_p4x.output.into();
-    let p4y: ark_bn254::Fq = in_p4y.output.into();
-    let q4xc0: ark_bn254::Fq = in_q4xc0.output.into();
-    let q4xc1: ark_bn254::Fq = in_q4xc1.output.into();
-    let q4yc0: ark_bn254::Fq = in_q4yc0.output.into();
-    let q4yc1: ark_bn254::Fq = in_q4yc1.output.into();
+    let t4: ElemG2PointAcc = in_t4.output.try_into().unwrap();
+    let p4x: ark_bn254::Fq = in_p4x.output.try_into().unwrap();
+    let p4y: ark_bn254::Fq = in_p4y.output.try_into().unwrap();
+    let q4xc0: ark_bn254::Fq = in_q4xc0.output.try_into().unwrap();
+    let q4xc1: ark_bn254::Fq = in_q4xc1.output.try_into().unwrap();
+    let q4yc0: ark_bn254::Fq = in_q4yc0.output.try_into().unwrap();
+    let q4yc1: ark_bn254::Fq = in_q4yc1.output.try_into().unwrap();
 
     let (mut temp, mut hint_script) = (ElemG2PointAcc::mock(), script!());
     if !skip {
@@ -829,10 +829,10 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(
         (in_p2x.id, in_p2x.output_type),
     ];
 
-    let p2x: ark_bn254::Fq = in_p2x.output.into();
-    let p2y: ark_bn254::Fq = in_p2y.output.into();
-    let p3x: ark_bn254::Fq = in_p3x.output.into();
-    let p3y: ark_bn254::Fq = in_p3y.output.into();
+    let p2x: ark_bn254::Fq = in_p2x.output.try_into().unwrap();
+    let p2y: ark_bn254::Fq = in_p2y.output.try_into().unwrap();
+    let p3x: ark_bn254::Fq = in_p3x.output.try_into().unwrap();
+    let p3y: ark_bn254::Fq = in_p3y.output.try_into().unwrap();
 
     let (mut leval, mut hint_script) = (ElemSparseEval::mock(), script!());
     if !skip {
@@ -871,7 +871,7 @@ pub(crate) fn wrap_hints_dense_dense_mul0_by_constant(
 
     let input_segment_info = vec![(in_a.id, in_a.output_type)];
 
-    let a: ElemFp12Acc = in_a.output.into();
+    let a: ElemFp12Acc = in_a.output.try_into().unwrap();
     let fixedacc = ElemFp12Acc {
         f: constant,
         hash: extern_hash_fps(
@@ -927,7 +927,7 @@ pub(crate) fn wrap_hints_dense_dense_mul1_by_constant(
         (in_c0.id, in_c0.output_type)
     ];
 
-    let a: ElemFp12Acc = in_a.output.into();
+    let a: ElemFp12Acc = in_a.output.try_into().unwrap();
     let fixedacc = ElemFp12Acc {
         f: constant,
         hash: extern_hash_fps(
@@ -953,7 +953,7 @@ pub(crate) fn wrap_hints_dense_dense_mul1_by_constant(
     if !skip {
         (dmul1, hint_script) = hints_dense_dense_mul1_by_constant(
             a.clone(),
-            in_c0.output.into(),
+            in_c0.output.try_into().unwrap(),
             fixedacc,
         );
     }
@@ -997,7 +997,7 @@ mod test {
         let inv1 = wrap_inv1(false, 1, &inv0);
         let inv2 = wrap_inv2(false, 1, &inv1, &seg);
 
-        let out: ElemFp12Acc = inv2.output.into();
+        let out: ElemFp12Acc = inv2.output.try_into().unwrap();
         println!("match {}", out.f == f.inverse().unwrap());
     }
 }

@@ -20,6 +20,7 @@ use std::sync::OnceLock;
 
 use super::utils::{fq_push_not_montgomery, Hint};
 
+#[allow(clippy::declare_interior_mutable_const)]
 pub trait Fp254Impl {
     const MODULUS: &'static str;
     const MONTGOMERY_ONE: &'static str;
@@ -667,6 +668,7 @@ pub trait Fp254Impl {
         (script, hints)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn hinted_mul_lc2(
         a_depth: u32,
         a: ark_bn254::Fq,
@@ -705,38 +707,18 @@ pub trait Fp254Impl {
 
         (script, hints)
     }
-
-    fn hinted_mul_lc2_2(a_depth: u32, a: ark_bn254::Fq, b_depth: u32, b: ark_bn254::Fq, c_depth: u32, c: ark_bn254::Fq, d_depth: u32, d: ark_bn254::Fq) -> (Script, Vec<Hint>) {
-        assert!(a_depth > b_depth && b_depth > c_depth && c_depth > d_depth);
-
-        let mut hints = Vec::new();
-
-        let modulus = &Fq::modulus_as_bigint();
-
-        let x = BigInt::from_str(&a.to_string()).unwrap();
-        let y = BigInt::from_str(&b.to_string()).unwrap();
-        let z = BigInt::from_str(&c.to_string()).unwrap();
-        let w = BigInt::from_str(&d.to_string()).unwrap();
-        
-        let q = (x * z + y * w) / modulus;
-
-        let script = script!{
-            for _ in 0..Self::N_LIMBS { 
-                OP_DEPTH OP_1SUB OP_ROLL // hints
-            }
-            // { fq_push(ark_bn254::Fq::from_str(&q.to_string()).unwrap()) }
-            { Fq::roll(a_depth + 1) }
-            { Fq::roll(b_depth + 2) }
-            { Fq::roll(c_depth + 3) }
-            { Fq::roll(d_depth + 4) }
-            { Fq::tmul_lc2_2() }
-        };
-        hints.push(Hint::BigIntegerTmulLC2(q));
-
-        (script, hints)
-    }
-
-    fn hinted_mul_lc2_keep_elements(a_depth: u32, a: ark_bn254::Fq, b_depth: u32, b: ark_bn254::Fq, c_depth: u32, c: ark_bn254::Fq, d_depth: u32, d: ark_bn254::Fq) -> (Script, Vec<Hint>) {
+    
+    #[allow(clippy::too_many_arguments)]
+    fn hinted_mul_lc2_keep_elements(
+        a_depth: u32,
+        a: ark_bn254::Fq,
+        b_depth: u32,
+        b: ark_bn254::Fq,
+        c_depth: u32,
+        c: ark_bn254::Fq,
+        d_depth: u32,
+        d: ark_bn254::Fq,
+    ) -> (Script, Vec<Hint>) {
         assert!(a_depth > b_depth && b_depth > c_depth && c_depth > d_depth);
 
         let mut hints = Vec::new();
@@ -766,39 +748,8 @@ pub trait Fp254Impl {
         (script, hints)
     }
 
-
-    fn hinted_mul_lc2_keep_elements_2(a_depth: u32, a: ark_bn254::Fq, b_depth: u32, b: ark_bn254::Fq, c_depth: u32, c: ark_bn254::Fq, d_depth: u32, d: ark_bn254::Fq) -> (Script, Vec<Hint>) {
-        assert!(a_depth > b_depth && b_depth > c_depth && c_depth > d_depth);
-
-        let mut hints = Vec::new();
-
-        let modulus = &Fq::modulus_as_bigint();
-
-        let x = BigInt::from_str(&a.to_string()).unwrap();
-        let y = BigInt::from_str(&b.to_string()).unwrap();
-        let z = BigInt::from_str(&c.to_string()).unwrap();
-        let w = BigInt::from_str(&d.to_string()).unwrap();
-        
-        let q = (x * z + y * w) / modulus;
-
-        let script = script!{
-            for _ in 0..Self::N_LIMBS { 
-                OP_DEPTH OP_1SUB OP_ROLL // hints
-            }
-            // { fq_push(ark_bn254::Fq::from_str(&q.to_string()).unwrap()) }
-            { Fq::copy(a_depth + 1) }
-            { Fq::copy(b_depth + 2) }
-            { Fq::copy(c_depth + 3) }
-            { Fq::copy(d_depth + 4) }
-            { Fq::tmul_lc2_2() }
-        };
-        hints.push(Hint::BigIntegerTmulLC2(q));
-
-        (script, hints)
-    }
-
-
     fn mul() -> Script {
+        #[allow(clippy::borrow_interior_mutable_const)]
         Self::MUL_ONCELOCK
             .get_or_init(|| {
                 script! {
@@ -1175,8 +1126,8 @@ pub trait Fp254Impl {
     fn is_one(a: u32) -> Script {
         let mut u29x9_one = [0u32; 9];
         let montgomery_one = BigUint::from_str_radix(Self::MONTGOMERY_ONE, 16).unwrap();
-        for i in 0..9 {
-            u29x9_one[i] = *montgomery_one
+        for (i, one_i) in u29x9_one.iter_mut().enumerate() {
+            *one_i = *montgomery_one
                 .clone()
                 .div(BigUint::one().shl(29 * i) as BigUint)
                 .rem(BigUint::one().shl(29) as BigUint)
@@ -1319,8 +1270,8 @@ pub trait Fp254Impl {
                 .mul(BigUint::from_str_radix(Self::MONTGOMERY_ONE, 16).unwrap())
                 .rem(BigUint::from_str_radix(Self::MODULUS, 16).unwrap());
 
-            for i in 0..9 {
-                u29x9_montgomery[i] = *constant
+            for (i, montgomery_i) in u29x9_montgomery.iter_mut().enumerate() {
+                *montgomery_i = *constant
                     .clone()
                     .div(BigUint::one().shl(29 * i) as BigUint)
                     .rem(BigUint::one().shl(29) as BigUint)

@@ -68,13 +68,86 @@ mod test {
     use ark_ff::Field;
     use rand::Rng;
 
-    use crate::{chunk::{api::mock_pubkeys, hint_models::EvalIns, primitves::{extern_hash_fps, fp12_to_vec}, test_utils::{read_scripts_from_file, write_map_to_file, write_scripts_to_file, write_scripts_to_separate_files}}, groth16::offchain_checker::compute_c_wi};
+    use crate::{chunk::{api::mock_pubkeys, hint_models::EvalIns}, groth16::{g16::test::test_utils::{read_scripts_from_file, write_scripts_to_file, write_scripts_to_separate_files}, offchain_checker::compute_c_wi}};
 
-    use crate::chunk::{compile::NUM_PUBS, test_utils::read_map_from_file};
 
-    use self::chunk::{ acc::{self, script_exec, Pubs}, hint_models::Element, segment::Segment};
+    use self::{chunk::{ assert::{self, script_exec, Pubs}, compile::NUM_PUBS, hint_models::Element, segment::Segment}, test_utils::{read_map_from_file, write_map_to_file}};
 
     use super::*;
+
+
+    mod test_utils {
+        use crate::treepp::*;
+        use bitcoin::ScriptBuf;
+        use std::collections::HashMap;
+        use std::error::Error;
+        use std::fs::File;
+        use std::io::BufReader;
+        use std::io::Write;
+
+
+        pub(crate) fn write_map_to_file(
+            map: &HashMap<u32, Vec<Vec<u8>>>,
+            filename: &str,
+        ) -> Result<(), Box<dyn Error>> {
+            // Serialize the map to a JSON string
+            let json = serde_json::to_string(map)?;
+
+            // Write the JSON string to a file
+            let mut file = File::create(filename)?;
+            file.write_all(json.as_bytes())?;
+            Ok(())
+        }
+
+        pub(crate) fn read_map_from_file(
+            filename: &str,
+        ) -> Result<HashMap<u32, Vec<Vec<u8>>>, Box<dyn Error>> {
+            let file = File::open(filename)?;
+            let reader = BufReader::new(file);
+            let map = serde_json::from_reader(reader)?;
+            Ok(map)
+        }
+
+        pub fn write_scripts_to_file(sig_cache: HashMap<u32, Vec<Script>>, file: &str) {
+            let mut buf: HashMap<u32, Vec<Vec<u8>>> = HashMap::new();
+            for (k, v) in sig_cache {
+                let vs = v.into_iter().map(|x| x.compile().to_bytes()).collect();
+                buf.insert(k, vs);
+            }
+            write_map_to_file(&buf, file).unwrap();
+        }
+
+        pub fn write_scripts_to_separate_files(sig_cache: HashMap<u32, Vec<Script>>, file: &str) {
+            let mut buf: HashMap<u32, Vec<Vec<u8>>> = HashMap::new();
+            std::fs::create_dir("chunker_data");
+            for (k, v) in sig_cache {
+                let file = format!("chunker_data/{file}_{k}.json");
+                let vs = v.into_iter().map(|x| x.compile().to_bytes()).collect();
+                buf.insert(k, vs);
+                write_map_to_file(&buf, &file).unwrap();
+                buf.clear();
+            }
+        }
+
+        pub fn read_scripts_from_file(file: &str) -> HashMap<u32, Vec<Script>> {
+            let mut scr: HashMap<u32, Vec<Script>> = HashMap::new();
+            let f = read_map_from_file(file).unwrap();
+            for (k, v) in f {
+                let vs: Vec<Script> = v
+                    .into_iter()
+                    .map(|x| {
+                        let sc = script! {};
+                        let bf = ScriptBuf::from_bytes(x);
+                        let sc = sc.push_script(bf);
+                        sc
+                    })
+                    .collect();
+                scr.insert(k, vs);
+            }
+            scr
+        }
+
+    }
 
     pub mod mock {
         use super::*;
@@ -502,7 +575,7 @@ mod test {
 
         println!("eval_ins {:?}", eval_ins);
         println!("pubs {:?}", pubs);
-        acc::groth16(true, &mut segments, eval_ins, pubs, &mut None);
+        assert::groth16(true, &mut segments, eval_ins, pubs, &mut None);
 
         // let proof_asserts = acc::hint_to_data(segments.clone());
         // let signed_asserts = sign_assertions(proof_asserts);

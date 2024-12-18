@@ -2,12 +2,12 @@
 use std::collections::HashMap;
 
 use ark_ec::bn::BnConfig;
-use ark_ff::Field;
 use bitcoin_script::script;
 
-use crate::{chunk::hint_models::{ElemG1Point, G1PointExt}, treepp};
+use crate::{chunk::hint_models::{ElemG1Point}, treepp};
+use crate::chunk::hint_models::ElemTraitExt;
 
-use super::{acc::{groth16, Pubs}, hint_models::{ElemFp12Acc, ElemFr, ElemG2PointAcc, ElemeFrTrait, EvalIns}, msm::{tap_hash_p, tap_msm}, primitves::{extern_hash_fps, fp12_to_vec}, segment::{ScriptType, Segment}, taps::*, taps_mul::*, wots::WOTSPubKey};
+use super::{assert::{groth16, Pubs}, hint_models::{ElemFp12Acc, ElemFr, ElemG2PointAcc, EvalIns}, primitves::gen_bitcom, segment::{ScriptType, Segment}, taps_msm::{tap_hash_p, tap_msm}, taps_mul::*, taps_point_eval::*, taps_point_ops::*, taps_premiller::*, wots::WOTSPubKey};
 
 pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 pub const NUM_PUBS: usize = 1;

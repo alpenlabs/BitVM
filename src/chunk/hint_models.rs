@@ -1,8 +1,7 @@
 use crate::chunk::primitves::extern_hash_nibbles;
 use ark_bn254::{G1Affine, G2Affine};
 use ark_ff::{AdditiveGroup, Field, MontFp};
-use super::primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps};
-use super::taps::HashBytes;
+use super::primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps, HashBytes};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Element {
@@ -26,69 +25,42 @@ pub(crate) struct EvalIns {
     pub(crate) ks: Vec<ark_bn254::Fr>,
 }
 
-
-impl From<Element> for ElemG2PointAcc {
-    fn from(value: Element) -> Self {
-        match value {
-            Element::G2Acc(v) => v,
-            _ => panic!("Cannot convert Element into ElemG2PointAcc"),
-        }
-    }
+#[derive(Debug)]
+pub(crate) enum ElementConversionError {
+    /// Returned when an attempt to convert an `Element` variant into a type that
+    /// does not match its stored variant is made.
+    InvalidVariantConversion {
+        attempted: &'static str,
+        found: &'static str,
+    },
 }
 
-impl From<Element> for ElemFp12Acc {
-    fn from(value: Element) -> Self {
-        match value {
-            Element::Fp12(v) => v,
-            _ => panic!("Cannot convert Element into ElemFp12Acc"),
+/// Helper macro to reduce repetitive code for `TryFrom<Element>`.
+macro_rules! impl_try_from_element {
+    ($t:ty, $variant:ident) => {
+        impl TryFrom<Element> for $t {
+            type Error = ElementConversionError;
+
+            fn try_from(value: Element) -> Result<Self, Self::Error> {
+                match value {
+                    Element::$variant(v) => Ok(v),
+                    other => Err(ElementConversionError::InvalidVariantConversion {
+                        attempted: stringify!($t),
+                        found: stringify!(other),
+                    }),
+                }
+            }
         }
-    }
+    };
 }
 
-impl From<Element> for ElemSparseEval {
-    fn from(value: Element) -> Self {
-        match value {
-            Element::SparseEval(v) => v,
-            _ => panic!("Cannot convert Element into ElemSparseEval"),
-        }
-    }
-}
-
-impl From<Element> for ElemFq {
-    fn from(value: Element) -> Self {
-        match value {
-            Element::FieldElem(v) => v,
-            _ => panic!("Cannot convert Element into ElemFq"),
-        }
-    }
-}
-
-impl From<Element> for ElemFr {
-    fn from(value: Element) -> Self {
-        match value {
-            Element::ScalarElem(v) => v,
-            _ => panic!("Cannot convert Element into ElemFr"),
-        }
-    }
-}
-
-impl From<Element> for ElemHashBytes {
-    fn from(value: Element) -> Self {
-        match value {
-            Element::HashBytes(v) => v,
-            _ => panic!("Cannot convert Element into ElemHashBytes"),
-        }
-    }
-}
-
-impl From<Element> for ElemG1Point {
-    fn from(value: Element) -> Self {
-        match value {
-            Element::MSMG1(v) => v,
-            _ => panic!("Cannot convert Element into ElemG1Point"),
-        }
-    }
-}
+impl_try_from_element!(ElemG2PointAcc, G2Acc);
+impl_try_from_element!(ElemFp12Acc, Fp12);
+impl_try_from_element!(ElemSparseEval, SparseEval);
+impl_try_from_element!(ElemFq, FieldElem);
+impl_try_from_element!(ElemFr, ScalarElem);
+impl_try_from_element!(ElemHashBytes, HashBytes);
+impl_try_from_element!(ElemG1Point, MSMG1);
 
 pub type ElemFq = ark_bn254::Fq;
 pub type ElemFr = ark_bn254::Fr;
@@ -100,12 +72,12 @@ pub(crate) struct ElemFp12Acc {
     pub(crate) hash: HashBytes,
 }
 
-impl ElemFp12Acc {
-    pub(crate) fn out(&self) -> HashBytes {
+impl ElemTraitExt for ElemFp12Acc {
+    fn out(&self) -> HashBytes {
          self.hash
     }
 
-    pub(crate) fn mock() -> Self {
+    fn mock() -> Self {
         let f = ark_bn254::Fq12::ONE;
         let hash = extern_hash_fps(
             vec![
@@ -117,7 +89,7 @@ impl ElemFp12Acc {
         ElemFp12Acc { f, hash }
     }
 
-    pub(crate) fn ret_type(&self) -> bool {
+    fn ret_type(&self) -> bool {
         false // is not field
     }
 
@@ -131,11 +103,8 @@ pub(crate) struct ElemG2PointAcc {
 }
 
 impl ElemG2PointAcc {
-    pub(crate) fn out(&self) -> HashBytes {
-        let hash_t = extern_hash_fps(vec![self.t.x.c0, self.t.x.c1, self.t.y.c0, self.t.y.c1], true);
-        let hash_le = self.hash_le();
-        let hash = extern_hash_nibbles(vec![hash_t, hash_le], true);
-        hash
+    pub(crate) fn hash_t(&self) -> HashBytes {
+        extern_hash_fps(vec![self.t.x.c0, self.t.x.c1, self.t.y.c0, self.t.y.c1], true)
     }
 
     pub(crate) fn hash_le(&self) -> HashBytes {
@@ -171,7 +140,19 @@ impl ElemG2PointAcc {
         le
     }
 
-    pub(crate) fn mock() -> Self {
+
+
+}
+
+impl ElemTraitExt for ElemG2PointAcc {
+    fn out(&self) -> HashBytes {
+        let hash_t = self.hash_t();
+        let hash_le = self.hash_le();
+        let hash = extern_hash_nibbles(vec![hash_t, hash_le], true);
+        hash
+    }
+
+    fn mock() -> Self {
         let q4xc0: ark_bn254::Fq = MontFp!("18327300221956260726652878806040774028373651771658608258634994907375058801387");
         let q4xc1: ark_bn254::Fq = MontFp!("2791853351403597124265928925229664715548948431563105825401192338793643440152"); 
         let q4yc0: ark_bn254::Fq = MontFp!("9203020065248672543175273161372438565462224153828027408202959864555260432617");
@@ -180,10 +161,9 @@ impl ElemG2PointAcc {
         ElemG2PointAcc { t, dbl_le: None, add_le: None }
     }
 
-    pub(crate) fn ret_type(&self) -> bool {
+    fn ret_type(&self) -> bool {
         false // is not field
     }
-
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -212,19 +192,19 @@ impl ElemSparseEval {
 pub type ElemG1Point = ark_bn254::G1Affine;
 
 // Define a trait to extend the functionality
-pub(crate) trait G1PointExt {
+pub(crate) trait ElemTraitExt {
     fn out(&self) -> HashBytes;
-    fn mock() -> ElemG1Point;
+    fn mock() -> Self;
     fn ret_type(&self) -> bool;
 }
 
 // Implement the trait for ark_bn254::G1Affine
-impl G1PointExt for ElemG1Point {
+impl ElemTraitExt for ElemG1Point {
     fn out(&self) -> HashBytes {
         extern_hash_fps(vec![self.x, self.y], true)
     }
 
-    fn mock() -> ElemG1Point {
+    fn mock() -> Self {
         let g1x: ark_bn254::Fq = MontFp!("5567084537907487155917146166615783238769284480674905823618779044732684151587");
         let g1y: ark_bn254::Fq = MontFp!("6500138522353517220105129525103627482682148482121078429366182801568786680416");
         ark_bn254::G1Affine::new(g1x, g1y)
@@ -234,14 +214,8 @@ impl G1PointExt for ElemG1Point {
     }
 }
 
-pub(crate) trait ElemeFqTrait {
-    fn mock() -> ark_bn254::Fq;
-    fn ret_type(&self) -> bool;
-    fn out(&self) -> HashBytes;
-}
-
-impl ElemeFqTrait for ElemFq {
-    fn mock() -> ark_bn254::Fq {
+impl ElemTraitExt for ElemFq {
+    fn mock() -> Self {
         ark_bn254::Fq::ONE
     }
     fn ret_type(&self) -> bool {
@@ -252,14 +226,9 @@ impl ElemeFqTrait for ElemFq {
     }
 }
 
-pub(crate) trait ElemeFrTrait {
-    fn mock() -> ark_bn254::Fr;
-    fn ret_type(&self) -> bool;
-    fn out(&self) -> HashBytes;
 
-}
-impl ElemeFrTrait for ElemFr {
-    fn mock() -> ark_bn254::Fr {
+impl ElemTraitExt for ElemFr {
+    fn mock() -> Self {
         ark_bn254::Fr::ONE
     }
     fn ret_type(&self) -> bool {
@@ -271,13 +240,9 @@ impl ElemeFrTrait for ElemFr {
     }
 }
 
-pub(crate) trait HashBytesTrait {
-    fn mock() -> HashBytes;
-    fn ret_type(&self) -> bool;
-    fn out(&self) -> HashBytes;
-}
-impl HashBytesTrait for HashBytes {
-    fn mock() -> HashBytes {
+
+impl ElemTraitExt for HashBytes {
+    fn mock() -> Self {
         [0u8; 64]
     }
     fn ret_type(&self) -> bool {

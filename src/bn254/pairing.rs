@@ -516,8 +516,7 @@ impl Pairing {
                 f = fx;
             }
 
-            for j in 0..num_line_groups {
-                let p = p_lst[j];
+            for (j, p) in p_lst.iter().enumerate().take(num_line_groups) {
                 let coeffs = &line_coeffs[num_lines - (i + 2)][j][0];
                 assert_eq!(coeffs.0, ark_bn254::Fq2::ONE);
                 let mut fx = f;
@@ -528,7 +527,7 @@ impl Pairing {
                 fx.mul_by_034(&coeffs.0, &c1new, &c2new);
 
                 let (hinted_script, hint) =
-                    hinted_ell_by_constant_affine(f, -p.x / p.y, p.y.inverse().unwrap(), coeffs);
+                    hinted_ell_by_constant_affine_and_sparse_mul(f, -p.x / p.y, p.y.inverse().unwrap(), coeffs);
                 scripts.push(hinted_script);
                 hints.extend(hint);
                 f = fx;
@@ -568,8 +567,7 @@ impl Pairing {
             if ark_bn254::Config::ATE_LOOP_COUNT[i - 1] == 1
                 || ark_bn254::Config::ATE_LOOP_COUNT[i - 1] == -1
             {
-                for j in 0..num_line_groups {
-                    let p = p_lst[j];
+                for (j, p) in p_lst.iter().enumerate().take(num_line_groups) {
                     let coeffs = &line_coeffs[num_lines - (i + 2)][j][1];
                     assert_eq!(coeffs.0, ark_bn254::Fq2::ONE);
                     let mut fx = f;
@@ -579,7 +577,7 @@ impl Pairing {
                     c2new.mul_assign_by_fp(&(p.y.inverse().unwrap()));
                     fx.mul_by_034(&coeffs.0, &c1new, &c2new);
 
-                    let (hinted_script, hint) = hinted_ell_by_constant_affine(
+                    let (hinted_script, hint) = hinted_ell_by_constant_affine_and_sparse_mul(
                         f,
                         -p.x / p.y,
                         p.y.inverse().unwrap(),
@@ -663,8 +661,7 @@ impl Pairing {
         hints.extend(hint);
         f = fx;
 
-        for j in 0..num_line_groups {
-            let p = p_lst[j];
+        for (j, p) in p_lst.iter().enumerate().take(num_line_groups) {
             let coeffs = &line_coeffs[num_lines - 2][j][0];
             assert_eq!(coeffs.0, ark_bn254::Fq2::ONE);
             let mut fx = f;
@@ -675,7 +672,7 @@ impl Pairing {
             fx.mul_by_034(&coeffs.0, &c1new, &c2new);
 
             let (hinted_script, hint) =
-                hinted_ell_by_constant_affine(f, -p.x / p.y, p.y.inverse().unwrap(), coeffs);
+                hinted_ell_by_constant_affine_and_sparse_mul(f, -p.x / p.y, p.y.inverse().unwrap(), coeffs);
             scripts.push(hinted_script);
             hints.extend(hint);
             f = fx;
@@ -752,8 +749,7 @@ impl Pairing {
             }
         }
 
-        for j in 0..num_line_groups {
-            let p = p_lst[j];
+        for (j, p) in p_lst.iter().enumerate().take(num_line_groups) {
             let coeffs = &line_coeffs[num_lines - 1][j][0];
             assert_eq!(coeffs.0, ark_bn254::Fq2::ONE);
             let mut fx = f;
@@ -764,7 +760,7 @@ impl Pairing {
             fx.mul_by_034(&coeffs.0, &c1new, &c2new);
 
             let (hinted_script, hint) =
-                hinted_ell_by_constant_affine(f, -p.x / p.y, p.y.inverse().unwrap(), coeffs);
+                hinted_ell_by_constant_affine_and_sparse_mul(f, -p.x / p.y, p.y.inverse().unwrap(), coeffs);
             scripts.push(hinted_script);
             hints.extend(hint);
             f = fx;
@@ -1359,11 +1355,11 @@ mod test {
             {fq_push_not_montgomery(p2.y.inverse().unwrap())}
             {fq_push_not_montgomery(p2.x)}
             {fq_push_not_montgomery(p2.y)}
-            { from_eval_p2 }
+            {from_eval_p2 }// utils::from_eval_point(p2),
             {fq_push_not_montgomery(p3.y.inverse().unwrap())}
             {fq_push_not_montgomery(p3.x)}
             {fq_push_not_montgomery(p3.y)}
-            { from_eval_p3 }
+            {from_eval_p3 }// utils::from_eval_point(p3),
             {fq_push_not_montgomery(p4.y.inverse().unwrap())}
             {fq_push_not_montgomery(p4.x)}
             {fq_push_not_montgomery(p4.y)}

@@ -162,7 +162,7 @@ impl Fq12 {
         let mut hints = Vec::new();
 
         let (hinted_script1, hint1) = Fq6::hinted_mul(6, a.c0, 0, b.c0); // t0
-        let (hinted_script2, hint2) = Fq6::hinted_mul_2(6, a.c1, 0, b.c1); // t1
+        let (hinted_script2, hint2) = Fq6::hinted_mul(6, a.c1, 0, b.c1); // t1
 
         let mut script = script! {};
         let script_lines = [
@@ -194,7 +194,7 @@ impl Fq12 {
         let mut hints = Vec::new();
 
         let (hinted_script1, hint1) = Fq6::hinted_mul(6, a.c0, 0, b.c1); // t0
-        let (hinted_script2, hint2) = Fq6::hinted_mul_2(6, a.c1, 0, b.c0); // t1
+        let (hinted_script2, hint2) = Fq6::hinted_mul(6, a.c1, 0, b.c0); // t1
 
         let mut script = script! {};
         let script_lines = [

@@ -177,36 +177,6 @@ impl Fq2 {
         (script, hints)
     }
 
-    pub fn hinted_mul_2(mut a_depth: u32, mut a: ark_bn254::Fq2, mut b_depth: u32, mut b: ark_bn254::Fq2) -> (Script, Vec<Hint>) {
-        if a_depth < b_depth {
-            (a_depth, b_depth) = (b_depth, a_depth);
-            (a, b) = (b, a);
-        }
-        assert_ne!(a_depth, b_depth);
-
-        let mut hints = Vec::new();
-
-        let (hinted_script1, hint1) = Fq::hinted_mul_lc2_keep_elements_2(3, a.c0, 2, a.c1, 1, b.c1, 0, b.c0);
-        let (hinted_script2, hint2) = Fq::hinted_mul_lc2_2(3, a.c0, 2, a.c1, 1, b.c0, 0, -b.c1);
-
-        let script = script! {
-            { Fq2::roll(a_depth) }
-            { Fq2::roll(b_depth + 2) }                       // a.c0 a.c1 b.c0 b.c1
-            { Fq::roll(1) }                                  // a.c0 a.c1 b.c1 b.c0
-            { hinted_script1 }                               // a.c0 a.c1 b.c1 b.c0 a.c0*b.c1+a.c1*b.c0
-            { Fq::toaltstack() }                             // a.c0 a.c1 b.c1 b.c0 | a.c0*b.c1+a.c1*b.c0
-            { Fq::roll(1) }                                  // a.c0 a.c1 b.c0 b.c1 | a.c0*b.c1+a.c1*b.c0
-            { Fq::neg(0) }                                   // a.c0 a.c1 b.c0 -b.c1 | a.c0*b.c1+a.c1*b.c0
-            { hinted_script2 }                               // a.c0*b.c0-a.c1*b.c1 | a.c0*b.c1+a.c1*b.c0
-            { Fq::fromaltstack() }                           // a.c0*b.c0-a.c1*b.c1 a.c0*b.c1+a.c1*b.c0
-        };
-
-        hints.extend(hint1);
-        hints.extend(hint2);
-
-        (script, hints)
-    }
-
     pub fn mul_by_fq(mut a: u32, b: u32) -> Script {
         if a < b {
             a += 1;

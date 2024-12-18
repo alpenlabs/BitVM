@@ -6,10 +6,10 @@ use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::{Field, PrimeField};
 use bitcoin_script::script;
 
-use crate::{chunk::{compile::{bitcom_scripts_from_segments, op_scripts_from_segments, Vkey}, segment::*, taps::{add_with_frob, tap_precompute_Py, tup_to_scr, Sig, SigData}}, execute_script, groth16::g16::{Assertions, PublicKeys, Signatures, N_TAPLEAVES, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}, signatures::wots::{wots160, wots256}, treepp};
+use crate::{chunk::{compile::{bitcom_scripts_from_segments, op_scripts_from_segments, Vkey}, primitves::{tup_to_scr, HashBytes, Sig, SigData}, segment::*, taps_point_eval::{get_hint_for_add_with_frob}}, execute_script, groth16::g16::{Assertions, PublicKeys, Signatures, N_TAPLEAVES, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}, signatures::wots::{wots160, wots256}, treepp};
 use sha2::{Digest, Sha256};
 
-use super::{api::nib_to_byte_array, compile::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, hint_models::*, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps}, taps::{HashBytes}, wots::WOTSPubKey};
+use super::{api::nib_to_byte_array, compile::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, hint_models::*, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps},  wots::WOTSPubKey};
 
 
 
@@ -42,15 +42,17 @@ fn compare(hint_out: &Element, claimed_assertions: &mut Option<Intermediates>) -
             panic!()
         }
     }
+
     let (x, is_field) = match hint_out {
-        Element::G2Acc(r) => (r.out(), false),
-        Element::Fp12(r) => (r.out(), false),
-        Element::FieldElem(f) => (extern_fq_to_nibbles(*f), true),
-        Element::MSMG1(r) => (r.out(), false),
-        Element::ScalarElem(r) => (extern_fr_to_nibbles(*r), true),
-        Element::SparseEval(r) => (r.out(), false),
-        Element::HashBytes(r) => (*r, false),
+        Element::G2Acc(r) => (r.out(), r.ret_type()),
+        Element::Fp12(r) => (r.out(), r.ret_type()),
+        Element::FieldElem(f) => (f.out(), f.ret_type()),
+        Element::MSMG1(r) => (r.out(), r.ret_type()),
+        Element::ScalarElem(r) => (r.out(), r.ret_type()),
+        Element::SparseEval(r) => (r.out(), r.ret_type()),
+        Element::HashBytes(r) => (r.out(), r.ret_type()),
     };
+
     let matches = if is_field {
         let r = get_fq(claimed_assertions);
         extern_fq_to_nibbles(r) == x
@@ -327,8 +329,8 @@ pub(crate) fn groth16(
     let leval = wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, 1);
     push_compare_or_return!(leval);
     // (t2, t3) = (le.t2, le.t3);
-    t2 = add_with_frob(pubs.q2, t2, 1);
-    t3 = add_with_frob(pubs.q3, t3, 1);
+    t2 = get_hint_for_add_with_frob(pubs.q2, t2, 1);
+    t3 = get_hint_for_add_with_frob(pubs.q3, t3, 1);
 
 
     let dmul0 = wrap_hints_dense_le_mul0(is_compile_mode, all_output_hints.len(), &f_acc, &leval);
@@ -348,8 +350,8 @@ pub(crate) fn groth16(
 
     let leval = wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, -1);
     push_compare_or_return!(leval);
-    t2 = add_with_frob(pubs.q2, t2, -1);
-    t3 = add_with_frob(pubs.q3, t3, -1);
+    t2 = get_hint_for_add_with_frob(pubs.q2, t2, -1);
+    t3 = get_hint_for_add_with_frob(pubs.q3, t3, -1);
 
     let dmul0 = wrap_hints_dense_le_mul0(is_compile_mode, all_output_hints.len(), &f_acc, &leval);
     push_compare_or_return!(dmul0);
@@ -365,7 +367,7 @@ pub(crate) fn groth16(
     push_compare_or_return!(dmul1);
     f_acc = dmul1;
 
-    let result: ElemFp12Acc = f_acc.output.into();
+    let result: ElemFp12Acc = f_acc.output.try_into().unwrap();
     if result.f != ark_bn254::Fq12::ONE {
         return false;
     }
@@ -591,7 +593,6 @@ pub fn script_exec(
     }
 
     let mut sig = Sig {
-        msk: None,
         cache: sigcache,
     };
 
@@ -635,7 +636,11 @@ pub fn script_exec(
             }
         }
         if !exec_result.success {
-            assert!(exec_result.final_stack.len() == 1);
+            if exec_result.final_stack.len() != 1 {
+                println!("final {:?}", i);
+                println!("final {:?}", segments[i].scr_type);
+                assert!(false);
+            }
         } else {
             println!("disprove script {}: tapindex {}, {:?}",i,tap_script_index, segments[i].scr_type);
             let disprove_hint = (
@@ -655,7 +660,7 @@ pub fn script_exec(
 #[cfg(test)]
 mod test {
 
-    use crate::{chunk::{msm::tap_msm, taps::tap_precompute_Py}, signatures::wots::wots256};
+    use crate::{chunk::{taps_msm::tap_msm, taps_premiller::tap_precompute_Py}, signatures::wots::wots256};
     use super::*;
 
 
@@ -675,9 +680,9 @@ mod test {
         let p4y = wrap_hints_precompute_Py(false, id_p4y as usize, &gp4y);
     
         // assertioons
-        let n_gp4y = extern_fq_to_nibbles(gp4y.output.into());
+        let n_gp4y = extern_fq_to_nibbles(gp4y.output.try_into().unwrap());
         let a_gp4y = nib_to_byte_array(&n_gp4y);
-        let n_p4y = extern_fq_to_nibbles(p4y.output.into());
+        let n_p4y = extern_fq_to_nibbles(p4y.output.try_into().unwrap());
         let a_p4y = nib_to_byte_array(&n_p4y);
     
         // signature
@@ -699,7 +704,7 @@ mod test {
     
     
         let locking_bitcom = script!{};  // bitcom_precompute_Py(&pubk, (id_p4y, true), vec![(id_gp4y, true)]);
-        let (unlocking_bitcom_script, _) = tup_to_scr(&mut Sig { msk: None, cache: sigcache }, vec![((id_p4y, true), n_p4y), ((id_gp4y, true), n_gp4y)]);
+        let (unlocking_bitcom_script, _) = tup_to_scr(&mut Sig {  cache: sigcache }, vec![((id_p4y, true), n_p4y), ((id_gp4y, true), n_gp4y)]);
         let aux_hints = p4y.hint_script;
         let ops_scripts = tap_precompute_Py();
     
@@ -752,14 +757,14 @@ mod test {
         let msm = wrap_hint_msm(false, id_msm as usize, Some(msm0.clone()), vec![scalar.clone()], msm_chain_index, pub_vky.clone());
     
         // assertioons
-        let n_scalar = extern_fr_to_nibbles(scalar.output.into());
+        let n_scalar = extern_fr_to_nibbles(scalar.output.try_into().unwrap());
         let a_scalar = nib_to_byte_array(&n_scalar);
-        let n_msm: ElemG1Point = msm.output.into();
+        let n_msm: ElemG1Point = msm.output.try_into().unwrap();
         let n_msm = extern_hash_fps(vec![n_msm.x, n_msm.y], true);
         let a_msm: [u8; 32] = nib_to_byte_array(&n_msm).try_into().unwrap();
         let a_msm: [u8; 20] = a_msm[12..32].try_into().unwrap();
     
-        let n_msm0: ElemG1Point = msm0.output.into();
+        let n_msm0: ElemG1Point = msm0.output.try_into().unwrap();
         let n_msm0 = extern_hash_fps(vec![n_msm0.x, n_msm0.y], true);
         let a_msm0: [u8; 32] = nib_to_byte_array(&n_msm0).try_into().unwrap();
         let a_msm0: [u8; 20] = a_msm0[12..32].try_into().unwrap();
@@ -787,7 +792,7 @@ mod test {
     
     
         let locking_bitcom = script!{}; // bitcom_msm(&pubk, (id_msm, msm.output_type), vec![(id_scalar, scalar.output_type), (id_msm0, msm0.output_type)]);
-        let (unlocking_bitcom_script, _) = tup_to_scr(&mut Sig { msk: None, cache: sigcache }, vec![((id_scalar, scalar.output_type), n_scalar), ((id_msm0, msm0.output_type), n_msm0), ((id_msm, msm.output_type), n_msm)]);
+        let (unlocking_bitcom_script, _) = tup_to_scr(&mut Sig { cache: sigcache }, vec![((id_scalar, scalar.output_type), n_scalar), ((id_msm0, msm0.output_type), n_msm0), ((id_msm, msm.output_type), n_msm)]);
         let aux_hints = msm.hint_script;
         let ops_scripts = tap_msm(8, msm_chain_index, pub_vky);
     

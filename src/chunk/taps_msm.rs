@@ -1,11 +1,8 @@
 use std::collections::HashMap;
-
 use crate::bn254::utils::fq_push_not_montgomery;
 use crate::chunk::primitves::{
-    extern_hash_fps, extern_fq_to_nibbles, extern_fr_to_nibbles, unpack_limbs_to_nibbles
+    extern_hash_fps, unpack_limbs_to_nibbles
 };
-use crate::chunk::taps::{tup_to_scr, wots_locking_script};
-use crate::chunk::wots::{wots_p256_get_pub_key, wots_p160_get_pub_key};
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
@@ -16,9 +13,7 @@ use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
 use num_traits::One;
 
 use super::hint_models::{ElemFq, ElemFr, ElemG1Point};
-use super::primitves::hash_fp2;
-use super::taps::{gen_bitcom, HashBytes, Link, Sig};
-use super::wots::WOTSPubKey;
+use super::primitves::{hash_fp2, HashBytes};
 use crate::bn254::fq2::Fq2;
 use crate::bn254::utils::Hint;
 
@@ -192,7 +187,9 @@ pub(crate) fn tap_msm(window: usize, msm_tap_index: usize, qs: Vec<ark_bn254::G1
         OP_IF
             {Fq2::drop()}
         OP_ELSE
-            {hash_fp2()} // [nt, t_hash]
+            {Fq2::roll(2)} {Fq2::toaltstack()}
+            {hash_fp2()} {Fq2::fromaltstack()}// [t_hash, nt]
+            {Fq::roll(2)} // [nt, t_hash]
             {Fq::fromaltstack()}
             {Fq::equalverify(1, 0)}
         OP_ENDIF
@@ -582,87 +579,6 @@ pub(crate) fn hint_msm(
     (hint_out, simulate_stack_input)
 }
 
-pub fn try_msm(qs: Vec<ark_bn254::G1Affine>, scalars: Vec<ark_bn254::Fr>) {
-    // constants
-    let num_bits: usize = 256;
-    let window = 8;
-    let pub_ins = 3;
-    let msk = "b138982ce17ac813d505b5b40b665d404e9528e7";
-    let mut sec_in: Vec<u32> = (0..pub_ins).collect();
-    let mut sec_out = pub_ins;
-    let mut sig = Sig {
-        msk: Some(msk),
-        cache: HashMap::new(),
-    };
-    let qs: Vec<G1Affine> = qs;
-    // run time
-    let mut hint_in_t =  G1Affine::identity();
-    let mut hint_in_scalars = scalars;
-
-    for i in 0..num_bits / window {
-        println!("index {:?}", i);
-        if i == 1 {
-            sec_in.push(sec_out);
-        } else if i > 1 {
-            sec_in.pop();
-            sec_in.push(sec_out);
-        }
-        sec_out = sec_in.last().unwrap() + 1;
-        let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        let pk = wots_p160_get_pub_key(&format!("{}{:04X}", msk, sec_out));
-        pub_scripts.insert(sec_out, pk);
-        for j in 0..sec_in.len() {
-            let i = &sec_in[j];
-            if j == pub_ins as usize {
-                let pk = wots_p160_get_pub_key(&format!("{}{:04X}", msk, i));
-                pub_scripts.insert(*i, pk);
-            } else {
-                let pk = wots_p256_get_pub_key(&format!("{}{:04X}", msk, i));
-                pub_scripts.insert(*i, pk);
-            }
-        }
-        let msec_out = (sec_out, false);
-        let mut msec_in: Vec<Link> = sec_in.iter().map(|x| (*x, true)).collect();
-        if msec_in.len() == pub_ins as usize + 1 {
-            let last = msec_in.pop().unwrap();
-            msec_in.push((last.0, false));
-        }
-        let bitcomms_tapscript = script!(); // bitcom_msm(&pub_scripts, msec_out, msec_in.clone());
-        let msm_ops = tap_msm(window, i, qs.clone());
-
-        let (aux, stack_data) = hint_msm(
-            // &mut sig,
-            // msec_out,
-            // msec_in.clone(),
-            hint_in_t.clone(),
-            hint_in_scalars.clone(),
-            i as usize,
-            qs.clone(),
-        );
-
-        let script = script! {
-            {stack_data}
-            {bitcomms_tapscript}
-            {msm_ops}
-        };
-        println!("script len {:?}", script.len());
-        hint_in_t = aux.clone();
-        let exec_result = execute_script(script);
-        for i in 0..exec_result.final_stack.len() {
-            println!("{i:} {:?}", exec_result.final_stack.get(i));
-        }
-        assert!(!exec_result.success && exec_result.final_stack.len() == 1);
-        println!("ts len {}", exec_result.stats.max_nb_stack_items);
-        if i == num_bits / window - 1 {
-            println!(
-                "check valid {:?}",
-                qs[0] * hint_in_scalars[0] + qs[1] * hint_in_scalars[1] == aux
-            );
-        }
-    }
-}
-
-
 // Hash P
 //vk0: G1Affine
 pub(crate) fn tap_hash_p(q: G1Affine) -> Script {
@@ -715,10 +631,11 @@ pub(crate) fn tap_hash_p(q: G1Affine) -> Script {
         // Altstack:[identity, gpx, gpy, th]
         //[ntx, nty, tx, ty]
 
-        {Fq2::fromaltstack()}
+        {Fq2::fromaltstack()} {Fq::fromaltstack()}
+        {Fq2::roll(3)} {Fq2::toaltstack()} {Fq::toaltstack()}
         { hash_fp2() }
         {Fq::fromaltstack()}
-        {Fq::equalverify(1, 0)}
+        {Fq::equalverify(1, 0)} {Fq2::fromaltstack()} 
         {Fq2::fromaltstack()} {Fq::roll(1)}
         // // [ntx, nty, gpx, gpy]
         {Fq::fromaltstack()}
@@ -768,6 +685,7 @@ pub(crate) fn hint_hash_p(
     let (_, hints_add_line) = hinted_affine_add_line_g1(tx, qx, alpha_chord, bias_minus_chord);
 
 
+
     let simulate_stack_input = script! {
         // bit commits raw
         for hint in hints_check_chord_t {
@@ -785,8 +703,6 @@ pub(crate) fn hint_hash_p(
 
         {fq_push_not_montgomery(tx)}
         {fq_push_not_montgomery(ty)}
-
-        // { bc_elems }
     };
     (zero_nib, simulate_stack_input)
 }
@@ -794,36 +710,16 @@ pub(crate) fn hint_hash_p(
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
 
     use crate::{
-        bn254::{fq2::Fq2, utils::fr_push_not_montgomery}, chunk::{api::nib_to_byte_array, taps::SigData}, signatures::wots::{wots160, wots256},
+        bn254::{fq2::Fq2, utils::fr_push_not_montgomery}, chunk::{primitves::extern_nibbles_to_limbs},
     };
-
-    use self::mock::{compile_circuit, generate_proof};
-
     use super::*;
-    use ark_bn254::{Bn254, G1Affine};
+    use ark_bn254::{G1Affine};
     use ark_ff::UniformRand;
-    use bitcoin::opcodes::{all::OP_EQUALVERIFY, OP_TRUE};
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
-
-    #[test]
-    fn test_try_msm() {
-        let mut prng = ChaCha20Rng::seed_from_u64(2);
-
-        let (proof, scalars, vk) = generate_new_mock_proof();
-        assert!(scalars.len() == 3);
-        let scalars = vec![scalars[2], scalars[1], scalars[0]];
-        let qs = vec![
-            vk.gamma_abc_g1[3],
-            vk.gamma_abc_g1[2],
-            vk.gamma_abc_g1[1],
-        ];
-
-        try_msm(qs, scalars);
-    }
+    use crate::chunk::hint_models::ElemTraitExt;
 
     #[test]
     fn test_precompute_table() {
@@ -992,73 +888,35 @@ mod test {
 
     #[test]
     fn test_tap_hash_p() {
-        // compile time
-        let sec_key_for_bitcomms = "b138982ce17ac813d505b5b40b665d404e9528e7";
-        let sec_in = vec![1, 2, 3];
-        let sec_out = 0;
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let q = ark_bn254::G1Affine::rand(&mut prng);
-
+        let t = ark_bn254::G1Affine::rand(&mut prng);
+        let r = (t + q).into_affine();
+        let thash = extern_hash_fps(vec![t.x, t.y], false);
 
         let hash_c_scr = tap_hash_p(q);
 
-        let mut pub_scripts: HashMap<u32, WOTSPubKey> = HashMap::new();
-        pub_scripts.insert(sec_out, wots_p160_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, 0)));
-        for j in 0..sec_in.len() {
-            let i = &sec_in[j];
-            if j == 0 {
-                let pk = wots_p160_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
-                pub_scripts.insert(*i, pk);
-            } else {
-                let pk = wots_p256_get_pub_key(&format!("{}{:04X}", sec_key_for_bitcomms, i));
-                pub_scripts.insert(*i, pk);
+        let (hint_out, hint_script) = hint_hash_p( t, r.y, r.x,q);
+
+        let bitcom_scr = script!{
+            for i in extern_nibbles_to_limbs(hint_out) {
+                {i}
             }
-        }
-
-        // let sec_out = (sec_out, false);
-
-        let sec_in_arr = vec![(sec_in[0],false), (sec_in[1], true), (sec_in[2], true)];
-        let bitcom_scr = script!{}; // bitcom_hash_p(&pub_scripts, (sec_out, false), sec_in_arr.clone());
-
-        // runtime
-        let mut prng = ChaCha20Rng::seed_from_u64(0);
-        let t = ark_bn254::G1Affine::rand(&mut prng);
-
-        let r = (t + q).into_affine();
-
-        let thash = extern_hash_fps(vec![t.x, t.y], false);
-
-        let mut sig_cache: HashMap<u32, SigData> = HashMap::new();
-        let bal: [u8; 32] = nib_to_byte_array(&thash).try_into().unwrap();
-        let bal: [u8; 20] = bal[12..32].try_into().unwrap();
-        sig_cache.insert(sec_in_arr[0].0, SigData::Sig160(wots160::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in_arr[0].0), &bal)));
-
-        let bal = extern_fq_to_nibbles(r.y);
-        let bal: [u8; 32] = nib_to_byte_array(&bal).try_into().unwrap();
-        sig_cache.insert(sec_in_arr[1].0, SigData::Sig256(wots256::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in_arr[1].0), &bal)));
-
-
-        let bal = extern_fq_to_nibbles(r.x);
-        let bal: [u8; 32] = nib_to_byte_array(&bal).try_into().unwrap();
-        sig_cache.insert(sec_in_arr[2].0, SigData::Sig256(wots256::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_in_arr[2].0), &bal)));
-
-
-        let bal: [u8; 32] = nib_to_byte_array(&[0u8;64]).try_into().unwrap();
-        let bal: [u8; 20] = bal[12..32].try_into().unwrap();
-        sig_cache.insert(sec_out, SigData::Sig160(wots160::get_signature(&format!("{}{:04X}", sec_key_for_bitcomms, sec_out), &bal)));
-
-
-        let mut sig = Sig {
-            msk: None,
-            cache: sig_cache,
+            {Fq::toaltstack()}
+            for i in extern_nibbles_to_limbs(thash) {
+                {i}
+            }
+            {Fq::toaltstack()}
+            {fq_push_not_montgomery(r.y)}
+            {Fq::toaltstack()}   
+            {fq_push_not_montgomery(r.x)}
+            {Fq::toaltstack()}   
         };
-        let (_, simulate_stack_input) = hint_hash_p(
-            // &mut sig, (sec_out, false), sec_in_arr, 
-             t, r.y, r.x,q);
+
 
         let tap_len = hash_c_scr.len();
         let script = script! {
-            {simulate_stack_input}
+            {hint_script}
             {bitcom_scr}
             {hash_c_scr}
         };
@@ -1074,114 +932,54 @@ mod test {
     }
 
 
+    #[test]
+    fn test_tap_msm() {
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let q = ark_bn254::G1Affine::rand(&mut prng);
+        let scalars = vec![ark_bn254::Fr::ONE, ark_bn254::Fr::ONE + ark_bn254::Fr::ONE];
+        let qs = vec![q, (q+ q).into_affine()];
+        let t = ark_bn254::G1Affine::rand(&mut prng);
+        let t: ElemG1Point = t;
+        let msm_tap_index = 1;
 
-    pub mod mock {
-        use ark_bn254::{Bn254, Fr as F};
-        use ark_crypto_primitives::snark::{CircuitSpecificSetupSNARK, SNARK};
-        use ark_ff::AdditiveGroup;
-        use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
-        use ark_r1cs_std::{alloc::AllocVar, eq::EqGadget, fields::fp::FpVar};
-        use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-        use ark_std::test_rng;
-        use rand::{RngCore, SeedableRng};
+        let hash_c_scr = tap_msm(8, msm_tap_index, qs.clone());
 
-        #[derive(Clone)]
-        pub struct DummyCircuit {
-            pub a: Option<F>, // Private input a
-            pub b: Option<F>, // Private input b
-            pub c: F,         // Public output: a * b
-            pub d: F,         // Public output: a + b
-            pub e: F,         // Public output: a - b
-        }
+        let (hint_out, hint_script) = hint_msm( t, scalars.clone(), msm_tap_index, qs.clone());
 
-        impl ConstraintSynthesizer<F> for DummyCircuit {
-            fn generate_constraints(self, cs: ConstraintSystemRef<F>) -> Result<(), SynthesisError> {
-                // Allocate private inputs a and b as witnesses
-                let a = FpVar::new_witness(cs.clone(), || {
-                    self.a.ok_or(SynthesisError::AssignmentMissing)
-                })?;
-                let b = FpVar::new_witness(cs.clone(), || {
-                    self.b.ok_or(SynthesisError::AssignmentMissing)
-                })?;
-
-                // Allocate public outputs c, d, and e
-                let c = FpVar::new_input(cs.clone(), || Ok(self.c))?;
-                let d = FpVar::new_input(cs.clone(), || Ok(self.d))?;
-                let e = FpVar::new_input(cs.clone(), || Ok(self.e))?;
-
-                // Enforce the constraints: c = a * b, d = a + b, e = a - b
-                let computed_c = &a * &b;
-                let computed_d = &a + &b;
-                let computed_e = &a - &b;
-
-                computed_c.enforce_equal(&c)?;
-                computed_d.enforce_equal(&d)?;
-                computed_e.enforce_equal(&e)?;
-
-                Ok(())
+        let bitcom_scr = script!{
+            for i in extern_nibbles_to_limbs(hint_out.out()) {
+                {i}
             }
-        }
-
-        pub fn compile_circuit() -> (ProvingKey<Bn254>, VerifyingKey<Bn254>) {
-            type E = Bn254;
-            let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
-            let circuit = DummyCircuit {
-                a: None,
-                b: None,
-                c: F::ZERO,
-                d: F::ZERO,
-                e: F::ZERO,
-            };
-            let (pk, vk) = Groth16::<E>::setup(circuit, &mut rng).unwrap();
-            (pk, vk)
-        }
-
-
-            pub struct Proof {
-                pub proof: ark_groth16::Proof<Bn254>,
-                pub public_inputs: Vec<ark_bn254::Fr>,
+            {Fq::toaltstack()}
+            for i in extern_nibbles_to_limbs(t.out()) {
+                {i}
             }
+            {Fq::toaltstack()}
 
-
-        pub fn generate_proof() -> Proof {
-            let (a, b) = (5, 3);
-            let (c, d, e) = (a * b, a + b, a - b);
-
-            let circuit = DummyCircuit {
-                a: Some(F::from(a)),
-                b: Some(F::from(b)),
-                c: F::from(c),
-                d: F::from(d),
-                e: F::from(e),
-            };
-
-            let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
-
-            let (pk, _) = compile_circuit();
-
-            let proof = Groth16::<Bn254>::prove(&pk, circuit.clone(), &mut rng).unwrap();
-            let public_inputs = vec![circuit.c, circuit.d, circuit.e];
-
-            Proof {
-                proof,
-                public_inputs,
+            for scalar in scalars {
+                {fr_push_not_montgomery(scalar)}
+                {Fq::toaltstack()}  
             }
-        }
+        };
 
+
+        let tap_len = hash_c_scr.len();
+        let script = script! {
+            {hint_script}
+            {bitcom_scr}
+            {hash_c_scr}
+        };
+
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        assert!(!res.success);
+        assert!(res.final_stack.len() == 1);
+
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
 
-    fn generate_new_mock_proof() -> (
-        ark_groth16::Proof<Bn254>,
-        Vec<ark_bn254::Fr>,
-        ark_groth16::VerifyingKey<Bn254>,
-    )  {
-        let (_, vk) = compile_circuit();
-        let proof = generate_proof();
-        (
-            proof.proof,
-            proof.public_inputs,
-            vk
-        )
-    }
+
 
 }
