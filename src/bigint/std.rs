@@ -3,7 +3,7 @@ use num_traits::Num;
 use std::str::FromStr;
 
 use crate::bigint::BigIntImpl;
-use crate::pseudo::push_to_stack;
+use crate::pseudo::{push_to_stack, NMUL};
 use crate::treepp::*;
 
 impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
@@ -120,7 +120,8 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
                 }
                 OP_1SUB OP_PICK
             }
-        }.add_stack_hint(-(Self::N_LIMBS as i32), Self::N_LIMBS as i32)
+        }
+        .add_stack_hint(-(Self::N_LIMBS as i32), Self::N_LIMBS as i32)
     }
 
     pub fn roll(mut a: u32) -> Script {
@@ -160,7 +161,9 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
     }
 
     #[inline]
-    pub fn push_zero() -> Script { push_to_stack(0, Self::N_LIMBS as usize) }
+    pub fn push_zero() -> Script {
+        push_to_stack(0, Self::N_LIMBS as usize)
+    }
 
     #[inline]
     pub fn push_one() -> Script {
@@ -238,7 +241,6 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
         }
     }
 
-
     pub fn is_negative(depth: u32) -> Script {
         script! {
             { (1 + depth) * Self::N_LIMBS - 1 } OP_PICK
@@ -257,7 +259,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
     }
 
     /// Resize positive numbers
-    /// 
+    ///
     /// # Note
     ///
     /// Does not work for negative numbers
@@ -286,13 +288,100 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
             }
         }
     }
+
+    pub fn unpack_limbs<const WINDOW: u32>() -> Script {
+        let n_digits: u32 = (N_BITS + WINDOW - 1) / WINDOW;
+
+        script! {
+            { Self::toaltstack() }
+            for iter in (1..=n_digits).rev() {
+                {{
+                    let s_bit = iter * WINDOW - 1; // start bit
+                    let e_bit = (iter - 1) * WINDOW; // end bit
+
+                    let s_limb = s_bit / LIMB_SIZE; // start bit limb
+                    let e_limb = e_bit / LIMB_SIZE; // end bit limb
+
+                    let mut st = 0;
+                    if (e_bit % LIMB_SIZE == 0) || (s_limb > e_limb) {
+                        st = (s_bit % LIMB_SIZE) + 1;
+                    }
+                    script! {
+                        if iter == n_digits { // initialize accumulator to track reduced limb
+                            OP_FROMALTSTACK
+                        } else if (s_bit + 1) % LIMB_SIZE == 0  { // drop current and initialize next accumulator
+                            OP_DROP OP_FROMALTSTACK
+                        }
+
+                        if (e_bit % LIMB_SIZE == 0) || (s_limb > e_limb) {
+                            if s_limb > e_limb {
+                                { NMUL(2) }
+                            } else {
+                                0
+                            }
+                        }
+                        for i in st..WINDOW {
+                            if s_limb > e_limb {
+                                if i % LIMB_SIZE == (s_bit % LIMB_SIZE) + 1 {
+                                    // window is split between multiple limbs
+                                    OP_FROMALTSTACK
+                                }
+                            }
+                            if i == 0 {
+                                { 1 << ((s_bit - i) % LIMB_SIZE) }
+                                OP_2DUP
+                                OP_GREATERTHANOREQUAL
+                                OP_IF
+                                    OP_SUB
+                                    2
+                                OP_ELSE
+                                    OP_DROP
+                                    0
+                                OP_ENDIF
+                                OP_SWAP
+                            } else{
+                                if (s_bit - i) % LIMB_SIZE > 7 {
+                                    { 1 << ((s_bit - i) % LIMB_SIZE) }
+                                    OP_2DUP
+                                    OP_GREATERTHANOREQUAL
+                                    OP_IF
+                                        OP_SUB
+                                        OP_SWAP OP_1ADD
+                                    OP_ELSE
+                                        OP_DROP
+                                        OP_SWAP
+                                    OP_ENDIF
+                                    if i < WINDOW - 1 { { NMUL(2) } }
+                                    OP_SWAP
+                                } else {
+                                    OP_TUCK
+                                    { (1 << ((s_bit - i) % LIMB_SIZE)) - 1 }
+                                    OP_GREATERTHAN
+                                    OP_TUCK
+                                    OP_ADD
+                                    if i < WINDOW - 1 { { NMUL(2) } }
+                                    OP_ROT OP_ROT
+                                    OP_IF
+                                        { 1 << ((s_bit - i) % LIMB_SIZE) }
+                                        OP_SUB
+                                    OP_ENDIF
+                                }
+                            }
+                        }
+                    }
+
+                }}
+            }
+            OP_DROP // drop accumulator
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
     use crate::bigint::{BigIntImpl, U254};
     use crate::run;
-    
+
     use bitcoin_script::script;
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha20Rng;
@@ -547,5 +636,28 @@ mod test {
             { 0xe5c2634 } OP_EQUALVERIFY // 329037900
             { 0x30644e } OP_EQUAL // 12388
         });
+    }
+
+    #[test]
+    fn test_unpack_limbs_to_nibbles() {
+        const WINDOW: u32 = 4;
+
+        println!(
+            "U254::unpack_limbs().len: {}",
+            U254::unpack_limbs::<WINDOW>().len()
+        );
+
+        let hex_str = "30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47";
+
+        let script = script! {
+            { U254::push_hex(hex_str) }
+            { U254::unpack_limbs::<WINDOW>() }
+            for i in hex_str.chars().rev().map(|c| c.to_digit(16).unwrap() as u8) {
+                { i } OP_EQUALVERIFY
+            }
+            OP_TRUE
+        };
+
+        run(script);
     }
 }
