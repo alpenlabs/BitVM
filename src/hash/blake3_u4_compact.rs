@@ -1,1603 +1,186 @@
 use std::collections::HashMap;
 
-use bitcoin_script_stack::stack::{StackTracker, StackVariable};
+use bitcoin_script_stack::stack::StackTracker;
 
 pub use bitcoin_script::builder::StructuredScript as Script;
 pub use bitcoin_script::script;
 
-use crate::bigint::U254;
-use crate::execute_script;
-use crate::pseudo::NMUL;
-use crate::u4::{u4_add_stack::*, u4_logic_stack::*, u4_shift_stack::*};
+use crate::chunk::primitves::{unpack_limbs_to_nibbles,pack_nibbles_to_limbs};
 
-const IV: [u32; 8] = [
-    0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
-];
-
-const MSG_PERMUTATION: [u8; 16] = [2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8];
+use crate::hash::blake3_u4::{compress, get_flags_for_block, TablesVars};
 
 const USE_FULL_TABLES: bool = false;
 
-#[derive(Clone, Debug, Copy)]
-pub struct TablesVars {
-    modulo: StackVariable,
-    quotient: StackVariable,
-    shift_tables: StackVariable,
-    half_lookup: StackVariable,
-    xor_table: StackVariable,
-}
+pub fn blake3_u4_compact(stack: &mut StackTracker, msg_len: u32, define_var: bool) {
+    // we require that the msg_len be a multiple of 64 bytes, this makes padding unnecessary
+    assert!(msg_len % 64 == 0, "Value is not a multiple of 64");
 
-impl TablesVars {
-    pub fn new(stack: &mut StackTracker, use_full_tables: bool) -> Self {
-        let modulo = u4_push_modulo_for_blake(stack);
-        let quotient = u4_push_quotient_for_blake(stack);
-        let shift_tables = u4_push_shift_for_blake(stack);
-        let half_lookup = if !use_full_tables {
-            u4_push_lookup_table_stack(stack)
-        } else {
-            u4_push_full_lookup_table_stack(stack)
-        };
-        let xor_table = if !use_full_tables {
-            u4_push_xor_table_stack(stack)
-        } else {
-            u4_push_xor_full_table_stack(stack)
-        };
-        TablesVars {
-            modulo,
-            quotient,
-            shift_tables,
-            half_lookup,
-            xor_table,
-        }
-    }
+    // We require message take atmost a chunk. i.e, 1024 bytes. 
+    // Currently hash of empty string is not supported. I guess we could just hardcode and return the value
+    assert!(msg_len > 0 && msg_len <= 1024, "msg length must be greater than 0 and less than or equal to 1024 bytes");
 
-    pub fn drop(&self, stack: &mut StackTracker) {
-        stack.drop(self.xor_table);
-        stack.drop(self.half_lookup);
-        stack.drop(self.shift_tables);
-        stack.drop(self.quotient);
-        stack.drop(self.modulo);
-    }
-}
+    //number of msg blocks
+    let num_blocks = msg_len / 64;
 
-pub fn right_rotate_xored(
-    stack: &mut StackTracker,
-    var_map: &mut HashMap<u8, StackVariable>,
-    x: u8,
-    y: u8,
-    n: u8,
-    tables: &TablesVars,
-) -> StackVariable {
-    let pos_shift = 8 - n / 4;
-
-    let y = var_map[&y];
-    let x = var_map.get_mut(&x).unwrap();
-
-    let mut ret = Vec::new();
-
-    for i in pos_shift..pos_shift + 8 {
-        let n = i % 8;
-
-        let mut z = 0;
-        if i < 8 {
-            z = pos_shift;
-        }
-
-        stack.move_var_sub_n(x, z as u32);
-        stack.copy_var_sub_n(y, n as u32);
-
-        let r0 = u4_logic_stack_nib(stack, tables.half_lookup, tables.xor_table, false);
-        ret.push(r0);
-    }
-
-    stack.join_count(&mut ret[0], 7)
-}
-
-pub fn right_rotate7_xored_sub(
-    stack: &mut StackTracker,
-    x: &mut StackVariable,
-    y: StackVariable,
-    tables: &TablesVars,
-    n: u8,
-) {
-    stack.from_altstack();
-
-    stack.move_var_sub_n(x, 0);
-    stack.copy_var_sub_n(y, n as u32);
-
-    let r0 = u4_logic_stack_nib(stack, tables.half_lookup, tables.xor_table, false);
-    stack.rename(r0, &format!("z{}", n));
-    stack.copy_var(r0);
-
-    stack.to_altstack();
-
-    // r7 r0 >> 3
-    let w1 = u4_2_nib_shift_blake(stack, tables.shift_tables);
-    stack.rename(w1, &format!("w{}", n + 1));
-}
-
-pub fn right_rotate7_xored(
-    stack: &mut StackTracker,
-    var_map: &mut HashMap<u8, StackVariable>,
-    x: u8,
-    y: u8,
-    tables: &TablesVars,
-) -> StackVariable {
-    // x    = x0 x1 x2 x3 x4 x5 x6 x7
-    // y    = y0 y1 y2 y3 y4 y5 y6 y7
-    // x^y = z
-    // z             = z0 z1 z2 z3 z4 z5 z6 z7
-    // rrot4( z )    = z7 z0 z1 z2 z3 z4 z5 z6
-    // w = rrot7( z ) = (z6) z7 z0 z1 z2 z3 z4 z5 z6  >> 3
-
-    let y = var_map[&y];
-    let x = var_map.get_mut(&x).unwrap();
-
-    // nib 6 xored
-    stack.move_var_sub_n(x, 6);
-    stack.copy_var_sub_n(y, 6);
-    let z6 = u4_logic_stack_nib(stack, tables.half_lookup, tables.xor_table, false);
-    stack.rename(z6, "z6");
-
-    // nib 6 copy saved
-    stack.copy_var(z6);
-    stack.to_altstack();
-
-    //nib 7 xored
-    stack.move_var_sub_n(x, 6); // previous nib 7 as it was consumed
-    stack.copy_var_sub_n(y, 7);
-
-    let z7 = u4_logic_stack_nib(stack, tables.half_lookup, tables.xor_table, false);
-    stack.rename(z7, "z7");
-    stack.copy_var(z7);
-    stack.to_altstack();
-
-    // z6 z7 >> 3
-    let mut w0 = u4_2_nib_shift_blake(stack, tables.shift_tables);
-    stack.rename(w0, "w0");
-
-    for i in 0..6 {
-        right_rotate7_xored_sub(stack, x, y, tables, i);
-    }
-
-    stack.from_altstack();
-    stack.from_altstack();
-
-    let w7 = u4_2_nib_shift_blake(stack, tables.shift_tables);
-    stack.rename(w7, "w7");
-
-    stack.join_count(&mut w0, 7)
-}
-
-pub fn g(
-    stack: &mut StackTracker,
-    var_map: &mut HashMap<u8, StackVariable>,
-    a: u8,
-    b: u8,
-    c: u8,
-    d: u8,
-    mx: StackVariable,
-    my: StackVariable,
-    tables: &TablesVars,
-) {
-    //adds a + b + mx
-    //consumes a and mx and copies b
-    let vb = var_map[&b];
-    let mut va = var_map.get_mut(&a).unwrap();
-    u4_add_stack(
-        stack,
-        8,
-        vec![vb, mx],
-        vec![&mut va],
-        vec![],
-        tables.quotient,
-        tables.modulo,
-    );
-    //stores the results in a
-    *va = stack.from_altstack_joined(8, &format!("state_{}", a));
-
-    // right rotate d xor a ( consumes d and copies a)
-    let ret = right_rotate_xored(stack, var_map, d, a, 16, tables);
-    // saves in d
-    var_map.insert(d, ret);
-
-    let vd = var_map[&d];
-    let mut vc = var_map.get_mut(&c).unwrap();
-    u4_add_stack(
-        stack,
-        8,
-        vec![vd],
-        vec![&mut vc],
-        vec![],
-        tables.quotient,
-        tables.modulo,
-    );
-    *vc = stack.from_altstack_joined(8, &format!("state_{}", c));
-
-    let ret = right_rotate_xored(stack, var_map, b, c, 12, tables);
-    var_map.insert(b, ret);
-
-    let vb = var_map[&b];
-    let mut va = var_map.get_mut(&a).unwrap();
-    u4_add_stack(
-        stack,
-        8,
-        vec![vb, my],
-        vec![&mut va],
-        vec![],
-        tables.quotient,
-        tables.modulo,
-    );
-    *va = stack.from_altstack_joined(8, &format!("state_{}", a));
-
-    let ret = right_rotate_xored(stack, var_map, d, a, 8, tables);
-    var_map.insert(d, ret);
-    stack.rename(ret, &format!("state_{}", d));
-
-    let vd = var_map[&d];
-    let mut vc = var_map.get_mut(&c).unwrap();
-    u4_add_stack(
-        stack,
-        8,
-        vec![vd],
-        vec![&mut vc],
-        vec![],
-        tables.quotient,
-        tables.modulo,
-    );
-    *vc = stack.from_altstack_joined(8, &format!("state_{}", c));
-
-    let ret = right_rotate7_xored(stack, var_map, b, c, tables);
-    var_map.insert(b, ret);
-    stack.rename(ret, &format!("state_{}", b));
-}
-
-pub fn round(
-    stack: &mut StackTracker,
-    state_var_map: &mut HashMap<u8, StackVariable>,
-    message_var_map: &HashMap<u8, StackVariable>,
-    tables: &TablesVars,
-) {
-    g(
-        stack,
-        state_var_map,
-        0,
-        4,
-        8,
-        12,
-        message_var_map[&0],
-        message_var_map[&1],
-        tables,
-    );
-    g(
-        stack,
-        state_var_map,
-        1,
-        5,
-        9,
-        13,
-        message_var_map[&2],
-        message_var_map[&3],
-        tables,
-    );
-    g(
-        stack,
-        state_var_map,
-        2,
-        6,
-        10,
-        14,
-        message_var_map[&4],
-        message_var_map[&5],
-        tables,
-    );
-    g(
-        stack,
-        state_var_map,
-        3,
-        7,
-        11,
-        15,
-        message_var_map[&6],
-        message_var_map[&7],
-        tables,
-    );
-
-    g(
-        stack,
-        state_var_map,
-        0,
-        5,
-        10,
-        15,
-        message_var_map[&8],
-        message_var_map[&9],
-        tables,
-    );
-    g(
-        stack,
-        state_var_map,
-        1,
-        6,
-        11,
-        12,
-        message_var_map[&10],
-        message_var_map[&11],
-        tables,
-    );
-    g(
-        stack,
-        state_var_map,
-        2,
-        7,
-        8,
-        13,
-        message_var_map[&12],
-        message_var_map[&13],
-        tables,
-    );
-    g(
-        stack,
-        state_var_map,
-        3,
-        4,
-        9,
-        14,
-        message_var_map[&14],
-        message_var_map[&15],
-        tables,
-    );
-}
-
-pub fn permutate(message_var_map: &HashMap<u8, StackVariable>) -> HashMap<u8, StackVariable> {
-    let mut ret = HashMap::new();
-    for i in 0..16_u8 {
-        ret.insert(i, message_var_map[&MSG_PERMUTATION[i as usize]]);
-    }
-    ret
-}
-
-pub fn init_state(
-    stack: &mut StackTracker,
-    chaining: bool,
-    counter: u32,
-    block_len: u32,
-    flags: u32,
-) -> HashMap<u8, StackVariable> {
-    let mut state = Vec::new();
-
-    if chaining {
-        for i in 0..8 {
-            state.push(stack.from_altstack_joined(8, &format!("prev-hash[{}]", i)));
-        }
-    } else {
-        for i in 0..8 {
-            state.push(stack.number_u32(IV[i]));
-        }
-    }
-    for i in 0..4 {
-        state.push(stack.number_u32(IV[i]));
-    }
-    state.push(stack.number_u32(0));
-    state.push(stack.number_u32(counter));
-    state.push(stack.number_u32(block_len));
-    state.push(stack.number_u32(flags));
-
-    let mut state_map = HashMap::new();
-    for i in 0..16 {
-        state_map.insert(i as u8, state[i]);
-        stack.rename(state[i], &format!("state_{}", i));
-    }
-    state_map
-}
-
-pub fn compress(
-    stack: &mut StackTracker,
-    chaining: bool,
-    counter: u32,
-    block_len: u32,
-    flags: u32,
-    mut message: HashMap<u8, StackVariable>,
-    tables: &TablesVars,
-    final_rounds: u8,
-    last_round: bool,
-) {
-    //chaining value needs to be copied for multiple blocks
-    //every time that is provided
-
-    let mut state = init_state(stack, chaining, counter, block_len, flags);
-
-    for i in 0..7 {
-        //round 6 could consume the message
-        round(stack, &mut state, &message, tables);
-
-        if i == 6 {
-            break;
-        }
-        message = permutate(&message);
-    }
-
-    for i in (0..final_rounds).rev() {
-        let mut tmp = Vec::new();
-
-        //iterate nibbles
-        for n in 0..8 {
-            let v2 = *state.get(&(i + 8)).unwrap();
-            stack.copy_var_sub_n(v2, n);
-            let v1 = state.get_mut(&i).unwrap();
-            stack.move_var_sub_n(v1, 0);
-            tmp.push(u4_logic_stack_nib(
-                stack,
-                tables.half_lookup,
-                tables.xor_table,
-                false,
-            ));
-
-            if last_round && n % 2 == 1 {
-                stack.to_altstack();
-                stack.to_altstack();
-            }
-        }
-        if !last_round {
-            for _ in 0..8 {
-                stack.to_altstack();
-            }
-        }
-    }
-}
-
-pub fn get_flags_for_block(i: u32, num_blocks: u32) -> u32 {
-    if num_blocks == 1 {
-        return 0b00001011;
-    }
-    if i == 0 {
-        return 0b00000001;
-    }
-    if i == num_blocks - 1 {
-        return 0b00001010;
-    }
-    0
-}
-
-fn split_digit(window: u32, index: u32) -> Script {
-    script! {
-        // {v}
-        0                           // {v} {A}
-        OP_SWAP
-        for i in 0..index {
-            OP_TUCK                 // {v} {A} {v}
-            { 1 << (window - i - 1) }   // {v} {A} {v} {1000}
-            OP_GREATERTHANOREQUAL   // {v} {A} {1/0}
-            OP_TUCK                 // {v} {1/0} {A} {1/0}
-            OP_ADD                  // {v} {1/0} {A+1/0}
-            if i < index - 1 { { NMUL(2) } }
-            OP_ROT OP_ROT
-            OP_IF
-                { 1 << (window - i - 1) }
-                OP_SUB
-            OP_ENDIF
-        }
-        // OP_SWAP
-    }
-}
-
-pub fn unpack_limbs_to_nibbles() -> Script {
-    script! {
-        {8}
-        OP_ROLL
-        {split_digit(24, 4)}
-        {split_digit(20, 4)}
-        {split_digit(16, 4)}
-        {split_digit(12, 4)}
-        {split_digit(8, 4)}
-
-        {8-1 + 6}
-        OP_ROLL
-        {split_digit(29, 4)}
-        {split_digit(25, 4)}
-        {split_digit(21, 4)}
-        {split_digit(17, 4)}
-        {split_digit(13, 4)}
-        {split_digit(9, 4)}
-        {split_digit(5, 4)}
-
-        {NMUL(8)}
-        {8-2 + 6+8} //
-        OP_ROLL
-        {split_digit(29, 3)}
-        OP_TOALTSTACK OP_ADD OP_FROMALTSTACK
-        {split_digit(26, 4)}
-        {split_digit(22, 4)}
-        {split_digit(18, 4)}
-        {split_digit(14, 4)}
-        {split_digit(10, 4)}
-        {split_digit(6, 4)}
-
-        {NMUL(4)}
-        {8-3 + 6+8+7} //
-        OP_ROLL
-        {split_digit(29, 2)}
-        OP_TOALTSTACK OP_ADD OP_FROMALTSTACK
-        {split_digit(27, 4)}
-        {split_digit(23, 4)}
-        {split_digit(19, 4)}
-        {split_digit(15, 4)}
-        {split_digit(11, 4)}
-        {split_digit(7, 4)}
-
-        {NMUL(2)}
-        {8-4 + 6+8+7+7} //
-        OP_ROLL
-        {split_digit(29, 1)}
-        OP_TOALTSTACK OP_ADD OP_FROMALTSTACK
-        {split_digit(28, 4)}
-        {split_digit(24, 4)}
-        {split_digit(20, 4)}
-        {split_digit(16, 4)}
-        {split_digit(12, 4)}
-        {split_digit(8, 4)}
-
-        {8-5 + 6+8+7+7+7} //
-        OP_ROLL
-        {split_digit(29, 4)}
-        {split_digit(25, 4)}
-        {split_digit(21, 4)}
-        {split_digit(17, 4)}
-        {split_digit(13, 4)}
-        {split_digit(9, 4)}
-        {split_digit(5, 4)}
-
-        {NMUL(8)}
-        {8-6 + 6+8+7+7+7+8} //
-        OP_ROLL
-        {split_digit(29, 3)}
-        OP_TOALTSTACK OP_ADD OP_FROMALTSTACK
-        {split_digit(26, 4)}
-        {split_digit(22, 4)}
-        {split_digit(18, 4)}
-        {split_digit(14, 4)}
-        {split_digit(10, 4)}
-        {split_digit(6, 4)}
-
-        {NMUL(4)}
-        {8-7 + 6+8+7+7+7+8+7} //
-        OP_ROLL
-        {split_digit(29, 2)}
-        OP_TOALTSTACK OP_ADD OP_FROMALTSTACK
-        {split_digit(27, 4)}
-        {split_digit(23, 4)}
-        {split_digit(19, 4)}
-        {split_digit(15, 4)}
-        {split_digit(11, 4)}
-        {split_digit(7, 4)}
-
-        {NMUL(2)}
-        {8-8 + 6+8+7+7+7+8+7+7} //
-        OP_ROLL
-        {split_digit(29, 1)}
-        OP_TOALTSTACK OP_ADD OP_FROMALTSTACK
-        {split_digit(28, 4)}
-        {split_digit(24, 4)}
-        {split_digit(20, 4)}
-        {split_digit(16, 4)}
-        {split_digit(12, 4)}
-        {split_digit(8, 4)}
-
-    }
-}
-
-pub fn pack_nibbles_to_limbs() -> Script {
-    fn split_digit(window: u32, index: u32) -> Script {
-        script! {
-            // {v}
-            0                           // {v} {A}
-            OP_SWAP
-            for i in 0..index {
-                OP_TUCK                 // {v} {A} {v}
-                { 1 << (window - i - 1) }   // {v} {A} {v} {1000}
-                OP_GREATERTHANOREQUAL   // {v} {A} {1/0}
-                OP_TUCK                 // {v} {1/0} {A} {1/0}
-                OP_ADD                  // {v} {1/0} {A+1/0}
-                if i < index - 1 { { NMUL(2) } }
-                OP_ROT OP_ROT
-                OP_IF
-                    { 1 << (window - i - 1) }
-                    OP_SUB
-                OP_ENDIF
-            }
-            OP_SWAP
-        }
-    }
-
-    const WINDOW: u32 = 4;
-    const LIMB_SIZE: u32 = 29;
-    const N_BITS: u32 = U254::N_BITS;
-    const N_DIGITS: u32 = (N_BITS + WINDOW - 1) / WINDOW;
-
-    script! {
-        for i in 1..64 { { i } OP_ROLL }
-        for i in (1..=N_DIGITS).rev() {
-            if (i * WINDOW) % LIMB_SIZE == 0 {
-                OP_TOALTSTACK
-            } else if (i * WINDOW) % LIMB_SIZE > 0 &&
-                        (i * WINDOW) % LIMB_SIZE < WINDOW {
-                OP_SWAP
-                { split_digit(WINDOW, (i * WINDOW) % LIMB_SIZE) }
-                OP_ROT
-                { NMUL(1 << ((i * WINDOW) % LIMB_SIZE)) }
-                OP_ADD
-                OP_TOALTSTACK
-            } else if i != N_DIGITS {
-                { NMUL(1 << WINDOW) }
-                OP_ADD
-            }
-        }
-        for _ in 1..U254::N_LIMBS { OP_FROMALTSTACK }
-        for i in 1..U254::N_LIMBS { { i } OP_ROLL }
-    }
-}
-
-// assumes that you have the message of 64 byte in compact form.
-pub fn blake3_u4_64bytes(stack: &mut StackTracker, define_var: bool) {
     if define_var {
-        stack.define(9, "msg0p1");
-        stack.define(9, "msg0p0");
+        for i in 0..num_blocks {
+            stack.define(9, &format!("msg{}p1", i));
+            stack.define(9, &format!("msg{}p0", i));
+        }
     }
 
-    stack.custom(
-        script!(
-            {unpack_limbs_to_nibbles()}
-            for _ in 0..64{
-                OP_TOALTSTACK
-            }
-        ),
-        1,
-        false,
-        0,
-        "unpack msg0p1",
-    );
+    for i in 0..num_blocks {
+        // let last_round: bool = i == num_blocks - 1;
 
-    stack.custom(
-        script!(
-            {unpack_limbs_to_nibbles()}
-            for _ in 0..64{
-                OP_FROMALTSTACK
-            }
-        ),
-        1,
-        false,
-        0,
-        "unpack msg0p0",
-    );
+        stack.custom(
+            script!(
+                {unpack_limbs_to_nibbles()}
+                for _ in 0..64{
+                    OP_TOALTSTACK
+                }
+            ),
+            1,
+            false,
+            0,
+            &format!("unpack msg{}p1", i),
+        );
 
-    //make a hashmap of msgs
-    let mut original_message = Vec::new();
-    for i in 0..16 {
-        let m = stack.define(8, &format!("msg_{}", i));
-        original_message.push(m);
-    }
+        stack.custom(
+            script!(
+                {unpack_limbs_to_nibbles()}
+                for _ in 0..64{
+                    OP_FROMALTSTACK
+                }
+            ),
+            1,
+            false,
+            0,
+            &format!("unpack msg{}p0", i),
+        );
 
-    //initialize the tables
-    let tables = TablesVars::new(stack, USE_FULL_TABLES);
+        //make a hashmap of msgs
+        let mut original_message = Vec::new();
+        for i in 0..16 {
+            let m = stack.define(8, &format!("msg_{}", i));
+            original_message.push(m);
+        }
 
-    // create the current block message map
-    let mut message = HashMap::new();
-    for m in 0..16 {
-        message.insert(m as u8, original_message[m as usize]);
-    }
+        //initialize the tables
+        let tables = TablesVars::new(stack, USE_FULL_TABLES);
 
-    compress(stack, false, 0, 64, 11, message, &tables, 8, true);
+        // create the current block message map
+        let mut message = HashMap::new();
+        for m in 0..16 {
+            message.insert(m as u8, original_message[m as usize]);
+        }
 
-    //delete 8 states
-    for _ in 0..8 {
-        stack.drop(stack.get_var_from_stack(0));
-    }
+        compress(
+            stack,
+            i != 0,
+            0,
+            64,
+            get_flags_for_block(i, num_blocks),
+            message,
+            &tables,
+            8,
+            i == num_blocks - 1,
+        );
 
-    //delete tables
-    for _ in 0..5 {
-        stack.drop(stack.get_var_from_stack(0));
-    }
+        //delete 8 states
+        for _ in 0..8 {
+            stack.drop(stack.get_var_from_stack(0));
+        }
 
-    //delete 16 msg words
-    for _ in 0..16 {
-        stack.drop(stack.get_var_from_stack(0));
-    }
-}
+        //delete tables
+        for _ in 0..5 {
+            stack.drop(stack.get_var_from_stack(0));
+        }
 
-// assumes that you have the message of 128 byte in compact form.
-pub fn blake3_u4_128bytes(stack: &mut StackTracker, define_var: bool) {
-    if define_var {
-        stack.define(9, "msg1p1");
-        stack.define(9, "msg1p0");
-        stack.define(9, "msg0p1");
-        stack.define(9, "msg0p0");
-    }
-
-    stack.custom(
-        script!(
-            {unpack_limbs_to_nibbles()}
-            for _ in 0..64{
-                OP_TOALTSTACK
-            }
-        ),
-        1,
-        false,
-        0,
-        "unpack msg0p0",
-    );
-
-    stack.custom(
-        script!(
-            {unpack_limbs_to_nibbles()}
-            for _ in 0..64{
-                OP_FROMALTSTACK
-            }
-        ),
-        1,
-        false,
-        0,
-        "unpack msg0p1",
-    );
-
-    //make a hashmap of msgs
-    let mut original_message = Vec::new();
-    for i in 0..16 {
-        let m = stack.define(8, &format!("msg_{}", i));
-        original_message.push(m);
-    }
-
-    //initialize the tables
-    let tables = TablesVars::new(stack, USE_FULL_TABLES);
-
-    // create the current block message map
-    let mut message = HashMap::new();
-    for m in 0..16 {
-        message.insert(m as u8, original_message[m as usize]);
-    }
-
-    compress(stack, false, 0, 64, 1, message, &tables, 8, false);
-
-    //delete 8 states
-    for _ in 0..8 {
-        stack.drop(stack.get_var_from_stack(0));
-    }
-
-    //delete tables
-    for _ in 0..5 {
-        stack.drop(stack.get_var_from_stack(0));
-    }
-
-    //delete 16 msg words
-    for _ in 0..16 {
-        stack.drop(stack.get_var_from_stack(0));
-    }
-
-    stack.custom(
-        script!(
-            {unpack_limbs_to_nibbles()}
-            for _ in 0..64{
-                OP_TOALTSTACK
-            }
-        ),
-        1,
-        false,
-        0,
-        "unpack msg1p0",
-    );
-
-    stack.custom(
-        script!(
-            {unpack_limbs_to_nibbles()}
-            for _ in 0..64{
-                OP_FROMALTSTACK
-            }
-        ),
-        1,
-        false,
-        0,
-        "unpack msg0p1",
-    );
-
-    //make a hashmap of msgs
-    let mut original_message = Vec::new();
-    for i in 0..16 {
-        let m = stack.define(8, &format!("msg_{}", i));
-        original_message.push(m);
-    }
-
-    //initialize the tables
-    let tables = TablesVars::new(stack, false);
-
-    // create the current block message map
-    let mut message = HashMap::new();
-    for m in 0..16 {
-        message.insert(m as u8, original_message[m as usize]);
-    }
-
-    compress(stack, true, 0, 64, 10, message, &tables, 8, true);
-
-    //delete 8 states
-    for _ in 0..8 {
-        stack.drop(stack.get_var_from_stack(0));
-    }
-
-    //delete tables
-    for _ in 0..5 {
-        stack.drop(stack.get_var_from_stack(0));
-    }
-
-    //delete 16 msg words
-    for _ in 0..16 {
-        stack.drop(stack.get_var_from_stack(0));
-    }
-}
-
-// assumes that you have the message of 192 byte in compact form.
-pub fn blake3_u4_192bytes(stack: &mut StackTracker, define_var: bool) {
-    if define_var {
-        stack.define(9, "msg2p1");
-        stack.define(9, "msg2p0");
-        stack.define(9, "msg1p1");
-        stack.define(9, "msg1p0");
-        stack.define(9, "msg0p1");
-        stack.define(9, "msg0p0");
-    }
-
-    stack.custom(
-        script!(
-            {unpack_limbs_to_nibbles()}
-            for _ in 0..64{
-                OP_TOALTSTACK
-            }
-        ),
-        1,
-        false,
-        0,
-        "unpack msg0p0",
-    );
-
-    stack.custom(
-        script!(
-            {unpack_limbs_to_nibbles()}
-            for _ in 0..64{
-                OP_FROMALTSTACK
-            }
-        ),
-        1,
-        false,
-        0,
-        "unpack msg0p1",
-    );
-
-    //make a hashmap of msgs
-    let mut original_message = Vec::new();
-    for i in 0..16 {
-        let m = stack.define(8, &format!("msg_{}", i));
-        original_message.push(m);
-    }
-
-    //initialize the tables
-    let tables = TablesVars::new(stack, USE_FULL_TABLES);
-
-    // create the current block message map
-    let mut message = HashMap::new();
-    for m in 0..16 {
-        message.insert(m as u8, original_message[m as usize]);
-    }
-
-    compress(stack, false, 0, 64, 1, message, &tables, 8, false);
-
-    //delete 8 states
-    for _ in 0..8 {
-        stack.drop(stack.get_var_from_stack(0));
-    }
-
-    //delete tables
-    for _ in 0..5 {
-        stack.drop(stack.get_var_from_stack(0));
-    }
-
-    //delete 16 msg words
-    for _ in 0..16 {
-        stack.drop(stack.get_var_from_stack(0));
-    }
-
-    stack.custom(
-        script!(
-            {unpack_limbs_to_nibbles()}
-            for _ in 0..64{
-                OP_TOALTSTACK
-            }
-        ),
-        1,
-        false,
-        0,
-        "unpack msg1p0",
-    );
-
-    stack.custom(
-        script!(
-            {unpack_limbs_to_nibbles()}
-            for _ in 0..64{
-                OP_FROMALTSTACK
-            }
-        ),
-        1,
-        false,
-        0,
-        "unpack msg1p1",
-    );
-
-    //make a hashmap of msgs
-    let mut original_message = Vec::new();
-    for i in 0..16 {
-        let m = stack.define(8, &format!("msg_{}", i));
-        original_message.push(m);
-    }
-
-    //initialize the tables
-    let tables = TablesVars::new(stack, false);
-
-    // create the current block message map
-    let mut message = HashMap::new();
-    for m in 0..16 {
-        message.insert(m as u8, original_message[m as usize]);
-    }
-
-    compress(stack, true, 0, 64, 0, message, &tables, 8, false);
-
-    //delete 8 states
-    for _ in 0..8 {
-        stack.drop(stack.get_var_from_stack(0));
-    }
-
-    //delete tables
-    for _ in 0..5 {
-        stack.drop(stack.get_var_from_stack(0));
-    }
-
-    //delete 16 msg words
-    for _ in 0..16 {
-        stack.drop(stack.get_var_from_stack(0));
-    }
-
-    stack.custom(
-        script!(
-            {unpack_limbs_to_nibbles()}
-            for _ in 0..64{
-                OP_TOALTSTACK
-            }
-        ),
-        1,
-        false,
-        0,
-        "unpack msg2p0",
-    );
-
-    stack.custom(
-        script!(
-            {unpack_limbs_to_nibbles()}
-            for _ in 0..64{
-                OP_FROMALTSTACK
-            }
-        ),
-        1,
-        false,
-        0,
-        "unpack msg2p1",
-    );
-
-    //make a hashmap of msgs
-    let mut original_message = Vec::new();
-    for i in 0..16 {
-        let m = stack.define(8, &format!("msg_{}", i));
-        original_message.push(m);
-    }
-
-    //initialize the tables
-    let tables = TablesVars::new(stack, false);
-
-    // create the current block message map
-    let mut message = HashMap::new();
-    for m in 0..16 {
-        message.insert(m as u8, original_message[m as usize]);
-    }
-
-    compress(stack, true, 0, 64, 10, message, &tables, 8, true);
-
-    //delete 8 states
-    for _ in 0..8 {
-        stack.drop(stack.get_var_from_stack(0));
-    }
-
-    //delete tables
-    for _ in 0..5 {
-        stack.drop(stack.get_var_from_stack(0));
-    }
-
-    //delete 16 msg words
-    for _ in 0..16 {
-        stack.drop(stack.get_var_from_stack(0));
+        //delete 16 msg words
+        for _ in 0..16 {
+            stack.drop(stack.get_var_from_stack(0));
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use std::collections::HashMap;
-
-    use ark_std::perf_trace::Colorize;
-    use bitcoin::{
-        opcodes::all::{OP_EQUALVERIFY, OP_FROMALTSTACK, OP_TOALTSTACK},
-        script,
-    };
     pub use bitcoin_script::script;
-    use bitcoin_script_stack::{script_util::verify_n, stack::StackTracker};
+    use bitcoin_script_stack::stack::StackTracker;
     use num_traits::ToBytes;
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha20Rng;
 
     use super::*;
-    use crate::{execute_script, u4::u4_std::u4_hex_to_nibbles};
+    use crate::u4::u4_std::u4_hex_to_nibbles;
+    fn test_blake3_compact(msg_len: u32) {
+        //make sure that the message length is a multiple of 64 bytes
+        assert!(
+            msg_len % 64 == 0,
+            "Message length must be a multiple of 64 bytes"
+        );
 
-    #[test]
-    fn test_rrot7() {
-        let mut stack = StackTracker::new();
-        let tables = TablesVars::new(&mut stack, true);
-
-        let mut ret = Vec::new();
-        ret.push(stack.number_u32(0xdeadbeaf));
-        ret.push(stack.number_u32(0x01020304));
-
-        let mut var_map: HashMap<u8, StackVariable> = HashMap::new();
-        var_map.insert(0, ret[0]);
-        var_map.insert(1, ret[1]);
-
-        right_rotate7_xored(&mut stack, &mut var_map, 0, 1, &tables);
-
-        stack.number_u32(0x57bf5f7b);
-
-        stack.custom(script! { {verify_n(8)}}, 2, false, 0, "verify");
-
-        stack.drop(ret[1]);
-
-        tables.drop(&mut stack);
-
-        stack.op_true();
-
-        assert!(stack.run().success);
-    }
-
-    #[test]
-    fn test_g() {
         let mut stack = StackTracker::new();
 
-        let tables = TablesVars::new(&mut stack, true);
+        // generate random bytes as u32 numbers.
+        let mut prng = ChaCha20Rng::seed_from_u64(42);
+        let nu32_arr: Vec<u32> = (0..(msg_len / 4)).into_iter().map(|_| prng.gen()).collect();
+        let nu32_byte_arr = nu32_arr
+            .iter()
+            .flat_map(|i| (i).to_le_bytes())
+            .collect::<Vec<_>>();
+        let input_hex_string = hex::encode(&nu32_byte_arr);
 
-        let mut ret = Vec::new();
-        for i in 0..6 {
-            ret.push(stack.number_u32(i));
+        let input_str_processed = hex::encode(
+            nu32_arr
+                .iter()
+                .flat_map(|i| (i).to_be_bytes())
+                .collect::<Vec<_>>(),
+        );
+
+        println!("Input Hex String :: {}", input_hex_string);
+        println!("Input Hex String processed:: {}", input_str_processed);
+
+        // compute the hash using the official implementation
+        let expected_hex_out = blake3::hash(
+            &nu32_arr
+                .iter()
+                .flat_map(|i| (i).to_le_bytes())
+                .collect::<Vec<_>>(),
+        )
+        .to_string();
+
+        println!("Expected Hash :: {}", expected_hex_out);
+
+        // push the random u32 numbers as nibbles and pack them
+        let num_blocks = msg_len / 64;
+
+        for i in (0..num_blocks).rev() {
+            let pos_start = 64 * (2 * i) as usize;
+            let pos_mid = 64 * (2 * i + 1) as usize;
+            let pos_end = 64 * (2 * i + 2) as usize;
+
+            stack.var(
+                9,
+                script! {
+                    {u4_hex_to_nibbles(&input_str_processed[pos_start..pos_mid])}
+                    {pack_nibbles_to_limbs()}
+                },
+                &format!("msg{}p0", i),
+            );
+
+            stack.var(
+                9,
+                script! {
+                    {u4_hex_to_nibbles(&input_str_processed[pos_mid..pos_end])}
+                    {pack_nibbles_to_limbs()}
+                },
+                &format!("msg{}p1", i),
+            );
         }
-
-        let mut var_map: HashMap<u8, StackVariable> = HashMap::new();
-        var_map.insert(0, ret[0]);
-        var_map.insert(1, ret[1]);
-        var_map.insert(2, ret[2]);
-        var_map.insert(3, ret[3]);
-
-        let start = stack.get_script_len();
-        g(
-            &mut stack,
-            &mut var_map,
-            0,
-            1,
-            2,
-            3,
-            ret[4],
-            ret[5],
-            &tables,
-        );
-        let end = stack.get_script_len();
-        println!("G size: {}", end - start);
-
-        stack.number_u32(0xc4d46c6c); //b
-        stack.custom(script! { {verify_n(8)}}, 2, false, 0, "verify");
-
-        stack.number_u32(0x6a063602); //c
-        stack.custom(script! { {verify_n(8)}}, 2, false, 0, "verify");
-
-        stack.number_u32(0x6a003600); //d
-        stack.custom(script! { {verify_n(8)}}, 2, false, 0, "verify");
-
-        stack.number_u32(0x0030006a); //a
-        stack.custom(script! { {verify_n(8)}}, 2, false, 0, "verify");
-
-        stack.drop(ret[5]);
-        stack.drop(ret[4]);
-        tables.drop(&mut stack);
-
-        stack.op_true();
-
-        assert!(stack.run().success);
-    }
-
-    #[test]
-    fn test_round() {
-        let mut stack = StackTracker::new();
-
-        let tables = TablesVars::new(&mut stack, true);
-
-        let mut var_map: HashMap<u8, StackVariable> = HashMap::new();
-        let mut msg_map: HashMap<u8, StackVariable> = HashMap::new();
-        for i in 0..16 {
-            var_map.insert(i, stack.number_u32(i as u32));
-            msg_map.insert(i, stack.number_u32(i as u32));
-        }
-
-        let start = stack.get_script_len();
-        round(&mut stack, &mut var_map, &msg_map, &tables);
-        let end = stack.get_script_len();
-        println!("Round size: {}", end - start);
-    }
-
-    #[test]
-    fn test_blake3_u4_64byte() {
-        let mut stack = StackTracker::new();
-        // see : https://emn178.github.io/online-tools/blake3/?input=67452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab89&input_type=hex&output_type=hex&bits=256&blake3_mode=hash&key_input_type=utf-8
-        stack.custom(
-            script! {
-                {0x00012345}
-                {0x0CF13579}
-                {0x17BC048D}
-                {0x02B3C4D5}
-                {0x1cdef012}
-                {0x068acf13}
-                {0x0af37bc0}
-                {0x091a2b3c}
-                {0x09abcdef}
-                {0x00012345}
-                {0x0CF13579}
-                {0x17BC048D}
-                {0x02B3C4D5}
-                {0x1cdef012}
-                {0x068acf13}
-                {0x0af37bc0}
-                {0x091a2b3c}
-                {0x09abcdef}
-            },
-            0,
-            false,
-            0,
-            "msg",
-        );
-
-        let start = stack.get_script().len();
-        blake3_u4_64bytes(&mut stack, true);
-        let end = stack.get_script().len();
-
-        println!("\n \n Script Size for 64 bytes: {}", end - start);
-        println!("Max Stack Use for 64 bytes: {}", stack.get_max_stack_size());
-    }
-    #[test]
-    fn test_blake3_u4_128byte() {
-        let mut stack = StackTracker::new();
-        //see : https://emn178.github.io/online-tools/blake3/?input=67452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab89&input_type=hex&output_type=hex&bits=256&blake3_mode=hash&key_input_type=utf-8
-        stack.custom(
-            script! {
-                {0x00012345}
-                {0x0CF13579}
-                {0x17BC048D}
-                {0x02B3C4D5}
-                {0x1cdef012}
-                {0x068acf13}
-                {0x0af37bc0}
-                {0x091a2b3c}
-                {0x09abcdef}
-                {0x00012345}
-                {0x0CF13579}
-                {0x17BC048D}
-                {0x02B3C4D5}
-                {0x1cdef012}
-                {0x068acf13}
-                {0x0af37bc0}
-                {0x091a2b3c}
-                {0x09abcdef}
-                {0x00012345}
-                {0x0CF13579}
-                {0x17BC048D}
-                {0x02B3C4D5}
-                {0x1cdef012}
-                {0x068acf13}
-                {0x0af37bc0}
-                {0x091a2b3c}
-                {0x09abcdef}
-                {0x00012345}
-                {0x0CF13579}
-                {0x17BC048D}
-                {0x02B3C4D5}
-                {0x1cdef012}
-                {0x068acf13}
-                {0x0af37bc0}
-                {0x091a2b3c}
-                {0x09abcdef}
-            },
-            0,
-            false,
-            0,
-            "msg",
-        );
-
-        let start = stack.get_script().len();
-        blake3_u4_128bytes(&mut stack, true);
-        let end = stack.get_script().len();
-
-        println!("\n \n Script Size for 128 bytes: {}", end - start);
-        println!(
-            "Max Stack Use for 128 bytes: {}",
-            stack.get_max_stack_size()
-        );
-    }
-
-    #[test]
-    fn test_blake3_u4_192byte() {
-        let mut stack = StackTracker::new();
-        //see : https://emn178.github.io/online-tools/blake3/?input=67452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab8967452301efcdab89&input_type=hex&output_type=hex&bits=256&blake3_mode=hash&key_input_type=utf-8
-        stack.custom(
-            script! {
-                {0x00012345}
-                {0x0CF13579}
-                {0x17BC048D}
-                {0x02B3C4D5}
-                {0x1cdef012}
-                {0x068acf13}
-                {0x0af37bc0}
-                {0x091a2b3c}
-                {0x09abcdef}
-                {0x00012345}
-                {0x0CF13579}
-                {0x17BC048D}
-                {0x02B3C4D5}
-                {0x1cdef012}
-                {0x068acf13}
-                {0x0af37bc0}
-                {0x091a2b3c}
-                {0x09abcdef}
-                {0x00012345}
-                {0x0CF13579}
-                {0x17BC048D}
-                {0x02B3C4D5}
-                {0x1cdef012}
-                {0x068acf13}
-                {0x0af37bc0}
-                {0x091a2b3c}
-                {0x09abcdef}
-                {0x00012345}
-                {0x0CF13579}
-                {0x17BC048D}
-                {0x02B3C4D5}
-                {0x1cdef012}
-                {0x068acf13}
-                {0x0af37bc0}
-                {0x091a2b3c}
-                {0x09abcdef}
-                {0x00012345}
-                {0x0CF13579}
-                {0x17BC048D}
-                {0x02B3C4D5}
-                {0x1cdef012}
-                {0x068acf13}
-                {0x0af37bc0}
-                {0x091a2b3c}
-                {0x09abcdef}
-                {0x00012345}
-                {0x0CF13579}
-                {0x17BC048D}
-                {0x02B3C4D5}
-                {0x1cdef012}
-                {0x068acf13}
-                {0x0af37bc0}
-                {0x091a2b3c}
-                {0x09abcdef}
-            },
-            0,
-            false,
-            0,
-            "msg",
-        );
-
-        let start = stack.get_script().len();
-        blake3_u4_192bytes(&mut stack, true);
-        let end = stack.get_script().len();
-
-        println!("\n \n Script Size for 192 bytes: {}", end - start);
-        println!(
-            "Max Stack Use for 192 bytes: {}",
-            stack.get_max_stack_size()
-        );
-    }
-
-    #[test]
-    fn test_blake3_u4_64byte_randominputs() {
-        let mut stack = StackTracker::new();
-
-        // generate 64 random bytes as 16 u32 numbers.
-        let mut prng = ChaCha20Rng::seed_from_u64(42);
-        let nu32_arr: Vec<u32> = (0..16).into_iter().map(|_| prng.gen()).collect();
-        let nu32_byte_arr = nu32_arr
-            .iter()
-            .flat_map(|i| (i).to_le_bytes())
-            .collect::<Vec<_>>();
-        let input_hex_string = hex::encode(&nu32_byte_arr);
-
-        let input_str_processed = hex::encode(
-            nu32_arr
-                .iter()
-                .flat_map(|i| (i).to_be_bytes())
-                .collect::<Vec<_>>(),
-        );
-
-        println!("Input Hex String :: {}", input_hex_string);
-        println!("Input Hex String processed:: {}", input_str_processed);
-
-        // compute the hash using the official implementation
-        let expected_hex_out = blake3::hash(
-            &nu32_arr
-                .iter()
-                .flat_map(|i| (i).to_le_bytes())
-                .collect::<Vec<_>>(),
-        )
-        .to_string();
-
-        println!("Expected Hash :: {}", expected_hex_out);
-
-        // push the random u32 numbers as nibbles and pack them
-
-        stack.var(
-            9,
-            script! {
-                {u4_hex_to_nibbles(&input_str_processed[0..64])}
-                {pack_nibbles_to_limbs()}
-            },
-            "msg0p0",
-        );
-
-        stack.var(
-            9,
-            script! {
-                {u4_hex_to_nibbles(&input_str_processed[64..128])}
-                {pack_nibbles_to_limbs()}
-            },
-            "msg0p1",
-        );
-
-        blake3_u4_64bytes(&mut stack, false);
-
-        //push the expected hash
-        stack.var(
-            64,
-            script! {
-                    // for _ in 0..64{
-                    //     OP_TOALTSTACK
-                    // }
-                {u4_hex_to_nibbles(&expected_hex_out.chars().rev().collect::<String>())}
-            },
-            "expected-hash",
-        );
-
-        stack.custom(
-            script! {
-                for _ in 0..64{
-                    OP_FROMALTSTACK
-                    OP_EQUALVERIFY
-                }
-            },
-            1,
-            false,
-            0,
-            "verify",
-        );
-
-        stack.op_true();
-
-        assert!(stack.run().success);
-    }
-
-    #[test]
-    fn test_blake3_u4_128byte_randominputs() {
-        let mut stack = StackTracker::new();
-
-        // generate 64 random bytes as 32 u32 numbers.
-        let mut prng = ChaCha20Rng::seed_from_u64(42);
-        let nu32_arr: Vec<u32> = (0..32).into_iter().map(|_| prng.gen()).collect();
-        let nu32_byte_arr = nu32_arr
-            .iter()
-            .flat_map(|i| (i).to_le_bytes())
-            .collect::<Vec<_>>();
-        let input_hex_string = hex::encode(&nu32_byte_arr);
-
-        let input_str_processed = hex::encode(
-            nu32_arr
-                .iter()
-                .flat_map(|i| (i).to_be_bytes())
-                .collect::<Vec<_>>(),
-        );
-
-        println!("Input Hex String :: {}", input_hex_string);
-        println!("Input Hex String processed:: {}", input_str_processed);
-
-        // compute the hash using the official implementation
-        let expected_hex_out = blake3::hash(
-            &nu32_arr
-                .iter()
-                .flat_map(|i| (i).to_le_bytes())
-                .collect::<Vec<_>>(),
-        )
-        .to_string();
-
-        println!("Expected Hash :: {}", expected_hex_out);
-
-        // push the random u32 numbers as nibbles and pack them
-
-        stack.var(
-            9,
-            script! {
-                {u4_hex_to_nibbles(&input_str_processed[128..192])}
-                {pack_nibbles_to_limbs()}
-            },
-            "msg1p0",
-        );
-
-        stack.var(
-            9,
-            script! {
-                {u4_hex_to_nibbles(&input_str_processed[192..256])}
-                {pack_nibbles_to_limbs()}
-            },
-            "msg1p1",
-        );
-
-        stack.var(
-            9,
-            script! {
-                {u4_hex_to_nibbles(&input_str_processed[0..64])}
-                {pack_nibbles_to_limbs()}
-            },
-            "msg0p0",
-        );
-
-        stack.var(
-            9,
-            script! {
-                {u4_hex_to_nibbles(&input_str_processed[64..128])}
-                {pack_nibbles_to_limbs()}
-            },
-            "msg0p1",
-        );
-
-        blake3_u4_128bytes(&mut stack, false);
-
-        //push the expected hash
-        stack.var(
-            64,
-            script! {
-                    // for _ in 0..64{
-                    //     OP_TOALTSTACK
-                    // }
-                {u4_hex_to_nibbles(&expected_hex_out.chars().rev().collect::<String>())}
-            },
-            "expected-hash",
-        );
-
-        stack.custom(
-            script! {
-                for _ in 0..64{
-                    OP_FROMALTSTACK
-                    OP_EQUALVERIFY
-                }
-            },
-            1,
-            false,
-            0,
-            "verify",
-        );
-
-        stack.op_true();
-
-        assert!(stack.run().success);
-    }
-
-    #[test]
-    fn test_blake3_u4_192byte_randominputs() {
-        let mut stack = StackTracker::new();
-
-        // generate 64 random bytes as 48 u32 numbers.
-        let mut prng = ChaCha20Rng::seed_from_u64(42);
-        let nu32_arr: Vec<u32> = (0..48).into_iter().map(|_| prng.gen()).collect();
-        let nu32_byte_arr = nu32_arr
-            .iter()
-            .flat_map(|i| (i).to_le_bytes())
-            .collect::<Vec<_>>();
-        let input_hex_string = hex::encode(&nu32_byte_arr);
-
-        let input_str_processed = hex::encode(
-            nu32_arr
-                .iter()
-                .flat_map(|i| (i).to_be_bytes())
-                .collect::<Vec<_>>(),
-        );
-
-        println!("Input Hex String :: {}", input_hex_string);
-        println!("Input Hex String processed:: {}", input_str_processed);
-
-        // compute the hash using the official implementation
-        let expected_hex_out = blake3::hash(
-            &nu32_arr
-                .iter()
-                .flat_map(|i| (i).to_le_bytes())
-                .collect::<Vec<_>>(),
-        )
-        .to_string();
-
-        println!("Expected Hash :: {}", expected_hex_out);
-
-        // push the random u32 numbers as nibbles and pack them
-
-        stack.var(
-            9,
-            script! {
-                {u4_hex_to_nibbles(&input_str_processed[256..320])}
-                {pack_nibbles_to_limbs()}
-            },
-            "msg2p0",
-        );
-
-        stack.var(
-            9,
-            script! {
-                {u4_hex_to_nibbles(&input_str_processed[320..384])}
-                {pack_nibbles_to_limbs()}
-            },
-            "msg2p1",
-        );
-
-        stack.var(
-            9,
-            script! {
-                {u4_hex_to_nibbles(&input_str_processed[128..192])}
-                {pack_nibbles_to_limbs()}
-            },
-            "msg1p0",
-        );
-
-        stack.var(
-            9,
-            script! {
-                {u4_hex_to_nibbles(&input_str_processed[192..256])}
-                {pack_nibbles_to_limbs()}
-            },
-            "msg1p1",
-        );
-
-        stack.var(
-            9,
-            script! {
-                {u4_hex_to_nibbles(&input_str_processed[0..64])}
-                {pack_nibbles_to_limbs()}
-            },
-            "msg0p0",
-        );
-
-        stack.var(
-            9,
-            script! {
-                {u4_hex_to_nibbles(&input_str_processed[64..128])}
-                {pack_nibbles_to_limbs()}
-            },
-            "msg0p1",
-        );
-
-        blake3_u4_192bytes(&mut stack, false);
-
+        
+        blake3_u4_compact(&mut stack, msg_len, false);
         //push the expected hash
         stack.var(
             64,
@@ -1624,4 +207,25 @@ mod tests {
 
         assert!(stack.run().success);
     }
+
+    #[test]
+    fn test_blake3_compact_randominputs() {
+        test_blake3_compact(64);
+        test_blake3_compact(128);
+        test_blake3_compact(192);
+        test_blake3_compact(256);
+        test_blake3_compact(64*5);
+        test_blake3_compact(64*6);
+        test_blake3_compact(64*7);
+        test_blake3_compact(64*8);
+        test_blake3_compact(64*9);
+        test_blake3_compact(64*10);
+        test_blake3_compact(64*11);
+        test_blake3_compact(64*12);
+        test_blake3_compact(64*13);
+        test_blake3_compact(64*14);
+        test_blake3_compact(64*15);
+        test_blake3_compact(64*16); //max size for a chunk 1024 bytes
+    }
+    
 }
