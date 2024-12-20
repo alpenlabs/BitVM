@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use crate::bn254;
 use crate::bn254::utils::fq_push_not_montgomery;
 use crate::chunk::primitves::{
     extern_hash_fps, unpack_limbs_to_nibbles
@@ -19,29 +19,24 @@ use crate::bn254::utils::Hint;
 
 pub(crate) fn tap_msm(window: usize, msm_tap_index: usize, qs: Vec<ark_bn254::G1Affine>) -> Script {
     assert!(qs.len() > 0);
-    let (hinted_check_tangent, _) = hinted_check_tangent_line_g1(
+    let (hinted_check_tangent, _) = bn254::curves::G1Affine::hinted_check_tangent_line(
         ark_bn254::G1Affine::new_unchecked(ark_bn254::Fq::one(), ark_bn254::Fq::one()),
         ark_bn254::Fq::one(),
-        ark_bn254::Fq::one(),
     );
-    let (hinted_double_line, _) = hinted_affine_double_line_g1(
-        ark_bn254::Fq::one(),
-        ark_bn254::Fq::one(),
+    let (hinted_double_line, _) = bn254::curves::G1Affine::hinted_double(
+        ark_bn254::G1Affine::new_unchecked(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE),
         ark_bn254::Fq::one(),
     );
 
-    let (hinted_check_chord_t, _) = hinted_check_line_through_point_g1(
-        ark_bn254::Fq::one(),
-        ark_bn254::Fq::one(),
-        ark_bn254::Fq::one(),
-    );
-    let (hinted_check_chord_q, _) = hinted_check_line_through_point_g1(
-        ark_bn254::Fq::one(),
+    let (hinted_check_chord_t, _) = bn254::curves::G1Affine::hinted_check_line_through_point(
         ark_bn254::Fq::one(),
         ark_bn254::Fq::one(),
     );
-    let (hinted_add_line, _) = hinted_affine_add_line_g1(
+    let (hinted_check_chord_q, _) = bn254::curves::G1Affine::hinted_check_line_through_point(
         ark_bn254::Fq::one(),
+        ark_bn254::Fq::one(),
+    );
+    let (hinted_add_line, _) = bn254::curves::G1Affine::hinted_add(
         ark_bn254::Fq::one(),
         ark_bn254::Fq::one(),
         ark_bn254::Fq::one(),
@@ -52,10 +47,10 @@ pub(crate) fn tap_msm(window: usize, msm_tap_index: usize, qs: Vec<ark_bn254::G1
         for _ in 0..window {
             {Fq2::copy(2)}
             {Fq2::copy(2)}
-            {hinted_check_tangent.clone()}
+            {hinted_check_tangent.clone()} 
+            OP_VERIFY
             {Fq::drop()}
             {Fq::toaltstack()}
-            {Fq::roll(1)}
             {Fq::fromaltstack()}
             {hinted_double_line.clone()}
         }
@@ -121,19 +116,19 @@ pub(crate) fn tap_msm(window: usize, msm_tap_index: usize, qs: Vec<ark_bn254::G1
                 {Fq2::copy(6)}
                 // [alpha, bias,tx,ty, qx, qy, ntx, nty, alpha, bias]
                 {Fq2::copy(2)}
-                {hinted_check_chord_t.clone()}
+                {hinted_check_chord_t.clone()} OP_VERIFY
                 //[alpha, bias, qx, qy, ntx, nty]
                 {Fq2::copy(6)}
                 {Fq2::copy(4)}
-                {hinted_check_chord_q.clone()}
+                {hinted_check_chord_q.clone()} OP_VERIFY
                 //[alpha, bias,tx,ty, qx, qy, ntx, nty]
                 {Fq::drop()}
                 {Fq::roll(1)} {Fq::drop()}
                 //[alpha, bias, tx, ty, qx, ntx]
-                {Fq::roll(4)} {Fq::roll(5)}
-                //[tx, ty, qx, ntx, bias, alpha]
+                {Fq::roll(5)} {Fq::roll(5)}
+                //[tx, ty, qx, ntx, alpha, bias]
                 {Fq::roll(2)} {Fq::roll(3)}
-                //[tx, ty, bias, alpha, ntx, qx]
+                //[tx, ty, alpha, bias, ntx, qx]
                 {hinted_add_line.clone()}
                 // [t,nt]
             OP_ENDIF
@@ -255,189 +250,6 @@ fn tap_extract_window_segment_from_scalar(index: usize) -> Script {
 //     //hash_in: HashBytes, // in = Hash([Hash(T), Hash_le_aux])
 // }
 
-
-
-fn hinted_affine_add_line_g1(
-    tx: ark_bn254::Fq,
-    qx: ark_bn254::Fq,
-    c3: ark_bn254::Fq,
-    c4: ark_bn254::Fq,
-) -> (Script, Vec<Hint>) {
-    let mut hints = Vec::new();
-    let (hsc, hts) = Fq::hinted_square(c3);
-    let (hinted_script1, hint1) = Fq::hinted_mul(2, c3, 0, c3.square() - tx - qx);
-
-    let script_lines = vec![
-        // [b, a, T.x, Q.x]
-        Fq::neg(0),
-        // [T.x, -Q.x]
-        Fq::roll(1),
-        // [-Q.x, T.x]
-        Fq::neg(0),
-        // [-T.x - Q.x]
-        Fq::add(1, 0),
-        // [-T.x - Q.x]
-        Fq::roll(1),
-        Fq::copy(0),
-        // [-T.x - Q.x, alpha, alpha]
-        hsc,
-        // [-T.x - Q.x, alpha, alpha^2]
-        // calculate x' = alpha^2 - T.x - Q.x
-        Fq::add(2, 0),
-        // [b, alpha, x']
-        Fq::copy(0),
-        // [b, alpha, x', x']
-        hinted_script1,
-        // [b, x', alpha * x']
-        Fq::neg(0),
-        // [b, x', -alpha * x']
-        // fq2_push_not_montgomery(c4),
-        // [x', -alpha * x', -bias]
-        // compute y' = -bias - alpha * x'
-        Fq::add(2, 0),
-        // [x', y']
-    ];
-
-    let mut script = script! {};
-    for script_line in script_lines {
-        script = script.push_script(script_line.compile());
-    }
-    hints.extend(hts);
-    hints.extend(hint1);
-
-    (script, hints)
-}
-
-fn hinted_affine_double_line_g1(
-    tx: ark_bn254::Fq,
-    c3: ark_bn254::Fq,
-    c4: ark_bn254::Fq,
-) -> (Script, Vec<Hint>) {
-    let mut hints = Vec::new();
-
-    let (hsc, hts) = Fq::hinted_square(c3);
-    let (hinted_script1, hint1) = Fq::hinted_mul(2, c3, 0, c3.square() - tx - tx);
-
-    let script_lines = vec![
-        Fq::double(0),
-        Fq::neg(0),
-        // [bias, alpha, - 2 * T.x]
-        Fq::roll(1),
-        Fq::copy(0),
-        // [bias, - 2 * T.x, alpha, alpha]
-        hsc,
-        // fq2_push_not_montgomery(c3.square()),
-        // [bias, - 2 * T.x, alpha, alpha^2]
-        Fq::add(2, 0),
-        // [bias, alpha, x']
-        Fq::copy(0),
-        // [bias, alpha, x', x']
-        hinted_script1,
-        // [bias, x', alpha * x']
-        Fq::neg(0),
-        // [bias, x', -alpha * x']
-        Fq::add(2, 0),
-        // [x', y']
-    ];
-
-    let mut script = script! {};
-
-    for script_line in script_lines {
-        script = script.push_script(script_line.compile());
-    }
-    hints.extend(hts);
-    hints.extend(hint1);
-
-    (script, hints)
-}
-
-pub fn hinted_check_tangent_line_g1(
-    t: ark_bn254::G1Affine,
-    c3: ark_bn254::Fq,
-    c4: ark_bn254::Fq,
-) -> (Script, Vec<Hint>) {
-    let mut hints = Vec::new();
-
-    let (hinted_script1, hint1) = Fq::hinted_mul(1, t.y.double(), 0, c3);
-    let (hinted_script2, hint2) = Fq::hinted_square(t.x);
-    let (hinted_script3, hint3) = hinted_check_line_through_point_g1(t.x, c3, c4);
-
-    // [a, b, x, y]
-    let script_lines = vec![
-        // alpha * (2 * T.y) = 3 * T.x^2
-        Fq::copy(0),
-        Fq::double(0),
-        // [a, b, x, y, 2y]
-        Fq::copy(4),
-        // [a, b, x, y, 2y, a]
-        hinted_script1,
-        // [T.x, T.y, alpha * (2 * T.y)]
-        Fq::copy(2),
-        hinted_script2,
-        Fq::copy(0),
-        Fq::double(0),
-        Fq::add(1, 0),
-        // [T.x, T.y, alpha * (2 * T.y), 3 * T.x^2]
-        Fq::neg(0),
-        Fq::add(1, 0),
-        fq_push_not_montgomery(ark_bn254::Fq::ZERO),
-        Fq::equalverify(1, 0),
-        // [T.x, T.y]
-        // check: T.y - alpha * T.x - bias = 0
-        hinted_script3,
-        // []
-    ];
-
-    let mut script = script! {};
-    for script_line in script_lines {
-        script = script.push_script(script_line.compile());
-    }
-    hints.extend(hint1);
-    hints.extend(hint2);
-    hints.extend(hint3);
-
-    (script, hints)
-}
-
-
-
-fn hinted_check_line_through_point_g1(
-    x: ark_bn254::Fq,
-    c3: ark_bn254::Fq,
-    c4: ark_bn254::Fq,
-) -> (Script, Vec<Hint>) {
-    let mut hints: Vec<Hint> = Vec::new();
-
-    let (hinted_script1, hint1) = Fq::hinted_mul(1, x, 0, c3);
-
-    let script_lines = vec![
-        // [alpha, bias, x, y ]
-        Fq::roll(1),
-        // [alpha, bias, y, x ]
-        Fq::roll(3),
-        // [bias, y, x, alpha ]
-        hinted_script1,
-        // [bias, y, alpha * x]
-        Fq::neg(0),
-        // [bias, y, -alpha * x]
-        Fq::add(1, 0),
-        // [bias, y - alpha * x]
-        Fq::add(1, 0),
-        // [y - alpha * x - bias]
-        Fq::push_zero(),
-        // [y - alpha * x - bias, 0]
-        Fq::equalverify(1, 0),
-    ];
-
-    let mut script = script! {};
-    for script_line in script_lines {
-        script = script.push_script(script_line.compile());
-    }
-    hints.extend(hint1);
-
-    (script, hints)
-}
-
 fn get_byte_mul_g1(
     scalar: ark_bn254::Fr,
     window: u8,
@@ -496,9 +308,8 @@ pub(crate) fn hint_msm(
             let new_tx = alpha.square() - t.x.double();
             let new_ty = bias_minus - alpha * new_tx;
 
-            let (_, hints_check_tangent) =
-                hinted_check_tangent_line_g1(t, alpha, bias_minus);
-            let (_, hints_double_line) = hinted_affine_double_line_g1(t.x, alpha, bias_minus);
+            let (_, hints_check_tangent) = bn254::curves::G1Affine::hinted_check_tangent_line(t, alpha);
+            let (_, hints_double_line) = bn254::curves::G1Affine::hinted_double(t, alpha);
 
             t.x = new_tx;
             t.y = new_ty;
@@ -532,10 +343,10 @@ pub(crate) fn hint_msm(
             let new_ty = bias_minus - alpha * new_tx;
 
             let (_, hints_check_chord_t) =
-                hinted_check_line_through_point_g1(t.x, alpha, bias_minus);
+                bn254::curves::G1Affine::hinted_check_line_through_point(t.x, alpha);
             let (_, hints_check_chord_q) =
-                hinted_check_line_through_point_g1(q.x, alpha, bias_minus);
-            let (_, hints_add_line) = hinted_affine_add_line_g1(t.x, q.x, alpha, bias_minus);
+                bn254::curves::G1Affine::hinted_check_line_through_point(q.x, alpha);
+            let (_, hints_add_line) = bn254::curves::G1Affine::hinted_add(t.x, q.x, alpha);
 
             t.x = new_tx;
             t.y = new_ty;
@@ -582,14 +393,12 @@ pub(crate) fn hint_msm(
 // Hash P
 //vk0: G1Affine
 pub(crate) fn tap_hash_p(q: G1Affine) -> Script {
-    let (hinted_add_line, _) = hinted_affine_add_line_g1(
-        ark_bn254::Fq::one(),
+    let (hinted_add_line, _) = bn254::curves::G1Affine::hinted_add(
         ark_bn254::Fq::one(),
         ark_bn254::Fq::one(),
         ark_bn254::Fq::one(),
     );
-    let (hinted_line_pt, _) = hinted_check_line_through_point_g1(
-        ark_bn254::Fq::one(),
+    let (hinted_line_pt, _) = bn254::curves::G1Affine::hinted_check_line_through_point(
         ark_bn254::Fq::one(),
         ark_bn254::Fq::one(),
     );
@@ -608,7 +417,7 @@ pub(crate) fn tap_hash_p(q: G1Affine) -> Script {
         //[hinttqa, alpha, bias, tx, ty, alpha, bias]
         { Fq2::copy(2)}
         //[hinttqa, alpha, bias, tx, ty, alpha, bias,tx, ty] 
-        { hinted_line_pt.clone() }
+        { hinted_line_pt.clone() } OP_VERIFY
         //[hinttqa, alpha, bias, tx, ty
 
         { Fq2::copy(2)}
@@ -616,13 +425,13 @@ pub(crate) fn tap_hash_p(q: G1Affine) -> Script {
         {fq_push_not_montgomery(q.x)}
         {fq_push_not_montgomery(q.y)}
         //[hinttqa, alpha, bias, tx, ty, alpha, bias, qx, qy]
-        { hinted_line_pt.clone() }
+        { hinted_line_pt.clone() } OP_VERIFY
 
         //[hinttqa, alpha, bias, tx, ty
         {Fq2::copy(0)}
         {Fq2::toaltstack()}
         {Fq::drop()} {Fq::toaltstack()}
-        {Fq::roll(1)} {Fq::fromaltstack()}
+        {Fq::fromaltstack()}
 
         // //[hinttqa, alpha, bias, tx]
         {fq_push_not_montgomery(q.x)}
@@ -680,9 +489,9 @@ pub(crate) fn hint_hash_p(
     let bias_minus_chord = alpha_chord * tx - ty;
     assert_eq!(alpha_chord * tx - ty, bias_minus_chord);
 
-    let (_, hints_check_chord_t) = hinted_check_line_through_point_g1(tx, alpha_chord, bias_minus_chord);
-    let (_, hints_check_chord_q) = hinted_check_line_through_point_g1(qx, alpha_chord, bias_minus_chord);
-    let (_, hints_add_line) = hinted_affine_add_line_g1(tx, qx, alpha_chord, bias_minus_chord);
+    let (_, hints_check_chord_t) = bn254::curves::G1Affine::hinted_check_line_through_point(tx, alpha_chord);
+    let (_, hints_check_chord_q) = bn254::curves::G1Affine::hinted_check_line_through_point(qx, alpha_chord);
+    let (_, hints_add_line) = bn254::curves::G1Affine::hinted_add(tx, qx, alpha_chord);
 
 
 
@@ -799,8 +608,8 @@ mod test {
         let nx = alpha.square() - t.x.double();
         let ny = bias_minus - alpha * nx;
 
-        let (hinted_check_line, hints) = hinted_check_tangent_line_g1(t, alpha, bias_minus);
-        let (hinted_double_line, hintsd) = hinted_affine_double_line_g1(t.x, alpha, bias_minus);
+        let (hinted_check_line, hints) = bn254::curves::G1Affine::hinted_check_tangent_line(t, alpha);
+        let (hinted_double_line, hintsd) = bn254::curves::G1Affine::hinted_double(t, alpha);
 
         let script = script! {
             for hint in hints {
@@ -811,6 +620,7 @@ mod test {
             { fq_push_not_montgomery(t.x) }
             { fq_push_not_montgomery(t.y) }
             { hinted_check_line.clone() }
+            OP_VERIFY
             OP_TRUE
         };
         let exec_result = execute_script(script);
@@ -825,8 +635,8 @@ mod test {
             for hint in hintsd {
                 { hint.push() }
             }
-            {fq_push_not_montgomery(bias_minus)}
             {fq_push_not_montgomery(alpha)}
+            {fq_push_not_montgomery(bias_minus)}
             { fq_push_not_montgomery(t.x) }
             { hinted_double_line.clone() }
             {fq_push_not_montgomery(nx)}
@@ -860,14 +670,14 @@ mod test {
 
         let x = alpha.square() - t.x - q.x;
         let y = bias_minus - alpha * x;
-        let (hinted_add_line, hints) = hinted_affine_add_line_g1(t.x, q.x, alpha, bias_minus);
+        let (hinted_add_line, hints) = bn254::curves::G1Affine::hinted_add(t.x, q.x, alpha);
 
         let script = script! {
             for hint in hints {
                 { hint.push() }
             }
-            {fq_push_not_montgomery(bias_minus)}
             {fq_push_not_montgomery(alpha)}
+            {fq_push_not_montgomery(bias_minus)}
             { fq_push_not_montgomery(t.x) }
             { fq_push_not_montgomery(q.x) }
             { hinted_add_line.clone() }
@@ -936,8 +746,8 @@ mod test {
     fn test_tap_msm() {
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let q = ark_bn254::G1Affine::rand(&mut prng);
-        let scalars = vec![ark_bn254::Fr::ONE, ark_bn254::Fr::ONE + ark_bn254::Fr::ONE];
-        let qs = vec![q, (q+ q).into_affine()];
+        let scalars = vec![ark_bn254::Fr::ONE, ark_bn254::Fr::ONE, ark_bn254::Fr::ONE + ark_bn254::Fr::ONE];
+        let qs = vec![q, q, (q+ q).into_affine()];
         let t = ark_bn254::G1Affine::rand(&mut prng);
         let t: ElemG1Point = t;
         let msm_tap_index = 1;
