@@ -1,5 +1,9 @@
+use std::ops::{AddAssign, Div, Neg, Rem};
+use std::str::FromStr;
+
 use crate::bn254;
-use crate::bn254::utils::fq_push_not_montgomery;
+use crate::bn254::fr::Fr;
+use crate::bn254::utils::{fq_push_not_montgomery, fr_push_not_montgomery};
 use crate::chunk::primitves::{
     extern_hash_fps, unpack_limbs_to_nibbles
 };
@@ -9,8 +13,9 @@ use crate::{
 };
 use ark_bn254::G1Affine;
 use ark_ec::{AffineRepr, CurveGroup};
-use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
-use num_traits::One;
+use ark_ff::{AdditiveGroup, BigInteger, Field, MontFp, PrimeField};
+use num_bigint::{BigInt, BigUint, Sign};
+use num_traits::{One, Signed};
 
 use super::hint_models::{ElemFq, ElemFr, ElemG1Point};
 use super::primitves::{hash_fp2, HashBytes};
@@ -517,6 +522,169 @@ pub(crate) fn hint_hash_p(
 }
 
 
+/// Decomposes a scalar s into k1, k2, s.t. s = k1 + lambda k2,
+fn calculate_scalar_decomposition(
+    k: ark_bn254::Fr,
+) -> ((u8, ark_bn254::Fr), (u8, ark_bn254::Fr)) {
+    let scalar: BigInt = k.into_bigint().into();
+
+    let scalar_decomp_coeffs: [(bool, BigUint); 4] = [
+        (false, BigUint::from_str("147946756881789319000765030803803410728").unwrap()),
+        (true, BigUint::from_str("9931322734385697763").unwrap()),
+        (false, BigUint::from_str("9931322734385697763").unwrap()),
+        (false, BigUint::from_str("147946756881789319010696353538189108491").unwrap()),
+    ];
+    
+    let coeff_bigints: [BigInt; 4] = scalar_decomp_coeffs.map(|x| {
+        BigInt::from_biguint(x.0.then_some(Sign::Plus).unwrap_or(Sign::Minus), x.1)
+    });
+
+    let [n11, n12, n21, n22] = coeff_bigints;
+
+    let r = BigInt::from_biguint(Sign::Plus, BigUint::from(ark_bn254::Fr::MODULUS));
+
+    // beta = vector([k,0]) * self.curve.N_inv
+    // The inverse of N is 1/r * Matrix([[n22, -n12], [-n21, n11]]).
+    // so β = (k*n22, -k*n12)/r
+
+    let beta_1 = {
+        let mut div = (&scalar * &n22).div(&r);
+        let rem = (&scalar * &n22).rem(&r);
+        if (&rem + &rem) > r {
+            div.add_assign(BigInt::one());
+        }
+        div
+    };
+    let beta_2 = {
+        let mut div = (&scalar * &n12.clone().neg()).div(&r);
+        let rem = (&scalar * &n12.clone().neg()).rem(&r);
+        if (&rem + &rem) > r {
+            div.add_assign(BigInt::one());
+        }
+        div
+    };
+
+    // b = vector([int(beta[0]), int(beta[1])]) * self.curve.N
+    // b = (β1N11 + β2N21, β1N12 + β2N22) with the signs!
+    //   = (b11   + b12  , b21   + b22)   with the signs!
+
+    // b1
+    let b11 = &beta_1 * &n11;
+    let b12 = &beta_2 * &n21;
+    let b1 = b11 + b12;
+
+    // b2
+    let b21 = &beta_1 * &n12;
+    let b22 = &beta_2 * &n22;
+    let b2 = b21 + b22;
+
+    let k1 = &scalar - b1;
+    let k1_abs = BigUint::try_from(k1.abs()).unwrap();
+
+    // k2
+    let k2 = -b2;
+    let k2_abs = BigUint::try_from(k2.abs()).unwrap();
+
+    let k1signr = k1.sign();
+    let k2signr = k2.sign();
+
+
+    let mut k1sign: u8 = 0;
+    if k1signr == Sign::Plus {
+        k1sign = 1;
+    } else if k1signr == Sign::Minus {
+        k1sign = 2;
+    } else {
+        k1sign = 0;
+    }
+
+    let mut k2sign: u8 = 0;
+    if k2signr == Sign::Plus {
+        k2sign = 1;
+    } else if k2signr == Sign::Minus {
+        k2sign = 2;
+    } else {
+        k2sign = 0;
+    }
+
+    (
+        (k1sign , ark_bn254::Fr::from(k1_abs)),
+        (k2sign , ark_bn254::Fr::from(k2_abs)),
+    )
+}
+
+fn hinted_scalar_mul_by_constant(a: ark_bn254::Fr, constant: &ark_bn254::Fr) -> (Script, Vec<Hint>) {
+    let mut hints = Vec::new();
+    let x = BigInt::from_str(&a.to_string()).unwrap();
+    let y = BigInt::from_str(&constant.to_string()).unwrap();
+    let modulus = &Fr::modulus_as_bigint();
+    let q = (x * y) / modulus;
+
+    let script = script! {
+        for _ in 0..bn254::fr::Fr::N_LIMBS {
+            OP_DEPTH OP_1SUB OP_ROLL // hints
+        }
+        { Fr::roll(1) }
+        { fr_push_not_montgomery(*constant) }
+        { Fr::tmul() }
+    };
+    hints.push(Hint::BigIntegerTmulLC1(q));
+    (script, hints)
+}
+
+fn hinted_scalar_decomposition(k: ark_bn254::Fr) -> (Script, Vec<Hint>) {
+    const LAMBDA: ark_bn254::Fr = MontFp!("21888242871839275217838484774961031246154997185409878258781734729429964517155");
+    let (_, (_, k1)) = calculate_scalar_decomposition(k);
+    let (mul_scr, mul_hints) = hinted_scalar_mul_by_constant(k1, &LAMBDA);
+    let scr = script!{
+        // [s0, s1, k0, k1, k]
+        {Fr::toaltstack()}
+        // [s0, s1, k0, k1]
+        {mul_scr}
+        // [s0, s1, k0, k1 * lambda]
+        {Fr::N_LIMBS * 2} OP_ROLL
+        // [s0, k0, k1 * lambda, s1]
+        {2} OP_EQUAL
+        OP_IF
+            {Fr::neg(0)}
+        OP_ENDIF
+        {Fr::toaltstack()}
+
+        // [k, s0, k0]
+        {Fr::N_LIMBS} OP_ROLL
+        // [k, k0, s0]
+        {2} OP_EQUAL
+        OP_IF
+            {Fr::neg(0)}
+        OP_ENDIF
+        {Fr::fromaltstack()}
+        // [k0, k1]
+        {Fr::add(1, 0)}
+        {Fr::fromaltstack()}
+        // [k', k]
+        {Fr::equalverify(1, 0)}
+    };
+    (scr, mul_hints)
+}
+
+fn hinted_endomorphoism(a: ark_bn254::G1Affine) -> (Script, Vec<Hint>) {
+    let endo_coeffs = BigUint::from_str(
+        "21888242871839275220042445260109153167277707414472061641714758635765020556616"
+    ).unwrap();
+    let endo_coeffs = ark_bn254::Fq::from(endo_coeffs);
+
+    let (mul_scr, mul_hints) = Fq::hinted_mul_by_constant(a.x, &endo_coeffs);
+
+    let scr = script!{
+        // [tmul_hints, a.x, a.y]
+        {Fq::roll(1)}
+        {mul_scr}
+        {Fq::roll(1)}
+        // [e*a.x, a.y]
+    };
+    (scr, mul_hints)
+}
+
 #[cfg(test)]
 mod test {
 
@@ -525,7 +693,8 @@ mod test {
     };
     use super::*;
     use ark_bn254::{G1Affine};
-    use ark_ff::UniformRand;
+    use ark_ff::{MontFp, UniformRand};
+    use bitcoin::opcodes::OP_TRUE;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
     use crate::chunk::hint_models::ElemTraitExt;
@@ -590,6 +759,7 @@ mod test {
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
+        println!("max stat {:?}", res.stats.max_nb_stack_items);
     }
 
     #[test]
@@ -791,5 +961,89 @@ mod test {
     }
 
 
+
+    #[test]
+    fn test_hinted_scalar_decomposition() {
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        const LAMBDA: ark_bn254::Fr = MontFp!("21888242871839275217838484774961031246154997185409878258781734729429964517155");
+        let k = ark_bn254::Fr::rand(&mut prng);
+
+        let dec = calculate_scalar_decomposition(k);
+        let  ((is_k1_positive, k1), (is_k2_positive, k2)) = dec;
+        let (is_k1_positive, is_k2_positive) = (is_k1_positive != 2, is_k2_positive != 2);
+
+        if is_k1_positive && is_k2_positive {
+            assert_eq!(k1 + k2 * LAMBDA, k);
+        }
+        if is_k1_positive && !is_k2_positive {
+            assert_eq!(k1 - k2 * LAMBDA, k);
+        }
+        if !is_k1_positive && is_k2_positive {
+            assert_eq!(-k1 + k2 * LAMBDA, k);
+        }
+        if !is_k1_positive && !is_k2_positive {
+            assert_eq!(-k1 - k2 * LAMBDA, k);
+        }
+        // check if k1 and k2 are indeed small.
+        let expected_max_bits = (ark_bn254::Fr::MODULUS_BIT_SIZE + 1) / 2;
+        assert!(
+            k1.into_bigint().num_bits() <= expected_max_bits,
+            "k1 has {} bits",
+            k1.into_bigint().num_bits()
+        );
+        assert!(
+            k2.into_bigint().num_bits() <= expected_max_bits,
+            "k2 has {} bits",
+            k2.into_bigint().num_bits()
+        );
+
+        let (dec_scr, hints) = hinted_scalar_decomposition(k);
+        let scr = script!{
+            for hint in hints {
+                {hint.push()}
+            }
+            {is_k1_positive as u32}
+            {is_k2_positive as u32}
+            {fr_push_not_montgomery(k1)}
+            {fr_push_not_montgomery(k2)}
+            {fr_push_not_montgomery(k)}
+            {dec_scr}
+            OP_TRUE
+        };
+
+        let res = execute_script(scr);
+        assert!(res.final_stack.len() == 1);
+        assert!(res.success);
+    }
+
+    #[test]
+    fn test_hinted_endomorphoism() {
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let p = ark_bn254::G1Affine::rand(&mut prng);
+        let (scr, hints) = hinted_endomorphoism(p);
+        const LAMBDA: ark_bn254::Fr = MontFp!("21888242871839275217838484774961031246154997185409878258781734729429964517155");
+        let lambda_p = (p * LAMBDA).into_affine();
+
+        // phi(p) = lambda * P
+        let scrp = script!{
+            for hint in hints {
+                {hint.push()}
+            }
+            {fq_push_not_montgomery(p.x)}
+            {fq_push_not_montgomery(p.y)}
+            {scr}
+            {fq_push_not_montgomery(lambda_p.y)}
+            {Fq::equalverify(1, 0)}
+            {fq_push_not_montgomery(lambda_p.x)}
+            {Fq::equalverify(1, 0)}
+            OP_TRUE
+        };
+
+        let res = execute_script(scrp);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        assert!(res.success);
+    }
 
 }
