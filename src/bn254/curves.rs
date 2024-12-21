@@ -1440,7 +1440,7 @@ impl G1Affine {
         }
     }
 
-    fn dfs_with_constant_mul(
+    pub fn dfs_with_constant_mul(
         index: u32,
         depth: u32,
         mask: u32,

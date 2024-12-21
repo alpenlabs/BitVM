@@ -1,7 +1,8 @@
 use std::ops::{AddAssign, Div, Neg, Rem};
 use std::str::FromStr;
 
-use crate::bn254;
+use crate::bigint::bits::limb_to_le_bits;
+use crate::bn254::{self, curves};
 use crate::bn254::fr::Fr;
 use crate::bn254::utils::{fq_push_not_montgomery, fr_push_not_montgomery};
 use crate::chunk::primitves::{
@@ -14,6 +15,7 @@ use crate::{
 use ark_bn254::G1Affine;
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, BigInteger, Field, MontFp, PrimeField};
+use bitcoin::opcodes::all::OP_VERIFY;
 use num_bigint::{BigInt, BigUint, Sign};
 use num_traits::{One, Signed};
 
@@ -101,11 +103,11 @@ pub(crate) fn tap_msm(window: usize, msm_tap_index: usize, qs: Vec<ark_bn254::G1
         // [z, 16z]
         // addition step: assign new_t = q if t = 0 given q != 0
         {Fq::fromaltstack()} // scalar
-        {tap_extract_window_segment_from_scalar(msm_tap_index as usize)}
-        OP_DUP 0 OP_NUMEQUAL
-        OP_IF
-            OP_DROP
-        OP_ELSE
+        {tap_extract_window_segment_from_scalar(msm_tap_index as u32)}
+        // OP_DUP 0 OP_NUMEQUAL
+        // OP_IF
+        //     OP_DROP
+        // OP_ELSE
             {tap_bake_precompute(qs[0], window)}
             // [a, b, tx, ty, ntx, nty, qx, qy]
             {Fq2::roll(2)}
@@ -137,16 +139,16 @@ pub(crate) fn tap_msm(window: usize, msm_tap_index: usize, qs: Vec<ark_bn254::G1
                 {hinted_add_line.clone()}
                 // [t,nt]
             OP_ENDIF
-        OP_ENDIF
+        //OP_ENDIF
 
 
         for i in 1..qs.len() {
             {Fq::fromaltstack()} // scalar
-            {tap_extract_window_segment_from_scalar(msm_tap_index as usize)}
-            OP_DUP 0 OP_NUMEQUAL
-            OP_IF
-                OP_DROP
-            OP_ELSE
+            {tap_extract_window_segment_from_scalar(msm_tap_index as u32)}
+            // OP_DUP 0 OP_NUMEQUAL
+            // OP_IF
+            //     OP_DROP
+            // OP_ELSE
                 {tap_bake_precompute(qs[i], window)}
                 {Fq2::roll(2)}
                 //[alpha, bias, tx, ty, qx, qy, ntx, nty]
@@ -160,24 +162,25 @@ pub(crate) fn tap_msm(window: usize, msm_tap_index: usize, qs: Vec<ark_bn254::G1
                     {Fq2::copy(6)}
                     // [alpha, bias,tx,ty, qx, qy, ntx, nty, alpha, bias]
                     {Fq2::copy(2)}
-                    {hinted_check_chord_t.clone()}
+                    {hinted_check_chord_t.clone()} OP_VERIFY
                     //[alpha, bias, qx, qy, ntx, nty]
                     {Fq2::copy(6)}
                     {Fq2::copy(4)}
-                    {hinted_check_chord_q.clone()}
+                    {hinted_check_chord_q.clone()} OP_VERIFY
                     //[alpha, bias,tx,ty, qx, qy, ntx, nty]
                     {Fq::drop()}
                     {Fq::roll(1)} {Fq::drop()}
                     //[alpha, bias, tx, ty, qx, ntx]
-                    {Fq::roll(4)} {Fq::roll(5)}
+                    {Fq::roll(5)} {Fq::roll(5)}
                     //[tx, ty, qx, ntx, bias, alpha]
                     {Fq::roll(2)} {Fq::roll(3)}
                     //[tx, ty, bias, alpha, ntx, qx]
                     {hinted_add_line.clone()}
                 OP_ENDIF
-            OP_ENDIF
+            //OP_ENDIF
         }
-
+        
+        
     };
 
     let hash_script = script! {
@@ -212,39 +215,28 @@ fn tap_bake_precompute(q: ark_bn254::G1Affine, window: usize) -> Script {
     for _ in 1..(1 << window) {
         p_mul.push((p_mul.last().unwrap().clone() + q.clone()).into_affine());
     }
-    script! {
-        for i in 0..(1 << window) {
-            OP_DUP {i} OP_NUMEQUAL
-            OP_IF
-                {fq_push_not_montgomery(p_mul[i].x)}
-                {fq_push_not_montgomery(p_mul[i].y)}
-            OP_ENDIF
-        }
-        {18} OP_ROLL OP_DROP
-        // OP_DEPTH OP_1SUB OP_ROLL OP_DROP
-    }
+    curves::G1Affine::dfs_with_constant_mul_not_montgomery(0, window as u32 - 1, 0, &p_mul)
 }
 
-fn tap_extract_window_segment_from_scalar(index: usize) -> Script {
-    const N: usize = 32;
+fn tap_extract_window_segment_from_scalar(index: u32) -> Script {
+    const WINDOW: u32 = 8;
+
     script! {
-        {unpack_limbs_to_nibbles()}
-        {N-1-index} OP_DUP OP_ADD // double
-        OP_1ADD // +1
-        OP_DUP OP_TOALTSTACK
-        OP_ROLL
-        OP_FROMALTSTACK OP_ROLL
-        OP_TOALTSTACK OP_TOALTSTACK
-        for _ in 0..N-1 {
-            OP_2DROP
+        {Fr::toaltstack()}
+        {0} {0} // padding
+        {Fr::fromaltstack()}
+        {bn254::fr::Fr::convert_to_le_bits()}
+            
+        for i in 0..=255 {
+            if i / WINDOW == index {
+                OP_TOALTSTACK
+            } else {
+                OP_DROP
+            }
         }
-        OP_FROMALTSTACK
-        OP_DUP OP_ADD
-        OP_DUP OP_ADD
-        OP_DUP OP_ADD
-        OP_DUP OP_ADD
-        OP_FROMALTSTACK
-        OP_ADD
+        for _ in 0..WINDOW {
+            OP_FROMALTSTACK
+        }
     }
 }
 
@@ -275,6 +267,7 @@ fn get_byte_mul_g1(
         .collect::<Vec<_>>()
         .chunks(window as usize)
         .map(|slice| slice.into_iter().fold(0, |acc, &b| (acc << 1) + b as u32))
+        .rev()
         .collect::<Vec<u32>>();
 
     let item = chunks[index];
@@ -689,15 +682,23 @@ fn hinted_endomorphoism(a: ark_bn254::G1Affine) -> (Script, Vec<Hint>) {
 mod test {
 
     use crate::{
-        bn254::{fq2::Fq2, utils::fr_push_not_montgomery}, chunk::{primitves::extern_nibbles_to_limbs},
+        bigint::bits::limb_to_le_bits, bn254::{curves, fq2::Fq2, utils::fr_push_not_montgomery}, chunk::primitves::extern_nibbles_to_limbs, execute_script_without_stack_limit
     };
     use super::*;
     use ark_bn254::{G1Affine};
     use ark_ff::{MontFp, UniformRand};
-    use bitcoin::opcodes::OP_TRUE;
+    use bitcoin::opcodes::{all::{OP_1SUB, OP_DEPTH, OP_DROP, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_ROLL, OP_TOALTSTACK}, OP_TRUE};
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
     use crate::chunk::hint_models::ElemTraitExt;
+
+    fn u32_to_bits_vec(value: u32, window: usize) -> Vec<u8> {
+        let mut bits = Vec::with_capacity(window);
+        for i in (0..window).rev() {
+            bits.push(((value >> i) & 1) as u8);
+        }
+        bits
+    }
 
     #[test]
     fn test_precompute_table() {
@@ -710,11 +711,18 @@ mod test {
             p_mul.push((p_mul.last().unwrap().clone() + q.clone()).into_affine());
         }
 
-        let scr = tap_bake_precompute(q, window);
-        let index = u32::rand(&mut prng) % (1 << window);
+        let scr = script!{ 
+            {curves::G1Affine::dfs_with_constant_mul_not_montgomery(0, window as u32 - 1, 0, &p_mul) }
+        };
+        let index = 1; //u32::rand(&mut prng) % (1 << window);
+        let index_bits = u32_to_bits_vec(index, window);
+
+        println!("index_bits {:?}", index_bits);
         println!("script len {:?}", scr.len());
         let script = script! {
-            {index}
+            for i in index_bits {
+                {i}
+            }
             {scr}
             {fq_push_not_montgomery(p_mul[index as usize].y)}
             {Fq::equalverify(1, 0)}
@@ -745,14 +753,20 @@ mod test {
             .collect::<Vec<_>>()
             .chunks(window as usize)
             .map(|slice| slice.into_iter().fold(0, |acc, &b| (acc << 1) + b as u32))
+            .rev()
             .collect::<Vec<u32>>();
         let chunk_match = chunks[index as usize];
-        println!("chunk_match {:?}", chunk_match);
+        let chunk_bits = u32_to_bits_vec(chunk_match, window);
         let script = script! {
             {fr_push_not_montgomery(scalar)}
-            {tap_extract_window_segment_from_scalar(index as usize)}
-            {chunk_match}
-            OP_EQUALVERIFY
+            {tap_extract_window_segment_from_scalar(index as u32)}
+
+            for bit in chunk_bits.iter().rev() {
+                {*bit}
+            }
+            for _ in 0..window {
+                OP_DEPTH OP_1SUB OP_ROLL OP_EQUALVERIFY
+            }
             OP_TRUE
         };
         let res = execute_script(script);
@@ -916,13 +930,14 @@ mod test {
     fn test_tap_msm() {
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let q = ark_bn254::G1Affine::rand(&mut prng);
-        let scalars = vec![ark_bn254::Fr::ONE, ark_bn254::Fr::ONE, ark_bn254::Fr::ONE + ark_bn254::Fr::ONE];
-        let qs = vec![q, q, (q+ q).into_affine()];
+        let scalar = ark_bn254::Fr::rand(&mut prng);
+        let scalars = vec![scalar, scalar];
+        let qs = vec![q, q];
         let t = ark_bn254::G1Affine::rand(&mut prng);
         let t: ElemG1Point = t;
         let msm_tap_index = 1;
 
-        let hash_c_scr = tap_msm(8, msm_tap_index, qs.clone());
+        let tap_msm = tap_msm(8, msm_tap_index, qs.clone());
 
         let (hint_out, hint_script) = hint_msm( t, scalars.clone(), msm_tap_index, qs.clone());
 
@@ -943,14 +958,14 @@ mod test {
         };
 
 
-        let tap_len = hash_c_scr.len();
+        let tap_len = tap_msm.len();
         let script = script! {
             {hint_script}
             {bitcom_scr}
-            {hash_c_scr}
+            {tap_msm}
         };
 
-        let res = execute_script(script);
+        let res = execute_script_without_stack_limit(script);
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
@@ -959,7 +974,6 @@ mod test {
 
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
-
 
 
     #[test]
@@ -1046,4 +1060,58 @@ mod test {
         assert!(res.success);
     }
 
+    #[test]
+    fn test_this() {
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        
+        const LEN: u32 = 256;
+        const WINDOW: u32 = 8;
+        const SPLITS: u32 = LEN / WINDOW;
+        const LIMB_SIZE: u32 = 29;
+        const N_LIMBS: u32 = bn254::fr::Fr::N_LIMBS;
+
+        let index = 0; //u32::rand(&mut prng) % SPLITS;
+        let start_pos = index * WINDOW;
+        let start_limb = start_pos / LIMB_SIZE;
+        let end_limb = (start_pos+WINDOW-1) / LIMB_SIZE;
+        // let mask = (1<<WINDOW)-1;
+        // let mask = (mask) * (1 << (index * WINDOW));
+        // let num_bits = u32_to_bits_vec(mask, 32);
+        println!("sl {} el {}", start_limb, end_limb);
+        let num = ark_bn254::Fr::ONE + ark_bn254::Fr::ONE ;//  rand(&mut prng);
+        
+
+        let scr = script!{
+            {fr_push_not_montgomery(num)}
+            for i in 0..N_LIMBS {
+                if i == start_limb || i == end_limb {
+                    OP_TOALTSTACK
+                } else {
+                    OP_DROP
+                }
+            }
+            for _ in start_limb..=end_limb {
+                OP_FROMALTSTACK
+                { limb_to_le_bits(LIMB_SIZE)}
+            }
+            for _ in (start_limb * LIMB_SIZE)..start_pos {
+                OP_DROP
+            }
+            for _ in start_pos..start_pos+WINDOW {
+                OP_TOALTSTACK
+            }
+            for _ in (start_pos+WINDOW)..(end_limb+1)*LIMB_SIZE {
+                OP_DROP
+            }
+            for _ in 0..WINDOW {
+                OP_FROMALTSTACK
+            }
+        };
+
+        let res = execute_script(scr);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        //assert!(res.success);
+    }
 }
