@@ -1586,6 +1586,7 @@ impl G1Affine {
     pub fn hinted_scalar_mul_by_constant_g1(
         scalar: ark_bn254::Fr,
         p: &mut ark_bn254::G1Affine,
+        i_step: u32,
     ) -> Vec<(Script, Vec<Hint>)> {
         let mut all_loop_info: Vec<(Script, Vec<Hint>)> = Vec::new();
 
@@ -1593,41 +1594,32 @@ impl G1Affine {
         let mut loop_scripts = script!();
         let mut i = 0;
         // options: i_step = 2-15
-        let i_step = 8;
 
         // precomputed lookup table (affine)
         let mut p_mul: Vec<ark_bn254::G1Affine> = Vec::new();
         p_mul.push(ark_bn254::G1Affine::zero());
         for _ in 1..(1 << i_step) {
-            p_mul.push((*p_mul.last().unwrap() + *p).into_affine());
+            let new_v= (*p_mul.last().unwrap() + *p).into_affine();
+            p_mul.push(new_v);
         }
 
         let mut c: ark_bn254::G1Affine = ark_bn254::G1Affine::zero();
 
         let scalar_bigint = scalar.into_bigint();
 
-        fn extract_window_segment_from_scalar(index: u32, window: u32) -> Script {
-            script! {
-                {Fr::toaltstack()}
-                {Fr::fromaltstack()}
-                {bn254::fr::Fr::convert_to_le_bits()}
-                    
-                for i in 0..Fr::N_BITS {
-                    if i / window == index {
-                        OP_TOALTSTACK
-                    } else {
-                        OP_DROP
-                    }
-                }
-            }
-        }
+        // fn extract_window_segment_from_scalar(index: u32, window: u32) -> Script {
+            
+        //     script! {
+        //         {bn254::fr::Fr::convert_to_le_bits_toaltstack()}
+        //     }
+        // }
 
         while i < Fr::N_BITS {
             let depth = min(Fr::N_BITS - i, i_step);
 
             // consme fr on stack and segment send to altstack
             loop_scripts = script!(
-                {extract_window_segment_from_scalar(i/i_step, i_step)}
+                {Fr::toaltstack()}
             );
             loop_hints.clear();
             
@@ -1643,8 +1635,13 @@ impl G1Affine {
 
             // squeeze a bucket scalar
             loop_scripts = loop_scripts.push_script(script! {
-                for _ in 0..depth {
+                {Fr::fromaltstack()}
+                {bn254::fr::Fr::convert_to_le_bits_toaltstack()}
+                for j in 0..bn254::fr::Fr::N_BITS {
                     OP_FROMALTSTACK
+                    if j / i_step != i/i_step as u32 {
+                        OP_DROP
+                    }
                 }
             }.compile());
 
@@ -1677,13 +1674,7 @@ impl G1Affine {
             all_loop_info.push((loop_scripts, loop_hints.clone()));
         }
 
-        println!("debug: c:{:?}", c);
         *p = c;
-
-        // let mut script = script! {
-        //     { Fr::convert_to_le_bits_toaltstack() }
-
-        // };
 
         all_loop_info
     }
@@ -2157,6 +2148,7 @@ mod test {
     use ark_ec::{AffineRepr, CurveGroup};
     use ark_ff::{BigInteger, Field, PrimeField};
     use ark_std::{end_timer, start_timer, test_rng, UniformRand};
+    use bitcoin::opcodes::all::OP_FROMALTSTACK;
     use core::ops::{Add, Mul};
     use num_bigint::BigUint;
     use num_traits::{One, Zero};
@@ -2770,13 +2762,13 @@ mod test {
             .map(|_| ark_bn254::G1Projective::rand(rng).into_affine())
             .collect::<Vec<_>>();
 
-        let q = bases[0].mul(scalars[0]).into_affine();
-        println!("debug: expected res:{:?}", bases[0]);
+        let expected = bases[0].mul(scalars[0]).into_affine();
 
         let window = 8;
-        let chunks = scalars[0]
+
+        let chunks= scalars[0]
             .into_bigint()
-            .to_bits_be()
+            .to_bits_be()[2..]
             .iter()
             .map(|b| if *b { 1_u8 } else { 0_u8 })
             .collect::<Vec<_>>()
@@ -2789,50 +2781,45 @@ mod test {
             crate::bn254::curves::G1Affine::hinted_scalar_mul_by_constant_g1(
                 scalars[0],
                 &mut bases[0],
+                window as u32,
             );
-        println!("segments len {}", all_loop_info.len());
         assert_eq!(chunks.len(), all_loop_info.len());
 
-        // let mut scalar_mul_affine_script = script!{};
-        // let mut hints = vec![];
-
         let mut acc = ark_bn254::G1Affine::identity();
+        let mut prev_acc = ark_bn254::G1Affine::identity();
         for (itr, (scalar_mul_affine_script, hints)) in all_loop_info.iter().enumerate() {
+            prev_acc = acc.clone();
             if !acc.is_zero() {
-                for _ in 0..window {
+                let depth = std::cmp::min(bn254::fr::Fr::N_BITS as usize - itr*window, window);
+                for _ in 0..depth {
                     acc = (acc + acc).into_affine();
                 }
             }
             let base_i = (base0 * ark_bn254::Fr::from(chunks[itr])).into_affine();
-            println!("acc {:?}", base_i);
-
             acc = (acc + base_i).into_affine();
+
             let script = script! {
                 for hint in hints {
                     { hint.push() }
                 }
-                { fr_push_not_montgomery(scalars[0]) }
-                // { scalar_mul_affine_script.clone() }
-                // // { fq_push_not_montgomery(q.y) }
-                // // { Fq::equalverify(1, 0) }
-                // // { fq_push_not_montgomery(q.x) }
-                // // { Fq::equalverify(1, 0) }
-                // { G1Affine::push_not_montgomery(acc) }
-                // { G1Affine::equalverify() }
-                // OP_TRUE
-                {chunks[itr]}
+                if itr != 0 {
+                   { G1Affine::push_not_montgomery(prev_acc) }
+                }
+                { fr_push_not_montgomery(ark_bn254::Fr::from(scalars[0])) }
+                { scalar_mul_affine_script.clone() }
+                { G1Affine::push_not_montgomery(acc) }
+                { G1Affine::equalverify() }
+                OP_TRUE
             };
             let exec_result = execute_script_without_stack_limit(script);
-            for i in 0..exec_result.final_stack.len() {
-                println!("{i:} {:?}", exec_result.final_stack.get(i));
-            }
-    
             println!(
-                "script size of scalar_mul_affine: {}",
-                scalar_mul_affine_script.len()
+                "chunk {} script size: {} max_stack {}",
+                itr, scalar_mul_affine_script.len(), exec_result.stats.max_nb_stack_items
             );
-            break;
+            assert!(exec_result.success && exec_result.final_stack.len() == 1);
         }
+        assert_eq!(acc, expected);
+        println!("debug: expected res:{:?}", acc);
 
 
     }

@@ -249,6 +249,7 @@ pub fn hinted_msm_with_constant_bases_affine(
             let all_loop_info = G1Affine::hinted_scalar_mul_by_constant_g1(
                 scalars[i],
                 &mut c,
+                6,
             );
             let mut hinted_script = script!{
                 { bn254::fr::Fr::convert_to_le_bits_toaltstack() }
