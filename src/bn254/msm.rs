@@ -3,7 +3,7 @@ use super::utils::Hint;
 use crate::bn254::fp254impl::Fp254Impl;
 use crate::bn254::utils::fr_push_not_montgomery;
 use crate::bn254::{curves::G1Affine, curves::G1Projective, utils::fr_push};
-use crate::treepp::*;
+use crate::{bn254, treepp::*};
 use ark_ec::{AdditiveGroup, AffineRepr, CurveGroup};
 use ark_ff::{BigInteger, Field, PrimeField};
 
@@ -234,8 +234,8 @@ pub fn hinted_msm_with_constant_bases_affine(
     println!("use hinted_msm_with_constant_bases_affine");
     assert_eq!(bases.len(), scalars.len());
     let len = bases.len();
-    let i_step = 12_u32;
-    let (inner_coeffs, outer_coeffs) = prepare_msm_input(bases, scalars, i_step);
+    // let i_step = 12_u32;
+    // let (inner_coeffs, outer_coeffs) = prepare_msm_input(bases, scalars, i_step);
 
     let mut hints = Vec::new();
     let mut hinted_scripts = Vec::new();
@@ -246,13 +246,20 @@ pub fn hinted_msm_with_constant_bases_affine(
     for i in 0..len {
         let mut c = bases[i];
         if scalars[i] != ark_bn254::Fr::ONE {
-            let (hinted_script, hint) = G1Affine::hinted_scalar_mul_by_constant_g1(
+            let all_loop_info = G1Affine::hinted_scalar_mul_by_constant_g1(
                 scalars[i],
                 &mut c,
-                inner_coeffs[i].0.clone(),
-                inner_coeffs[i].1.clone(),
-                inner_coeffs[i].2.clone(),
             );
+            let mut hinted_script = script!{
+                { bn254::fr::Fr::convert_to_le_bits_toaltstack() }
+            };
+            let mut hint = vec![];
+    
+            for info in all_loop_info {
+                hinted_script = hinted_script.push_script(info.0.compile());
+                hint.extend_from_slice(&info.1);
+            }
+
             println!("scalar mul {}: {}", i, hinted_script.len());
             hinted_scripts.push(hinted_script);
             hints.extend(hint);
@@ -261,7 +268,7 @@ pub fn hinted_msm_with_constant_bases_affine(
         // check coeffs before using
         if i > 0 {
             let (hinted_script, hint) =
-                G1Affine::hinted_check_add(p, c, outer_coeffs[i - 1].0); // outer_coeffs[i - 1].1
+                G1Affine::hinted_check_add(p, c); // outer_coeffs[i - 1].1
             hinted_scripts.push(hinted_script);
             hints.extend(hint);
             p = (p + c).into_affine();

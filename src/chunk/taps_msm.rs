@@ -1112,6 +1112,7 @@ mod test {
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
+        println!("max stack {:?}", res.stats.max_nb_stack_items);
         //assert!(res.success);
     }
 }
