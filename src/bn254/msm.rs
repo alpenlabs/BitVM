@@ -247,8 +247,8 @@ pub fn hinted_msm_with_constant_bases_affine(
         let mut c = bases[i];
         if scalars[i] != ark_bn254::Fr::ONE {
             let all_loop_info = G1Affine::hinted_scalar_mul_by_constant_g1(
-                scalars[i],
-                &mut c,
+                scalars.to_vec(),
+                bases.to_vec(),
                 6,
             );
             let mut hinted_script = script!{
