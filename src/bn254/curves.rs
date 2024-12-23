@@ -1,6 +1,6 @@
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, BigInteger, Field, MontFp, PrimeField};
-use bitcoin::opcodes::all::{OP_EQUAL, OP_FROMALTSTACK, OP_NUMEQUAL, OP_PICK, OP_RETURN, OP_ROLL, OP_TOALTSTACK};
+use bitcoin::opcodes::all::{OP_DROP, OP_EQUAL, OP_FROMALTSTACK, OP_NUMEQUAL, OP_PICK, OP_RETURN, OP_ROLL, OP_TOALTSTACK};
 use num_bigint::{BigInt, BigUint, Sign};
 use num_traits::{One, Signed};
 
@@ -1809,8 +1809,9 @@ impl G1Affine {
 
         let mut g1acc: ark_bn254::G1Affine = ark_bn254::G1Affine::zero();
         let mut i = 0;
-        while i < Fr::N_BITS {
-            let depth = min(Fr::N_BITS - i, i_step);
+        let num_bits = (Fr::N_BITS + 1)/2;
+        while i < num_bits {
+            let depth = min(num_bits - i, i_step);
 
             // consme fr on stack and segment send to altstack
             // [K0, K1,   0s0, 0k0, 0s1, 0k1,    1s0, 1k0, 1s1, 1k1]
@@ -1852,19 +1853,23 @@ impl G1Affine {
                     OP_FROMALTSTACK
                     {Fr::fromaltstack()}
                     {bn254::fr::Fr::convert_to_le_bits_toaltstack()}
-                    for j in 0..bn254::fr::Fr::N_BITS {
+                    for _ in 0..(bn254::fr::Fr::N_BITS - num_bits) { // skip zeros in msbs
+                        OP_FROMALTSTACK OP_DROP
+                    }
+                    for j in 0..num_bits { 
                         OP_FROMALTSTACK
                         if j / i_step != i/i_step as u32 {
                             OP_DROP
                         }
                     }
+
                 }.compile());
 
                 let mut mask = 0;
                 let scalar_bigint = scalar.into_bigint();
                 for j in 0..depth {
                     mask *= 2;
-                    mask += scalar_bigint.get_bit((Fr::N_BITS - i - j - 1) as usize) as u32;
+                    mask += scalar_bigint.get_bit((num_bits - i - j - 1) as usize) as u32;
                 }
 
                 // lookup q
@@ -3025,12 +3030,15 @@ mod test {
 
             let mut expected: ark_bn254::G1Affine = ark_bn254::G1Affine::identity();
             let mut chunks: Vec<Vec<u32>> = vec![];
+
+
+            let num_bits = (bn254::fr::Fr::N_BITS + 1) / 2;
             for i in 0..scalars.len() {
                 let scalar = scalars[i];
     
                 let tmp = scalar
                     .into_bigint()
-                    .to_bits_be()[2..]
+                    .to_bits_be()[(256-num_bits as usize)..256]
                     .iter()
                     .map(|b| if *b { 1_u8 } else { 0_u8 })
                     .collect::<Vec<_>>()
@@ -3043,10 +3051,10 @@ mod test {
                 let cur: ark_bn254::G1Affine = (bases[i] * scalars[i]).into_affine();
                 expected = (expected + cur).into();
             }
-    
+            
             let mut accs: Vec<Vec<Hint>> = vec![];
             let mut acc = ark_bn254::G1Affine::identity();
-            for itr in 0..((bn254::fr::Fr::N_BITS + window -1)/window) {
+            for itr in 0..((num_bits + window -1)/window) {
                 accs.push(
                     vec![
                         Hint::Fq(acc.x),
@@ -3054,7 +3062,7 @@ mod test {
                     ]
                 );
                 if !acc.is_zero() {
-                    let depth = std::cmp::min(bn254::fr::Fr::N_BITS - window * itr as u32, window);
+                    let depth = std::cmp::min(num_bits - window * itr as u32, window);
                     for _ in 0..depth {
                         acc = (acc + acc).into_affine();
                     }
@@ -3069,11 +3077,11 @@ mod test {
         }
 
         
-        let n = 1;
-        let window = 8;
+        let n = 2;
+        let window = 6;
 
         let rng = &mut test_rng();
-        let g16_scalars = (0..n).map(|_| ark_bn254::Fr::from(u32::rand(rng))).collect::<Vec<_>>();
+        let g16_scalars = (0..n).map(|_| ark_bn254::Fr::rand(rng)).collect::<Vec<_>>();
 
         let g16_bases = (0..n)
             .map(|_| ark_bn254::G1Projective::rand(rng).into_affine())
@@ -3083,6 +3091,7 @@ mod test {
  
 
         let aux_input_hints = calc_hints_for_scalar_mul_by_constant_g1(g16_scalars.clone(), g16_bases.clone(), window as u32);
+
         let mut glv_scalars_aux_hints: Vec<Hint> = vec![]; 
         g16_scalars.iter().for_each(|s| {
             let glv_hints = bn254::curves::G1Affine::calculate_scalar_decomposition(*s);
@@ -3093,8 +3102,6 @@ mod test {
             glv_scalars_aux_hints.push(Hint::Fr(k1));
         });
         
-        println!("glv_scalars_aux_hints {:?}", glv_scalars_aux_hints);
-
         let all_loop_info =
             crate::bn254::curves::G1Affine::hinted_scalar_mul_by_constant_g1(
                 g16_scalars.clone(),
@@ -3134,9 +3141,9 @@ mod test {
                 OP_TRUE
             };
             let exec_result = execute_script_without_stack_limit(script);
-            for i in 0..exec_result.final_stack.len() {
-                println!("{i:} {:?}", exec_result.final_stack.get(i));
-            }
+            // for i in 0..exec_result.final_stack.len() {
+            //     println!("{i:} {:?}", exec_result.final_stack.get(i));
+            // }
             println!(
                 "chunk {} script size: {} max_stack {}",
                 itr, scalar_mul_affine_script.len(), exec_result.stats.max_nb_stack_items
