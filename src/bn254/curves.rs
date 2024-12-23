@@ -1800,6 +1800,8 @@ impl G1Affine {
             let (s0, s1) = bn254::curves::G1Affine::calculate_scalar_decomposition(*s);
             scalars.push(s0.1);
             scalars.push(s1.1);
+        });
+        g16_scalars.iter().rev().for_each(|s| {
             let (dec_scr, hints) = Self::hinted_scalar_decomposition(*s);
             scalar_dec_hints.extend_from_slice(&hints);
             scalar_dec_scripts.push(dec_scr);
@@ -1813,13 +1815,12 @@ impl G1Affine {
             // consme fr on stack and segment send to altstack
             // [K0, K1,   0s0, 0k0, 0s1, 0k1,    1s0, 1k0, 1s1, 1k1]
             let segment_len = 2 * Fr::N_LIMBS as usize + 2;
-            let size_of_aux_scalars_on_stack = (g16_scalars.len() * segment_len) as u32;
             loop_hints.clear();
 
             loop_scripts = script!(
                 for sitr in 0..g16_scalars.len() {
                     for _ in 0..Fr::N_LIMBS {
-                        {size_of_aux_scalars_on_stack + Fr::N_LIMBS -1} OP_ROLL
+                        { ((g16_scalars.len()-sitr) * segment_len) as u32 + Fr::N_LIMBS -1} OP_ROLL
                     }
                     {Fr::toaltstack()}
                     for _ in 0..segment_len {
@@ -2381,7 +2382,7 @@ mod test {
     use ark_ec::{AffineRepr, CurveGroup};
     use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
     use ark_std::{end_timer, start_timer, test_rng, UniformRand};
-    use bitcoin::opcodes::all::OP_FROMALTSTACK;
+    use bitcoin::opcodes::all::{OP_FROMALTSTACK, OP_RETURN};
     use core::ops::{Add, Mul};
     use std::str::FromStr;
     use num_bigint::BigUint;
@@ -3072,7 +3073,7 @@ mod test {
         let window = 8;
 
         let rng = &mut test_rng();
-        let g16_scalars = (0..n).map(|_| ark_bn254::Fr::rand(rng)).collect::<Vec<_>>();
+        let g16_scalars = (0..n).map(|_| ark_bn254::Fr::from(u32::rand(rng))).collect::<Vec<_>>();
 
         let g16_bases = (0..n)
             .map(|_| ark_bn254::G1Projective::rand(rng).into_affine())
@@ -3092,6 +3093,7 @@ mod test {
             glv_scalars_aux_hints.push(Hint::Fr(k1));
         });
         
+        println!("glv_scalars_aux_hints {:?}", glv_scalars_aux_hints);
 
         let all_loop_info =
             crate::bn254::curves::G1Affine::hinted_scalar_mul_by_constant_g1(
@@ -3118,8 +3120,6 @@ mod test {
                     {hint.push()}
                 }
                 { scalar_mul_affine_script.clone() }
-
-
 
                 // helpers to validate result
                 if itr+1 < aux_input_hints.len() {
