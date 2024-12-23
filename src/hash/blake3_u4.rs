@@ -560,7 +560,8 @@ pub fn blake3(stack: &mut StackTracker, mut msg_len: u32, final_rounds: u8) {
         "This blake3 implementation supports up to 288 bytes"
     );
 
-    let use_full_tables = msg_len <= 232;
+    // let use_full_tables = msg_len <= 232;
+    let use_full_tables = true;
 
     let num_blocks = msg_len.div_ceil(64);
     let mut num_padding_bytes = num_blocks * 64 - msg_len;
@@ -662,12 +663,13 @@ mod tests {
 
     use std::collections::HashMap;
 
+    use bitcoin::script;
     pub use bitcoin_script::script;
     //pub use bitcoin::ScriptBuf as Script;
     use bitcoin_script_stack::{debugger::debug_script, script_util::verify_n, stack::StackTracker, optimizer::optimize};
 
     use super::*;
-    use crate::u4::u4_std::u4_hex_to_nibbles;
+    use crate::{execute_script, u4::u4_std::u4_hex_to_nibbles};
 
     fn verify_blake3_hash(result: &str) -> Script {
         script! {
@@ -789,9 +791,8 @@ mod tests {
 
         assert!(stack.run().success);
 
-        //assert optimized version too
-        let optimized = optimize(stack.get_script().compile());
-        assert!(debug_script(optimized).0.result().unwrap().success);        
+    
+
 
     }
 
@@ -844,10 +845,11 @@ mod tests {
         let start_optimized = optimize(stack.get_script().compile()).len();
         blake3(&mut stack, repeat * 4, 8);
         let end = stack.get_script().len();
-        println!("Blake3 size: {} for: {} bytes", end - start, repeat * 4);
+        println!("Blake3 Script size for {} bytes :: {}", repeat * 4 , end - start);
+        println!("Blake3 Max Stack Use for {} bytes :: {}", repeat * 4, stack.get_max_stack_size());
 
         let end_optimized = optimize(stack.get_script().compile()).len();
-        println!("Blake3 optimized size: {} for: {} bytes", end_optimized - start_optimized, repeat * 4);
+        println!("Blake3 Optimized Script size for {} bytes :: {}", repeat * 4, end_optimized - start_optimized);
 
         stack.custom(
             script! { {verify_blake3_hash(hex_out)}},
@@ -860,12 +862,27 @@ mod tests {
         stack.op_true();
 
         assert!(stack.run().success);
+
+        let optimized = optimize(stack.get_script().compile());
+        let scr = { script!().push_script(optimized.clone())};
+        let exec_result = execute_script(scr);
+        println!("Blake3 Optimized Max Stack use for {} bytes :: {}\n", repeat*4, exec_result.stats.max_nb_stack_items);
+
+        
+        // assert optimized version too
+        assert!(debug_script(optimized).0.result().unwrap().success);         
     }
 
     #[test]
     fn test_blake3_long() {
+        let hex_out = "86ca95aefdee3d969af9bcc78b48a5c1115be5d66cafc2fc106bbd982d820e70";
+        test_long_blakes(16, hex_out);
+
         let hex_out = "9bd93dd19a93d1d3522c6717d77a2e20e11b8627efa5df80c76d727ca7431892";
         test_long_blakes(20, hex_out);
+
+        let hex_out = "cfe4e91ae2dd3223f02e8c33d4ee464734d1620b64ed1f08cac7e21f204851b7";
+        test_long_blakes(32, hex_out);
 
         let hex_out = "08729d0161b725b93e83ce79b06c534ce7684d39e21ad05074b67e0ac89ef44a";
         test_long_blakes(40, hex_out);
@@ -880,6 +897,9 @@ mod tests {
 
         let hex_out = "a23e7a7e11ff2febf28a205c8dc0ca57ae4eb2d0eb079bb5c6a5bdcdd3e56de1";
         test_long_blakes(60, hex_out);
+        
+        let hex_out = "4902b971aebb04bf93ac4f9493e76777fb19f9299f152716269b0d122a761891";
+        test_long_blakes(64, hex_out);
 
         //max limit
         let hex_out = "b6c1b3d6b1555e0d20bd5188e4b8b20488c36105fd9c8971ac10dd267e612e4f";
