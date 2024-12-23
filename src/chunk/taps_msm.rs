@@ -15,7 +15,7 @@ use crate::{
 use ark_bn254::G1Affine;
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, BigInteger, Field, MontFp, PrimeField};
-use bitcoin::opcodes::all::OP_VERIFY;
+use bitcoin::opcodes::all::{OP_FROMALTSTACK, OP_TOALTSTACK, OP_VERIFY};
 use num_bigint::{BigInt, BigUint, Sign};
 use num_traits::{One, Signed};
 
@@ -630,12 +630,16 @@ fn hinted_scalar_decomposition(k: ark_bn254::Fr) -> (Script, Vec<Hint>) {
     let (_, (_, k1)) = calculate_scalar_decomposition(k);
     let (mul_scr, mul_hints) = hinted_scalar_mul_by_constant(k1, &LAMBDA);
     let scr = script!{
-        // [s0, s1, k0, k1, k]
+        // [s0, k0, s1, k1, k]
         {Fr::toaltstack()}
-        // [s0, s1, k0, k1]
+        // [s0, k0, s1, k1]
+        {Fr::N_LIMBS} OP_ROLL
+        // [s0, k0, k1, s1]
+        OP_TOALTSTACK
+        // [s0, k0, k1]
         {mul_scr}
         // [s0, s1, k0, k1 * lambda]
-        {Fr::N_LIMBS * 2} OP_ROLL
+        OP_FROMALTSTACK
         // [s0, k0, k1 * lambda, s1]
         {2} OP_EQUAL
         OP_IF
@@ -1017,8 +1021,8 @@ mod test {
                 {hint.push()}
             }
             {is_k1_positive as u32}
-            {is_k2_positive as u32}
             {fr_push_not_montgomery(k1)}
+            {is_k2_positive as u32}
             {fr_push_not_montgomery(k2)}
             {fr_push_not_montgomery(k)}
             {dec_scr}
@@ -1026,6 +1030,7 @@ mod test {
         };
 
         let res = execute_script(scr);
+        println!("max stack {:?}", res.stats.max_nb_stack_items);
         assert!(res.final_stack.len() == 1);
         assert!(res.success);
     }
