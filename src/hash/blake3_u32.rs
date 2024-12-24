@@ -198,8 +198,8 @@ fn compress(env: &mut Env, ap: u32, n_limbs: Option<u32>) -> Script {
     }
 }
 
-// const N_DIGEST_U32_LIMBS: u32 = 8; // 256-bit
-pub(crate) const N_DIGEST_U32_LIMBS: u32 = 5; // 160-bit
+pub (crate) const N_DIGEST_U32_LIMBS: u32 = 8; // 256-bit
+// pub(crate) const N_DIGEST_U32_LIMBS: u32 = 5; // 160-bit
 
 /// Blake3 taking a N_DIGEST_U32_LIMBS*8-byte message and returning a N_DIGEST_U32_LIMBS*4-byte digest
 pub fn blake3() -> Script {
@@ -719,6 +719,62 @@ mod tests {
             max_nb_stack_items = exec_result.stats.max_nb_stack_items;
         }
         println!("max_nb_stack_items = {max_nb_stack_items}");
+    }
+
+   
+    fn test_blake3_var_length_benchmark(msg_len : usize, hex_out : &str){
+        let script = script! {
+            for _ in 0..( msg_len / 4 ) {
+                //{u32_push(1)}
+                { 1 }
+            }
+            { blake3_var_length(msg_len / 4) }
+            {push_bytes_hex(hex_out)}
+            blake3_hash_equalverify
+            OP_TRUE
+        };
+        println!("Blake3_u32 Script Size for {} bytes : {}", msg_len, script.len());
+
+        let exec_result = execute_script(script);
+        assert!(exec_result.success);
+
+        let mut max_nb_stack_items = 0;
+
+        if exec_result.stats.max_nb_stack_items > max_nb_stack_items {
+            max_nb_stack_items = exec_result.stats.max_nb_stack_items;
+        }
+        println!("max_nb_stack_items = {max_nb_stack_items}\n");
+    }
+
+    #[test]
+    fn test_blake3_var_length_benchmark_multiple(){
+        let hex_out = "86ca95aefdee3d969af9bcc78b48a5c1115be5d66cafc2fc106bbd982d820e70";
+        test_blake3_var_length_benchmark(64, hex_out);
+
+        let hex_out = "cfe4e91ae2dd3223f02e8c33d4ee464734d1620b64ed1f08cac7e21f204851b7";
+        test_blake3_var_length_benchmark(128, hex_out);
+
+        let hex_out = "f2487b9f736cc30faf28952733c95560dc60e72cc7731b03a9ecfc86665e2e85";
+        test_blake3_var_length_benchmark(192, hex_out);
+
+        let hex_out = "4902b971aebb04bf93ac4f9493e76777fb19f9299f152716269b0d122a761891";
+        test_blake3_var_length_benchmark(256, hex_out);
+
+        let hex_out = "280077dda7844a4feb931c975ed048d0d0a246628adb3545da54107e2fc3446a";
+        test_blake3_var_length_benchmark(320, hex_out);
+
+        let hex_out = "f84882e029ebf4e1cd4e644136cebd2c299a2ea7e8cb93600602ab7457f55e3d";
+        test_blake3_var_length_benchmark(384, hex_out);
+
+        let hex_out = "f9369b1c87729c5d859b194dab87ad2b76f40dd6dadf7bbf31017e47f4e0b698";
+        test_blake3_var_length_benchmark(448, hex_out);
+
+        let hex_out = "2e472ab88ae719ded6cbc7e10f02e1dca3dadbb7dd4bc8fb78b81fbe03d7a8f5";
+        test_blake3_var_length_benchmark(512, hex_out);
+
+
+        let hex_out = "88941c75fc38a639ca0fcdf10e907431879c230bc6633df5236637a6c4135676";
+        test_blake3_var_length_benchmark(576, hex_out);
     }
 
     #[test]
