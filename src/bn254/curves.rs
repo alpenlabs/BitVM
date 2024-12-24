@@ -1736,25 +1736,18 @@ impl G1Affine {
         (scr, mul_hints)
     }
 
-    fn hinted_endomorphoism(a: ark_bn254::G1Affine) -> (Script, Vec<Hint>) {
-        let endo_coeffs = BigUint::from_str(
-            "21888242871839275220042445260109153167277707414472061641714758635765020556616"
-        ).unwrap();
-        let endo_coeffs = ark_bn254::Fq::from(endo_coeffs);
-
-        let (mul_scr, mul_hints) = Fq::hinted_mul_by_constant(a.x, &endo_coeffs);
-
-        let scr = script!{
-            // [tmul_hints, a.x, a.y]
-            {Fq::roll(1)}
-            {mul_scr}
-            {Fq::roll(1)}
-            // [e*a.x, a.y]
-        };
-        (scr, mul_hints)
+    pub(crate) fn aux_hints_for_scalar_decomposition(msm_scalars: Vec<ark_bn254::Fr>) -> Vec<Hint> {
+        let mut msm_aux_hints = vec![];
+        msm_scalars.iter().for_each(|s| {
+            let glv_hints =  bn254::curves::G1Affine::calculate_scalar_decomposition(*s);
+            let ((s0, k0), (s1, k1)) = glv_hints;
+            msm_aux_hints.push(Hint::U32(s0 as u32));
+            msm_aux_hints.push(Hint::Fr(k0));
+            msm_aux_hints.push(Hint::U32(s1 as u32));
+            msm_aux_hints.push(Hint::Fr(k1));
+        });
+        msm_aux_hints
     }
-
-
 
     pub fn hinted_scalar_mul_by_constant_g1(
         g16_scalars: Vec<ark_bn254::Fr>,
@@ -3077,8 +3070,8 @@ mod test {
         }
 
         
-        let n = 2;
-        let window = 6;
+        let n = 3;
+        let window = 4;
 
         let rng = &mut test_rng();
         let g16_scalars = (0..n).map(|_| ark_bn254::Fr::rand(rng)).collect::<Vec<_>>();
