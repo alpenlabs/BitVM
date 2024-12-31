@@ -9,7 +9,10 @@ use crate::bigint::U254;
 
 use crate::hash::blake3_u4::{compress, get_flags_for_block, TablesVars};
 
-// This implementation assumes you have the input (with needed padding) in compact form on the stack
+// This implementation assumes you have the input is in compact form on the stack.
+// The message must be packed into multiple of (2 * 9) limbs such that it expands a multiple of 128 nibbles 
+// The padding added by user is removed and 0 is added as padding to prevent maliciously or mistaken wrong padding
+
 pub fn blake3_u4_compact(
     stack: &mut StackTracker,
     mut msg_len: u32,
@@ -77,6 +80,47 @@ pub fn blake3_u4_compact(
             0,
             &format!("unpack msg{}p0", i),
         );
+
+        // handle padding if it is the last block
+        if i == (num_blocks - 1) && msg_len != 64 {
+
+            // due to LE representation, msg portion can be on top of padding.
+            let j = msg_len % 4;
+            let pad_bytes = 64 + j - msg_len - 4;
+
+            stack.custom(
+                script!(
+                    //Drop whatever padding has been added for packing to limbs and pad with zeros
+                    for _ in 0..(pad_bytes*2){
+                        OP_DROP
+                    }
+
+                    for _ in 0..(j*2){
+                        OP_TOALTSTACK
+                    }
+
+                    for _ in 0..(4-j) * 2{
+                        OP_DROP
+                    }
+
+                    for _ in 0..(4-j) * 2{
+                        OP_0
+                    }
+
+                    for _ in 0..(j*2){
+                        OP_FROMALTSTACK
+                    }
+
+                    for _ in 0..(pad_bytes*2){
+                        OP_0
+                    }
+                ),
+                0,
+                false,
+                0,
+                "padding",
+            );
+        }
 
         //make a hashmap of msgs
         let mut original_message = Vec::new();
@@ -341,10 +385,10 @@ mod tests {
         fn gen_inputs_with_padding(len: usize) -> String {
             // Generate the byte sequence with a repeating pattern of 251 bytes
             let mut bytes: Vec<u8> = (0..251u8).cycle().take(len).collect();
-            // Add padding to ensure length is a multple of 64
+            // Add wrong padding padding to ensure length is a multple of 64
             if len % 64 != 0 {
                 for _ in 0..(64 - (len % 64)) {
-                    bytes.push(0);
+                    bytes.push(1); //zero should be added as padding but this is done intentionally to check if blake3_u4_compact can handle it
                 }
             }
             // Convert each byte to its two-digit hexadecimal representation and concatenate
