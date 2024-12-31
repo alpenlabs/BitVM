@@ -1,9 +1,10 @@
 
 use super::utils::Hint;
 use crate::bn254::fp254impl::Fp254Impl;
-use crate::bn254::utils::fr_push_not_montgomery;
+use crate::bn254::fq::Fq;
+use crate::bn254::utils::{fr_push_not_montgomery};
 use crate::bn254::{curves::G1Affine, curves::G1Projective, utils::fr_push};
-use crate::{bn254, treepp::*};
+use crate::{treepp::*};
 use ark_ec::{AdditiveGroup, AffineRepr, CurveGroup};
 use ark_ff::{BigInteger, Field, PrimeField};
 
@@ -287,16 +288,25 @@ pub fn hinted_msm_with_constant_bases_affine(
     // Gather scripts
     let script = script! {
         for i in 0..msm_scripts.len() {
+            for hint in &msm_aux_hints { // aux hints: [ScalarDecomposition_i]
+                {hint.push()}
+            }
+            // G1Acc: bitcommited input irl
             if i == 0 {
                 {G1Affine::push_not_montgomery(ark_bn254::G1Affine::identity())}
+            } else {
+                {Fq::fromaltstack()}
+                {Fq::fromaltstack()}
             }
+            // Scalar_i: groth16 public inputs bitcommited input irl
             for msm_scalar in &msm_scalars {
                 {fr_push_not_montgomery(*msm_scalar)}
             }
-            for hint in &msm_aux_hints { // aux hints
-                {hint.push()}
-            }
+            // [ScalarDecomposition_0, ScalarDecomposition_1,.., ScalarDecomposition_i,    G1Acc, Scalar_0, Scalar_1,..Scalar_i, ]
             {msm_scripts[i].clone()}
+            if i != msm_scripts.len()-1 {
+                {Fq::toaltstack()} {Fq::toaltstack()}
+            }
         }
         // tx, ty
         for i in 0..add_scripts.len() {
@@ -304,7 +314,7 @@ pub fn hinted_msm_with_constant_bases_affine(
             {add_scripts[i].clone()}
         }
     };
-    println!("msm is divided into {} chunks ", msm_scripts.len() + add_scripts.len());
+    //println!("msm is divided into {} chunks ", msm_scripts.len() + add_scripts.len());
 
     (script, hints)
     // into_affine involving extreem expensive field inversion, X/Z^2 and Y/Z^3, fortunately there's no need to do into_affine any more here

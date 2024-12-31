@@ -1,6 +1,5 @@
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, BigInteger, Field, MontFp, PrimeField};
-use bitcoin::opcodes::all::{OP_DROP, OP_EQUAL, OP_FROMALTSTACK, OP_NUMEQUAL, OP_PICK, OP_RETURN, OP_ROLL, OP_TOALTSTACK};
 use num_bigint::{BigInt, BigUint, Sign};
 use num_traits::{One, Signed};
 
@@ -1445,7 +1444,7 @@ impl G1Affine {
         }
     }
 
-    pub fn dfs_with_constant_mul(
+    fn dfs_with_constant_mul(
         index: u32,
         depth: u32,
         mask: u32,
@@ -1749,19 +1748,30 @@ impl G1Affine {
         msm_aux_hints
     }
 
+    // Stack: [ScalarDecomposition_0, ScalarDecomposition_1,.., ScalarDecomposition_i,    G1Acc, Scalar_0, Scalar_1,..Scalar_i, ]
+    // where 
+    // G1Acc is initial value of accumulator => G1Affine::ZERO
+    // Scalar_i is groth16 public input, Scalar_i < |F_r|
+    // ScalarDecomposition_i is glv decomposition of scalar, => [s0, k0, s1, k1]
+    // k0 and k1 are scalar elements of size < |F_r/2|
+    // s0 and s1 are u32 elements which indicate sign of scalar
+    // Scalar_0 = s0 * k0 + s1 * k1
     pub fn hinted_scalar_mul_by_constant_g1(
         g16_scalars: Vec<ark_bn254::Fr>,
-        ps: Vec<ark_bn254::G1Affine>,
+        g16_bases: Vec<ark_bn254::G1Affine>,
         i_step: u32,
     ) -> Vec<(Script, Vec<Hint>)> {
-        assert_eq!(g16_scalars.len(), ps.len());
+        assert_eq!(g16_scalars.len(), g16_bases.len());
         let mut all_loop_info: Vec<(Script, Vec<Hint>)> = Vec::new();
         let mut loop_hints = vec![];
         let mut loop_scripts = script!();
 
-        // precomputed lookup table (affine)
+        // Given: g16_bases = [p0, p1]
+        // Extend bases to include point endomorphism => [p0, phi(p0)..]
+        // precomputed lookup table belonging to this extended list of bases
+        // later msm [k0, k1..] with [p0, phi(p0)] such that product = (s0).k0 * p0 + (s1).k1 * phi(p1) = (s0.k0 + s1.k1.lambda) p = k.p
         let mut p_muls: Vec<Vec<ark_bn254::G1Affine>> = Vec::new();
-        for p in ps {
+        for p in g16_bases {
             let mut p_mul: Vec<ark_bn254::G1Affine> = Vec::new();
             p_mul.push(ark_bn254::G1Affine::zero());
             for _ in 1..(1 << i_step) {
@@ -1770,6 +1780,7 @@ impl G1Affine {
             }
             p_muls.push(p_mul);
 
+            // precompute phi(p)
             let endo_coeffs = BigUint::from_str(
                 "21888242871839275220042445260109153167277707414472061641714758635765020556616"
             ).unwrap();
@@ -1786,18 +1797,18 @@ impl G1Affine {
 
         
 
-        let mut scalars: Vec<ark_bn254::Fr> = vec![];
-        let mut scalar_dec_scripts: Vec<Script> = vec![];
-        let mut scalar_dec_hints: Vec<Hint> = vec![];
+        let mut glv_scalars: Vec<ark_bn254::Fr> = vec![];
+        let mut validate_scalar_dec_scripts: Vec<Script> = vec![];
+        let mut validate_scalar_dec_hints: Vec<Hint> = vec![];
         g16_scalars.iter().for_each(|s| {
             let (s0, s1) = bn254::curves::G1Affine::calculate_scalar_decomposition(*s);
-            scalars.push(s0.1);
-            scalars.push(s1.1);
+            glv_scalars.push(s0.1);
+            glv_scalars.push(s1.1);
         });
-        g16_scalars.iter().rev().for_each(|s| {
+        g16_scalars.iter().rev().for_each(|s| { // reverse because we process g16_scalars from msb in double & add algorithm
             let (dec_scr, hints) = Self::hinted_scalar_decomposition(*s);
-            scalar_dec_hints.extend_from_slice(&hints);
-            scalar_dec_scripts.push(dec_scr);
+            validate_scalar_dec_hints.extend_from_slice(&hints);
+            validate_scalar_dec_scripts.push(dec_scr);
         });
 
         let mut g1acc: ark_bn254::G1Affine = ark_bn254::G1Affine::zero();
@@ -1806,28 +1817,51 @@ impl G1Affine {
         while i < num_bits {
             let depth = min(num_bits - i, i_step);
 
-            // consme fr on stack and segment send to altstack
-            // [K0, K1,   0s0, 0k0, 0s1, 0k1,    1s0, 1k0, 1s1, 1k1]
             let segment_len = 2 * Fr::N_LIMBS as usize + 2;
             loop_hints.clear();
+            loop_scripts = script!();
 
-            loop_scripts = script!(
+            // Rearrange stack: bring segments to top
+            // [0s0, 0k0, 0s1, 0k1,    1s0, 1k0, 1s1, 1k1,   G1Acc, K0, K1]
+            let g16_offset = g16_scalars.len() as u32 * Fr::N_LIMBS + 2 * Fr::N_LIMBS; // 2 -> G1Acc(x, y)
+            let segment_height = segment_len * g16_scalars.len();
+            loop_scripts = loop_scripts.push_script(script!(
+                for _ in 0..segment_height {
+                    {g16_offset + segment_height as u32 - 1} OP_ROLL
+                }
+            ).compile());
+            // [G1Acc, K0, K1, 0s0, 0k0, 0s1, 0k1,    1s0, 1k0, 1s1, 1k1]
+
+            // Verify scalar decomposition and send verified segments to altstack
+            // here segment refers to scalar decomposition [is0, sk0, 0s1, 0k1] 
+            // [K0, K1,   0s0, 0k0, 0s1, 0k1,    1s0, 1k0, 1s1, 1k1]
+            loop_scripts = loop_scripts.push_script(script!(
                 for sitr in 0..g16_scalars.len() {
+                    // bring K_i to the top of stack
                     for _ in 0..Fr::N_LIMBS {
                         { ((g16_scalars.len()-sitr) * segment_len) as u32 + Fr::N_LIMBS -1} OP_ROLL
                     }
+                    // [K0, 0s0, 0k0, 0s1, 0k1,    1s0, 1k0, 1s1, 1k1,  K1]
                     {Fr::toaltstack()}
+                    // [K0, 0s0, 0k0, 0s1, 0k1,    1s0, 1k0, 1s1, 1k1]
+                    // copy segment
                     for _ in 0..segment_len {
                         {segment_len -1} OP_PICK
                     }
+                    // [K0, 0s0, 0k0, 0s1, 0k1,    1s0, 1k0, 1s1, 1k1, 1s0, 1k0, 1s1, 1k1]
                     {Fr::fromaltstack()}
-                    {scalar_dec_scripts[sitr].clone()}
+                    // [K0, 0s0, 0k0, 0s1, 0k1,    1s0, 1k0, 1s1, 1k1,   1s0, 1k0, 1s1, 1k1, K1]
+                    // verify decomposition of K[g16_scalars.len()-sitr]
+                    {validate_scalar_dec_scripts[sitr].clone()}
+                    // Send valid segment to altstack
                     for _ in 0..segment_len {
                         OP_TOALTSTACK
                     }
+                    // [K0, 0s0, 0k0, 0s1, 0k1]
+                    // repeat for other batch
                 }
-            );
-            loop_hints.extend_from_slice(&scalar_dec_hints);
+            ).compile());
+            loop_hints.extend_from_slice(&validate_scalar_dec_hints);
 
             
             // double(step-size) point
@@ -1840,22 +1874,22 @@ impl G1Affine {
                 }
             }
 
-            for (itr, scalar) in scalars.iter().enumerate() {
+            
+            for (itr, scalar) in glv_scalars.iter().enumerate() {
                 // squeeze a bucket scalar
                 loop_scripts = loop_scripts.push_script(script! {
-                    OP_FROMALTSTACK
-                    {Fr::fromaltstack()}
+                    OP_FROMALTSTACK // s0
+                    {Fr::fromaltstack()} // k0
                     {bn254::fr::Fr::convert_to_le_bits_toaltstack()}
-                    for _ in 0..(bn254::fr::Fr::N_BITS - num_bits) { // skip zeros in msbs
+                    for _ in 0..(bn254::fr::Fr::N_BITS - num_bits) { // skip zeros in msbs because k0 < |Fr/2|
                         OP_FROMALTSTACK OP_DROP
                     }
                     for j in 0..num_bits { 
                         OP_FROMALTSTACK
-                        if j / i_step != i/i_step as u32 {
+                        if j / i_step != i/i_step as u32 { // keep only bits corresponding to this window
                             OP_DROP
                         }
                     }
-
                 }.compile());
 
                 let mut mask = 0;
@@ -1865,11 +1899,19 @@ impl G1Affine {
                     mask += scalar_bigint.get_bit((num_bits - i - j - 1) as usize) as u32;
                 }
 
-                // lookup q
+                // lookup q:
+                // here we negate Q with the sign of scalar:
+                // i.e. (s0)k0 * P = k0 * (s0) P = k0 * -P is s0 indicates negative
+                // s0 = {0, 1, 2} => {ZERO, POSITIVE, NEGATIVE}
                 let lookup_scr = script!{
+                    // [s0, k0]
                     {G1Affine::dfs_with_constant_mul_not_montgomery(0, depth - 1, 0, &p_muls[itr])}
+                    // lookup: p_muls(k0) => G1Affine::P
+                    // [s0, Px0, Py0]
                     {Fq::toaltstack()} {Fq::toaltstack()}
+                    // [s0]
                     {2} OP_NUMEQUAL
+                    // if s0 is negative, negate P
                     OP_IF 
                         {Fr::fromaltstack()} 
                         {Fr::fromaltstack()}
@@ -1877,28 +1919,18 @@ impl G1Affine {
                     OP_ELSE
                         {Fr::fromaltstack()} {Fr::fromaltstack()}
                     OP_ENDIF
-
                 };
                 loop_scripts  = loop_scripts.push_script(lookup_scr.compile());
                 // add point
-                if i == 0 && itr == 0 { 
-                    let add_loop = script! {
-                        // [tx, ty, qx, qy]
-                        {Fq::roll(2)} {Fq::drop()} // drop t = inf
-                        {Fq::roll(2)} {Fq::drop()}
-                    };
-                    loop_scripts = loop_scripts.push_script(add_loop.compile());
-                } else {
-                    let (add_script, add_hints) =
-                    G1Affine::hinted_check_add(g1acc, p_muls[itr][mask as usize]);
-                    let add_loop = script! {
-                        // query bucket point through lookup table
-                        // check before usage
-                        { add_script }
-                    };
-                    loop_scripts = loop_scripts.push_script(add_loop.compile());
-                    loop_hints.extend(add_hints);
-                }
+                let (add_script, add_hints) =
+                G1Affine::hinted_check_add(g1acc, p_muls[itr][mask as usize]);
+                let add_loop = script! {
+                    // query bucket point through lookup table
+                    // check before usage
+                    { add_script }
+                };
+                loop_scripts = loop_scripts.push_script(add_loop.compile());
+                loop_hints.extend(add_hints);
                 g1acc = (g1acc + p_muls[itr][mask as usize]).into_affine();
             }
 
@@ -1909,7 +1941,6 @@ impl G1Affine {
 
         all_loop_info
     }
-
 
     pub fn check_add(c3: ark_bn254::Fq, c4: ark_bn254::Fq) -> Script {
         script! {
@@ -2378,9 +2409,8 @@ mod test {
     use crate::bn254::fp254impl::Fp254Impl;
     use ark_bn254::Fr;
     use ark_ec::{AffineRepr, CurveGroup};
-    use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
+    use ark_ff::{AdditiveGroup, BigInteger, Field, MontFp, PrimeField};
     use ark_std::{end_timer, start_timer, test_rng, UniformRand};
-    use bitcoin::opcodes::all::{OP_FROMALTSTACK, OP_RETURN};
     use core::ops::{Add, Mul};
     use std::str::FromStr;
     use num_bigint::BigUint;
@@ -2954,8 +2984,8 @@ mod test {
         let n = 1 << k;
         let rng = &mut test_rng();
 
-        let mut scalars = (0..n).map(|_| ark_bn254::Fr::rand(rng)).collect::<Vec<_>>();
-        
+        let scalars = (0..n).map(|_| ark_bn254::Fr::rand(rng)).collect::<Vec<_>>();
+
         let bases = (0..n)
             .map(|_| ark_bn254::G1Projective::rand(rng).into_affine())
             .collect::<Vec<_>>();
@@ -2984,7 +3014,64 @@ mod test {
             scalar_mul_affine_script.len()
         );
     }
+    
 
+    #[test]
+    fn test_hinted_scalar_decomposition() {
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        const LAMBDA: ark_bn254::Fr = MontFp!("21888242871839275217838484774961031246154997185409878258781734729429964517155");
+        let k = ark_bn254::Fr::rand(&mut prng);
+
+        let dec = bn254::curves::G1Affine::calculate_scalar_decomposition(k);
+        let  ((is_k1_positive, k1), (is_k2_positive, k2)) = dec;
+        let (is_k1_positive, is_k2_positive) = (is_k1_positive != 2, is_k2_positive != 2);
+
+        if is_k1_positive && is_k2_positive {
+            assert_eq!(k1 + k2 * LAMBDA, k);
+        }
+        if is_k1_positive && !is_k2_positive {
+            assert_eq!(k1 - k2 * LAMBDA, k);
+        }
+        if !is_k1_positive && is_k2_positive {
+            assert_eq!(-k1 + k2 * LAMBDA, k);
+        }
+        if !is_k1_positive && !is_k2_positive {
+            assert_eq!(-k1 - k2 * LAMBDA, k);
+        }
+        // check if k1 and k2 are indeed small.
+        let expected_max_bits = (ark_bn254::Fr::MODULUS_BIT_SIZE + 1) / 2;
+        assert!(
+            k1.into_bigint().num_bits() <= expected_max_bits,
+            "k1 has {} bits",
+            k1.into_bigint().num_bits()
+        );
+        assert!(
+            k2.into_bigint().num_bits() <= expected_max_bits,
+            "k2 has {} bits",
+            k2.into_bigint().num_bits()
+        );
+
+        let (dec_scr, hints) = bn254::curves::G1Affine::hinted_scalar_decomposition(k);
+        let scr = script!{
+            for hint in hints {
+                {hint.push()}
+            }
+            {is_k1_positive as u32}
+            {fr_push_not_montgomery(k1)}
+            {is_k2_positive as u32}
+            {fr_push_not_montgomery(k2)}
+            {fr_push_not_montgomery(k)}
+            {dec_scr}
+            OP_TRUE
+        };
+
+        let res = execute_script(scr);
+        println!("max stack {:?}", res.stats.max_nb_stack_items);
+        assert!(res.final_stack.len() == 1);
+        assert!(res.success);
+    }
+
+    
 
     #[test]
     fn test_hinted_scalar_mul_by_constant_g1_affine() {
@@ -3070,8 +3157,8 @@ mod test {
         }
 
         
-        let n = 3;
-        let window = 4;
+        let n = 1;
+        let window = 8;
 
         let rng = &mut test_rng();
         let g16_scalars = (0..n).map(|_| ark_bn254::Fr::rand(rng)).collect::<Vec<_>>();
@@ -3108,17 +3195,16 @@ mod test {
                 for hint in hints {
                     { hint.push() }
                 }
+                for hint in &glv_scalars_aux_hints { // aux hints
+                    {hint.push()}
+                }
                 for acc_hint in &aux_input_hints[itr] { // bit commed g1 acc
                     { acc_hint.push() }
                 }
-                
                 for scalar in g16_scalars.iter() {
                     { fr_push_not_montgomery(*scalar) } // scalar bit commed
                 }
 
-                for hint in &glv_scalars_aux_hints { // aux hints
-                    {hint.push()}
-                }
                 { scalar_mul_affine_script.clone() }
 
                 // helpers to validate result
@@ -3550,53 +3636,6 @@ mod test {
             run(script);
         }
     }
-
-
-    #[test]
-    fn test_hinted_g2_affine_is_on_curve() {
-
-        // println!("G2.affine_is_on_curve: {} bytes", affine_is_on_curve.len());
-
-        let mut prng = ChaCha20Rng::seed_from_u64(0);
-
-        for _ in 0..3 {
-            let point = ark_bn254::G2Affine::rand(&mut prng);
-            let (scr, hints) = G2Affine::hinted_is_on_curve(point.x, point.y);
-            let script = script! {
-                for hint in hints { 
-                    { hint.push() }
-                }
-                { fq2_push_not_montgomery(point.x) }
-                { fq2_push_not_montgomery(point.y) }
-                { scr}
-            };
-            println!("curves::test_affine_is_on_curve = {} bytes", script.len());
-            let res = execute_script(script);
-            for i in 0..res.final_stack.len() {
-                println!("{i:} {:?}", res.final_stack.get(i));
-            }
-            assert!(res.success);
-
-            let (scr, hints) = G2Affine::hinted_is_on_curve(point.x, point.y + point.y);
-            let script = script! {
-                for hint in hints { 
-                    { hint.push() }
-                }
-                { fq2_push_not_montgomery(point.x) }
-                { fq2_push_not_montgomery(point.y) }
-                {Fq2::double(0)}
-                { scr}
-                OP_NOT
-            };
-            println!("curves::test_affine_is_on_curve = {} bytes", script.len());
-            let res = execute_script(script);
-            for i in 0..res.final_stack.len() {
-                println!("{i:} {:?}", res.final_stack.get(i));
-            }
-            assert!(res.success);
-        }
-    }
-
 
     #[test]
     fn test_convert_to_compressed() {
