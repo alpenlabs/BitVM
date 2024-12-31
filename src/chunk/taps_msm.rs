@@ -1,13 +1,10 @@
 use std::ops::{AddAssign, Div, Neg, Rem};
 use std::str::FromStr;
 
-use crate::bigint::bits::limb_to_le_bits;
 use crate::bn254::{self, curves};
 use crate::bn254::fr::Fr;
 use crate::bn254::utils::{fq_push_not_montgomery, fr_push_not_montgomery};
-use crate::chunk::primitves::{
-    extern_hash_fps, unpack_limbs_to_nibbles
-};
+use crate::chunk::primitves::extern_hash_fps;
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
@@ -15,7 +12,6 @@ use crate::{
 use ark_bn254::G1Affine;
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, BigInteger, Field, MontFp, PrimeField};
-use bitcoin::opcodes::all::{OP_FROMALTSTACK, OP_TOALTSTACK, OP_VERIFY};
 use num_bigint::{BigInt, BigUint, Sign};
 use num_traits::{One, Signed};
 
@@ -481,6 +477,8 @@ pub(crate) fn hint_hash_p(
     let (rx, ry) = (hint_in_rx, hint_in_ry);
     let thash = extern_hash_fps(vec![hint_in_t.x, hint_in_t.y], false);
 
+    let rdash = (ark_bn254::G1Affine::new_unchecked(tx, ty) + hint_in_q).into_affine();
+    // assert_eq!(rdash, ark_bn254::G1Affine::new_unchecked(rx, ry));
     let zero_nib = [0u8;64];
 
     let alpha_chord = (ty - qy) / (tx - qx);

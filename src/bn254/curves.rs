@@ -1587,7 +1587,7 @@ impl G1Affine {
     }
 
     /// Decomposes a scalar s into k1, k2, s.t. s = k1 + lambda k2,
-    fn calculate_scalar_decomposition(
+    pub(crate) fn calculate_scalar_decomposition(
         k: ark_bn254::Fr,
     ) -> ((u8, ark_bn254::Fr), (u8, ark_bn254::Fr)) {
         let scalar: BigInt = k.into_bigint().into();

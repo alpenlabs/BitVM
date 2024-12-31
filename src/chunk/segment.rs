@@ -1,7 +1,9 @@
 
-use crate::treepp;
+use std::{ops::Neg, str::FromStr};
 
-use super::{hint_models::Element, taps_point_eval::*, taps_premiller::*};
+use crate::{bn254::{self, curves::G1Affine, fp254impl::Fp254Impl, fq::Fq, fr::Fr, utils::fq_push_not_montgomery}, chunk::taps_msm::tap_hash_p, execute_script, treepp};
+
+use super::{hint_models::Element, primitves::extern_nibbles_to_limbs, taps_point_eval::*, taps_premiller::*};
 
 pub type SegmentID = u32;
 pub type SegmentOutputType = bool;
@@ -50,10 +52,150 @@ pub enum ScriptType {
 
 
 
-use ark_ff::{AdditiveGroup, Field};
+use ark_ec::{AffineRepr, CurveGroup};
+use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
 use bitcoin_script::script;
+use num_bigint::BigUint;
 
 use super::{hint_models::*, taps_msm::{hint_hash_p, hint_msm}, primitves::extern_hash_fps,  taps_point_ops::*, taps_mul::*};
+
+
+pub(crate) fn wrap_hinted_msm(
+    skip: bool,
+    segment_id: usize,
+    scalars: Vec<Segment>,
+    pub_vky: Vec<ark_bn254::G1Affine>,
+) {
+
+    let hint_scalars: Vec<ark_bn254::Fr> = scalars
+    .iter()
+    .map(|f| {
+        f.output.try_into().unwrap()
+    })
+    .collect();
+
+    assert!(hint_scalars.len() <= 2);
+    let mut window = 8;
+    if hint_scalars.len() == 2 {
+        window = 6;
+    }
+
+    let mut expected = ark_bn254::G1Affine::identity();
+    pub_vky.iter().zip(hint_scalars.iter()).for_each(|(b, s)| expected = (expected + *b * s).into_affine());
+
+
+    let msm_chunks = G1Affine::hinted_scalar_mul_by_constant_g1(
+        hint_scalars.clone(),
+        pub_vky.clone(),
+        window,
+    );
+    let msm_aux_hints = G1Affine::aux_hints_for_scalar_decomposition(hint_scalars.clone());
+    let msm_hints: Vec<treepp::Script> = msm_chunks.iter().map(|(_, hs)| {
+        let hint_scr = script!{
+            for h in hs {
+                {h.push()}
+            }
+            for h in &msm_aux_hints {
+                {h.push()}
+            }
+        };
+        hint_scr
+    }).collect();
+    let msm_scripts: Vec<treepp::Script> = msm_chunks.iter().map(|(ss, _)| ss.clone()).collect();
+    let msm_exp_out: Vec<Element> = calculate_expected_outputs_per_chunk(
+        hint_scalars.clone(),
+        pub_vky.clone(),
+        window,
+    ).iter().map(|f| Element::MSMG1(*f)).collect();
+
+    fn calculate_expected_outputs_per_chunk(
+        g16_scalars: Vec<ark_bn254::Fr>,
+        g16_bases: Vec<ark_bn254::G1Affine>,
+        window: u32,
+    ) -> Vec<ark_bn254::G1Affine> {
+        assert_eq!(g16_scalars.len(), g16_bases.len());
+
+        let glv_scalars: Vec<((u8, ark_bn254::Fr), (u8, ark_bn254::Fr))> = g16_scalars.iter().map(|s| bn254::curves::G1Affine::calculate_scalar_decomposition(*s)).collect();
+        let endo_coeffs = BigUint::from_str("21888242871839275220042445260109153167277707414472061641714758635765020556616").unwrap();
+        let endo_coeffs = ark_bn254::Fq::from(endo_coeffs);
+        let glv_bases: Vec<(ark_bn254::G1Affine, ark_bn254::G1Affine)> = g16_bases.iter().map(|b| 
+            (*b, ark_bn254::G1Affine::new_unchecked(b.x * endo_coeffs, b.y))
+        ).collect();       
+        
+        let mut scalars: Vec<ark_bn254::Fr> = vec![];
+        let mut bases: Vec<ark_bn254::G1Affine> = vec![];
+
+        glv_scalars.iter().enumerate().for_each(|(idx, stup)| {
+            let (s0, s1) = stup;
+            scalars.push(s0.1);
+            scalars.push(s1.1);
+            let (mut g0, mut g1) = glv_bases[idx];
+            if s0.0 == 2 {
+                g0 = g0.neg();
+            } 
+            if s1.0 == 2 {
+                g1 = g1.neg();
+            }
+            bases.push(g0);
+            bases.push(g1);
+        });
+
+        let mut expected: ark_bn254::G1Affine = ark_bn254::G1Affine::identity();
+        let mut chunks: Vec<Vec<u32>> = vec![];
+
+
+        let num_bits = (bn254::fr::Fr::N_BITS + 1) / 2;
+        for i in 0..scalars.len() {
+            let scalar = scalars[i];
+
+            let tmp = scalar
+                .into_bigint()
+                .to_bits_be()[(256-num_bits as usize)..256]
+                .iter()
+                .map(|b| if *b { 1_u8 } else { 0_u8 })
+                .collect::<Vec<_>>()
+                .chunks(window as usize)
+                .map(|slice| slice.into_iter().fold(0, |acc, &b| (acc << 1) + b as u32))
+                .collect::<Vec<u32>>();
+        
+            chunks.push(tmp);
+
+            let cur: ark_bn254::G1Affine = (bases[i] * scalars[i]).into_affine();
+            expected = (expected + cur).into();
+        }
+        
+        let mut accs: Vec<ark_bn254::G1Affine> = vec![];
+        let mut acc = ark_bn254::G1Affine::identity();
+        for itr in 0..((num_bits + window -1)/window) {
+            if !acc.is_zero() {
+                let depth = std::cmp::min(num_bits - window * itr as u32, window);
+                for _ in 0..depth {
+                    acc = (acc + acc).into_affine();
+                }
+            }
+            for j in 0..bases.len() {
+                let base_i = (bases[j]  * ark_bn254::Fr::from(chunks[j][itr as usize])).into_affine();
+                acc = (acc + base_i).into_affine();
+            }
+            accs.push(acc);
+        }
+        assert_eq!(acc, expected);
+        accs
+    }
+
+    let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
+    for i in 0..msm_hints.len() {
+        let seg = Segment { 
+            id: segment_id as u32 as u32, 
+            output_type: false, 
+            inputs: input_segment_info.clone(), 
+            output: msm_exp_out[i], 
+            hint_script: msm_hints[i].clone(), 
+            scr_type: ScriptType::MSM((i, pub_vky.clone())) };
+
+    }
+
+}
 
 pub(crate) fn wrap_hint_msm(
     skip: bool,
@@ -110,16 +252,51 @@ pub(crate) fn wrap_hint_hash_p(
     input_segment_info.push((in_ry.id, in_ry.output_type));
     input_segment_info.push((in_rx.id, in_rx.output_type));
 
+    let t = in_t.output.try_into().unwrap();
+    let ry = in_ry.output.try_into().unwrap();
+    let rx = in_rx.output.try_into().unwrap();
     let (mut h, mut hint_script) = ([0u8;64], script!());
     if !skip {
         (h, hint_script) = hint_hash_p(
-            in_t.output.try_into().unwrap(),
-            in_ry.output.try_into().unwrap(),
-            in_rx.output.try_into().unwrap(),
+            t,
+            ry,
+            rx,
             pub_vky0.clone(),
         );
     }
     let output_type = h.ret_type();
+    let hash_c_scr = tap_hash_p(pub_vky0);
+
+    let thash = extern_hash_fps(vec![t.x, t.y], false);
+    let bitcom_scr = script!{
+        for i in extern_nibbles_to_limbs(h) {
+            {i}
+        }
+        {Fq::toaltstack()}
+        for i in extern_nibbles_to_limbs(thash) {
+            {i}
+        }
+        {Fq::toaltstack()}
+        {fq_push_not_montgomery(ry)}
+        {Fq::toaltstack()}   
+        {fq_push_not_montgomery(rx)}
+        {Fq::toaltstack()}   
+    };
+
+    let script = script! {
+        {hint_script.clone()}
+        {bitcom_scr}
+        {hash_c_scr}
+    };
+
+    let res = execute_script(script);
+    for i in 0..res.final_stack.len() {
+        println!("{i:} {:?}", res.final_stack.get(i));
+    }
+    assert!(!res.success);
+    assert!(res.final_stack.len() == 1);
+
+
     Segment { id: segment_id as u32, output_type, inputs: input_segment_info, output: Element::HashBytes(h), hint_script, scr_type: ScriptType::PreMillerHashP(pub_vky0) }
 }
 
