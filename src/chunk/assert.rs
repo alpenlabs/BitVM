@@ -178,7 +178,7 @@ pub(crate) fn groth16(
     let mut msm = wrap_hint_msm(is_compile_mode, all_output_hints.len(), None, pub_scalars.clone(), 0, vky.clone());
     push_compare_or_return!(msm);
 
-    for i in 1..32 {
+    for i in 1..19 {
         msm = wrap_hint_msm(is_compile_mode, all_output_hints.len(), Some(msm), pub_scalars.clone(), i, vky.clone());
         push_compare_or_return!(msm);
     }
@@ -738,74 +738,5 @@ mod test {
     }
     
     
-    pub fn try_check_msm(f: ark_bn254::Fr, pub_vky: Vec<ark_bn254::G1Affine>) {
-        let msm_chain_index = 1;
-        // segments
-        let id_scalar = 0;
-        let id_msm: u32 = 43;
-        let id_msm0: u32 = 42;
-        //let f = ark_bn254::Fq::ONE + ark_bn254::Fq::ONE;
-        let scalar = Segment {
-            id: id_scalar,
-            output_type: true,
-            inputs: vec![],
-            output: Element::ScalarElem(f),
-            hint_script: script!(),
-            scr_type: ScriptType::NonDeterministic
-        };
-        let msm0 = wrap_hint_msm(false, id_msm0 as usize, None, vec![scalar.clone()], msm_chain_index-1, pub_vky.clone());
-        let msm = wrap_hint_msm(false, id_msm as usize, Some(msm0.clone()), vec![scalar.clone()], msm_chain_index, pub_vky.clone());
-    
-        // assertioons
-        let n_scalar = extern_fr_to_nibbles(scalar.output.try_into().unwrap());
-        let a_scalar = nib_to_byte_array(&n_scalar);
-        let n_msm: ElemG1Point = msm.output.try_into().unwrap();
-        let n_msm = extern_hash_fps(vec![n_msm.x, n_msm.y], true);
-        let a_msm: [u8; 32] = nib_to_byte_array(&n_msm).try_into().unwrap();
-        let a_msm: [u8; 20] = a_msm[12..32].try_into().unwrap();
-    
-        let n_msm0: ElemG1Point = msm0.output.try_into().unwrap();
-        let n_msm0 = extern_hash_fps(vec![n_msm0.x, n_msm0.y], true);
-        let a_msm0: [u8; 32] = nib_to_byte_array(&n_msm0).try_into().unwrap();
-        let a_msm0: [u8; 20] = a_msm0[12..32].try_into().unwrap();
-    
-        // signature
-        const MOCK_SECRET: &str = "a138982ce17ac813d505a5b40b665d404e9528e7";
-        let pub_scalar = wots256::generate_public_key(&format!("{MOCK_SECRET}{:04x}", id_scalar));
-        let pub_msm0 = wots160::generate_public_key(&format!("{MOCK_SECRET}{:04x}", id_msm0));
-        let pub_msm = wots160::generate_public_key(&format!("{MOCK_SECRET}{:04x}", id_msm));
-        let mut pubk: HashMap<u32, WOTSPubKey> = HashMap::new();
-        pubk.insert(id_scalar, WOTSPubKey::P256(pub_scalar));
-        pubk.insert(id_msm0, WOTSPubKey::P160(pub_msm0));
-        pubk.insert(id_msm, WOTSPubKey::P160(pub_msm));
-    
-        let sa_scalar = wots256::get_signature(&format!("{MOCK_SECRET}{:04x}", id_scalar), &a_scalar);
-        let sa_msm0 = wots160::get_signature(&format!("{MOCK_SECRET}{:04x}", id_msm0), &a_msm0);
-        let sa_msm = wots160::get_signature(&format!("{MOCK_SECRET}{:04x}", id_msm), &a_msm);
-    
-    
-        // execution
-        let mut sigcache: HashMap<u32, SigData> = HashMap::new();
-        sigcache.insert(id_scalar, SigData::Sig256(sa_scalar));
-        sigcache.insert(id_msm0, SigData::Sig160(sa_msm0));
-        sigcache.insert(id_msm, SigData::Sig160(sa_msm));
-    
-    
-        let locking_bitcom = script!{}; // bitcom_msm(&pubk, (id_msm, msm.output_type), vec![(id_scalar, scalar.output_type), (id_msm0, msm0.output_type)]);
-        let (unlocking_bitcom_script, _) = tup_to_scr(&mut Sig { cache: sigcache }, vec![((id_scalar, scalar.output_type), n_scalar), ((id_msm0, msm0.output_type), n_msm0), ((id_msm, msm.output_type), n_msm)]);
-        let aux_hints = msm.hint_script;
-        let ops_scripts = tap_msm(8, msm_chain_index, pub_vky);
-    
-        let exec_result = execute_script(script!{
-            {aux_hints.clone()}
-            {unlocking_bitcom_script.clone()}
-            {locking_bitcom.clone()}
-            {ops_scripts.clone()}
-        });
-        for i in 0..exec_result.final_stack.len() {
-            println!("{i:} {:?}", exec_result.final_stack.get(i));
-        }
-    }
-    
-    
+
 }

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use ark_ec::bn::BnConfig;
 use bitcoin_script::script;
 
-use crate::{chunk::hint_models::{ElemG1Point}, treepp};
+use crate::{bn254::curves::G1Affine, chunk::hint_models::ElemG1Point, treepp};
 use crate::chunk::hint_models::ElemTraitExt;
 
 use super::{assert::{groth16, Pubs}, hint_models::{ElemFp12Acc, ElemFr, ElemG2PointAcc, EvalIns}, primitves::gen_bitcom, segment::{ScriptType, Segment}, taps_msm::{tap_hash_p, tap_msm}, taps_mul::*, taps_point_eval::*, taps_point_ops::*, taps_premiller::*, wots::WOTSPubKey};
@@ -12,7 +12,7 @@ use super::{assert::{groth16, Pubs}, hint_models::{ElemFp12Acc, ElemFr, ElemG2Po
 pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 pub const NUM_PUBS: usize = 1;
 pub const NUM_U256: usize = 40;
-pub const NUM_U160: usize = 574;
+pub const NUM_U160: usize = 574-32+19;
 
 
 pub(crate) struct Vkey {
@@ -94,7 +94,7 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
     let mut tap_frob_fp12 = cached(tap_frob_fp12);
     let mut tap_point_add_with_frob = cached(tap_point_add_with_frob);
     let mut tap_hash_p = cached(tap_hash_p);
-    let mut tap_msm = cached(|(a, b, c)| tap_msm(a, b, c ));
+    // let mut tap_msm = cached(|(a, b, c)| tap_msm(a, b, c ));
     let mut tap_double_eval_mul_for_fixed_Qs = cached(|(a, b)| tap_double_eval_mul_for_fixed_Qs(a, b));
     let mut tap_add_eval_mul_for_fixed_Qs = cached(|(a, b, c, d, e)| tap_add_eval_mul_for_fixed_Qs(a, b, c, d, e));
     let mut tap_add_eval_mul_for_fixed_Qs_with_frob = cached(|(a, b, c, d, e)| tap_add_eval_mul_for_fixed_Qs_with_frob(a, b, c, d, e));
@@ -108,7 +108,7 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
     let tap_dense_dense_mul0 = tap_dense_dense_mul0();
     let tap_dense_dense_mul1 = tap_dense_dense_mul1();
 
-    let msm_window = 8;
+    let msm_window = 7;
     let mut op_scripts: Vec<treepp::Script> = vec![];
     for seg in segments {
         let scr_type = seg.scr_type.clone();
@@ -167,7 +167,9 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
             },
 
             ScriptType::MSM(inp) => {
-                op_scripts.push(tap_msm((msm_window, inp.0, inp.1 )));
+                let g16_scalars = (0..inp.1.len()).into_iter().map(|_| ElemFr::mock()).collect();
+                let msm_scr = tap_msm(msm_window, inp.0, g16_scalars, inp.1);
+                op_scripts.push(msm_scr);
             },
             ScriptType::PostMillerFrobFp12(power) => {
                 op_scripts.push(tap_frob_fp12(power as usize));

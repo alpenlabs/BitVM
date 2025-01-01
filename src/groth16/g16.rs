@@ -5,9 +5,9 @@ use crate::{chunk, treepp::*};
 
 pub const N_VERIFIER_PUBLIC_INPUTS: usize = 1;
 pub const N_VERIFIER_FQS: usize = 40;
-pub const N_VERIFIER_HASHES: usize = 574;
+pub const N_VERIFIER_HASHES: usize = 574-32+19;
 
-pub const N_TAPLEAVES: usize = 580;
+pub const N_TAPLEAVES: usize = 580-32+19;
 
 pub type Proof = ark_groth16::Proof<Bn254>;
 pub type VerifyingKey = ark_groth16::VerifyingKey<Bn254>;
