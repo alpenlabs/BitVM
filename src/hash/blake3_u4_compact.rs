@@ -10,8 +10,46 @@ use crate::bigint::U254;
 use crate::hash::blake3_u4::{compress, get_flags_for_block, TablesVars};
 
 // This implementation assumes you have the input is in compact form on the stack.
-// The message must be packed into multiple of (2 * 9) limbs such that it expands a multiple of 128 nibbles 
+// The message must be packed into multiple of (2 * 9) limbs such that it expands a multiple of 128 nibbles
 // The padding added by user is removed and 0 is added as padding to prevent maliciously or mistaken wrong padding
+
+/// Compact BLAKE3 hash implementation
+///
+/// This function computes a BLAKE3 hash using a compact form of the input message packed into limbs of 29 bits each,
+/// only expanding each msg block into its nibble form when needed to achieve higher stack efficieny and support for
+/// larger message size
+///
+/// ## Assumptions:
+/// - The stack contains only message. Anything other has to be moved to alt stack.
+/// - The input message is in compact form (stored as limbs of 29 bits on the stack).
+/// - The input message must unpack to a multiple of 128 nibbles.
+/// - The start of the message is at the top of the stack
+/// - The user must ensure padding for the message to align to multiple of (2 * 9) limbs,
+///   resulting in a size that expands to a multiple of 128 nibbles. Any incorrectly added
+///   padding will be corrected to comply with padding requirement of blake3.
+///
+/// ## Behavior:
+/// 1. Defines stack variables for compact message blocks if `define_var` is enabled.
+/// 2. Moves the compact message to an alternate stack for processing.
+/// 3. Initializes hash computation tables.
+/// 4. Processes each message block:
+///     - Unpacks compact message forms.
+///     - Corrects any user-provided padding if it is the last block.
+///     - Computes the hash for the block using `compress` while maintaining intermediate states.
+/// 5. Drops intermediate states and finalizes the hash result on the stack.
+///
+/// ## Stack Effects:
+/// - Temporarily uses the alternate stack for intermediate results and hash computation tables.
+/// - Final result is left on the main stack as a BLAKE3 hash value.
+///
+/// ## Panics:
+/// - If `msg_len` is 0 or greater than 1024 bytes, the function panics with an assertion error.
+/// - If the input is not a multiple of 18 limbs, or doesnot unpack to a multiple of 128 nibbles.
+/// - If the stack contains elements other than the message.
+///
+/// ## Note:
+/// This function does not currently support the hash of an empty string. Handling for such cases
+/// can be added as a hardcoded return value.
 
 pub fn blake3_u4_compact(
     stack: &mut StackTracker,
@@ -21,9 +59,11 @@ pub fn blake3_u4_compact(
 ) {
     // We require message take atmost a chunk. i.e, 1024 bytes.
     // Currently hash of empty string is not supported. I guess we could just hardcode and return the value
+    assert!(msg_len > 0, "msg length must be greater than 0");
+
     assert!(
-        msg_len > 0 && msg_len <= 1024,
-        "msg length must be greater than 0 and less than or equal to 1024 bytes"
+        msg_len <= 1024,
+        "msg length must be less than or equal to 1024 bytes"
     );
 
     //number of msg blocks
@@ -83,7 +123,6 @@ pub fn blake3_u4_compact(
 
         // handle padding if it is the last block
         if i == (num_blocks - 1) && msg_len != 64 {
-
             // due to LE representation, msg portion can be on top of padding.
             let j = msg_len % 4;
             let pad_bytes = 64 + j - msg_len - 4;
@@ -173,18 +212,26 @@ mod tests {
     use super::*;
     use crate::{execute_script, u4::u4_std::u4_hex_to_nibbles};
 
+    fn add_padding(input: String) -> String {
+        let len_bytes = input.len() / 2;
+        let mut res = String::from(input);
+
+        if len_bytes % 64 != 0 {
+            res.push_str(&"0".repeat((64 - (len_bytes % 64)) * 2)); //zero should be added as padding but this is done intentionally to test if blake3_u4_compact can handle wrong padding
+        }
+        res
+    }
+
+    fn gen_random_hex_strs(len_bytes: u32) -> String {
+        let mut rng = rand::thread_rng();
+        (0..(len_bytes * 2))
+            .map(|_| format!("{:x}", rng.gen_range(0..16))) // Generate a random hex digit
+            .collect()
+    }
+
     // verfires that the hash of the input hex matches with the official implementation.
     // can also be verified using https://emn178.github.io/online-tools/blake3/?input=<input_hex_str>
     fn test_blake3_compact_giveninputhex(input_hex_str: String, msg_len: u32) -> String {
-        // message length in bytes
-        let input_len: u32 = (input_hex_str.len() / 2) as u32;
-
-        //make sure that the message length is a multiple of 64 bytes
-        assert!(
-            input_len % 64 == 0,
-            "Message length must be a multiple of 64 bytes"
-        );
-
         let mut stack = StackTracker::new();
 
         // convert the input into byte array (LE notation)
@@ -324,16 +371,9 @@ mod tests {
     }
 
     #[test]
-    // test on random inputs of varying lengths
-    fn test_blake3_compact_randominputs() {
-        //gen random hex string (length in bytes)
-        fn gen_random_hex_strs(len_bytes: u32) -> String {
-            let mut rng = rand::thread_rng();
-            (0..(len_bytes * 2))
-                .map(|_| format!("{:x}", rng.gen_range(0..16))) // Generate a random hex digit
-                .collect()
-        }
+    // test on random inputs of length that are multiple of 64 bytes
 
+    fn test_blake3_compact_randominputs_multipleof64bytes() {
         test_blake3_compact_giveninputhex(gen_random_hex_strs(64), 64 * 1);
         test_blake3_compact_giveninputhex(gen_random_hex_strs(128), 64 * 2);
         test_blake3_compact_giveninputhex(gen_random_hex_strs(192), 64 * 3);
@@ -349,8 +389,20 @@ mod tests {
         test_blake3_compact_giveninputhex(gen_random_hex_strs(64 * 13), 64 * 13);
         test_blake3_compact_giveninputhex(gen_random_hex_strs(64 * 14), 64 * 14);
         test_blake3_compact_giveninputhex(gen_random_hex_strs(64 * 15), 64 * 15);
-        test_blake3_compact_giveninputhex(gen_random_hex_strs(64 * 16), 64 * 16);
         //max size for a chunk 1024 bytes
+        test_blake3_compact_giveninputhex(gen_random_hex_strs(64 * 16), 64 * 16);
+    }
+
+    #[test]
+    // test on random inputs of random lengths
+    fn test_blake3_compact_randominputs() {
+        test_blake3_compact_giveninputhex(add_padding(gen_random_hex_strs(56)), 56);
+        test_blake3_compact_giveninputhex(add_padding(gen_random_hex_strs(13)), 13);
+        test_blake3_compact_giveninputhex(add_padding(gen_random_hex_strs(20)), 20);
+        test_blake3_compact_giveninputhex(add_padding(gen_random_hex_strs(780)), 780);
+        test_blake3_compact_giveninputhex(add_padding(gen_random_hex_strs(1021)), 1021);
+        test_blake3_compact_giveninputhex(add_padding(gen_random_hex_strs(51)), 51);
+        test_blake3_compact_giveninputhex(add_padding(gen_random_hex_strs(999)), 999);
     }
 
     #[test]
@@ -395,6 +447,7 @@ mod tests {
             bytes.iter().map(|byte| format!("{:02x}", byte)).collect()
         }
 
+        // The official test vectors for blake3 given at https://github.com/BLAKE3-team/BLAKE3/blob/master/test_vectors/test_vectors.json
         let path = "src/hash/blake3_official_test_vectors.json";
 
         let test_vectors = read_test_vectors(path).unwrap();
@@ -410,5 +463,17 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "msg length must be greater than 0")]
+    fn test_blake3_compact_zerolength_input() {
+        test_blake3_compact_giveninputhex(String::from(""), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "msg length must be less than or equal to 1024 bytes")]
+    fn test_blake3_compact_large_length() {
+        test_blake3_compact_giveninputhex(String::from("0".repeat(1025 * 2)), 1025);
     }
 }
