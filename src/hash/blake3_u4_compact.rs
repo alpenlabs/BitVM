@@ -10,18 +10,18 @@ use crate::bigint::U254;
 use crate::hash::blake3_u4::{compress, get_flags_for_block, TablesVars};
 
 // This implementation assumes you have the input is in compact form on the stack.
-// The message must be packed into multiple of (2 * 9) limbs such that it expands a multiple of 128 nibbles
+// The message must be packed into U254 (which uses 9 limbs 29 bits each) such that it expands a multiple of 128 nibbles
 // The padding added by user is removed and 0 is added as padding to prevent maliciously or mistaken wrong padding
 
 /// Compact BLAKE3 hash implementation
 ///
-/// This function computes a BLAKE3 hash using a compact form of the input message packed into limbs of 29 bits each,
+/// This function computes a BLAKE3 hash where the input is given as U254 such that each msgblock of 64 byte is comprised of 2 U254
 /// only expanding each msg block into its nibble form when needed to achieve higher stack efficieny and support for
 /// larger message size
 ///
 /// ## Assumptions:
 /// - The stack contains only message. Anything other has to be moved to alt stack.
-/// - The input message is in compact form (stored as limbs of 29 bits on the stack).
+/// - The input message is in compact form as U254 where each message block is comprised of two U254 totalling 18 limbs of 19 bits each. 
 /// - The input message must unpack to a multiple of 128 nibbles.
 /// - The start of the message is at the top of the stack
 /// - The user must ensure padding for the message to align to multiple of (2 * 9) limbs,
