@@ -7,8 +7,6 @@ use crate::bn254::fr::Fr;
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use ark_ec::{bn::BnConfig, AffineRepr};
 use ark_ff::Field;
-use bitcoin::opcodes::all::OP_DUP;
-use bitcoin::ScriptBuf;
 use ark_ff::{AdditiveGroup, BigInt};
 use num_bigint::BigUint;
 

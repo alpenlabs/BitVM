@@ -1,7 +1,6 @@
 
-use std::{ops::Neg, str::FromStr};
 
-use crate::{bn254::{self, curves::G1Affine, fp254impl::Fp254Impl, fq::Fq, fr::Fr, utils::{fq_push_not_montgomery, fr_push_not_montgomery}}, chunk::taps_msm::tap_hash_p, execute_script, execute_script_without_stack_limit, treepp};
+use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::taps_msm::tap_hash_p, execute_script, treepp};
 
 use super::{hint_models::Element, primitves::extern_nibbles_to_limbs, taps_msm::hint_msm, taps_point_eval::*, taps_premiller::*};
 

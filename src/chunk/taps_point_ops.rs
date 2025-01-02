@@ -6,11 +6,9 @@ use crate::{
     treepp::*,
 };
 use ark_bn254::{ G2Affine};
-use ark_ff::{AdditiveGroup, Field, Zero};
-use num_bigint::BigUint;
+use ark_ff::{AdditiveGroup, Field};
 use num_traits::One;
 use std::ops::Neg;
-use std::str::FromStr;
 
 use super::primitves::{extern_hash_fps};
 use super::hint_models::*;

@@ -8,10 +8,8 @@ use crate::{
 use ark_bn254::{G2Affine};
 use ark_ec::CurveGroup;
 use ark_ff::{AdditiveGroup, Field, Zero};
-use num_bigint::BigUint;
 use num_traits::One;
 use std::ops::Neg;
-use std::str::FromStr;
 
 use super::primitves::{extern_hash_fps, hash_fp12_192};
 use super::hint_models::*;

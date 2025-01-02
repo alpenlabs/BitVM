@@ -5,7 +5,7 @@ use crate::bn254::utils::{
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::primitves::{
     extern_hash_nibbles,  extern_nibbles_to_limbs, hash_fp12,
-    hash_fp12_with_hints, hash_fp2, hash_fp4, hash_fp6, 
+    hash_fp12_with_hints, hash_fp6, 
 };
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},

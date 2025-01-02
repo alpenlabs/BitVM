@@ -1,9 +1,7 @@
-use std::ops::MulAssign;
 
 use crate::bn254::fp254impl::Fp254Impl;
 use crate::bn254::fq::Fq;
 use crate::bn254::fq2::Fq2;
-use crate::bn254::utils::fq_push_not_montgomery;
 use crate::treepp::{script, Script};
 use ark_ff::{Field, Fp6Config, MontFp};
 use num_bigint::BigUint;

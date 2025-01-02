@@ -1,24 +1,22 @@
-use std::ops::{AddAssign, Div, Neg, Rem};
+use std::ops::Neg;
 use std::str::FromStr;
 
-use crate::bn254::curves::G1Affine;
-use crate::bn254::{self, curves};
+use crate::bn254::{self};
 use crate::bn254::fr::Fr;
-use crate::bn254::utils::{fq_push_not_montgomery, fr_push_not_montgomery};
+use crate::bn254::utils::fq_push_not_montgomery;
 use crate::chunk::primitves::extern_hash_fps;
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
 };
 use ark_ec::{AffineRepr, CurveGroup};
-use ark_ff::{AdditiveGroup, BigInteger, Field, MontFp, PrimeField};
-use num_bigint::{BigInt, BigUint, Sign};
-use num_traits::{One, Signed};
+use ark_ff::{AdditiveGroup, BigInteger, PrimeField};
+use num_bigint::BigUint;
+use num_traits::One;
 
-use super::hint_models::{ElemFq, ElemFr, ElemG1Point};
+use super::hint_models::{ElemFq, ElemG1Point};
 use super::primitves::{hash_fp2, HashBytes};
 use crate::bn254::fq2::Fq2;
-use crate::bn254::utils::Hint;
 
 pub(crate) fn tap_msm(window: usize, msm_tap_index: usize, ks: Vec<ark_bn254::Fr>, qs: Vec<ark_bn254::G1Affine>) -> Script {
     let mut g1acc = if msm_tap_index == 0 {
@@ -339,7 +337,7 @@ mod test {
     };
     use super::*;
     use ark_bn254::{G1Affine};
-    use ark_ff::{MontFp, UniformRand};
+    use ark_ff::{Field, MontFp, UniformRand};
     use bitcoin::opcodes::{all::{OP_1SUB, OP_DEPTH, OP_DROP, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_ROLL, OP_TOALTSTACK}, OP_TRUE};
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
