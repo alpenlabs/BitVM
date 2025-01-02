@@ -52,102 +52,9 @@ pub enum ScriptType {
 
 
 
-use ark_ec::{AffineRepr, CurveGroup};
-use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
-use bitcoin::opcodes::OP_TRUE;
 use bitcoin_script::script;
-use num_bigint::BigUint;
 
 use super::{hint_models::*, taps_msm::{hint_hash_p}, primitves::extern_hash_fps,  taps_point_ops::*, taps_mul::*};
-
-
-pub(crate) fn wrap_hinted_msm(
-    _skip: bool,
-    segment_id: usize,
-    scalars: Vec<Segment>,
-    pub_vky: Vec<ark_bn254::G1Affine>,
-) -> Vec<Segment> {
-
-    let msm_scalars: Vec<ark_bn254::Fr> = scalars
-    .iter()
-    .map(|f| {
-        f.output.try_into().unwrap()
-    })
-    .collect();
-    assert!(msm_scalars.len() <= 2);
-    let mut window = 7;
-    if msm_scalars.len() == 2 {
-        window = 5;
-    }
-
-    let aux_hints_scalar_decs = bn254::curves::G1Affine::aux_hints_for_scalar_decomposition(msm_scalars.clone());
-
-    let mut g1acc: ark_bn254::G1Affine = ark_bn254::G1Affine::zero();
-    let mut i = 0;
-    let num_bits = (Fr::N_BITS + 1)/2;
-    let mut segments: Vec<Segment> = vec![];
-    while i < num_bits {
-        let ith_step = i / window;
-        let cur_segment_id = segment_id as u32 + ith_step;
-        let init_g1acc = g1acc.clone();
-        let (loop_script, loop_hints)= bn254::curves::G1Affine::hinted_scalar_mul_by_constant_g1_ith_step(&mut g1acc, msm_scalars.clone(), pub_vky.clone(), window, ith_step);
-        let hint_script = script!{
-            for h in &loop_hints {
-                {h.push()}
-            }
-            for h in &aux_hints_scalar_decs {
-                {h.push()}
-            }
-        };
-
-        let mock_script = script!{
-            for h in &loop_hints {
-                {h.push()}
-            }
-            for h in &aux_hints_scalar_decs {
-                {h.push()}
-            }
-            if ith_step > 0 {
-                {fq_push_not_montgomery(init_g1acc.x)}
-                {fq_push_not_montgomery(init_g1acc.y)}
-            }
-            for scalar in msm_scalars.iter() {
-                { fr_push_not_montgomery(*scalar) } 
-            }
-            {loop_script}
-            {fq_push_not_montgomery(g1acc.x)}
-            {fq_push_not_montgomery(g1acc.y)}
-            {G1Affine::equalverify()}
-            OP_TRUE
-        };
-        let exec_result = execute_script_without_stack_limit(mock_script);
-        assert!(exec_result.success);
-
-        let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
-        if ith_step != 0 {
-            input_segment_info.push((cur_segment_id -1, false));
-        }
-        scalars
-        .iter()
-        .for_each(|f| {
-            input_segment_info.push((f.id, f.output_type));
-        });
-
-        let seg = Segment { 
-            id: cur_segment_id, 
-            output_type: false, 
-            inputs: input_segment_info, 
-            output: Element::MSMG1(g1acc), 
-            hint_script, 
-            scr_type: ScriptType::MSM((ith_step as usize, pub_vky.clone())) };
-        segments.push(seg);
-
-        i += window;
-    }
-
-    segments
-
-}
 
 pub(crate) fn wrap_hint_msm(
     skip: bool,
@@ -1110,6 +1017,7 @@ mod test {
     use crate::chunk::primitves::fp12_to_vec;
 
     use super::*;
+    use ark_ff::{Field};
 
 
     #[test]
