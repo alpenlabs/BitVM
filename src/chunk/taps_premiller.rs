@@ -140,7 +140,7 @@ pub(crate) fn hint_hash_c2(
 }
 
 // precompute P
-pub(crate) fn tap_precompute_Px() -> Script {
+pub(crate) fn tap_precompute_px() -> Script {
     let (eval_x, _) = hinted_x_from_eval_point(
         G1Affine::new_unchecked(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE),
         ark_bn254::Fq::ONE,
@@ -190,7 +190,7 @@ pub(crate) fn tap_precompute_Px() -> Script {
 }
 
 // precompute P
-pub(crate) fn tap_precompute_Py() -> Script {
+pub(crate) fn tap_precompute_py() -> Script {
     let (y_eval_scr, _) = hinted_y_from_eval_point(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE);
 
     let ops_scr = script! {
@@ -287,7 +287,7 @@ pub(crate) fn hints_precompute_Py(
 }
 
 // hash T4
-pub(crate) fn tap_initT4() -> Script {
+pub(crate) fn tap_init_t4() -> Script {
     let (on_curve_scr, _) =
         bn254::curves::G2Affine::hinted_is_on_curve(ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE);
 

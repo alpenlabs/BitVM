@@ -506,7 +506,7 @@ pub(crate) fn wrap_hint_sparse_dense_mul(
     }
 }
 
-pub(crate) fn wrap_hint_double_eval_mul_for_fixed_Qs(
+pub(crate) fn wrap_hint_double_eval_mul_for_fixed_qs(
     skip: bool,
     segment_id: usize,
     in_p3y: &Segment,
@@ -531,7 +531,7 @@ pub(crate) fn wrap_hint_double_eval_mul_for_fixed_Qs(
 
     let (mut leval, mut hint_script) = (ElemSparseEval::mock(), script!());
     if !skip {
-        (leval, hint_script) = hint_double_eval_mul_for_fixed_Qs(
+        (leval, hint_script) = hint_double_eval_mul_for_fixed_qs(
             // sig,(segment_id as u32, output_type),
             // input_segment_info.clone(),
             p3y,
@@ -706,7 +706,7 @@ pub(crate) fn wrap_hints_dense_le_mul1(
 
 
 
-pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs(
+pub(crate) fn wrap_hint_add_eval_mul_for_fixed_qs(
     skip: bool,
     segment_id: usize,
     in_p3y: &Segment,
@@ -734,7 +734,7 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs(
 
     let (mut leval, mut hint_script) = (ElemSparseEval::mock(), script!());
     if !skip {
-        (leval, hint_script) = hint_add_eval_mul_for_fixed_Qs(
+        (leval, hint_script) = hint_add_eval_mul_for_fixed_qs(
             p3y,
             p3x,
             p2y,
@@ -849,7 +849,7 @@ pub(crate) fn wrap_hint_point_add_with_frob(
     }
 }
 
-pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(
+pub(crate) fn wrap_hint_add_eval_mul_for_fixed_qs_with_frob(
     skip: bool,
     segment_id: usize,
     in_p3y: &Segment,
@@ -877,7 +877,7 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(
 
     let (mut leval, mut hint_script) = (ElemSparseEval::mock(), script!());
     if !skip {
-        (leval, hint_script) = hint_add_eval_mul_for_fixed_Qs_with_frob(
+        (leval, hint_script) = hint_add_eval_mul_for_fixed_qs_with_frob(
             p3y,
             p3x,
             p2y,

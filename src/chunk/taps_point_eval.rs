@@ -18,7 +18,7 @@ use super::hint_models::*;
 
 // DOUBLE EVAL
 
-pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
+pub(crate) fn hint_double_eval_mul_for_fixed_qs(
     hint_in_p3y: ElemFq,
     hint_in_p3x: ElemFq,
     hint_in_p2y: ElemFq,
@@ -111,7 +111,7 @@ pub(crate) fn hint_double_eval_mul_for_fixed_Qs(
     (hint_out, simulate_stack_input)
 }
 
-pub(crate) fn tap_double_eval_mul_for_fixed_Qs(
+pub(crate) fn tap_double_eval_mul_for_fixed_qs(
     t2: G2Affine,
     t3: G2Affine,
 ) -> (Script, G2Affine, G2Affine) {
@@ -214,7 +214,7 @@ pub(crate) fn tap_double_eval_mul_for_fixed_Qs(
 
 // ADD EVAL
 
-pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
+pub(crate) fn hint_add_eval_mul_for_fixed_qs(
     hint_in_p3y: ElemFq,
     hint_in_p3x: ElemFq,
     hint_in_p2y: ElemFq,
@@ -311,7 +311,7 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs(
     (hint_out, simulate_stack_input)
 }
 
-pub(crate) fn tap_add_eval_mul_for_fixed_Qs(
+pub(crate) fn tap_add_eval_mul_for_fixed_qs(
     t2: G2Affine,
     t3: G2Affine,
     q2: G2Affine,
@@ -427,7 +427,7 @@ pub(crate) fn get_hint_for_add_with_frob(q: ark_bn254::G2Affine, t: ark_bn254::G
 
 }
 
-pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
+pub(crate) fn hint_add_eval_mul_for_fixed_qs_with_frob(
     hint_in_p3y: ElemFq,
     hint_in_p3x: ElemFq,
     hint_in_p2y: ElemFq,
@@ -533,7 +533,7 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
     (hint_out, simulate_stack_input)
 }
 
-pub(crate) fn tap_add_eval_mul_for_fixed_Qs_with_frob(
+pub(crate) fn tap_add_eval_mul_for_fixed_qs_with_frob(
     t2: G2Affine,
     t3: G2Affine,
     qq2: G2Affine,

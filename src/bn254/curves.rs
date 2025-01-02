@@ -1,6 +1,5 @@
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, BigInteger, Field, MontFp, PrimeField};
-use bitcoin::opcodes::all::OP_RETURN;
 use num_bigint::{BigInt, BigUint, Sign};
 use num_traits::{One, Signed};
 
@@ -2527,9 +2526,8 @@ mod test {
     use crate::bn254::fp254impl::Fp254Impl;
     use ark_bn254::Fr;
     use ark_ec::{AffineRepr, CurveGroup};
-    use ark_ff::{AdditiveGroup, BigInteger, Field, MontFp, PrimeField};
+    use ark_ff::{ BigInteger, Field, MontFp, PrimeField};
     use ark_std::{end_timer, start_timer, test_rng, UniformRand};
-    use bitcoin::opcodes::OP_TRUE;
     use core::ops::{Add, Mul};
     use std::str::FromStr;
     use num_bigint::BigUint;

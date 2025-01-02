@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use ark_ec::bn::BnConfig;
 use bitcoin_script::script;
 
-use crate::{bn254::curves::G1Affine, chunk::hint_models::ElemG1Point, treepp};
+use crate::{chunk::hint_models::ElemG1Point, treepp};
 use crate::chunk::hint_models::ElemTraitExt;
 
 use super::{assert::{groth16, Pubs}, hint_models::{ElemFp12Acc, ElemFr, ElemG2PointAcc, EvalIns}, primitves::gen_bitcom, segment::{ScriptType, Segment}, taps_msm::{tap_hash_p, tap_msm}, taps_mul::*, taps_point_eval::*, taps_point_ops::*, taps_premiller::*, wots::WOTSPubKey};
@@ -95,12 +95,12 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
     let mut tap_point_add_with_frob = cached(tap_point_add_with_frob);
     let mut tap_hash_p = cached(tap_hash_p);
     // let mut tap_msm = cached(|(a, b, c)| tap_msm(a, b, c ));
-    let mut tap_double_eval_mul_for_fixed_Qs = cached(|(a, b)| tap_double_eval_mul_for_fixed_Qs(a, b));
-    let mut tap_add_eval_mul_for_fixed_Qs = cached(|(a, b, c, d, e)| tap_add_eval_mul_for_fixed_Qs(a, b, c, d, e));
-    let mut tap_add_eval_mul_for_fixed_Qs_with_frob = cached(|(a, b, c, d, e)| tap_add_eval_mul_for_fixed_Qs_with_frob(a, b, c, d, e));
-    let tap_initT4 = tap_initT4();
-    let tap_precompute_Py = tap_precompute_Py();
-    let tap_precompute_Px = tap_precompute_Px();
+    let mut tap_double_eval_mul_for_fixed_qs = cached(|(a, b)| tap_double_eval_mul_for_fixed_qs(a, b));
+    let mut tap_add_eval_mul_for_fixed_qs = cached(|(a, b, c, d, e)| tap_add_eval_mul_for_fixed_qs(a, b, c, d, e));
+    let mut tap_add_eval_mul_for_fixed_qs_with_frob = cached(|(a, b, c, d, e)| tap_add_eval_mul_for_fixed_qs_with_frob(a, b, c, d, e));
+    let tap_initT4 = tap_init_t4();
+    let tap_precompute_py = tap_precompute_py();
+    let tap_precompute_px = tap_precompute_px();
     let tap_hash_c = tap_hash_c();
     let tap_hash_c2 = tap_hash_c2();
     let tap_squaring = tap_squaring();
@@ -121,10 +121,10 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
                 op_scripts.push(tap_initT4.clone());
             }
             ScriptType::PreMillerPrecomputePy => {
-                op_scripts.push(tap_precompute_Py.clone());
+                op_scripts.push(tap_precompute_py.clone());
             },
             ScriptType::PreMillerPrecomputePx => {
-                op_scripts.push(tap_precompute_Px.clone());
+                op_scripts.push(tap_precompute_px.clone());
             },
             ScriptType::PreMillerHashC => {
                 op_scripts.push(tap_hash_c.clone());
@@ -181,13 +181,13 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
                 op_scripts.push(tap_hash_p(inp));
             },
             ScriptType::MillerSparseSparseDbl(inp) => {
-                op_scripts.push(tap_double_eval_mul_for_fixed_Qs((inp.0, inp.1)).0);
+                op_scripts.push(tap_double_eval_mul_for_fixed_qs((inp.0, inp.1)).0);
             },
             ScriptType::MillerSparseSparseAdd(inp) => {
-                op_scripts.push(tap_add_eval_mul_for_fixed_Qs((inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1)).0);
+                op_scripts.push(tap_add_eval_mul_for_fixed_qs((inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1)).0);
             },
             ScriptType::PostMillerSparseAddWithFrob(inp) => {
-                op_scripts.push(tap_add_eval_mul_for_fixed_Qs_with_frob((inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1)).0);
+                op_scripts.push(tap_add_eval_mul_for_fixed_qs_with_frob((inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1)).0);
             },
         }
     }

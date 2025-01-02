@@ -1,13 +1,12 @@
 use std::{collections::HashMap, ops::Neg};
 
-use alloy::signers::k256::elliptic_curve::scalar;
 use ark_bn254::{Bn254};
 use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::{Field, PrimeField};
 use bitcoin_script::script;
 
 use crate::{chunk::{compile::{bitcom_scripts_from_segments, op_scripts_from_segments, Vkey}, primitves::{tup_to_scr, HashBytes, Sig, SigData}, segment::*, taps_point_eval::{get_hint_for_add_with_frob}}, execute_script, groth16::g16::{Assertions, PublicKeys, Signatures, N_TAPLEAVES, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}, signatures::wots::{wots160, wots256}, treepp};
-use sha2::{Digest, Sha256};
+
 
 use super::{api::nib_to_byte_array, compile::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, hint_models::*, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps},  wots::WOTSPubKey};
 
@@ -236,7 +235,7 @@ pub(crate) fn groth16(
         push_compare_or_return!(sdmul);
         f_acc = sdmul;
 
-        let leval = wrap_hint_double_eval_mul_for_fixed_Qs(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3);
+        let leval = wrap_hint_double_eval_mul_for_fixed_qs(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3);
         push_compare_or_return!(leval);
         (t2, t3) = ((t2 + t2).into_affine(), (t3 + t3).into_affine());
 
@@ -265,7 +264,7 @@ pub(crate) fn groth16(
         push_compare_or_return!(sdmul);
         f_acc = sdmul;
 
-        let leval = wrap_hint_add_eval_mul_for_fixed_Qs(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, ate);
+        let leval = wrap_hint_add_eval_mul_for_fixed_qs(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, ate);
         push_compare_or_return!(leval);
         if ate == 1 {
             (t2, t3) = ((t2 + pubs.q2).into_affine(), (t3 + pubs.q3).into_affine());
@@ -326,7 +325,7 @@ pub(crate) fn groth16(
     push_compare_or_return!(sdmul);
     f_acc = sdmul;
 
-    let leval = wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, 1);
+    let leval = wrap_hint_add_eval_mul_for_fixed_qs_with_frob(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, 1);
     push_compare_or_return!(leval);
     // (t2, t3) = (le.t2, le.t3);
     t2 = get_hint_for_add_with_frob(pubs.q2, t2, 1);
@@ -348,7 +347,7 @@ pub(crate) fn groth16(
     push_compare_or_return!(sdmul);
     f_acc = sdmul;
 
-    let leval = wrap_hint_add_eval_mul_for_fixed_Qs_with_frob(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, -1);
+    let leval = wrap_hint_add_eval_mul_for_fixed_qs_with_frob(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, -1);
     push_compare_or_return!(leval);
     t2 = get_hint_for_add_with_frob(pubs.q2, t2, -1);
     t3 = get_hint_for_add_with_frob(pubs.q3, t3, -1);
@@ -652,91 +651,4 @@ pub fn script_exec(
         tap_script_index += 1;
     }
     None
-}
-
-
-
-
-#[cfg(test)]
-mod test {
-
-    use crate::{chunk::{taps_msm::tap_msm, taps_premiller::tap_precompute_Py}, signatures::wots::wots256};
-    use super::*;
-
-
-    pub fn try_check_precompute_py(f: ark_bn254::Fq) {
-        // segments
-        let id_gp4y = 1;
-        let id_p4y: u32 = 7;
-        //let f = ark_bn254::Fq::ONE + ark_bn254::Fq::ONE;
-        let gp4y = Segment {
-            id: id_gp4y,
-            output_type: true,
-            inputs: vec![],
-            output: Element::FieldElem(f),
-            hint_script: script!(),
-            scr_type: ScriptType::NonDeterministic
-        };
-        let p4y = wrap_hints_precompute_Py(false, id_p4y as usize, &gp4y);
-    
-        // assertioons
-        let n_gp4y = extern_fq_to_nibbles(gp4y.output.try_into().unwrap());
-        let a_gp4y = nib_to_byte_array(&n_gp4y);
-        let n_p4y = extern_fq_to_nibbles(p4y.output.try_into().unwrap());
-        let a_p4y = nib_to_byte_array(&n_p4y);
-    
-        // signature
-        const MOCK_SECRET: &str = "a138982ce17ac813d505a5b40b665d404e9528e7";
-        let pub_gp4y = wots256::generate_public_key(&format!("{MOCK_SECRET}{:04x}", id_gp4y));
-        let pub_p4y = wots256::generate_public_key(&format!("{MOCK_SECRET}{:04x}", id_p4y));
-        let mut pubk: HashMap<u32, WOTSPubKey> = HashMap::new();
-        pubk.insert(id_gp4y, WOTSPubKey::P256(pub_gp4y));
-        pubk.insert(id_p4y, WOTSPubKey::P256(pub_p4y));
-    
-        let sa_gp4y = wots256::get_signature(&format!("{MOCK_SECRET}{:04x}", id_gp4y), &a_gp4y);
-        let sa_p4y = wots256::get_signature(&format!("{MOCK_SECRET}{:04x}", id_p4y), &a_p4y);
-    
-    
-        // execution
-        let mut sigcache: HashMap<u32, SigData> = HashMap::new();
-        sigcache.insert(id_gp4y, SigData::Sig256(sa_gp4y));
-        sigcache.insert(id_p4y, SigData::Sig256(sa_p4y));
-    
-    
-        let locking_bitcom = script!{};  // bitcom_precompute_Py(&pubk, (id_p4y, true), vec![(id_gp4y, true)]);
-        let (unlocking_bitcom_script, _) = tup_to_scr(&mut Sig {  cache: sigcache }, vec![((id_p4y, true), n_p4y), ((id_gp4y, true), n_gp4y)]);
-        let aux_hints = p4y.hint_script;
-        let ops_scripts = tap_precompute_Py();
-    
-        let exec_result = execute_script(script!{
-            {aux_hints.clone()}
-            {unlocking_bitcom_script.clone()}
-            {locking_bitcom.clone()}
-            {ops_scripts.clone()}
-        });
-        for i in 0..exec_result.final_stack.len() {
-            println!("{i:} {:?}", exec_result.final_stack.get(i));
-        }
-    
-        let mut hasher = Sha256::new();
-        hasher.update(aux_hints.compile().as_bytes());
-        let a = hasher.finalize();
-        let mut hasher = Sha256::new();
-        hasher.update(unlocking_bitcom_script.compile().as_bytes());
-        let b = hasher.finalize();
-        let mut hasher = Sha256::new();
-        hasher.update(locking_bitcom.compile().as_bytes());
-        let c = hasher.finalize();
-        let mut hasher = Sha256::new();
-        hasher.update(ops_scripts.compile().as_bytes());
-        let d = hasher.finalize();
-        
-        println!("a {:?}", a);
-        println!("b {:?}", b);
-        println!("c {:?}", c);
-        println!("d {:?}", d);
-    }
-    
-    
-
 }
