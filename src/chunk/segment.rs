@@ -190,7 +190,7 @@ pub(crate) fn wrap_hint_hash_c(
 
 
 
-pub(crate) fn wrap_hints_precompute_Px(
+pub(crate) fn wrap_hints_precompute_px(
     skip: bool,
     segment_id: usize,
     in_py: &Segment,
@@ -204,7 +204,7 @@ pub(crate) fn wrap_hints_precompute_Px(
 
     let (mut p4x, mut hint_script) = (ElemFq::mock(), script!());
     if !skip {
-        (p4x, hint_script) = hints_precompute_Px(
+        (p4x, hint_script) = hints_precompute_px(
             in_py.output.try_into().unwrap(),
             in_px.output.try_into().unwrap(),
             in_pdy.output.try_into().unwrap());
@@ -213,7 +213,7 @@ pub(crate) fn wrap_hints_precompute_Px(
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::FieldElem(p4x), hint_script, scr_type: ScriptType::PreMillerPrecomputePx }
 }
 
-pub(crate) fn wrap_hints_precompute_Py(
+pub(crate) fn wrap_hints_precompute_py(
     skip: bool,
     segment_id: usize,
     in_p: &Segment,
@@ -224,7 +224,7 @@ pub(crate) fn wrap_hints_precompute_Py(
 
     let (mut p3y, mut hint_script) = (ElemFq::mock(), script!());
     if !skip {
-        (p3y, hint_script) = hints_precompute_Py(
+        (p3y, hint_script) = hints_precompute_py(
             in_p.output.try_into().unwrap());
     }
     let output_type = p3y.ret_type();
@@ -302,7 +302,7 @@ pub(crate) fn wrap_inv2(
 }
 
 
-pub(crate) fn wrap_hint_init_T4(
+pub(crate) fn wrap_hint_init_t4(
     skip: bool,
     segment_id: usize,
     in_q4yc1: &Segment,
@@ -325,7 +325,7 @@ pub(crate) fn wrap_hint_init_T4(
 
     let (mut tmpt4, mut hint_script) = (ElemG2PointAcc::mock(), script!());
     if !skip {
-        (tmpt4, hint_script) = hint_init_T4(
+        (tmpt4, hint_script) = hint_init_t4(
             q4yc1,
             q4yc0,
             q4xc1,

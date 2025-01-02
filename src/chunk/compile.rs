@@ -98,7 +98,7 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
     let mut tap_double_eval_mul_for_fixed_qs = cached(|(a, b)| tap_double_eval_mul_for_fixed_qs(a, b));
     let mut tap_add_eval_mul_for_fixed_qs = cached(|(a, b, c, d, e)| tap_add_eval_mul_for_fixed_qs(a, b, c, d, e));
     let mut tap_add_eval_mul_for_fixed_qs_with_frob = cached(|(a, b, c, d, e)| tap_add_eval_mul_for_fixed_qs_with_frob(a, b, c, d, e));
-    let tap_initT4 = tap_init_t4();
+    let tap_init_t4 = tap_init_t4();
     let tap_precompute_py = tap_precompute_py();
     let tap_precompute_px = tap_precompute_px();
     let tap_hash_c = tap_hash_c();
@@ -118,7 +118,7 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
                 op_scripts.push(script!());
             },
             ScriptType::PreMillerInitT4 => {
-                op_scripts.push(tap_initT4.clone());
+                op_scripts.push(tap_init_t4.clone());
             }
             ScriptType::PreMillerPrecomputePy => {
                 op_scripts.push(tap_precompute_py.clone());

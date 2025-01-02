@@ -119,7 +119,7 @@ mod test {
 
         pub fn write_scripts_to_separate_files(sig_cache: HashMap<u32, Vec<Script>>, file: &str) {
             let mut buf: HashMap<u32, Vec<Vec<u8>>> = HashMap::new();
-            std::fs::create_dir("chunker_data");
+            let _ = std::fs::create_dir("chunker_data");
             for (k, v) in sig_cache {
                 let file = format!("chunker_data/{file}_{k}.json");
                 let vs = v.into_iter().map(|x| x.compile().to_bytes()).collect();

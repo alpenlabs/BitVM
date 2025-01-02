@@ -221,7 +221,7 @@ pub(crate) fn tap_precompute_py() -> Script {
     }
 }
 
-pub(crate) fn hints_precompute_Px(
+pub(crate) fn hints_precompute_px(
     hint_in_py: ark_bn254::Fq,
     hint_in_px: ark_bn254::Fq,
     hint_in_pdy: ark_bn254::Fq,
@@ -255,7 +255,7 @@ pub(crate) fn hints_precompute_Px(
     (pdx, simulate_stack_input)
 }
 
-pub(crate) fn hints_precompute_Py(
+pub(crate) fn hints_precompute_py(
     hint_in_p: ark_bn254::Fq,
 ) -> (ark_bn254::Fq, Script) {
     // assert_eq!(sec_in.len(), 1);
@@ -322,7 +322,7 @@ pub(crate) fn tap_init_t4() -> Script {
     sc
 }
 
-pub(crate) fn hint_init_T4(
+pub(crate) fn hint_init_t4(
     hint_q4y1: ElemFq,
     hint_q4y0: ElemFq,
     hint_q4x1: ElemFq,

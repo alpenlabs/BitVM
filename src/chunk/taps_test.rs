@@ -159,7 +159,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let q = ark_bn254::G2Affine::rand(&mut prng);
 
-        let (hint_out, hint_script) = hint_init_T4(q.y.c1, q.y.c0, q.x.c1, q.x.c0);
+        let (hint_out, hint_script) = hint_init_t4(q.y.c1, q.y.c0, q.x.c1, q.x.c0);
 
         let bitcom_script = script!{
             for i in extern_nibbles_to_limbs(hint_out.out()) {
@@ -202,7 +202,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let p = ark_bn254::G1Affine::rand(&mut prng);
 
-        let (hint_out, hint_script) = hints_precompute_Px(p.y, p.x, p.y.inverse().unwrap());
+        let (hint_out, hint_script) = hints_precompute_px(p.y, p.x, p.y.inverse().unwrap());
 
         let bitcom_scr = script!{
             {fq_push_not_montgomery(hint_out)}
@@ -238,7 +238,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let p = ark_bn254::G1Affine::rand(&mut prng);
 
-        let (hint_out, hint_script) = hints_precompute_Py(p.y);
+        let (hint_out, hint_script) = hints_precompute_py(p.y);
 
         let bitcom_scr = script!{
             {fq_push_not_montgomery(hint_out)}
@@ -779,7 +779,7 @@ mod test {
     }
 
     #[test]
-    fn test_tap_double_eval_mul_for_fixed_Qs() {
+    fn test_tap_double_eval_mul_for_fixed_qs() {
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -824,7 +824,7 @@ mod test {
     }
 
     #[test]
-    fn test_tap_add_eval_mul_for_fixed_Qs() {
+    fn test_tap_add_eval_mul_for_fixed_qs() {
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -876,7 +876,7 @@ mod test {
     }
 
     #[test]
-    fn test_tap_add_eval_mul_for_fixed_Qs_with_frob() {
+    fn test_tap_add_eval_mul_for_fixed_qs_with_frob() {
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);

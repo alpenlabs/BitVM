@@ -102,22 +102,22 @@ pub(crate) fn groth16(
     all_output_hints.extend_from_slice(&p4vec);
     let (gp4y, gp4x, gp3y, gp3x, gp2y, gp2x) = (&p4vec[0], &p4vec[1], &p4vec[2], &p4vec[3], &p4vec[4], &p4vec[5]);
 
-    let p4y = wrap_hints_precompute_Py(is_compile_mode, all_output_hints.len(), &gp4y);
+    let p4y = wrap_hints_precompute_py(is_compile_mode, all_output_hints.len(), &gp4y);
     push_compare_or_return!(p4y);
 
-    let p4x = wrap_hints_precompute_Px(is_compile_mode, all_output_hints.len(), &gp4y, &gp4x, &p4y);
+    let p4x = wrap_hints_precompute_px(is_compile_mode, all_output_hints.len(), &gp4y, &gp4x, &p4y);
     push_compare_or_return!(p4x);
 
-    let p3y = wrap_hints_precompute_Py(is_compile_mode, all_output_hints.len(), &gp3y);
+    let p3y = wrap_hints_precompute_py(is_compile_mode, all_output_hints.len(), &gp3y);
     push_compare_or_return!(p3y);
 
-    let p3x = wrap_hints_precompute_Px(is_compile_mode, all_output_hints.len(), &gp3y, &gp3x, &p3y);
+    let p3x = wrap_hints_precompute_px(is_compile_mode, all_output_hints.len(), &gp3y, &gp3x, &p3y);
     push_compare_or_return!(p3x);
 
-    let p2y = wrap_hints_precompute_Py(is_compile_mode, all_output_hints.len(), &gp2y);
+    let p2y = wrap_hints_precompute_py(is_compile_mode, all_output_hints.len(), &gp2y);
     push_compare_or_return!(p2y);
 
-    let p2x = wrap_hints_precompute_Px(is_compile_mode, all_output_hints.len(), &gp2y, &gp2x, &p2y);
+    let p2x = wrap_hints_precompute_px(is_compile_mode, all_output_hints.len(), &gp2y, &gp2x, &p2y);
     push_compare_or_return!(p2x);
 
     let gc: Vec<Segment> = vec![
@@ -206,7 +206,7 @@ pub(crate) fn groth16(
     let cinv2 = wrap_hint_hash_c2(is_compile_mode, all_output_hints.len(), &gcinv);
     push_compare_or_return!(cinv2);
 
-    let mut t4 = wrap_hint_init_T4(is_compile_mode, all_output_hints.len(), &q4yc1, &q4yc0, &q4xc1, &q4xc0);
+    let mut t4 = wrap_hint_init_t4(is_compile_mode, all_output_hints.len(), &q4yc1, &q4yc0, &q4xc1, &q4xc0);
     push_compare_or_return!(t4);
 
     let (mut t2, mut t3) = (pubs.q2, pubs.q3);
