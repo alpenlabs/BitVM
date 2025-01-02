@@ -907,7 +907,9 @@ mod test {
 
         let (tap_scr, nt2, nt3) = tap_add_eval_mul_for_fixed_Qs_with_frob(t2, t3, q2, q3, ate);
 
-        assert_eq!( (nt2, nt3), (get_hint_for_add_with_frob(q2, t2, ate), get_hint_for_add_with_frob(q3, t3, ate)));
+        assert_eq!( nt3, get_hint_for_add_with_frob(q3, t3, ate));
+
+        assert_eq!( nt2, get_hint_for_add_with_frob(q2, t2, ate));
 
 
         let tap_len = tap_scr.len();

@@ -1,4 +1,4 @@
-use crate::bn254::utils::*;
+use crate::bn254::{self, utils::*};
 use crate::bn254::{fq2::Fq2};
 use crate::chunk::primitves::*;
 use crate::{
@@ -12,7 +12,7 @@ use num_traits::One;
 use std::ops::Neg;
 use std::str::FromStr;
 
-use super::primitves::{extern_hash_fps, hash_fp12_192};
+use super::primitves::{extern_hash_fps};
 use super::hint_models::*;
 
 
@@ -386,48 +386,8 @@ pub(crate) fn tap_point_add_with_frob(ate: i8) -> Script {
         OP_NOT OP_VERIFY
     };
 
-    let beta_12x = BigUint::from_str(
-        "21575463638280843010398324269430826099269044274347216827212613867836435027261",
-    )
-    .unwrap();
-    let beta_12y = BigUint::from_str(
-        "10307601595873709700152284273816112264069230130616436755625194854815875713954",
-    )
-    .unwrap();
-    let beta_12 = ark_bn254::Fq2::from_base_prime_field_elems([
-        ark_bn254::Fq::from(beta_12x.clone()),
-        ark_bn254::Fq::from(beta_12y.clone()),
-    ])
-    .unwrap();
-    let beta_13x = BigUint::from_str(
-        "2821565182194536844548159561693502659359617185244120367078079554186484126554",
-    )
-    .unwrap();
-    let beta_13y = BigUint::from_str(
-        "3505843767911556378687030309984248845540243509899259641013678093033130930403",
-    )
-    .unwrap();
-    let beta_13 = ark_bn254::Fq2::from_base_prime_field_elems([
-        ark_bn254::Fq::from(beta_13x.clone()),
-        ark_bn254::Fq::from(beta_13y.clone()),
-    ])
-    .unwrap();
-
-    let (beta12_mul, _) = Fq2::hinted_mul(2, ark_bn254::Fq2::one(), 0, beta_12);
-    let (beta13_mul, _) = Fq2::hinted_mul(2, ark_bn254::Fq2::one(), 0, beta_13);
-
-    let beta_22x = BigUint::from_str(
-        "21888242871839275220042445260109153167277707414472061641714758635765020556616",
-    )
-    .unwrap();
-    let beta_22y = BigUint::from_str("0").unwrap();
-    let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([
-        ark_bn254::Fq::from(beta_22x.clone()),
-        ark_bn254::Fq::from(beta_22y.clone()),
-    ])
-    .unwrap();
-
-    let (beta22_mul, _) = Fq2::hinted_mul(2, ark_bn254::Fq2::one(), 0, beta_22);
+    let (_, beta_22_scr, _) = bn254::curves::G2Affine::hinted_endomorphism_affine(ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE));
+    let (_, beta_12_scr, _) = bn254::curves::G2Affine::hinted_p_power_endomorphism(ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE));
 
     let precompute_script = script! {
         // bring back from altstack
@@ -441,19 +401,9 @@ pub(crate) fn tap_point_add_with_frob(ate: i8) -> Script {
 
         {ate_unsigned_bit} 1 OP_NUMEQUAL
         OP_IF
-            {Fq::neg(0)}
-            {fq2_push_not_montgomery(beta_13)} // beta_13
-            {beta13_mul}
-            {Fq2::toaltstack()}
-            {Fq::neg(0)}
-            {fq2_push_not_montgomery(beta_12)} // beta_12
-            {beta12_mul}
-            {Fq2::fromaltstack()}
+            {beta_12_scr}
         OP_ELSE
-            {Fq2::toaltstack()}
-            {fq2_push_not_montgomery(beta_22)} // beta_22
-            {beta22_mul}
-            {Fq2::fromaltstack()}
+            {beta_22_scr}
         OP_ENDIF
 
         {Fq::fromaltstack()}
@@ -483,70 +433,18 @@ pub(crate) fn hint_point_add_with_frob(
     assert!(ate == 1 || ate == -1);
     let (tt, p) = (hint_t.t, ark_bn254::G1Affine::new_unchecked(hint_px, hint_py));
     let q = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0, hint_q4x1), ark_bn254::Fq2::new(hint_q4y0, hint_q4y1));
-    let mut qq = q.clone();
     let hash_le_aux = hint_t.hash_le();
+    let mut qq = q.clone();
+    let mut frob_hint = vec![];
 
-    let beta_12x = BigUint::from_str(
-        "21575463638280843010398324269430826099269044274347216827212613867836435027261",
-    )
-    .unwrap();
-    let beta_12y = BigUint::from_str(
-        "10307601595873709700152284273816112264069230130616436755625194854815875713954",
-    )
-    .unwrap();
-    let beta_12 = ark_bn254::Fq2::from_base_prime_field_elems([
-        ark_bn254::Fq::from(beta_12x.clone()),
-        ark_bn254::Fq::from(beta_12y.clone()),
-    ])
-    .unwrap();
-    let beta_13x = BigUint::from_str(
-        "2821565182194536844548159561693502659359617185244120367078079554186484126554",
-    )
-    .unwrap();
-    let beta_13y = BigUint::from_str(
-        "3505843767911556378687030309984248845540243509899259641013678093033130930403",
-    )
-    .unwrap();
-    let beta_13 = ark_bn254::Fq2::from_base_prime_field_elems([
-        ark_bn254::Fq::from(beta_13x.clone()),
-        ark_bn254::Fq::from(beta_13y.clone()),
-    ])
-    .unwrap();
-    let beta_22x = BigUint::from_str(
-        "21888242871839275220042445260109153167277707414472061641714758635765020556616",
-    )
-    .unwrap();
-    let beta_22y = BigUint::from_str("0").unwrap();
-    let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([
-        ark_bn254::Fq::from(beta_22x.clone()),
-        ark_bn254::Fq::from(beta_22y.clone()),
-    ])
-    .unwrap();
-
-    let mut frob_hint: Vec<Hint> = vec![];
     if ate == 1 {
-        qq.x.conjugate_in_place();
-        let (_, hint_beta12_mul) = Fq2::hinted_mul(2, qq.x, 0, beta_12);
-        qq.x = qq.x * beta_12;
-
-        qq.y.conjugate_in_place();
-        let (_, hint_beta13_mul) = Fq2::hinted_mul(2, qq.y, 0, beta_13);
-        qq.y = qq.y * beta_13;
-
-        for hint in hint_beta13_mul {
-            frob_hint.push(hint);
-        }
-        for hint in hint_beta12_mul {
-            frob_hint.push(hint);
-        }
-    } else if ate == -1 {
-        // todo: correct this code block
-        let (_, hint_beta22_mul) = Fq2::hinted_mul(2, qq.x, 0, beta_22);
-        qq.x = qq.x * beta_22;
-
-        for hint in hint_beta22_mul {
-            frob_hint.push(hint);
-        }
+        let (qdash, _, beta_12_hint) = bn254::curves::G2Affine::hinted_p_power_endomorphism(q);
+        qq = qdash;
+        frob_hint = beta_12_hint;
+    } else {
+        let (qdash, _, beta_22_hint) = bn254::curves::G2Affine::hinted_endomorphism_affine(q);
+        qq = qdash;
+        frob_hint = beta_22_hint;
     }
 
     let alpha_chord = (tt.y - qq.y) / (tt.x - qq.x);

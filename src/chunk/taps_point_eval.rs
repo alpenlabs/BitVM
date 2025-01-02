@@ -1,4 +1,4 @@
-use crate::bn254::utils::*;
+use crate::bn254::{self, utils::*};
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::primitves::*;
 use crate::{
@@ -414,53 +414,15 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs(
 
 
 pub(crate) fn get_hint_for_add_with_frob(q: ark_bn254::G2Affine, t: ark_bn254::G2Affine, ate: i8) -> ark_bn254::G2Affine {
-    let beta_12x = BigUint::from_str(
-        "21575463638280843010398324269430826099269044274347216827212613867836435027261",
-    )
-    .unwrap();
-    let beta_12y = BigUint::from_str(
-        "10307601595873709700152284273816112264069230130616436755625194854815875713954",
-    )
-    .unwrap();
-    let beta_12 = ark_bn254::Fq2::from_base_prime_field_elems([
-        ark_bn254::Fq::from(beta_12x.clone()),
-        ark_bn254::Fq::from(beta_12y),
-    ])
-    .unwrap();
-    let beta_13x = BigUint::from_str(
-        "2821565182194536844548159561693502659359617185244120367078079554186484126554",
-    )
-    .unwrap();
-    let beta_13y = BigUint::from_str(
-        "3505843767911556378687030309984248845540243509899259641013678093033130930403",
-    )
-    .unwrap();
-    let beta_13 = ark_bn254::Fq2::from_base_prime_field_elems([
-        ark_bn254::Fq::from(beta_13x.clone()),
-        ark_bn254::Fq::from(beta_13y),
-    ])
-    .unwrap();
-    let beta_22x = BigUint::from_str(
-        "21888242871839275220042445260109153167277707414472061641714758635765020556616",
-    )
-    .unwrap();
-    let beta_22y = BigUint::from_str("0").unwrap();
-    let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([
-        ark_bn254::Fq::from(beta_22x.clone()),
-        ark_bn254::Fq::from(beta_22y),
-    ])
-    .unwrap();
-
-    let mut q = q.clone();
+    let mut qq = q.clone();
     if ate == 1 {
-        q.x.conjugate_in_place();
-        q.x = q.x * beta_12;
-        q.y.conjugate_in_place();
-        q.y = q.y * beta_13;
+        let (qdash, _, _) = bn254::curves::G2Affine::hinted_p_power_endomorphism(qq);
+        qq = qdash;
     } else if ate == -1 {
-        q.x = q.x * beta_22;
+        let (qdash, _, _) = bn254::curves::G2Affine::hinted_endomorphism_affine(qq);
+        qq = qdash;
     }
-    let r = (t + q).into_affine();
+    let r = (t + qq).into_affine();
     r
 
 }
@@ -483,52 +445,15 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
     );
     let (p2, p3) = (ark_bn254::G1Affine::new_unchecked(hint_in_p2x, hint_in_p2y), ark_bn254::G1Affine::new_unchecked(hint_in_p3x, hint_in_p3y));
 
-    let beta_12x = BigUint::from_str(
-        "21575463638280843010398324269430826099269044274347216827212613867836435027261",
-    )
-    .unwrap();
-    let beta_12y = BigUint::from_str(
-        "10307601595873709700152284273816112264069230130616436755625194854815875713954",
-    )
-    .unwrap();
-    let beta_12 = ark_bn254::Fq2::from_base_prime_field_elems([
-        ark_bn254::Fq::from(beta_12x.clone()),
-        ark_bn254::Fq::from(beta_12y),
-    ])
-    .unwrap();
-    let beta_13x = BigUint::from_str(
-        "2821565182194536844548159561693502659359617185244120367078079554186484126554",
-    )
-    .unwrap();
-    let beta_13y = BigUint::from_str(
-        "3505843767911556378687030309984248845540243509899259641013678093033130930403",
-    )
-    .unwrap();
-    let beta_13 = ark_bn254::Fq2::from_base_prime_field_elems([
-        ark_bn254::Fq::from(beta_13x.clone()),
-        ark_bn254::Fq::from(beta_13y),
-    ])
-    .unwrap();
-    let beta_22x = BigUint::from_str(
-        "21888242871839275220042445260109153167277707414472061641714758635765020556616",
-    )
-    .unwrap();
-    let beta_22y = BigUint::from_str("0").unwrap();
-    let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([
-        ark_bn254::Fq::from(beta_22x.clone()),
-        ark_bn254::Fq::from(beta_22y),
-    ])
-    .unwrap();
 
     // First
     let mut qq = qq2.clone();
     if ate == 1 {
-        qq.x.conjugate_in_place();
-        qq.x = qq.x * beta_12;
-        qq.y.conjugate_in_place();
-        qq.y = qq.y * beta_13;
-    } else if ate == -1 {
-        qq.x = qq.x * beta_22;
+        let (qdash, _, _) = bn254::curves::G2Affine::hinted_p_power_endomorphism(qq);
+        qq = qdash;
+    } else {
+        let (qdash, _, _) = bn254::curves::G2Affine::hinted_endomorphism_affine(qq);
+        qq = qdash;
     }
     let alpha_t2 = (t2.y - qq.y) / (t2.x - qq.x);
     let bias_t2 = alpha_t2 * t2.x - t2.y;
@@ -546,12 +471,11 @@ pub(crate) fn hint_add_eval_mul_for_fixed_Qs_with_frob(
     // Second
     let mut qq = qq3.clone();
     if ate == 1 {
-        qq.x.conjugate_in_place();
-        qq.x = qq.x * beta_12;
-        qq.y.conjugate_in_place();
-        qq.y = qq.y * beta_13;
-    } else if ate == -1 {
-        qq.x = qq.x * beta_22;
+        let (qdash, _, _) = bn254::curves::G2Affine::hinted_p_power_endomorphism(qq);
+        qq = qdash;
+    } else {
+        let (qdash, _, _) = bn254::curves::G2Affine::hinted_endomorphism_affine(qq);
+        qq = qdash;
     }
     let alpha_t3 = (t3.y - qq.y) / (t3.x - qq.x);
     let bias_t3 = alpha_t3 * t3.x - t3.y;
@@ -616,53 +540,17 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs_with_frob(
     qq3: G2Affine,
     ate: i8,
 ) -> (Script, G2Affine, G2Affine) {
-    let beta_12x = BigUint::from_str(
-        "21575463638280843010398324269430826099269044274347216827212613867836435027261",
-    )
-    .unwrap();
-    let beta_12y = BigUint::from_str(
-        "10307601595873709700152284273816112264069230130616436755625194854815875713954",
-    )
-    .unwrap();
-    let beta_12 = ark_bn254::Fq2::from_base_prime_field_elems([
-        ark_bn254::Fq::from(beta_12x.clone()),
-        ark_bn254::Fq::from(beta_12y),
-    ])
-    .unwrap();
-    let beta_13x = BigUint::from_str(
-        "2821565182194536844548159561693502659359617185244120367078079554186484126554",
-    )
-    .unwrap();
-    let beta_13y = BigUint::from_str(
-        "3505843767911556378687030309984248845540243509899259641013678093033130930403",
-    )
-    .unwrap();
-    let beta_13 = ark_bn254::Fq2::from_base_prime_field_elems([
-        ark_bn254::Fq::from(beta_13x.clone()),
-        ark_bn254::Fq::from(beta_13y),
-    ])
-    .unwrap();
-    let beta_22x = BigUint::from_str(
-        "21888242871839275220042445260109153167277707414472061641714758635765020556616",
-    )
-    .unwrap();
-    let beta_22y = BigUint::from_str("0").unwrap();
-    let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([
-        ark_bn254::Fq::from(beta_22x.clone()),
-        ark_bn254::Fq::from(beta_22y),
-    ])
-    .unwrap();
 
     // First
     let mut qq = qq2.clone();
     if ate == 1 {
-        qq.x.conjugate_in_place();
-        qq.x = qq.x * beta_12;
-        qq.y.conjugate_in_place();
-        qq.y = qq.y * beta_13;
-    } else if ate == -1 {
-        qq.x = qq.x * beta_22;
+        let (qdash, _, _) = bn254::curves::G2Affine::hinted_p_power_endomorphism(qq);
+        qq = qdash;
+    } else {
+        let (qdash, _, _) = bn254::curves::G2Affine::hinted_endomorphism_affine(qq);
+        qq = qdash;
     }
+
     let alpha_t2 = (t2.y - qq.y) / (t2.x - qq.x);
     let bias_t2 = alpha_t2 * t2.x - t2.y;
     let x2 = alpha_t2.square() - t2.x - qq.x;
@@ -671,13 +559,13 @@ pub(crate) fn tap_add_eval_mul_for_fixed_Qs_with_frob(
     // Second
     let mut qq = qq3.clone();
     if ate == 1 {
-        qq.x.conjugate_in_place();
-        qq.x = qq.x * beta_12;
-        qq.y.conjugate_in_place();
-        qq.y = qq.y * beta_13;
-    } else if ate == -1 {
-        qq.x = qq.x * beta_22;
+        let (qdash, _, _) = bn254::curves::G2Affine::hinted_p_power_endomorphism(qq);
+        qq = qdash;
+    } else {
+        let (qdash, _, _) = bn254::curves::G2Affine::hinted_endomorphism_affine(qq);
+        qq = qdash;
     }
+
     let alpha_t3 = (t3.y - qq.y) / (t3.x - qq.x);
     let bias_t3 = alpha_t3 * t3.x - t3.y;
     let x3 = alpha_t3.square() - t3.x - qq.x;
