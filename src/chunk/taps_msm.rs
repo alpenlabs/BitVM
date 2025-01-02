@@ -333,12 +333,12 @@ pub(crate) fn hint_hash_p(
 mod test {
 
     use crate::{
-        bigint::bits::limb_to_le_bits, bn254::{curves, fq2::Fq2, utils::fr_push_not_montgomery}, chunk::primitves::extern_nibbles_to_limbs, execute_script_without_stack_limit
+        bn254::{curves, fq2::Fq2, utils::fr_push_not_montgomery}, chunk::primitves::extern_nibbles_to_limbs, execute_script_without_stack_limit
     };
     use super::*;
     use ark_bn254::{G1Affine};
-    use ark_ff::{Field, MontFp, UniformRand};
-    use bitcoin::opcodes::{all::{OP_1SUB, OP_DEPTH, OP_DROP, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_ROLL, OP_TOALTSTACK}, OP_TRUE};
+    use ark_ff::{Field, UniformRand};
+    
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
     use crate::chunk::hint_models::ElemTraitExt;

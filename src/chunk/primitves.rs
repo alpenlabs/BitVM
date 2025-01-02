@@ -685,15 +685,15 @@ pub fn hash_fp12_with_hints() -> Script {
 #[cfg(test)]
 mod test {
     use super::*;
-    use ark_ff::{AdditiveGroup, BigInt, Field, UniformRand};
+    use ark_ff::{Field, UniformRand};
     use ark_std::iterable::Iterable;
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha20Rng;
 
     use crate::{
-        bn254::utils::{fq_push_not_montgomery, fq_to_bits}, chunk, execute_script, u4::u4_std::u4_hex_to_nibbles
+        bn254::utils::fq_push_not_montgomery, execute_script, u4::u4_std::u4_hex_to_nibbles
     };
-    use std::cmp::min;
+    
 
     #[test]
     fn test_fq_from_nibbles() {
@@ -701,7 +701,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let p = ark_bn254::Fq::rand(&mut prng);
 
-        let mut nib32 = [15u8; 64];
+        let nib32 = [15u8; 64];
         let script = script! {
              {fq_push_not_montgomery(ark_bn254::Fq::ONE)}
              {unpack_limbs_to_nibbles()}
