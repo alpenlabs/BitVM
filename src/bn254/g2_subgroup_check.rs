@@ -1,17 +1,15 @@
+use std::{ops::Neg, str::FromStr};
+
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, Field};
+use bitcoin::opcodes::all::{OP_BOOLAND, OP_FROMALTSTACK, OP_TOALTSTACK};
 use bitcoin_script::script;
+use num_bigint::BigUint;
 use crate::treepp::Script;
 
-use super::{curves::G2Affine, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, utils::{hinted_affine_add_line, hinted_affine_double_line, hinted_check_chord_line, hinted_check_tangent_line, Hint}};
+use super::{curves::{G1Affine, G2Affine}, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, utils::{fq2_push_not_montgomery, hinted_affine_add_line, hinted_affine_double_line, hinted_check_chord_line, hinted_check_tangent_line, Hint}};
 
 fn split_scalar(window: usize, x0: u64) -> Vec<Vec<u8>> {
-    // const scalar
-    // convert scalar into bit form or naf form
-    // spit out segments
-    // Vec<[usize; window]>
-    //let x0: u64 = 4965661367192848881;
-    //x0.to_bigint()
     fn u64_to_bits(x: u64) -> Vec<u8> {
         let mut bits = Vec::with_capacity(64);
         for i in 0..64 {
@@ -169,7 +167,6 @@ fn hinted_check_add(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine) -> (Script, 
     (script, hints)
 }
 
-
 fn hinted_msm(scalar: u64, q: ark_bn254::G2Affine, window: usize) -> Vec<(Script, Vec<Hint>)> {
     let scalar_splits = split_scalar(window, scalar);
     let mut acc = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO);
@@ -188,6 +185,154 @@ fn hinted_msm(scalar: u64, q: ark_bn254::G2Affine, window: usize) -> Vec<(Script
     chunks
 }
 
+
+// Stack: [q] q /in G2Affine
+// compute q' = (q.x.conjugate()*beta_12, q.y.conjugate() * beta_13)
+fn hinted_mul_by_char_on_q(q: ark_bn254::G2Affine) -> (ark_bn254::G2Affine, Script, Vec<Hint>) {
+    let beta_12x = BigUint::from_str(
+        "21575463638280843010398324269430826099269044274347216827212613867836435027261",
+    )
+    .unwrap();
+    let beta_12y = BigUint::from_str(
+        "10307601595873709700152284273816112264069230130616436755625194854815875713954",
+    )
+    .unwrap();
+    let beta_12 = ark_bn254::Fq2::from_base_prime_field_elems([
+        ark_bn254::Fq::from(beta_12x.clone()),
+        ark_bn254::Fq::from(beta_12y.clone()),
+    ])
+    .unwrap();
+    let beta_13x = BigUint::from_str(
+        "2821565182194536844548159561693502659359617185244120367078079554186484126554",
+    )
+    .unwrap();
+    let beta_13y = BigUint::from_str(
+        "3505843767911556378687030309984248845540243509899259641013678093033130930403",
+    )
+    .unwrap();
+    let beta_13 = ark_bn254::Fq2::from_base_prime_field_elems([
+        ark_bn254::Fq::from(beta_13x.clone()),
+        ark_bn254::Fq::from(beta_13y.clone()),
+    ])
+    .unwrap();
+
+    let mut qq = q.clone();
+    qq.x.conjugate_in_place();
+    let (beta12_mul_scr, hint_beta12_mul) = Fq2::hinted_mul(2, qq.x, 0, beta_12);
+    qq.x = qq.x * beta_12;
+
+    qq.y.conjugate_in_place();
+    let (beta13_mul_scr, hint_beta13_mul) = Fq2::hinted_mul(2, qq.y, 0, beta_13);
+    qq.y = qq.y * beta_13;
+
+    let mut frob_hint: Vec<Hint> = vec![];
+    for hint in hint_beta13_mul {
+        frob_hint.push(hint);
+    }
+    for hint in hint_beta12_mul {
+        frob_hint.push(hint);
+    }
+
+    let scr = script!{
+        // [q.x, q.y]
+        {Fq::neg(0)}
+        {fq2_push_not_montgomery(beta_13)} // beta_13
+        {beta13_mul_scr}
+        {Fq2::toaltstack()}
+        {Fq::neg(0)}
+        {fq2_push_not_montgomery(beta_12)} // beta_12
+        {beta12_mul_scr}
+        {Fq2::fromaltstack()}
+    };
+    (qq, scr, frob_hint)
+}
+
+
+// ψ([x₀]P) + ψ²([x₀]P) - ψ³([2x₀]P)
+fn g2_chain_endomorphism(t: ark_bn254::G2Affine) -> (ark_bn254::G2Affine, Script, Vec<Hint>) {
+
+    let (sai_t, sai_t_scr, sai_t_hints) = hinted_mul_by_char_on_q(t);
+    let (sai_2_t, sai_2_t_scr, sai_2_t_hints) = hinted_mul_by_char_on_q(sai_t);
+    let (sai_3_t, sai_3_t_scr, sai_3_t_hints) = hinted_mul_by_char_on_q(sai_2_t);
+    let (double_sai_3_t_scr, double_sai_3_t_hints) = hinted_check_double(sai_3_t);
+    let mut sai_neg_dbl_3_t = (sai_3_t + sai_3_t).into_affine();
+    sai_neg_dbl_3_t = sai_neg_dbl_3_t.neg();
+
+    let (sai_add_0_scr, sai_add_0_hints) = hinted_check_add(sai_2_t, sai_neg_dbl_3_t);
+    let sai_add_0 = (sai_neg_dbl_3_t + sai_2_t).into_affine();
+
+    let (sai_add_1_scr, sai_add_1_hints) = hinted_check_add(sai_t, sai_add_0);
+    let sai_add_1 = (sai_add_0 + sai_t).into_affine();
+
+    let scr = script!(
+        // [t]
+        { sai_t_scr }
+        // [sai_t]
+        {Fq2::copy(2)} {Fq2::copy(2)}
+        // [sai_t, sai_t]
+        { sai_2_t_scr }
+        // [sai_t, sai_2_t]
+        {Fq2::copy(2)} {Fq2::copy(2)}
+        // [sai_t, sai_2_t, sai_2_t]
+        { sai_3_t_scr }
+        // [sai_t, sai_2_t, sai_3_t]
+        { double_sai_3_t_scr }
+        // [sai_t, sai_2_t, 2 * sai_3_t]
+        { Fq2::neg(0) }
+        // [sai_t, sai_2_t, -2 * sai_3_t]
+        {sai_add_0_scr}
+        // [sai_t, sai_add_0]
+        {sai_add_1_scr}
+        // [sai_add_1]
+    );
+
+    let mut hints = vec![];
+    hints.extend_from_slice(&sai_t_hints);
+    hints.extend_from_slice(&sai_2_t_hints);
+    hints.extend_from_slice(&sai_3_t_hints);
+    hints.extend_from_slice(&double_sai_3_t_hints);
+    hints.extend_from_slice(&sai_add_0_hints);
+    hints.extend_from_slice(&sai_add_1_hints);
+    (sai_add_1, scr, hints)
+}
+
+// IsInSubGroup returns true if p is on the r-torsion, false otherwise.
+// https://eprint.iacr.org/2022/348.pdf, sec. 3 and 5.1
+// [r]P == 0 <==> [x₀+1]P + ψ([x₀]P) + ψ²([x₀]P) = ψ³([2x₀]P)
+pub(crate) fn is_in_g2_subgroup(q: ark_bn254::G2Affine, window: usize) -> Vec<(Script, Vec<Hint>)> {
+    let scalar = 4965661367192848881;
+    let mut all_chunks = vec![];
+    let msm_chunks = hinted_msm(scalar, q, window);
+    let msm_res = (q * ark_bn254::Fr::from(scalar)).into_affine();
+    all_chunks.extend_from_slice(&msm_chunks);
+
+    let (endo_res, endo_scr, endo_hints) = g2_chain_endomorphism(msm_res);
+    all_chunks.push((endo_scr, endo_hints));
+    assert_eq!(endo_res.neg(), (msm_res + q).into_affine());
+
+    let last_chunk = {
+        let (add_0_scr, add_0_hints) = hinted_check_add(msm_res, q);
+        let scr = script!(
+            // [endo_res, msm_res, q]
+            {add_0_scr}
+            // [endo_res, [x₀+1]P]
+            {Fq2::neg(0)}
+            // [endo_res, -[x₀+1]P]
+            {Fq2::roll(4)} 
+            {Fq2::equal()}
+            OP_TOALTSTACK
+            {Fq2::equal()}
+            OP_FROMALTSTACK
+            OP_BOOLAND
+        );
+        (scr, add_0_hints)
+    };
+
+    all_chunks.push(last_chunk);
+
+    all_chunks
+}
+
 #[cfg(test)]
 mod test {
     use ark_ec::CurveGroup;
@@ -196,9 +341,9 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{bn254::{fq2::Fq2, g2_subgroup_check::{hinted_check_add, hinted_check_double, hinted_check_double_and_add}, utils::{fq2_push_not_montgomery, Hint}}, execute_script, execute_script_without_stack_limit, treepp};
+    use crate::{bn254::{fq2::Fq2, g2_subgroup_check::{hinted_check_add, hinted_check_double, hinted_check_double_and_add, hinted_mul_by_char_on_q, is_in_g2_subgroup}, utils::{fq2_push_not_montgomery, Hint}}, execute_script, execute_script_without_stack_limit, treepp};
 
-    use super::{hinted_msm, split_scalar};
+    use super::{g2_chain_endomorphism, hinted_msm, split_scalar};
 
     #[test]
     fn test_g2_affine_hinted_check_add() {
@@ -337,7 +482,7 @@ mod test {
     fn test_hinted_msm() {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let q = ark_bn254::G2Affine::rand(&mut prng);
-        let scalar = 4965661367192848881;
+        let scalar = u64::rand(&mut prng);
         let window = 4;
         let chunks = hinted_msm(scalar, q, window);
         let chunk_hints: Vec<Vec<Hint>> = chunks.iter().map(|c| c.1.clone()).collect();
@@ -396,5 +541,177 @@ mod test {
 
         
     }
+
+
+    #[test]
+    fn test_hinted_mul_by_char_on_q() {
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let q = ark_bn254::G2Affine::rand(&mut prng);
+        let (qdash, scr_endo, hints) = hinted_mul_by_char_on_q(q);
+
+        let script_len = scr_endo.len();
+        let script = script!(
+            for hint in hints {
+                {hint.push()}
+            }
+            { fq2_push_not_montgomery(q.x) }
+            { fq2_push_not_montgomery(q.y) }
+            { scr_endo }
+            {fq2_push_not_montgomery(qdash.y)}
+            {Fq2::equalverify()}
+            {fq2_push_not_montgomery(qdash.x)}
+            {Fq2::equalverify()}
+            OP_TRUE
+        );
+
+        let exec_result = execute_script(script);
+        println!("hinted_p_power_endomorphism script {} and stack {}", script_len, exec_result.stats.max_nb_stack_items);
+        assert!(exec_result.success);
+    }
+
+    #[test]
+    fn test_g2_chain_endomorphism() {
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let q = ark_bn254::G2Affine::rand(&mut prng);
+        let (t, t_scr, t_hints) = g2_chain_endomorphism(q);
+        
+        let script_len = t_scr.len();
+        let scr = script!(
+            for hint in t_hints {
+                {hint.push()}
+            }
+            { fq2_push_not_montgomery(q.x) }
+            { fq2_push_not_montgomery(q.y) }
+            {t_scr}
+            {fq2_push_not_montgomery(t.y)}
+            {Fq2::equalverify()}
+            {fq2_push_not_montgomery(t.x)}
+            {Fq2::equalverify()}
+            OP_TRUE
+        );
+
+        let exec_result = execute_script_without_stack_limit(scr);
+        // for i in 0..exec_result.final_stack.len() {
+        //     println!("{i:} {:?}", exec_result.final_stack.get(i));
+        // }
+        println!("hinted_p_power_endomorphism script {} and stack {}", script_len, exec_result.stats.max_nb_stack_items);
+        assert!(exec_result.success);
+        assert_eq!(exec_result.final_stack.len(), 1);
+    }
+
+
+
+    #[test]
+    fn test_is_in_g2_subgroup() {
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let q = ark_bn254::G2Affine::rand(&mut prng);
+        let scalar = 4965661367192848881;
+        let window = 4;
+        
+        let scalar_splits = split_scalar(window, scalar);
+        let mut accs = vec![];
+        let mut acc = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO);
+        for bits in &scalar_splits {
+            for bit in bits {
+                if *bit == 0 {
+                    acc = (acc + acc).into_affine();
+                } else if *bit == 1 {
+                    acc = (acc + q).into_affine();
+                }
+            }
+            accs.push(acc);
+        }
+        let expected_msm = (q * ark_bn254::Fr::from(scalar)).into_affine();
+        assert_eq!(expected_msm, accs[accs.len()-1]);
+
+        let (endo_res, _, _) = g2_chain_endomorphism(expected_msm);
+
+        let chunks = is_in_g2_subgroup(q, window);
+        let chunk_hints: Vec<Vec<Hint>> = chunks.iter().map(|c| c.1.clone()).collect();
+        let chunk_scripts: Vec<treepp::Script> = chunks.iter().map(|c| c.0.clone()).collect();
+        
+        // MSM Chunks
+        let num_msm_chunks = scalar_splits.len();
+        for i in 0..num_msm_chunks {
+            let scr = script!(
+                for hint in &chunk_hints[i] {
+                    {hint.push()}
+                }
+                // [t]
+                if i == 0 {
+                    { fq2_push_not_montgomery(ark_bn254::Fq2::ZERO) }
+                    { fq2_push_not_montgomery(ark_bn254::Fq2::ZERO) }
+                } else {
+                    { fq2_push_not_montgomery(accs[i-1].x) }
+                    { fq2_push_not_montgomery(accs[i-1].y) }
+                }
+                // [t, q]
+                { fq2_push_not_montgomery(q.x) }
+                { fq2_push_not_montgomery(q.y) }
+                { chunk_scripts[i].clone() }
+                // [nt]
+                { fq2_push_not_montgomery(accs[i].y) }
+                { Fq2::equalverify() }
+                { fq2_push_not_montgomery(accs[i].x) }
+                { Fq2::equalverify() }
+                OP_TRUE
+            );
+            let exec_result = execute_script_without_stack_limit(scr);
+            assert!(exec_result.success);
+            assert!(exec_result.final_stack.len() == 1);
+            println!(
+                "hinted_msm {}: {} @ {} stack",
+                i,
+                chunk_scripts[i].len(),
+                exec_result.stats.max_nb_stack_items
+            );
+        }
+
+        // ENDO CHUNK
+        let script_len = chunk_scripts[num_msm_chunks].len();
+        let scr = script!(
+            for hint in &chunk_hints[num_msm_chunks] {
+                {hint.push()}
+            }
+            { fq2_push_not_montgomery(expected_msm.x) }
+            { fq2_push_not_montgomery(expected_msm.y) }
+            { chunk_scripts[num_msm_chunks].clone() }
+
+            {fq2_push_not_montgomery(endo_res.y)}
+            {Fq2::equalverify()}
+            {fq2_push_not_montgomery(endo_res.x)}
+            {Fq2::equalverify()}
+            OP_TRUE
+        );
+
+        let exec_result = execute_script_without_stack_limit(scr);
+        println!("hinted_p_power_endomorphism {}: script {} and stack {}",num_msm_chunks, script_len, exec_result.stats.max_nb_stack_items);
+        assert!(exec_result.success);
+        assert_eq!(exec_result.final_stack.len(), 1);
+
+        // LAST_CHUNK
+        let script_len = chunk_scripts[num_msm_chunks+1].len();
+        let scr = script!(
+            for hint in &chunk_hints[num_msm_chunks+1] {
+                {hint.push()}
+            }
+            // aux hints
+            { fq2_push_not_montgomery(endo_res.x) }
+            { fq2_push_not_montgomery(endo_res.y) }
+            { fq2_push_not_montgomery(expected_msm.x) }
+            { fq2_push_not_montgomery(expected_msm.y) }
+            { fq2_push_not_montgomery(q.x) }
+            { fq2_push_not_montgomery(q.y) }
+
+            { chunk_scripts[num_msm_chunks+1].clone() }
+        );
+
+        let exec_result = execute_script_without_stack_limit(scr);
+        println!("hinted verify {}: script {} and stack {}",num_msm_chunks+1, script_len, exec_result.stats.max_nb_stack_items);
+        assert!(exec_result.success);
+        assert_eq!(exec_result.final_stack.len(), 1);
+
+    }
+
 
 }
