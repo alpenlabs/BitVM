@@ -25,7 +25,16 @@ fn split_scalar(window: usize, x0: u64) -> Vec<Vec<u8>> {
         }
         bits
     }
-    let x0_bits: Vec<Vec<u8>> = u64_to_bits(x0).chunks(window as usize).map(|c| c.to_vec()).collect();
+    let mut x0_bits: Vec<Vec<u8>> = vec![];
+    u64_to_bits(x0).chunks(window as usize).for_each(|c| {
+        let cv = c.to_vec();
+        if window == 4 && cv == vec![0, 0, 0, 0] { // can't do 4 doublings in 1 tapscript
+            x0_bits.push(vec![0, 0]);
+            x0_bits.push(vec![0, 0]);
+        } else {
+            x0_bits.push(cv);
+        }
+    });
     x0_bits
 }
 
@@ -197,6 +206,7 @@ fn hinted_msm(scalar: u64, q: ark_bn254::G2Affine, window: usize) -> Vec<(ark_bn
         }
         chunks.push((acc, chunk.0, chunk.1));
     }
+    // println!("chunks {:?}", chunks);
     chunks
 }
 
@@ -330,10 +340,11 @@ pub(crate) fn is_in_g2_subgroup(q: ark_bn254::G2Affine, window: usize) -> Vec<(a
         let add_0 = (msm_res + q).into_affine();
 
         let (add_1_scr, add_1_hints) = hinted_check_add(endo_res, add_0);
-        let add_1 = (endo_res + add_0).into_affine();
-        assert!(add_1.is_zero());
-        let add_1 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO);
-        
+        let mut add_1 = (endo_res + add_0).into_affine();
+        if add_1.is_zero() {
+            add_1 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO);
+        }
+
         let scr = script!(
             // [endo_res, msm_res, q]
             {add_0_scr}
@@ -715,4 +726,12 @@ mod test {
     }
 
 
+    #[test]
+    fn test_split_scalar() {
+        let scalar = 4965661367192848881;
+        let window = 4;
+        let num_msm_chunks = split_scalar(window, scalar);
+
+        println!("{:?}", num_msm_chunks);
+    }
 }

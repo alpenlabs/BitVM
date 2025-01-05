@@ -103,34 +103,36 @@ fn tap_g2_subgroup_check_endomorphism(endo_script: treepp::Script) -> treepp::Sc
 
 fn tap_g2_subgroup_check_equality(equality_script: treepp::Script) -> treepp::Script {
     let ops_scr = script!(
-        // [msm, t]
+        // [t, msm]
         {G2Affine::copy(1)}
         {G2Affine::copy(1)}
-        // [msm, t, msm, t]
+        // [t, msm, t, msm]
         {Fq2::fromaltstack()} {Fq2::fromaltstack()} // bitcommitted q
-        // [msm, t, msm, t, q]
+        // [t, msm, t, msm, q]
         {equality_script}
-        // [msm, t, nt]
+        // [t, msm, t, msm, nt]
     );
     let hash_scr =         
         script!(
-            // [msm, t, nt] / [nthash, thash, msmhash]
+            // [t, msm, nt] / [nthash, thash, msmhash]
             {G2Affine::toaltstack()} {G2Affine::toaltstack()}
             {hash_fp4()}
             {G2Affine::fromaltstack()} 
-            // [msmhash, t] / [nthash, thash, msmhash, nt]
+            // [thash, msm] / [nthash, thash, msmhash, nt]
             {Fq::roll(4)} {Fq::toaltstack()}
-            // [t] / [thash, msmhash, nt, msmhash]
+            // [msm] / [thash, msmhash, nt, thash]
             {hash_fp4()} {Fq::fromaltstack()}
-            // [nthash, thash, msmhash] / [thash, msmhash, nt]
+            // [msmhash, thash] / [nthash, thash, msmhash, nt]
             {G2Affine::fromaltstack()}
-            {Fq::fromaltstack()}  {Fq::fromaltstack()}
-            // [nthash, thash, msmhash, nt, msmhash, thash]
+            {Fq::fromaltstack()}  {Fq::fromaltstack()} {Fq::fromaltstack()}
+            
+            // [msmhash, thash, nt, msmhash, thash, nthash]
+            {Fq::equalverify(1, 7)}
+            // [msmhash, nt, msmhash, nthash]
             {Fq::equalverify(1, 6)}
-            // [nthash, thash, nt, thash]
-            {Fq::equalverify(5, 0)}
-            // [nthash, nt]
-            {G2Affine::toaltstack()} {Fq::toaltstack()}
+            // [nt, nthash]
+            {Fq::roll(4)} {Fq::roll(4)} {Fq::roll(4)} {Fq::roll(4)}
+            {G2Affine::toaltstack()}  {Fq::toaltstack()} 
 
             {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
             {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
@@ -236,4 +238,134 @@ fn tap_g2_subgroup_check(
     scrs.push(scr);
     
     scrs
+}
+
+#[cfg(test)]
+mod test {
+    use ark_ff::UniformRand;
+    use bitcoin_script::script;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
+
+    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::{hint_models::{ElemG2Point, ElemTraitExt}, primitves::extern_nibbles_to_limbs}, execute_script, execute_script_without_stack_limit, treepp};
+
+    use super::{hint_g2_subgroup_check, tap_g2_subgroup_check};
+
+
+    #[test]
+    fn test_tap_g2_subgroup_check() {
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let q = ark_bn254::G2Affine::rand(&mut prng);
+        let window = 4;
+
+        let hints = hint_g2_subgroup_check(q.y.c1, q.y.c0, q.x.c1, q.x.c0, window);
+        let scripts = tap_g2_subgroup_check(window);
+
+        assert_eq!(hints.len(), scripts.len());
+
+        let num_msm_chunks = hints.len()-2;
+        let mut prev_hash:[u8; 64] = [0u8; 64];
+
+        println!("num_msm_chunks {:?}", num_msm_chunks);
+        for i in 0..num_msm_chunks {
+            let (hout, tmul_hints): (ElemG2Point, treepp::Script) = hints[i].clone();
+            let hout_hash = hout.out();
+            let bitcom_scr = script!(
+                for i in extern_nibbles_to_limbs(hout_hash) {
+                    {i}
+                }
+                {Fq::toaltstack()}
+                if i != 0 {
+                    for i in extern_nibbles_to_limbs(prev_hash) {
+                        {i}
+                    }
+                    {Fq::toaltstack()}
+                }
+                {fq_push_not_montgomery(q.y.c1)}
+                {Fq::toaltstack()}
+                {fq_push_not_montgomery(q.y.c0)}
+                {Fq::toaltstack()}
+                {fq_push_not_montgomery(q.x.c1)}
+                {Fq::toaltstack()}
+                {fq_push_not_montgomery(q.x.c0)}
+                {Fq::toaltstack()}
+            );
+            prev_hash = hout_hash;
+
+            let tap_len = scripts[i].len();
+            let script = script! {
+                {tmul_hints}
+                {bitcom_scr}
+                {scripts[i].clone()}
+            };
+
+            let res = execute_script_without_stack_limit(script);
+            assert!(!res.success && res.final_stack.len() == 1);
+            println!("{} script {} stack {}",i, tap_len, res.stats.max_nb_stack_items);
+        }
+
+        // ENDO CHUNK
+        let (hout, tmul_hints): (ElemG2Point, treepp::Script) = hints[num_msm_chunks].clone();
+        let hout_hash = hout.out();
+        let bitcom_scr = script!(
+            for i in extern_nibbles_to_limbs(hout_hash) {
+                {i}
+            }
+            {Fq::toaltstack()}
+            for i in extern_nibbles_to_limbs(prev_hash) {
+                {i}
+            }
+            {Fq::toaltstack()}
+        );
+
+        let tap_len = scripts[num_msm_chunks].len();
+        let script = script! {
+            {tmul_hints}
+            {bitcom_scr}
+            {scripts[num_msm_chunks].clone()}
+        };
+
+        let res = execute_script_without_stack_limit(script);
+        assert!(!res.success && res.final_stack.len() == 1);
+        println!("{} script {} stack {}", num_msm_chunks, tap_len, res.stats.max_nb_stack_items);
+
+        // FINAL CHUNK
+        let (hout, tmul_hints): (ElemG2Point, treepp::Script) = hints[num_msm_chunks+1].clone();
+        let final_hash = hout.out();
+        let bitcom_scr = script!(
+            for i in extern_nibbles_to_limbs(final_hash) { // final_out
+                {i}
+            }
+            {Fq::toaltstack()}
+            for i in extern_nibbles_to_limbs(hout_hash) { // endo_out
+                {i}
+            }
+            {Fq::toaltstack()}
+            for i in extern_nibbles_to_limbs(prev_hash) { // msm_out
+                {i}
+            }
+            {Fq::toaltstack()}
+
+            {fq_push_not_montgomery(q.y.c1)}
+            {Fq::toaltstack()}
+            {fq_push_not_montgomery(q.y.c0)}
+            {Fq::toaltstack()}
+            {fq_push_not_montgomery(q.x.c1)}
+            {Fq::toaltstack()}
+            {fq_push_not_montgomery(q.x.c0)}
+            {Fq::toaltstack()}
+        );
+
+        let tap_len = scripts[num_msm_chunks+1].len();
+        let script = script! {
+            {tmul_hints}
+            {bitcom_scr}
+            {scripts[num_msm_chunks+1].clone()}
+        };
+
+        let res = execute_script_without_stack_limit(script);
+        assert!(!res.success && res.final_stack.len() == 1);
+        println!("{} script {} stack {}", num_msm_chunks+1, tap_len, res.stats.max_nb_stack_items);
+        
+    }
 }
