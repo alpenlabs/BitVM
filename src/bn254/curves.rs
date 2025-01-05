@@ -2419,6 +2419,29 @@ impl G2Affine {
         }
     }
 
+    // [ax, ay, bx, by]
+    pub fn copy(mut a: u32) -> Script {
+        a *= 4;
+        script! {
+            { Fq::copy(a + 3) }
+            { Fq::copy(a + 3) }
+            { Fq::copy(a + 3) }
+            { Fq::copy(a + 3) }
+        }
+    }
+
+    // [ax, ay, bx, by, a'x, a'y, b'x, b'y]
+    pub fn equal() -> Script {
+        script! {
+            {Fq2::roll(4)}
+            {Fq2::equal()}
+            OP_TOALTSTACK
+            {Fq2::equal()}
+            OP_FROMALTSTACK
+            OP_BOOLAND
+        }
+    }
+
     pub fn hinted_is_on_curve(x: ark_bn254::Fq2, y: ark_bn254::Fq2) -> (Script, Vec<Hint>) {
         let (x_sq, x_sq_hint) = Fq2::hinted_square(x);
         let (x_cu, x_cu_hint) = Fq2::hinted_mul(0, x, 2, x*x);

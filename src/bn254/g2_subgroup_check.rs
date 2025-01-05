@@ -2,7 +2,7 @@ use std::{ops::Neg, str::FromStr};
 
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, Field};
-use bitcoin::opcodes::all::{OP_BOOLAND, OP_FROMALTSTACK, OP_TOALTSTACK};
+use bitcoin::opcodes::all::{OP_BOOLAND, OP_ENDIF, OP_FROMALTSTACK, OP_TOALTSTACK};
 use bitcoin_script::script;
 use num_bigint::BigUint;
 use crate::treepp::Script;
@@ -115,7 +115,7 @@ fn hinted_check_add(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine) -> (Script, 
     let t_is_zero = t.is_zero() || (t == ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO)); // t is none or Some(0)
     let q_is_zero = q.is_zero() || (q == ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO)); // q is none or Some(0)
     
-    let (alpha, bias) = if !t_is_zero && !q_is_zero { // todo: add if t==q and if t == -q
+    let (alpha, bias) = if !t_is_zero && !q_is_zero && t != -q { // todo: add if t==q and if t == -q
         let alpha = (t.y - q.y) / (t.x - q.x);
         let bias = t.y - alpha * t.x;
         (alpha, bias)
@@ -126,7 +126,7 @@ fn hinted_check_add(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine) -> (Script, 
     let (hinted_script1, hint1) = hinted_check_chord_line(t, q, alpha, bias); // todo: remove unused arg: bias
     let (hinted_script2, hint2) = hinted_affine_add_line(t.x, q.x, alpha, bias);
 
-    if !t.is_zero() && !q.is_zero() {
+    if !t.is_zero() && !q.is_zero() && t != -q {
         hints.push(Hint::Fq(alpha.c0));
         hints.push(Hint::Fq(alpha.c1));
         hints.push(Hint::Fq(-bias.c0));
@@ -145,29 +145,44 @@ fn hinted_check_add(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine) -> (Script, 
             OP_IF
                 { G2Affine::drop() }
             OP_ELSE                                // qx qy tx ty
-                for _ in 0..Fq::N_LIMBS * 2 {
-                    OP_DEPTH OP_1SUB OP_ROLL 
-                }
-                for _ in 0..Fq::N_LIMBS * 2 {
-                    OP_DEPTH OP_1SUB OP_ROLL 
-                }                                  // qx qy tx ty c3 c4
-                { Fq2::copy(2) }
-                { Fq2::copy(2) }                    // qx qy tx ty c3 c4 c3 c4
-                { Fq2::copy(10) }
-                { Fq2::roll(10) }                    // qx qy tx c3 c4 c3 c4 tx ty
-                { Fq2::copy(16) }
-                { Fq2::roll(16) }                    // qx tx c3 c4 c3 c4 tx ty qx qy
-                { hinted_script1 }                 // qx tx c3 c4 0/1
-                { Fq2::roll(4) }
-                { Fq2::roll(6) }                    // c3 c4 tx qx
-                { hinted_script2 }                 // x' y'
+                {G2Affine::copy(1)}
+                // qx qy tx ty qx qy
+                { Fq2::neg(0)}
+                // qx qy tx ty qx -qy
+                {G2Affine::copy(1)}
+                // qx qy tx ty qx -qy tx ty
+                {G2Affine::equal()} 
+                // qx qy tx ty 0/1
+                OP_IF // qx == tx
+                    {G2Affine::drop()}
+                    {G2Affine::drop()}
+                    {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
+                    {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
+                OP_ELSE
+                    for _ in 0..Fq::N_LIMBS * 2 {
+                        OP_DEPTH OP_1SUB OP_ROLL 
+                    }
+                    for _ in 0..Fq::N_LIMBS * 2 {
+                        OP_DEPTH OP_1SUB OP_ROLL 
+                    }                                  // qx qy tx ty c3 c4
+                    { Fq2::copy(2) }
+                    { Fq2::copy(2) }                    // qx qy tx ty c3 c4 c3 c4
+                    { Fq2::copy(10) }
+                    { Fq2::roll(10) }                    // qx qy tx c3 c4 c3 c4 tx ty
+                    { Fq2::copy(16) }
+                    { Fq2::roll(16) }                    // qx tx c3 c4 c3 c4 tx ty qx qy
+                    { hinted_script1 }                 // qx tx c3 c4 0/1
+                    { Fq2::roll(4) }
+                    { Fq2::roll(6) }                    // c3 c4 tx qx
+                    { hinted_script2 }                 // x' y'
+                OP_ENDIF
             OP_ENDIF
         OP_ENDIF
     };
     (script, hints)
 }
 
-fn hinted_msm(scalar: u64, q: ark_bn254::G2Affine, window: usize) -> Vec<(Script, Vec<Hint>)> {
+fn hinted_msm(scalar: u64, q: ark_bn254::G2Affine, window: usize) -> Vec<(ark_bn254::G2Affine, Script, Vec<Hint>)> {
     let scalar_splits = split_scalar(window, scalar);
     let mut acc = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO);
     let mut chunks = vec![];
@@ -180,7 +195,7 @@ fn hinted_msm(scalar: u64, q: ark_bn254::G2Affine, window: usize) -> Vec<(Script
                 acc = (acc + q).into_affine();
             }
         }
-        chunks.push(chunk);
+        chunks.push((acc, chunk.0, chunk.1));
     }
     chunks
 }
@@ -299,33 +314,36 @@ fn g2_chain_endomorphism(t: ark_bn254::G2Affine) -> (ark_bn254::G2Affine, Script
 // IsInSubGroup returns true if p is on the r-torsion, false otherwise.
 // https://eprint.iacr.org/2022/348.pdf, sec. 3 and 5.1
 // [r]P == 0 <==> [x₀+1]P + ψ([x₀]P) + ψ²([x₀]P) = ψ³([2x₀]P)
-pub(crate) fn is_in_g2_subgroup(q: ark_bn254::G2Affine, window: usize) -> Vec<(Script, Vec<Hint>)> {
+pub(crate) fn is_in_g2_subgroup(q: ark_bn254::G2Affine, window: usize) -> Vec<(ark_bn254::G2Affine, Script, Vec<Hint>)> {
     let scalar = 4965661367192848881;
     let mut all_chunks = vec![];
     let msm_chunks = hinted_msm(scalar, q, window);
     let msm_res = (q * ark_bn254::Fr::from(scalar)).into_affine();
     all_chunks.extend_from_slice(&msm_chunks);
 
-    let (endo_res, endo_scr, endo_hints) = g2_chain_endomorphism(msm_res);
-    all_chunks.push((endo_scr, endo_hints));
-    assert_eq!(endo_res.neg(), (msm_res + q).into_affine());
+    let endo_chunk = g2_chain_endomorphism(msm_res);
+    let endo_res = endo_chunk.0.clone();
+    all_chunks.push(endo_chunk);
 
     let last_chunk = {
         let (add_0_scr, add_0_hints) = hinted_check_add(msm_res, q);
+        let add_0 = (msm_res + q).into_affine();
+
+        let (add_1_scr, add_1_hints) = hinted_check_add(endo_res, add_0);
+        let add_1 = (endo_res + add_0).into_affine();
+        assert!(add_1.is_zero());
+        let add_1 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO);
+        
         let scr = script!(
             // [endo_res, msm_res, q]
             {add_0_scr}
             // [endo_res, [x₀+1]P]
-            {Fq2::neg(0)}
-            // [endo_res, -[x₀+1]P]
-            {Fq2::roll(4)} 
-            {Fq2::equal()}
-            OP_TOALTSTACK
-            {Fq2::equal()}
-            OP_FROMALTSTACK
-            OP_BOOLAND
+            {add_1_scr}
         );
-        (scr, add_0_hints)
+        let mut hints = vec![];
+        hints.extend_from_slice(&add_0_hints);
+        hints.extend_from_slice(&add_1_hints);
+        (add_1, scr, hints)
     };
 
     all_chunks.push(last_chunk);
@@ -485,24 +503,12 @@ mod test {
         let scalar = u64::rand(&mut prng);
         let window = 4;
         let chunks = hinted_msm(scalar, q, window);
-        let chunk_hints: Vec<Vec<Hint>> = chunks.iter().map(|c| c.1.clone()).collect();
-        let chunk_scripts: Vec<treepp::Script> = chunks.iter().map(|c| c.0.clone()).collect();
+        let chunk_hints: Vec<Vec<Hint>> = chunks.iter().map(|c| c.2.clone()).collect();
+        let chunk_scripts: Vec<treepp::Script> = chunks.iter().map(|c| c.1.clone()).collect();
+        let chunk_results: Vec<ark_bn254::G2Affine> = chunks.iter().map(|c| c.0.clone()).collect();
         
-        let scalar_splits = split_scalar(window, scalar);
-        let mut accs = vec![];
-        let mut acc = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO);
-        for bits in &scalar_splits {
-            for bit in bits {
-                if *bit == 0 {
-                    acc = (acc + acc).into_affine();
-                } else if *bit == 1 {
-                    acc = (acc + q).into_affine();
-                }
-            }
-            accs.push(acc);
-        }
         let expected = (q * ark_bn254::Fr::from(scalar)).into_affine();
-        assert_eq!(expected, accs[accs.len()-1]);
+        assert_eq!(expected, chunk_results[chunk_results.len()-1]);
 
         for i in 0..chunk_scripts.len() {
             let scr = script!(
@@ -514,17 +520,17 @@ mod test {
                     { fq2_push_not_montgomery(ark_bn254::Fq2::ZERO) }
                     { fq2_push_not_montgomery(ark_bn254::Fq2::ZERO) }
                 } else {
-                    { fq2_push_not_montgomery(accs[i-1].x) }
-                    { fq2_push_not_montgomery(accs[i-1].y) }
+                    { fq2_push_not_montgomery(chunk_results[i-1].x) }
+                    { fq2_push_not_montgomery(chunk_results[i-1].y) }
                 }
                 // [t, q]
                 { fq2_push_not_montgomery(q.x) }
                 { fq2_push_not_montgomery(q.y) }
                 { chunk_scripts[i].clone() }
                 // [nt]
-                { fq2_push_not_montgomery(accs[i].y) }
+                { fq2_push_not_montgomery(chunk_results[i].y) }
                 { Fq2::equalverify() }
-                { fq2_push_not_montgomery(accs[i].x) }
+                { fq2_push_not_montgomery(chunk_results[i].x) }
                 { Fq2::equalverify() }
                 OP_TRUE
             );
@@ -607,31 +613,21 @@ mod test {
         let q = ark_bn254::G2Affine::rand(&mut prng);
         let scalar = 4965661367192848881;
         let window = 4;
-        
-        let scalar_splits = split_scalar(window, scalar);
-        let mut accs = vec![];
-        let mut acc = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO);
-        for bits in &scalar_splits {
-            for bit in bits {
-                if *bit == 0 {
-                    acc = (acc + acc).into_affine();
-                } else if *bit == 1 {
-                    acc = (acc + q).into_affine();
-                }
-            }
-            accs.push(acc);
-        }
-        let expected_msm = (q * ark_bn254::Fr::from(scalar)).into_affine();
-        assert_eq!(expected_msm, accs[accs.len()-1]);
+        let num_msm_chunks = split_scalar(window, scalar).len();
 
-        let (endo_res, _, _) = g2_chain_endomorphism(expected_msm);
+        let expected_msm = (q * ark_bn254::Fr::from(scalar)).into_affine();
+
 
         let chunks = is_in_g2_subgroup(q, window);
-        let chunk_hints: Vec<Vec<Hint>> = chunks.iter().map(|c| c.1.clone()).collect();
-        let chunk_scripts: Vec<treepp::Script> = chunks.iter().map(|c| c.0.clone()).collect();
-        
+        let chunk_hints: Vec<Vec<Hint>> = chunks.iter().map(|c| c.2.clone()).collect();
+        let chunk_scripts: Vec<treepp::Script> = chunks.iter().map(|c| c.1.clone()).collect();
+        let chunk_results: Vec<ark_bn254::G2Affine> = chunks.iter().map(|c| c.0.clone()).collect();
+
         // MSM Chunks
-        let num_msm_chunks = scalar_splits.len();
+        assert_eq!(num_msm_chunks+2, chunk_results.len());
+        assert_eq!(chunk_results[num_msm_chunks-1], expected_msm);
+        assert_eq!(chunk_results[num_msm_chunks+1], ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO));
+
         for i in 0..num_msm_chunks {
             let scr = script!(
                 for hint in &chunk_hints[i] {
@@ -642,17 +638,17 @@ mod test {
                     { fq2_push_not_montgomery(ark_bn254::Fq2::ZERO) }
                     { fq2_push_not_montgomery(ark_bn254::Fq2::ZERO) }
                 } else {
-                    { fq2_push_not_montgomery(accs[i-1].x) }
-                    { fq2_push_not_montgomery(accs[i-1].y) }
+                    { fq2_push_not_montgomery(chunk_results[i-1].x) }
+                    { fq2_push_not_montgomery(chunk_results[i-1].y) }
                 }
                 // [t, q]
                 { fq2_push_not_montgomery(q.x) }
                 { fq2_push_not_montgomery(q.y) }
                 { chunk_scripts[i].clone() }
                 // [nt]
-                { fq2_push_not_montgomery(accs[i].y) }
+                { fq2_push_not_montgomery(chunk_results[i].y) }
                 { Fq2::equalverify() }
-                { fq2_push_not_montgomery(accs[i].x) }
+                { fq2_push_not_montgomery(chunk_results[i].x) }
                 { Fq2::equalverify() }
                 OP_TRUE
             );
@@ -673,13 +669,13 @@ mod test {
             for hint in &chunk_hints[num_msm_chunks] {
                 {hint.push()}
             }
-            { fq2_push_not_montgomery(expected_msm.x) }
-            { fq2_push_not_montgomery(expected_msm.y) }
+            { fq2_push_not_montgomery(chunk_results[num_msm_chunks-1].x) }
+            { fq2_push_not_montgomery(chunk_results[num_msm_chunks-1].y) }
             { chunk_scripts[num_msm_chunks].clone() }
 
-            {fq2_push_not_montgomery(endo_res.y)}
+            {fq2_push_not_montgomery(chunk_results[num_msm_chunks].y)}
             {Fq2::equalverify()}
-            {fq2_push_not_montgomery(endo_res.x)}
+            {fq2_push_not_montgomery(chunk_results[num_msm_chunks].x)}
             {Fq2::equalverify()}
             OP_TRUE
         );
@@ -696,14 +692,19 @@ mod test {
                 {hint.push()}
             }
             // aux hints
-            { fq2_push_not_montgomery(endo_res.x) }
-            { fq2_push_not_montgomery(endo_res.y) }
-            { fq2_push_not_montgomery(expected_msm.x) }
-            { fq2_push_not_montgomery(expected_msm.y) }
+            { fq2_push_not_montgomery(chunk_results[num_msm_chunks].x) }
+            { fq2_push_not_montgomery(chunk_results[num_msm_chunks].y) }
+            { fq2_push_not_montgomery(chunk_results[num_msm_chunks-1].x) }
+            { fq2_push_not_montgomery(chunk_results[num_msm_chunks-1].y) }
             { fq2_push_not_montgomery(q.x) }
             { fq2_push_not_montgomery(q.y) }
 
             { chunk_scripts[num_msm_chunks+1].clone() }
+            { fq2_push_not_montgomery(chunk_results[num_msm_chunks+1].y) }
+            { Fq2::equalverify() }
+            { fq2_push_not_montgomery(chunk_results[num_msm_chunks+1].x) }
+            { Fq2::equalverify() }
+            OP_TRUE
         );
 
         let exec_result = execute_script_without_stack_limit(scr);
