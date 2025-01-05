@@ -2442,6 +2442,20 @@ impl G2Affine {
         }
     }
 
+    pub fn toaltstack() -> Script {
+        script! {
+            {Fq2::toaltstack()}
+            {Fq2::toaltstack()}
+        }
+    }
+
+    pub fn fromaltstack() -> Script {
+        script! {
+            {Fq2::fromaltstack()}
+            {Fq2::fromaltstack()}
+        }
+    }
+
     pub fn hinted_is_on_curve(x: ark_bn254::Fq2, y: ark_bn254::Fq2) -> (Script, Vec<Hint>) {
         let (x_sq, x_sq_hint) = Fq2::hinted_square(x);
         let (x_cu, x_cu_hint) = Fq2::hinted_mul(0, x, 2, x*x);
