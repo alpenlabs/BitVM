@@ -2386,6 +2386,39 @@ impl G2Affine {
         }
     }
 
+    pub fn is_zero_keep_element() -> Script {
+        // [px0, px1, qx0, qx1]
+        script! (
+            for i in 0..4 {
+                {Fq::copy(i)}
+                {Fq::is_zero(0)}
+                OP_TOALTSTACK
+            }
+            {1}
+            for _ in 0..4 {
+                OP_FROMALTSTACK
+                OP_BOOLAND
+            }
+        )
+    }
+
+    pub fn drop() -> Script {
+        script! {
+            { Fq2::drop() }
+            { Fq2::drop() }
+        }
+    }
+
+    pub fn roll(mut a: u32) -> Script {
+        a *= 4;
+        script! {
+            { Fq::roll(a + 3) }
+            { Fq::roll(a + 3) }
+            { Fq::roll(a + 3) }
+            { Fq::roll(a + 3) }
+        }
+    }
+
     pub fn hinted_is_on_curve(x: ark_bn254::Fq2, y: ark_bn254::Fq2) -> (Script, Vec<Hint>) {
         let (x_sq, x_sq_hint) = Fq2::hinted_square(x);
         let (x_cu, x_cu_hint) = Fq2::hinted_mul(0, x, 2, x*x);
