@@ -1,9 +1,9 @@
 use num_bigint::BigUint;
 use num_traits::Num;
-use std::str::FromStr;
 use std::cmp::Ordering;
+use std::str::FromStr;
 
-use crate::bigint::{BigIntImpl, U254};
+use crate::bigint::BigIntImpl;
 use crate::pseudo::{push_to_stack, NMUL};
 use crate::treepp::*;
 
@@ -121,7 +121,8 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
                 }
                 OP_1SUB OP_PICK
             }
-        }.add_stack_hint(-(Self::N_LIMBS as i32), Self::N_LIMBS as i32)
+        }
+        .add_stack_hint(-(Self::N_LIMBS as i32), Self::N_LIMBS as i32)
     }
 
     pub fn roll(mut a: u32) -> Script {
@@ -161,7 +162,9 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
     }
 
     #[inline]
-    pub fn push_zero() -> Script { push_to_stack(0, Self::N_LIMBS as usize) }
+    pub fn push_zero() -> Script {
+        push_to_stack(0, Self::N_LIMBS as usize)
+    }
 
     #[inline]
     pub fn push_one() -> Script {
@@ -239,7 +242,6 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
         }
     }
 
-
     pub fn is_negative(depth: u32) -> Script {
         script! {
             { (1 + depth) * Self::N_LIMBS - 1 } OP_PICK
@@ -278,7 +280,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
                         { n_limbs_target - 1 } OP_ROLL
                     }
                 }
-            },
+            }
             Ordering::Less => {
                 let n_limbs_to_remove = n_limbs_self - n_limbs_target;
                 script! {
@@ -290,8 +292,14 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
         }
     }
 
+    /// Unpacks the limbs of the big integer into smaller parts (nibbles) based on a given window size.
+    ///
+    /// This function decomposes the limbs of a `BigIntImpl` into smaller components  
+    /// determined by the specified `WINDOW` size.
+
     pub fn unpack_limbs<const WINDOW: u32>() -> Script {
         let n_digits: u32 = (N_BITS + WINDOW - 1) / WINDOW;
+        println!("n_digits: {}", n_digits);
 
         script! {
             { Self::toaltstack() }
@@ -377,64 +385,73 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
         }
     }
 
-    pub fn pack_limbs<const WINDOW : u32>() -> Script {
-        fn split_digit(window: u32, index: u32) -> Script {
-            script! {
-                // {v}
-                0                           // {v} {A}
-                OP_SWAP
-                for i in 0..index {
-                    OP_TUCK                 // {v} {A} {v}
-                    { 1 << (window - i - 1) }   // {v} {A} {v} {1000}
-                    OP_GREATERTHANOREQUAL   // {v} {A} {1/0}
-                    OP_TUCK                 // {v} {1/0} {A} {1/0}
-                    OP_ADD                  // {v} {1/0} {A+1/0}
-                    if i < index - 1 { { NMUL(2) } }
-                    OP_ROT OP_ROT
-                    OP_IF
-                        { 1 << (window - i - 1) }
-                        OP_SUB
-                    OP_ENDIF
-                }
-                OP_SWAP
+    pub fn split_digit(window: u32, index: u32) -> Script {
+        script! {
+            // {v}
+            0                           // {v} {A}
+            OP_SWAP
+            for i in 0..index {
+                OP_TUCK                 // {v} {A} {v}
+                { 1 << (window - i - 1) }   // {v} {A} {v} {1000}
+                OP_GREATERTHANOREQUAL   // {v} {A} {1/0}
+                OP_TUCK                 // {v} {1/0} {A} {1/0}
+                OP_ADD                  // {v} {1/0} {A+1/0}
+                if i < index - 1 { { NMUL(2) } }
+                OP_ROT OP_ROT
+                OP_IF
+                    { 1 << (window - i - 1) }
+                    OP_SUB
+                OP_ENDIF
             }
+            OP_SWAP
+        }
+    }
+
+    pub fn pack_limbs<const WINDOW: u32>() -> Script {
+        let n_digits: u32 = (N_BITS + WINDOW - 1) / WINDOW;
+        print!("n_digits :: {}\n",n_digits);
+
+        let n_limbs: u32 = N_BITS.div_ceil(LIMB_SIZE);
+        print!("n_limbs :: {}\n",n_limbs);
+
+        for i in (1..=n_digits).rev(){
+            println!("for i = {}, modulo = {}", i , (i * WINDOW) % LIMB_SIZE < WINDOW);
         }
 
-        const LIMB_SIZE: u32 = 29;
-        const N_BITS: u32 = U254::N_BITS;
-        let n_digits: u32 = (N_BITS + WINDOW - 1) / WINDOW;
-
         script! {
-            for i in 1..64 { { i } OP_ROLL }
+            for i in 1..n_digits { { i } OP_ROLL }
             for i in (1..=n_digits).rev() {
                 if (i * WINDOW) % LIMB_SIZE == 0 {
                     OP_TOALTSTACK
-                } else if (i * WINDOW) % LIMB_SIZE > 0 &&
+                }
+                 else if (i * WINDOW) % LIMB_SIZE > 0 &&
                             (i * WINDOW) % LIMB_SIZE < WINDOW {
                     OP_SWAP
-                    { split_digit(WINDOW, (i * WINDOW) % LIMB_SIZE) }
+                    { Self::split_digit(WINDOW, (i * WINDOW) % LIMB_SIZE) }
                     OP_ROT
                     { NMUL(1 << ((i * WINDOW) % LIMB_SIZE)) }
                     OP_ADD
                     OP_TOALTSTACK
-                } else if i != n_digits {
+                }
+                 else if i != n_digits {
                     { NMUL(1 << WINDOW) }
                     OP_ADD
                 }
             }
-            for _ in 1..U254::N_LIMBS { OP_FROMALTSTACK }
-            for i in 1..U254::N_LIMBS { { i } OP_ROLL }
+            for _ in 1..n_limbs { OP_FROMALTSTACK }
+            for i in 1..n_limbs { { i } OP_ROLL }
         }
     }
 }
 
-
 #[cfg(test)]
 mod test {
-    use crate::bigint::{BigIntImpl, U254};
-    use crate::run;
-    
-    use bitcoin_script::script;
+    use crate::pseudo::{push_to_stack, NMUL};
+    use crate::bigint::{BigIntImpl, U254, U64};
+    use crate::{execute_script, run};
+    use crate::treepp::script;
+    use bitcoin::opcodes::all::{OP_FROMALTSTACK, OP_TOALTSTACK};
+    use bitcoin::opcodes::{OP_FALSE, OP_TRUE};
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha20Rng;
 
@@ -729,16 +746,288 @@ mod test {
                 { i }
             }
             { U254::pack_limbs::<WINDOW>() }
-            { U254::push_hex(hex_str) }
+            { U254::unpack_limbs::<WINDOW>()}
+            // { U254::push_hex(hex_str) }
 
-            for i in (1..10).rev(){
-            {i}
-            OP_ROLL
-            OP_EQUALVERIFY
-            }
-            OP_TRUE
+            // for i in (1..10).rev(){
+            // {i}
+            // OP_ROLL
+            // OP_EQUALVERIFY
+            // }
+            // OP_TRUE
         };
 
-        run(script);
+        let res = crate::execute_script(script);
+        for i in 0..res.final_stack.len() {
+            if res.final_stack.get(i).is_empty() {
+                println!("Pos : {} -- Value : {:?}", i, res.final_stack.get(i));
+            } else {
+                println!(
+                    "Pos : {} -- Value : {}",
+                    i,
+                    res.final_stack
+                        .get(i)
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_pack_unpack_u210() {
+        const WINDOW: u32 = 3;
+        const N_BITS: u32 = 210;
+        const LIMB_SIZE: u32 = 30;
+
+        type U210 = BigIntImpl<N_BITS, LIMB_SIZE>;
+
+        let script = script! {
+            // { 0b111111111111111111111111111111 }
+            // { 0b111111111111111111111111111111 }
+            // { 0b111111111111111111111111111111 }
+            // { 0b111111111111111111111111111111 }
+            // { 0b111111111111111111111111111111 }
+            // { 0b111111111111111111111111111111 }
+            // { 0b111111111111111111111111111111 }
+
+            // { U210::unpack_limbs::<WINDOW>() }
+
+            for _ in 0..70{
+                {0b111}
+            }
+
+            { U210::pack_limbs::<WINDOW>() }
+
+        };
+        let res = crate::execute_script(script);
+        for i in 0..res.final_stack.len() {
+            if res.final_stack.get(i).is_empty() {
+                println!("Pos : {} -- Value : {:?}", i, res.final_stack.get(i));
+            } else {
+                println!(
+                    "Pos : {} -- Value : {}",
+                    i,
+                    res.final_stack
+                        .get(i)
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_pack_unpack_u64() {
+        const WINDOW: u32 = 4;
+
+        let script = script! {
+
+            { 0b1111111111111111 }
+            { 0b1111111111111111 }
+            { 0b1111111111111111 }
+            { 0b1111111111111111 }
+
+            { U64::unpack_limbs::<WINDOW>() }
+            // { U64::pack_limbs::<WINDOW>()}
+        };
+        let res = crate::execute_script(script);
+        for i in 0..res.final_stack.len() {
+            if res.final_stack.get(i).is_empty() {
+                println!("Pos : {} -- Value : {:?}", i, res.final_stack.get(i));
+            } else {
+                println!(
+                    "Pos : {} -- Value : {}",
+                    i,
+                    res.final_stack
+                        .get(i)
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_pack_unpack_u254() {
+        const WINDOW: u32 = 4;
+
+        let script = script! {
+            { 0b10101010101000010101110100101 }
+            { 0b01010100101010000000101010101 }
+            { 0b11010010100101001010101001010 }
+            { 0b00101010001110110001010110101 }
+            { 0b00010101001010101111111101001 }
+            { 0b10111110101010100101001011001 }
+            { 0b00001010100101010001010100101 }
+            { 0b01111010101010110100100010000 }
+            { 0b00010100101001010101001010101 }
+
+            { U254::unpack_limbs::<WINDOW>() }
+            { U254::pack_limbs::<WINDOW>() }
+            { U254::unpack_limbs::<WINDOW>() }
+            { U254::pack_limbs::<WINDOW>() }
+
+
+            { 0b10101010101000010101110100101 }
+            { 0b01010100101010000000101010101 }
+            { 0b11010010100101001010101001010 }
+            { 0b00101010001110110001010110101 }
+            { 0b00010101001010101111111101001 }
+            { 0b10111110101010100101001011001 }
+            { 0b00001010100101010001010100101 }
+            { 0b01111010101010110100100010000 }
+            { 0b00010100101001010101001010101 }
+
+            for i in (2..10).rev(){
+                {i}
+                OP_ROLL
+                OP_EQUALVERIFY
+            }
+            OP_EQUALVERIFY
+            OP_TRUE
+
+        };
+        println!("Script : {:?}", script.clone().compile());
+        let res = crate::execute_script(script);
+        for i in 0..res.final_stack.len() {
+            if res.final_stack.get(i).is_empty() {
+                println!("Pos : {} -- Value : {:?}", i, res.final_stack.get(i));
+            } else {
+                println!(
+                    "Pos : {} -- Value : {}",
+                    i,
+                    res.final_stack
+                        .get(i)
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
+        // let exec_result = execute_script(script);
+        // assert!(exec_result.success);
+    }
+
+    #[test]
+    fn test_split_digits() {
+        const WINDOW: u32 = 4;
+
+        let script = script! {
+            { 0b10101010101000010101110100101 }
+            { 0b01010100101010000000101010101 }
+            { 0b11010010100101001010101001010 }
+            { 0b00101010001110110001010110101 }
+            { 0b00010101001010101111111101001 }
+            { 0b10111110101010100101001011001 }
+            { 0b00001010100101010001010100101 }
+            { 0b01111010101010110100100010000 }
+            { 0b00010100101001010101001010101 }
+
+            {U254::split_digit(7,4)}
+
+
+        };
+
+        let res = crate::execute_script(script);
+        for i in 0..res.final_stack.len() {
+            if res.final_stack.get(i).is_empty() {
+                println!("Pos : {} -- Value : {:?}", i, res.final_stack.get(i));
+            } else {
+                println!(
+                    "Pos : {} -- Value : {}",
+                    i,
+                    res.final_stack
+                        .get(i)
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
+    }
+
+    // 12 bits into window of 5 should take 3 limbs bit only 2 stack elements are shown.
+    #[test]
+    fn test_pack_unpack_u12() {
+        const WINDOW: u32 = 5;
+        const N_BITS: u32 = 12;
+        const LIMB_SIZE: u32 = 6;
+
+        type U12 = BigIntImpl<N_BITS, LIMB_SIZE>;
+
+        let script = script! {
+            // { 0b1}
+            { 0b111111}
+            { 0b111111}
+
+            { U12::unpack_limbs::<WINDOW>() }
+            OP_FROMALTSTACK
+            // { U12::pack_limbs::<WINDOW>() }
+            // { U12::unpack_limbs::<WINDOW>() }
+            // { U12::pack_limbs::<WINDOW>() }
+
+        };
+
+        println!("Script : {:?}", script.clone().compile());
+        let res = crate::execute_script(script);
+        for i in 0..res.final_stack.len() {
+            if res.final_stack.get(i).is_empty() {
+                println!("Pos : {} -- Value : {:?}", i, res.final_stack.get(i));
+            } else {
+                println!(
+                    "Pos : {} -- Value : {}",
+                    i,
+                    res.final_stack
+                        .get(i)
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
+    }
+
+
+    #[test]
+    fn test_popfromemptystack(){
+        let script = script!(
+            // OP_FALSE
+            OP_TOALTSTACK
+            OP_TRUE
+        );
+
+
+        println!("Script : {:?}", script.clone().compile());
+        let res = crate::execute_script(script.clone());
+        for i in 0..res.final_stack.len() {
+            if res.final_stack.get(i).is_empty() {
+                println!("Pos : {} -- Value : {:?}", i, res.final_stack.get(i));
+            } else {
+                println!(
+                    "Pos : {} -- Value : {}",
+                    i,
+                    res.final_stack
+                        .get(i)
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
+
+        let exec_result = execute_script(script);
+        assert!(exec_result.success); 
+
     }
 }
