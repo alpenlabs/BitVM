@@ -26,7 +26,7 @@ pub(crate) fn tap_msm(window: usize, msm_tap_index: usize, ks: Vec<ark_bn254::Fr
         acc_hints[msm_tap_index-1]
     };
     let num_pubs = qs.len();
-    let (loop_script, _)= bn254::curves::G1Affine::hinted_scalar_mul_by_constant_g1_ith_step(&mut g1acc, ks, qs, window as u32, msm_tap_index as u32);
+    let (_, loop_script, _)= bn254::curves::G1Affine::hinted_scalar_mul_by_constant_g1_ith_step(&mut g1acc, ks, qs, window as u32, msm_tap_index as u32);
 
     // [G1AccDashHash, G1AccHash, k0, k1, k2]
     // [Dec, G1Acc]
@@ -183,7 +183,7 @@ pub(crate) fn hint_msm(window: usize, msm_tap_index: usize, ks: Vec<ark_bn254::F
     } else {
         acc_hints[msm_tap_index-1]
     };
-    let (_, loop_hints)= bn254::curves::G1Affine::hinted_scalar_mul_by_constant_g1_ith_step(&mut g1acc, ks, qs, window as u32, msm_tap_index as u32);
+    let (_, _, loop_hints)= bn254::curves::G1Affine::hinted_scalar_mul_by_constant_g1_ith_step(&mut g1acc, ks, qs, window as u32, msm_tap_index as u32);
     let hint_script = script!(
         for h in &loop_hints {
             {h.push()}
