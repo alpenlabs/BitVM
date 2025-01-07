@@ -37,7 +37,7 @@ mod test {
             false,
         );
         let hint_in = ElemFp12Acc { f, hash: fhash };
-        let (hint_out, hint_script) = hints_frob_fp12(hint_in, power);
+        let (hint_out, tap_frob, hint_script) = chunk_frob_fp12(hint_in, power);
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.out()) {
@@ -49,8 +49,6 @@ mod test {
             }
             {Fq::toaltstack()}
         };
-
-        let tap_frob = tap_frob_fp12(power);
 
         let tap_len = tap_frob.len();
         let script = script! {
@@ -79,7 +77,7 @@ mod test {
             f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
         ];
 
-        let (hint_out, hint_script) = hint_hash_c(fqvec.clone());
+        let (hint_out, tap_hash_c, hint_script) = chunk_hash_c(fqvec.clone());
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.out()) {
@@ -91,8 +89,6 @@ mod test {
                 {Fq::toaltstack()}                
             }
         };
-
-        let tap_hash_c = tap_hash_c();
 
         let tap_len = tap_hash_c.len();
         let script = script! {
@@ -122,7 +118,7 @@ mod test {
             false,
         );
         let hint_in = ElemFp12Acc { f, hash: fhash };
-        let (hint_out, hint_script) = hint_hash_c2(hint_in);
+        let (hint_out, tap_hash_c2, hint_script) = chunk_hash_c2(hint_in);
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.out()) {
@@ -134,8 +130,6 @@ mod test {
             }
             {Fq::toaltstack()}
         };
-
-        let tap_hash_c2 = tap_hash_c2();
 
         let tap_len = tap_hash_c2.len();
         let script = script! {
@@ -202,7 +196,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let p = ark_bn254::G1Affine::rand(&mut prng);
 
-        let (hint_out, hint_script) = hints_precompute_px(p.y, p.x, p.y.inverse().unwrap());
+        let (hint_out, tap_prex, hint_script) = chunk_precompute_px(p.y, p.x, p.y.inverse().unwrap());
 
         let bitcom_scr = script!{
             {fq_push_not_montgomery(hint_out)}
@@ -214,8 +208,6 @@ mod test {
             {fq_push_not_montgomery(p.y.inverse().unwrap())}
             {Fq::toaltstack()}                
         };
-
-        let tap_prex = tap_precompute_px();
 
         let tap_len = tap_prex.len();
         let script = script! {
@@ -238,7 +230,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let p = ark_bn254::G1Affine::rand(&mut prng);
 
-        let (hint_out, hint_script) = hints_precompute_py(p.y);
+        let (hint_out, tap_prey, hint_script) = chunk_precompute_py(p.y);
 
         let bitcom_scr = script!{
             {fq_push_not_montgomery(hint_out)}
@@ -246,8 +238,6 @@ mod test {
             {fq_push_not_montgomery(p.y)}
             {Fq::toaltstack()}                       
         };
-
-        let tap_prey = tap_precompute_py();
 
         let tap_len = tap_prey.len();
         let script = script! {
@@ -284,7 +274,7 @@ mod test {
 
         let dbl_blk = true;
 
-        let (hint_out, hint_script) = hint_sparse_dense_mul(hint_f, hint_t, dbl_blk);
+        let (hint_out, tap_scr, hint_script) = chunk_sparse_dense_mul(hint_f, hint_t, dbl_blk);
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.out()) {
@@ -300,8 +290,6 @@ mod test {
             }
             {Fq::toaltstack()}
         };
-
-        let tap_scr = tap_sparse_dense_mul(dbl_blk);
 
         let tap_len = tap_scr.len();
         let script = script! {
@@ -343,7 +331,7 @@ mod test {
 
 
 
-        let (hint_out, hint_script) = hints_dense_dense_mul0(hint_f, hint_g);
+        let (hint_out, tap_scr, hint_script) = chunk_dense_dense_mul0(hint_f, hint_g);
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.out()) {
@@ -359,8 +347,6 @@ mod test {
             }
             {Fq::toaltstack()}
         };
-
-        let tap_scr = tap_dense_dense_mul0();
 
         let tap_len = tap_scr.len();
         let script = script! {
@@ -411,7 +397,7 @@ mod test {
         let hint_c0 = ElemFp12Acc {f: ark_bn254::Fq12::new(c.c0, ark_bn254::Fq6::ZERO), hash: hash_c};
 
 
-        let (hint_out, hint_script) = hints_dense_dense_mul1(hint_f, hint_g, hint_c0);
+        let (hint_out, tap_scr, hint_script) = chunk_dense_dense_mul1(hint_f, hint_g, hint_c0);
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.out()) {
@@ -432,7 +418,6 @@ mod test {
             {Fq::toaltstack()}
         };
 
-        let tap_scr = tap_dense_dense_mul1();
 
         let tap_len = tap_scr.len();
         let script = script! {
@@ -476,7 +461,7 @@ mod test {
 
 
 
-        let (hint_out, hint_script) = hints_dense_dense_mul0_by_constant(hint_f, hint_g);
+        let (hint_out, tap_scr, hint_script) = chunk_dense_dense_mul0_by_constant(hint_f, hint_g);
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.out()) {
@@ -488,8 +473,6 @@ mod test {
             }
             {Fq::toaltstack()}
         };
-
-        let tap_scr = tap_dense_dense_mul0_by_constant(hint_g.f);
 
         let tap_len = tap_scr.len();
         let script = script! {
@@ -539,7 +522,7 @@ mod test {
         let hint_c0 = ElemFp12Acc {f: ark_bn254::Fq12::new(c.c0, ark_bn254::Fq6::ZERO), hash: hash_c};
 
 
-        let (hint_out, hint_script) = hints_dense_dense_mul1_by_constant(hint_f, hint_c0, hint_g);
+        let (hint_out, tap_scr, hint_script) = chunk_dense_dense_mul1_by_constant(hint_f, hint_c0, hint_g);
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.out()) {
@@ -555,8 +538,6 @@ mod test {
             }
             {Fq::toaltstack()}
         };
-
-        let tap_scr = tap_dense_dense_mul1_by_constant(hint_g.f);
 
         let tap_len = tap_scr.len();
         let script = script! {
@@ -588,7 +569,7 @@ mod test {
         );
         let hint_f = ElemFp12Acc { f, hash: fhash };
 
-        let (hint_out, hint_script) = hint_squaring(hint_f);
+        let (hint_out, tap_scr, hint_script) = chunk_squaring(hint_f);
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.out()) {
@@ -600,8 +581,6 @@ mod test {
             }
             {Fq::toaltstack()}
         };
-
-        let tap_scr = tap_squaring();
 
         let tap_len = tap_scr.len();
         let script = script! {
@@ -631,9 +610,8 @@ mod test {
         let add_le = Some((ark_bn254::Fq2::rand(&mut prng), ark_bn254::Fq2::rand(&mut prng)));
         let t = ElemG2PointAcc { t, dbl_le, add_le };
 
-        let point_ops_tapscript = tap_point_ops(ate);
 
-        let (hint_out, hint_script) = hint_point_ops(
+        let (hint_out, point_ops_tapscript, hint_script) = chunk_point_ops(
             t,
              q.y.c1, q.y.c0, q.x.c1, q.x.c0,
               p.y, p.x, ate);
@@ -680,13 +658,12 @@ mod test {
 
     #[test]
     fn test_tap_affine_double_eval() {
-        let point_ops_tapscript = tap_point_dbl();
 
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let t4acc: ElemG2PointAcc = ElemG2PointAcc { t: ark_bn254::G2Affine::rand(&mut prng), dbl_le: None, add_le: None };
 
-        let (hint_out, hint_script) = hint_point_dbl(t4acc, p.y, p.x);
+        let (hint_out, point_ops_tapscript, hint_script) = chunk_point_dbl(t4acc, p.y, p.x);
 
         let hint_out_hash = extern_nibbles_to_limbs(hint_out.out());
         let hint_in_hash = extern_nibbles_to_limbs(t4acc.out());
@@ -725,7 +702,6 @@ mod test {
     #[test]
     fn test_tap_affine_add_eval() {
         let ate = 1;
-        let point_ops_tapscript = tap_point_add_with_frob(ate);
 
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let t = ark_bn254::G2Affine::rand(&mut prng);
@@ -736,7 +712,7 @@ mod test {
         let add_le = Some((ark_bn254::Fq2::rand(&mut prng), ark_bn254::Fq2::rand(&mut prng)));
         let t = ElemG2PointAcc { t, dbl_le, add_le };
 
-        let (hint_out, hint_script) = hint_point_add_with_frob(
+        let (hint_out, point_ops_tapscript, hint_script) = chunk_point_add_with_frob(
             t,
              q.y.c1, q.y.c0, q.x.c1, q.x.c0, p.y, p.x, ate);
         let bitcom_script = script!{

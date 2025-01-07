@@ -19,74 +19,70 @@ use super::hint_models::*;
 use super::taps_point_ops::hash_g2acc_with_hashed_t;
 
 // SPARSE DENSE
-pub(crate) fn tap_sparse_dense_mul(dbl_blk: bool) -> Script {
-    let (hinted_script, _) = Fq12::hinted_mul_by_34(
-        ark_bn254::Fq12::one(),
-        ark_bn254::Fq2::one(),
-        ark_bn254::Fq2::one(),
-    );
-
-    let ops_script = script! {
-        // Stack: [...,hash_out, hash_in1, hash_in2]
-        // Move aux hashes to alt stack
-        {Fq::toaltstack()}
-        {Fq::toaltstack()}
-
-        // Stack [f, dbl_le0, dbl_le1]
-        {Fq12::copy(4)}
-        {Fq2::copy(14)}
-        {Fq2::copy(14)}
-
-        // Stack [f, dbl_le0, dbl_le1, f, dbl_le0, dbl_le]
-        { hinted_script }
-        // Stack [f, dbl_le0, dbl_le1, f1]
-        // Fq_equal verify
-    };
-
-    let hash_script = script! {
-        // Altstack: [Hout, Hin_f, Hin_g, HT, Hauxle]
-        // Stack [f, cur_le0, cur_le1, f1]
-        
-        {Fq::fromaltstack()} {Fq::fromaltstack()}  {Fq::fromaltstack()}
-        // M: [f, cur_le0, cur_le1, f1, Hauxle, HT, Hin_g]  
-        {Fq12::roll(3)} {Fq12::toaltstack()}      
-        {Fq12::roll(7)} {Fq12::toaltstack()}      
-
-        // A: [Hout, Hin_f, f1, f]
-        // M: [cur_le0, cur_le1, Hauxle, HT, Hin_g]  
-        {Fq::roll(1)}
-        {Fq2::roll(5)} {Fq2::roll(5)}
-        // M: [Hauxle, Hin_g, HT, cur_le0, cur_le1 ]  
-        {Fq2::roll(5)}
-        // M: [HT, cur_le0, cur_le1, Hauxle, Hin_g ]  
-        {hash_g2acc_with_hashed_t(dbl_blk)}
-        OP_VERIFY
-
-        {Fq12::fromaltstack()}
-        {hash_fp12()} // Hf
-        {Fq12::fromaltstack()} // f1
-        {Fq::roll(12)} {Fq::toaltstack()}
-        {hash_fp12()} {Fq::fromaltstack()}
-
-        // [Hf1, Hf]
-        {Fq::fromaltstack()} {Fq::fromaltstack()}
-        // [Hf1, Hf, Hin_f, Hout]
-        {Fq::equalverify(2, 1)}
-        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
-    };
-    let scr = script! {
-        {ops_script}
-        {hash_script}
-        OP_TRUE
-    };
-    scr
-}
-
-pub(crate) fn hint_sparse_dense_mul(
+pub(crate) fn chunk_sparse_dense_mul(
     hint_in_a: ElemFp12Acc,
     hint_in_g: ElemG2PointAcc,
     dbl_blk: bool,
-) -> (ElemFp12Acc, Script) {
+) -> (ElemFp12Acc, Script, Script) {
+
+    fn tap_sparse_dense_mul(dbl_blk: bool, hinted_script: Script) -> Script {
+    
+        let ops_script = script! {
+            // Stack: [...,hash_out, hash_in1, hash_in2]
+            // Move aux hashes to alt stack
+            {Fq::toaltstack()}
+            {Fq::toaltstack()}
+    
+            // Stack [f, dbl_le0, dbl_le1]
+            {Fq12::copy(4)}
+            {Fq2::copy(14)}
+            {Fq2::copy(14)}
+    
+            // Stack [f, dbl_le0, dbl_le1, f, dbl_le0, dbl_le]
+            { hinted_script }
+            // Stack [f, dbl_le0, dbl_le1, f1]
+            // Fq_equal verify
+        };
+    
+        let hash_script = script! {
+            // Altstack: [Hout, Hin_f, Hin_g, HT, Hauxle]
+            // Stack [f, cur_le0, cur_le1, f1]
+            
+            {Fq::fromaltstack()} {Fq::fromaltstack()}  {Fq::fromaltstack()}
+            // M: [f, cur_le0, cur_le1, f1, Hauxle, HT, Hin_g]  
+            {Fq12::roll(3)} {Fq12::toaltstack()}      
+            {Fq12::roll(7)} {Fq12::toaltstack()}      
+    
+            // A: [Hout, Hin_f, f1, f]
+            // M: [cur_le0, cur_le1, Hauxle, HT, Hin_g]  
+            {Fq::roll(1)}
+            {Fq2::roll(5)} {Fq2::roll(5)}
+            // M: [Hauxle, Hin_g, HT, cur_le0, cur_le1 ]  
+            {Fq2::roll(5)}
+            // M: [HT, cur_le0, cur_le1, Hauxle, Hin_g ]  
+            {hash_g2acc_with_hashed_t(dbl_blk)}
+            OP_VERIFY
+    
+            {Fq12::fromaltstack()}
+            {hash_fp12()} // Hf
+            {Fq12::fromaltstack()} // f1
+            {Fq::roll(12)} {Fq::toaltstack()}
+            {hash_fp12()} {Fq::fromaltstack()}
+    
+            // [Hf1, Hf]
+            {Fq::fromaltstack()} {Fq::fromaltstack()}
+            // [Hf1, Hf, Hin_f, Hout]
+            {Fq::equalverify(2, 1)}
+            {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+        };
+        let scr = script! {
+            {ops_script}
+            {hash_script}
+            OP_TRUE
+        };
+        scr
+    }
+    
     //assert_eq!(sec_in.len(), 2);
     if dbl_blk {
         assert!(hint_in_g.dbl_le.is_some());
@@ -102,7 +98,7 @@ pub(crate) fn hint_sparse_dense_mul(
     }
     
     let (f, cur_le0, cur_le1) = (hint_in_a.f, cur_le.0, cur_le.1);
-    let (_, hints) = Fq12::hinted_mul_by_34(f, cur_le0, cur_le1);
+    let (hinted_script, hints) = Fq12::hinted_mul_by_34(f, cur_le0, cur_le1);
     let mut f1 = f;
     f1.mul_by_034(&ark_bn254::Fq2::ONE, &cur_le0, &cur_le1);
 
@@ -171,6 +167,7 @@ pub(crate) fn hint_sparse_dense_mul(
             f: f1,
             hash: hash_dense_output,
         },
+        tap_sparse_dense_mul(dbl_blk, hinted_script),
         simulate_stack_input,
        // should_validate
     )
@@ -207,45 +204,46 @@ fn hash_mul(is_zero: bool) -> Script {
         {Fq::equal(1, 0)} OP_NOT OP_VERIFY
     }
 }
- 
-pub(crate) fn tap_dense_dense_mul0() -> Script {
-    let check_is_identity: bool = false;
-    let (hinted_mul, _) =
-        Fq12::hinted_mul_first(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
-    let mut check_id = 1;
-    if !check_is_identity {
-        check_id = 0;
+
+pub(crate) fn chunk_dense_dense_mul0(
+    hint_in_a: ElemFp12Acc,
+    hint_in_b: ElemFp12Acc,
+) -> (ElemFp12Acc, Script, Script) {
+
+    fn tap_dense_dense_mul0(hinted_mul: Script) -> Script {
+        let check_is_identity: bool = false;
+        let mut check_id = 1;
+        if !check_is_identity {
+            check_id = 0;
+        }
+
+
+        let ops_scr = script! {
+            { hinted_mul }
+            {check_id} 1 OP_NUMEQUAL
+            OP_IF
+                {Fq6::copy(0)}
+                {fq_push_not_montgomery(ark_bn254::Fq::one())}
+                for _ in 0..5 {
+                    {fq_push_not_montgomery(ark_bn254::Fq::zero())}
+                }
+                {Fq6::equalverify()}
+            OP_ENDIF
+        };
+        let scr = script! {
+            {ops_scr}
+            {hash_mul(true)}
+            OP_TRUE
+        };
+        scr
     }
 
 
-    let ops_scr = script! {
-        { hinted_mul }
-        {check_id} 1 OP_NUMEQUAL
-        OP_IF
-            {Fq6::copy(0)}
-            {fq_push_not_montgomery(ark_bn254::Fq::one())}
-            for _ in 0..5 {
-                {fq_push_not_montgomery(ark_bn254::Fq::zero())}
-            }
-            {Fq6::equalverify()}
-        OP_ENDIF
-    };
-    let scr = script! {
-        {ops_scr}
-        {hash_mul(true)}
-        OP_TRUE
-    };
-    scr
-}
 
-pub(crate) fn hints_dense_dense_mul0(
-    hint_in_a: ElemFp12Acc,
-    hint_in_b: ElemFp12Acc,
-) -> (ElemFp12Acc, Script) {
     let (f, g) = (hint_in_a.f, hint_in_b.f);
     let h = f * g;
 
-    let (_, mul_hints) = Fq12::hinted_mul_first(12, f, 0, g);
+    let (hinted_mul_scr, mul_hints) = Fq12::hinted_mul_first(12, f, 0, g);
 
     let hash_f = extern_hash_fps(
         vec![
@@ -291,6 +289,7 @@ pub(crate) fn hints_dense_dense_mul0(
             f: h,
             hash: hash_h,
         },
+        tap_dense_dense_mul0(hinted_mul_scr),
         simulate_stack_input,
     )
 }
@@ -298,41 +297,42 @@ pub(crate) fn hints_dense_dense_mul0(
 
 // DENSE DENSE MUL ONE
 
-pub(crate) fn tap_dense_dense_mul1() -> Script {
-    let check_is_identity: bool = false;
-    let mut check_id = 1;
-    if !check_is_identity {
-        check_id = 0;
-    }
-    let (hinted_mul, _) =
-        Fq12::hinted_mul_second(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
-
-    let ops_scr = script! {
-        { hinted_mul }
-        {check_id} 1 OP_NUMEQUAL
-        OP_IF
-            {Fq6::copy(0)}
-            for _ in 0..6 {
-                {fq_push_not_montgomery(ark_bn254::Fq::zero())}
-            }
-            {Fq6::equalverify()}
-        OP_ENDIF
-    };
-    let scr = script! {
-        {ops_scr}
-        {hash_mul(false)}
-        OP_TRUE
-    };
-    scr
-}
-
-pub(crate) fn hints_dense_dense_mul1(
+pub(crate) fn chunk_dense_dense_mul1(
     hint_in_a: ElemFp12Acc,
     hint_in_b: ElemFp12Acc,
     hint_in_c0: ElemFp12Acc,
-) -> (ElemFp12Acc, Script) {
+) -> (ElemFp12Acc, Script, Script) {
+
+
+    fn tap_dense_dense_mul1(hinted_mul: Script) -> Script {
+        let check_is_identity: bool = false;
+        let mut check_id = 1;
+        if !check_is_identity {
+            check_id = 0;
+        }
+        let ops_scr = script! {
+            { hinted_mul }
+            {check_id} 1 OP_NUMEQUAL
+            OP_IF
+                {Fq6::copy(0)}
+                for _ in 0..6 {
+                    {fq_push_not_montgomery(ark_bn254::Fq::zero())}
+                }
+                {Fq6::equalverify()}
+            OP_ENDIF
+        };
+        let scr = script! {
+            {ops_scr}
+            {hash_mul(false)}
+            OP_TRUE
+        };
+        scr
+    }
+
+
+
     let (f, g) = (hint_in_a.f, hint_in_b.f);
-    let (_, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
+    let (hinted_mul_scr, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
     let h = f * g;
 
     let hash_f = extern_hash_fps(
@@ -389,6 +389,7 @@ pub(crate) fn hints_dense_dense_mul1(
             f: h,
             hash: hash_c,
         },
+        tap_dense_dense_mul1(hinted_mul_scr),
         simulate_stack_input,
     )
 }
@@ -396,11 +397,41 @@ pub(crate) fn hints_dense_dense_mul1(
 
 // SQUARING
 
-pub(crate) fn hint_squaring(
+pub(crate) fn chunk_squaring(
     hint_in_a: ElemFp12Acc,
-) -> (ElemFp12Acc, Script) {
+) -> (ElemFp12Acc, Script, Script) {
+
+    fn tap_squaring(sq_script: Script) -> Script {
+        let hash_sc = script! {
+            {Fq12::toaltstack()}
+            { hash_fp12() }
+            {Fq12::fromaltstack()}
+            {Fq::roll(12)} {Fq::toaltstack()}
+            { hash_fp12() } 
+            //Alt:[hash_out, hash_in, hash_calc_out]
+            //Main:[hash_calc_in]
+            { Fq::fromaltstack() }
+            {Fq::roll(1)}
+            { Fq::fromaltstack() }
+            { Fq::fromaltstack() }
+            //Alt:[]
+            //Main:[hash_calc_in, hash_calc_out, hash_in, hash_out]
+            { Fq::equalverify(3, 1)}
+            { Fq::equal(1, 0)} // 1 if matches, 0 doesn't match
+            OP_NOT // 0 if matches, 1 doesn't match
+            OP_VERIFY // verify that output doesn't match
+        };
+        let sc = script! {
+            {Fq12::copy(0)}
+            {sq_script}
+            {hash_sc}
+            OP_TRUE
+        };
+        sc
+    }
+
     let a = hint_in_a.f;
-    let (_, hints) = Fq12::hinted_square(a);
+    let (sq_script, hints) = Fq12::hinted_square(a);
     let b = a.square();
     let a_hash = extern_hash_fps(
         vec![
@@ -433,88 +464,58 @@ pub(crate) fn hint_squaring(
         // {bc_elems}
     };
     let hint_out = ElemFp12Acc { hash: b_hash, f: b };
-    return (hint_out, simulate_stack_input);
+    return (hint_out, tap_squaring(sq_script), simulate_stack_input);
 }
 
-pub(crate) fn tap_squaring() -> Script {
-    let (sq_script, _) = Fq12::hinted_square(ark_bn254::Fq12::ONE);
-    let hash_sc = script! {
-        {Fq12::toaltstack()}
-        { hash_fp12() }
-        {Fq12::fromaltstack()}
-        {Fq::roll(12)} {Fq::toaltstack()}
-        { hash_fp12() } 
-        //Alt:[hash_out, hash_in, hash_calc_out]
-        //Main:[hash_calc_in]
-        { Fq::fromaltstack() }
-        {Fq::roll(1)}
-        { Fq::fromaltstack() }
-        { Fq::fromaltstack() }
-        //Alt:[]
-        //Main:[hash_calc_in, hash_calc_out, hash_in, hash_out]
-        { Fq::equalverify(3, 1)}
-        { Fq::equal(1, 0)} // 1 if matches, 0 doesn't match
-        OP_NOT // 0 if matches, 1 doesn't match
-        OP_VERIFY // verify that output doesn't match
-    };
-    let sc = script! {
-        {Fq12::copy(0)}
-        {sq_script}
-        {hash_sc}
-        OP_TRUE
-    };
-    sc
-}
+
 
 
 // DENSE DENSE MUL BY CONSTANT
 
-pub(crate) fn tap_dense_dense_mul0_by_constant(g: ark_bn254::Fq12) -> Script {
-    let check_is_identity: bool = true;
-    let (hinted_mul, _) =
-        Fq12::hinted_mul_first(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
-    let ghash = extern_hash_fps(vec![g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-        g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1], false);
-    let const_hash_limb = extern_nibbles_to_limbs(ghash);
-    let mut check_id = 1;
-    if !check_is_identity {
-        check_id = 0;
-    }
-
-    let ops_scr = script! {
-        for l in const_hash_limb {
-            {l}
-        }
-        {Fq::toaltstack()}
-        { hinted_mul }
-
-        {check_id} 1 OP_NUMEQUAL
-        OP_IF
-            {Fq6::copy(0)}
-            {fq_push_not_montgomery(ark_bn254::Fq::one())}
-            for _ in 0..5 {
-                {fq_push_not_montgomery(ark_bn254::Fq::zero())}
-            }
-            {Fq6::equalverify()}
-        OP_ENDIF
-    };
-    let scr = script! {
-        {ops_scr}
-        {hash_mul(true)}
-        OP_TRUE
-    };
-    scr
-}
-
-
-pub(crate) fn hints_dense_dense_mul0_by_constant(
+pub(crate) fn chunk_dense_dense_mul0_by_constant(
     hint_in_a: ElemFp12Acc,
     hint_in_b: ElemFp12Acc,
-) -> (ElemFp12Acc, Script) {
+) -> (ElemFp12Acc, Script, Script) {
+
+    fn tap_dense_dense_mul0_by_constant(g: ark_bn254::Fq12, hinted_mul: Script) -> Script {
+        let check_is_identity: bool = true;
+        let ghash = extern_hash_fps(vec![g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
+            g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1], false);
+        let const_hash_limb = extern_nibbles_to_limbs(ghash);
+        let mut check_id = 1;
+        if !check_is_identity {
+            check_id = 0;
+        }
+
+        let ops_scr = script! {
+            for l in const_hash_limb {
+                {l}
+            }
+            {Fq::toaltstack()}
+            { hinted_mul }
+
+            {check_id} 1 OP_NUMEQUAL
+            OP_IF
+                {Fq6::copy(0)}
+                {fq_push_not_montgomery(ark_bn254::Fq::one())}
+                for _ in 0..5 {
+                    {fq_push_not_montgomery(ark_bn254::Fq::zero())}
+                }
+                {Fq6::equalverify()}
+            OP_ENDIF
+        };
+        let scr = script! {
+            {ops_scr}
+            {hash_mul(true)}
+            OP_TRUE
+        };
+        scr
+    }
+
     let (f, g) = (hint_in_a.f, hint_in_b.f);
     let h = f * g;
 
-    let (_, mul_hints) = Fq12::hinted_mul_first(12, f, 0, g);
+    let (hint_mul_scr, mul_hints) = Fq12::hinted_mul_first(12, f, 0, g);
 
     let hash_f = extern_hash_fps(
         vec![
@@ -560,59 +561,61 @@ pub(crate) fn hints_dense_dense_mul0_by_constant(
             f: h,
             hash: hash_h,
         },
+        tap_dense_dense_mul0_by_constant(g, hint_mul_scr),
         simulate_stack_input,
     )
 }
 
 // DENSE DENSE MUL ONE
-
-pub(crate) fn tap_dense_dense_mul1_by_constant(g: ark_bn254::Fq12) -> Script {
-    let check_is_identity: bool = true;
-    let mut check_id = 1;
-    if !check_is_identity {
-        check_id = 0;
-    }
-    let (hinted_mul, _) =
-        Fq12::hinted_mul_second(12, ark_bn254::Fq12::one(), 0, ark_bn254::Fq12::one());
-
-    let ghash = extern_hash_fps(vec![g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-        g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1], false);
-    let const_hash_limb = extern_nibbles_to_limbs(ghash);
-
-
-    let ops_scr = script! {
-        for l in const_hash_limb {
-            {l}
-        }
-        {Fq::fromaltstack()}
-        {Fq::roll(1)}
-        {Fq::toaltstack()}
-        {Fq::toaltstack()}
-        { hinted_mul }
-        {check_id} 1 OP_NUMEQUAL
-        OP_IF
-            {Fq6::copy(0)}
-            for _ in 0..6 {
-                {fq_push_not_montgomery(ark_bn254::Fq::zero())}
-            }
-            {Fq6::equalverify()}
-        OP_ENDIF
-    };
-    let scr = script! {
-        {ops_scr}
-        {hash_mul(false)}
-        OP_TRUE
-    };
-    scr
-}
-
-pub(crate) fn hints_dense_dense_mul1_by_constant(
+pub(crate) fn chunk_dense_dense_mul1_by_constant(
     hint_in_a: ElemFp12Acc,
     hint_in_c0: ElemFp12Acc,
     hint_in_b: ElemFp12Acc,
-) -> (ElemFp12Acc, Script) {
+) -> (ElemFp12Acc, Script, Script) {
+
+
+    fn tap_dense_dense_mul1_by_constant(g: ark_bn254::Fq12, hinted_mul: Script) -> Script {
+        let check_is_identity: bool = true;
+        let mut check_id = 1;
+        if !check_is_identity {
+            check_id = 0;
+        }
+    
+        let ghash = extern_hash_fps(vec![g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
+            g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1], false);
+        let const_hash_limb = extern_nibbles_to_limbs(ghash);
+
+
+        let ops_scr = script! {
+            for l in const_hash_limb {
+                {l}
+            }
+            {Fq::fromaltstack()}
+            {Fq::roll(1)}
+            {Fq::toaltstack()}
+            {Fq::toaltstack()}
+            { hinted_mul }
+            {check_id} 1 OP_NUMEQUAL
+            OP_IF
+                {Fq6::copy(0)}
+                for _ in 0..6 {
+                    {fq_push_not_montgomery(ark_bn254::Fq::zero())}
+                }
+                {Fq6::equalverify()}
+            OP_ENDIF
+        };
+        let scr = script! {
+            {ops_scr}
+            {hash_mul(false)}
+            OP_TRUE
+        };
+        scr
+    }
+
+
+
     let (f, g) = (hint_in_a.f, hint_in_b.f);
-    let (_, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
+    let (hinted_mul_scr, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
     let h = f * g;
 
     let hash_f = extern_hash_fps(
@@ -660,48 +663,49 @@ pub(crate) fn hints_dense_dense_mul1_by_constant(
             f: h,
             hash: hash_c,
         },
+        tap_dense_dense_mul1_by_constant(g, hinted_mul_scr),
         simulate_stack_input,
     )
 }
 
 // FROB Fq12
-pub(crate) fn tap_frob_fp12(power: usize) -> Script {
-    let (hinted_frobenius_map, _) = Fq12::hinted_frobenius_map(power, ark_bn254::Fq12::one());
-
-    let ops_scr = script! {
-        // [f]
-        {Fq12::copy(0)}
-        // [f, f]
-        {hinted_frobenius_map}
-        // [f, g]
-    };
-    let hash_scr = script! {
-        {Fq12::toaltstack()}
-        { hash_fp12_192() }
-        {Fq12::fromaltstack()}
-        { Fq::roll(12) } {Fq::toaltstack()}
-        { hash_fp12_192() }
-        {Fq::fromaltstack()}
-
-        {Fq::fromaltstack()} {Fq::fromaltstack()}
-
-        {Fq::equalverify(1, 2)}
-        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
-    };
-    let sc = script! {
-        {ops_scr}
-       {hash_scr}
-        OP_TRUE
-    };
-    sc
-}
-
-pub(crate) fn hints_frob_fp12(
+pub(crate) fn chunk_frob_fp12(
     hint_in_f: ElemFp12Acc,
     power: usize,
-) -> (ElemFp12Acc, Script) {
+) -> (ElemFp12Acc, Script, Script) {
+
+    fn tap_frob_fp12(power: usize, hinted_frobenius_map: Script) -> Script {
+
+        let ops_scr = script! {
+            // [f]
+            {Fq12::copy(0)}
+            // [f, f]
+            {hinted_frobenius_map}
+            // [f, g]
+        };
+        let hash_scr = script! {
+            {Fq12::toaltstack()}
+            { hash_fp12_192() }
+            {Fq12::fromaltstack()}
+            { Fq::roll(12) } {Fq::toaltstack()}
+            { hash_fp12_192() }
+            {Fq::fromaltstack()}
+
+            {Fq::fromaltstack()} {Fq::fromaltstack()}
+
+            {Fq::equalverify(1, 2)}
+            {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+        };
+        let sc = script! {
+            {ops_scr}
+        {hash_scr}
+            OP_TRUE
+        };
+        sc
+    }
+
     let f = hint_in_f.f;
-    let (_, hints_frobenius_map) = Fq12::hinted_frobenius_map(power, f);
+    let (hinted_frob_scr, hints_frobenius_map) = Fq12::hinted_frobenius_map(power, f);
 
     let g = f.frobenius_map(power);
 
@@ -726,5 +730,5 @@ pub(crate) fn hints_frob_fp12(
         }
         { fq12_push_not_montgomery(f) }
     };
-    (ElemFp12Acc { f: g, hash: ghash }, simulate_stack_input)
+    (ElemFp12Acc { f: g, hash: ghash }, tap_frob_fp12(power, hinted_frob_scr), simulate_stack_input)
 }

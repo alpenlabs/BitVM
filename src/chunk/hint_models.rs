@@ -67,7 +67,7 @@ pub type ElemFq = ark_bn254::Fq;
 pub type ElemFr = ark_bn254::Fr;
 pub type ElemHashBytes = HashBytes;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct ElemFp12Acc {
     pub(crate) f: ark_bn254::Fq12,
     pub(crate) hash: HashBytes,
@@ -96,7 +96,7 @@ impl ElemTraitExt for ElemFp12Acc {
 
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub(crate) struct ElemG2PointAcc {
     pub(crate) t: ark_bn254::G2Affine,
     pub(crate) dbl_le: Option<(ark_bn254::Fq2, ark_bn254::Fq2)>,
@@ -158,8 +158,10 @@ impl ElemTraitExt for ElemG2PointAcc {
         let q4xc1: ark_bn254::Fq = MontFp!("2791853351403597124265928925229664715548948431563105825401192338793643440152"); 
         let q4yc0: ark_bn254::Fq = MontFp!("9203020065248672543175273161372438565462224153828027408202959864555260432617");
         let q4yc1: ark_bn254::Fq = MontFp!("21242559583226289516723159151189961292041850314492937202099045542257932723954");
-        let t = ark_bn254::G2Affine::new(ark_bn254::Fq2::new(q4xc0, q4xc1), ark_bn254::Fq2::new(q4yc0, q4yc1));
-        ElemG2PointAcc { t, dbl_le: None, add_le: None }
+        let tx = ark_bn254::Fq2::new(q4xc0, q4xc1);
+        let ty =  ark_bn254::Fq2::new(q4yc0, q4yc1);
+        let t = ark_bn254::G2Affine::new(tx, ty);
+        ElemG2PointAcc { t, dbl_le: Some((tx, ty)), add_le: Some((tx, ty)) }
     }
 
     fn ret_type(&self) -> bool {

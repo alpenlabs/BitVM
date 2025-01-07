@@ -1,8 +1,8 @@
 
 
-use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fr::Fr, utils::fq_push_not_montgomery}, chunk::taps_msm::tap_hash_p, execute_script, treepp};
+use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fr::Fr, utils::fq_push_not_montgomery}, chunk::taps_msm::{chunk_msm, chunk_hash_p}, execute_script, treepp};
 
-use super::{hint_models::Element, primitves::extern_nibbles_to_limbs, taps_msm::hint_msm, taps_point_eval::*, taps_premiller::*};
+use super::{hint_models::Element, primitves::extern_nibbles_to_limbs, taps_point_eval::*, taps_premiller::*};
 
 pub type SegmentID = u32;
 pub type SegmentOutputType = bool;
@@ -53,7 +53,7 @@ pub enum ScriptType {
 
 use bitcoin_script::script;
 
-use super::{hint_models::*, taps_msm::{hint_hash_p}, primitves::extern_hash_fps,  taps_point_ops::*, taps_mul::*};
+use super::{hint_models::*, primitves::extern_hash_fps,  taps_point_ops::*, taps_mul::*};
 
 pub(crate) fn wrap_hint_msm(
     skip: bool,
@@ -78,9 +78,9 @@ pub(crate) fn wrap_hint_msm(
     let num_chunks = (Fr::N_BITS + 2 * window - 1)/(2 * window);
     let mut segments = vec![];
     if !skip {
-        let houts = hint_msm(window as usize, hint_scalars, pub_vky.clone());
+        let houts = chunk_msm(window as usize, hint_scalars, pub_vky.clone());
         assert_eq!(houts.len() as u32, num_chunks);
-        for (msm_chunk_index, (hout_msm, hint_script)) in houts.into_iter().enumerate() {
+        for (msm_chunk_index, (hout_msm, _, hint_script)) in houts.into_iter().enumerate() {
             let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
             if msm_chunk_index > 0 {
                 let prev_msm_id = (segment_id + msm_chunk_index -1) as u32;
@@ -138,7 +138,7 @@ pub(crate) fn wrap_hint_hash_p(
     let rx = in_rx.output.try_into().unwrap();
     let (mut h, mut hint_script) = ([0u8;64], script!());
     if !skip {
-        (h, hint_script) = hint_hash_p(
+        (h, _, hint_script) = chunk_hash_p(
             t,
             ry,
             rx,
@@ -146,37 +146,6 @@ pub(crate) fn wrap_hint_hash_p(
         );
     }
     let output_type = h.ret_type();
-    let hash_c_scr = tap_hash_p(pub_vky0);
-
-    let thash = extern_hash_fps(vec![t.x, t.y], false);
-    let bitcom_scr = script!{
-        for i in extern_nibbles_to_limbs(h) {
-            {i}
-        }
-        {Fq::toaltstack()}
-        for i in extern_nibbles_to_limbs(thash) {
-            {i}
-        }
-        {Fq::toaltstack()}
-        {fq_push_not_montgomery(ry)}
-        {Fq::toaltstack()}   
-        {fq_push_not_montgomery(rx)}
-        {Fq::toaltstack()}   
-    };
-
-    let script = script! {
-        {hint_script.clone()}
-        {bitcom_scr}
-        {hash_c_scr}
-    };
-
-    let res = execute_script(script);
-    for i in 0..res.final_stack.len() {
-        println!("{i:} {:?}", res.final_stack.get(i));
-    }
-    assert!(!res.success);
-    assert!(res.final_stack.len() == 1);
-
 
     Segment { id: segment_id as u32, output_type, inputs: input_segment_info, output: Element::HashBytes(h), hint_script, scr_type: ScriptType::PreMillerHashP(pub_vky0) }
 }
@@ -198,7 +167,7 @@ pub(crate) fn wrap_hint_hash_c(
 
     let (mut c, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (c, hint_script) = hint_hash_c(
+        (c,_, hint_script) = chunk_hash_c(
              fqvec
             );
     }
@@ -222,7 +191,7 @@ pub(crate) fn wrap_hints_precompute_px(
 
     let (mut p4x, mut hint_script) = (ElemFq::mock(), script!());
     if !skip {
-        (p4x, hint_script) = hints_precompute_px(
+        (p4x,_, hint_script) = chunk_precompute_px(
             in_py.output.try_into().unwrap(),
             in_px.output.try_into().unwrap(),
             in_pdy.output.try_into().unwrap());
@@ -242,7 +211,7 @@ pub(crate) fn wrap_hints_precompute_py(
 
     let (mut p3y, mut hint_script) = (ElemFq::mock(), script!());
     if !skip {
-        (p3y, hint_script) = hints_precompute_py(
+        (p3y, _, hint_script) = chunk_precompute_py(
             in_p.output.try_into().unwrap());
     }
     let output_type = p3y.ret_type();
@@ -260,7 +229,7 @@ pub(crate) fn wrap_hint_hash_c2(
 
     let (mut c2, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (c2, hint_script) = hint_hash_c2(in_c.output.try_into().unwrap());
+        (c2, _, hint_script) = chunk_hash_c2(in_c.output.try_into().unwrap());
     }
     let output_type = c2.ret_type();
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(c2), hint_script, scr_type: ScriptType::PreMillerHashC2 }
@@ -373,7 +342,7 @@ pub(crate) fn wrap_hint_squaring(
 
     let (mut sq, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (sq, hint_script) = hint_squaring(
+        (sq,_, hint_script) = chunk_squaring(
             f_acc,
         );
     }
@@ -409,7 +378,7 @@ pub(crate) fn wrap_hint_point_dbl(
 
     let (mut dbl, mut hint_script) = (ElemG2PointAcc::mock(), script!());
     if !skip {
-        (dbl, hint_script) = hint_point_dbl(
+        (dbl, _, hint_script) = chunk_point_dbl(
             t4,
             p4y,
             p4x,
@@ -462,7 +431,7 @@ pub(crate) fn wrap_hint_point_ops(
 
     let (mut dbladd, mut hint_script) = (ElemG2PointAcc::mock(), script!());
     if !skip {
-        (dbladd, hint_script) = hint_point_ops(
+        (dbladd,_, hint_script) = chunk_point_ops(
             // sig, (segment_id as u32, output_type),
             // input_segment_info.clone(),
             t4,
@@ -505,7 +474,7 @@ pub(crate) fn wrap_hint_sparse_dense_mul(
 
     let (mut temp, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (temp, hint_script) = hint_sparse_dense_mul(
+        (temp, _, hint_script) = chunk_sparse_dense_mul(
             f_acc,
             t4,
             is_dbl_blk,
@@ -589,7 +558,7 @@ pub(crate) fn wrap_hints_dense_dense_mul0(
     
     let (mut dmul0, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul0, hint_script) = hints_dense_dense_mul0(
+        (dmul0,_, hint_script) = chunk_dense_dense_mul0(
             a.clone(),
             b.clone(),
         );
@@ -627,7 +596,7 @@ pub(crate) fn wrap_hints_dense_dense_mul1(
 
     let (mut dmul1, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul1, hint_script) = hints_dense_dense_mul1(
+        (dmul1, _, hint_script) = chunk_dense_dense_mul1(
             a.clone(),
             b.clone(),
             c.clone(),
@@ -665,7 +634,7 @@ pub(crate) fn wrap_hints_dense_le_mul0(
 
     let (mut dmul0, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul0, hint_script) = hints_dense_dense_mul0(
+        (dmul0,_, hint_script) = chunk_dense_dense_mul0(
             a.clone(),
             b.f.clone(),
         );
@@ -703,7 +672,7 @@ pub(crate) fn wrap_hints_dense_le_mul1(
 
     let (mut dmul1, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul1, hint_script) = hints_dense_dense_mul1(
+        (dmul1, _, hint_script) = chunk_dense_dense_mul1(
             a.clone(),
             b.f.clone(),
             c.clone(),
@@ -791,7 +760,7 @@ pub(crate) fn wrap_hints_frob_fp12(
 
     let (mut cp, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (cp, hint_script) = hints_frob_fp12(
+        (cp,_, hint_script) = chunk_frob_fp12(
             f,
             power,
         );
@@ -841,7 +810,7 @@ pub(crate) fn wrap_hint_point_add_with_frob(
 
     let (mut temp, mut hint_script) = (ElemG2PointAcc::mock(), script!());
     if !skip {
-        (temp, hint_script) = hint_point_add_with_frob(
+        (temp, _, hint_script) = chunk_point_add_with_frob(
             // sig, (segment_id as u32, output_type),
             // input_segment_info.clone(),
             t4,
@@ -956,7 +925,7 @@ pub(crate) fn wrap_hints_dense_dense_mul0_by_constant(
 
     let (mut dmul0, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul0, hint_script) = hints_dense_dense_mul0_by_constant(
+        (dmul0,_, hint_script) = chunk_dense_dense_mul0_by_constant(
             a.clone(),
             fixedacc,
         );
@@ -1009,7 +978,7 @@ pub(crate) fn wrap_hints_dense_dense_mul1_by_constant(
 
     let (mut dmul1, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul1, hint_script) = hints_dense_dense_mul1_by_constant(
+        (dmul1,_, hint_script) = chunk_dense_dense_mul1_by_constant(
             a.clone(),
             in_c0.output.try_into().unwrap(),
             fixedacc,
