@@ -162,28 +162,15 @@ pub(crate) fn groth16(
     all_output_hints.extend_from_slice(&temp_q4);
     let (q4xc0, q4xc1, q4yc0, q4yc1) = (&temp_q4[0], &temp_q4[1], &temp_q4[2], &temp_q4[3]);
 
-    // let gcinvhash = Segment {
-    //     id: all_output_hints.len() as u32,
-    //     output_type: false,
-    //     inputs: vec![],
-    //     output: Element::HashBytes(eval_ins.cinv),
-    //     hint_script: script!(),
-    //     scr_type: ScriptType::NonDeterministic
-    // };
-    // all_output_hints.push(gcinvhash.clone());
-
     let vky = pubs.ks_vks;
     let vky0 = pubs.vky0;
 
-    let mut msm = wrap_hint_msm(is_compile_mode, all_output_hints.len(), None, pub_scalars.clone(), 0, vky.clone());
-    push_compare_or_return!(msm);
-
-    for i in 1..19 {
-        msm = wrap_hint_msm(is_compile_mode, all_output_hints.len(), Some(msm), pub_scalars.clone(), i, vky.clone());
+    let msms = wrap_hint_msm(is_compile_mode, all_output_hints.len(), pub_scalars.clone(), vky.clone());
+    for msm in &msms {
         push_compare_or_return!(msm);
     }
 
-    let hp = wrap_hint_hash_p(is_compile_mode, all_output_hints.len(), &msm, &gp3y, &gp3x, vky0);
+    let hp = wrap_hint_hash_p(is_compile_mode, all_output_hints.len(), &msms[msms.len()-1], &gp3y, &gp3x, vky0);
     push_compare_or_return!(hp);
 
     let c = wrap_hint_hash_c(is_compile_mode, all_output_hints.len(), gc);
@@ -557,7 +544,7 @@ pub(crate) fn get_pubs(vk: &ark_groth16::VerifyingKey<Bn254>) -> Pubs {
     pubs
 }
 
-pub fn script_exec(
+pub(crate) fn script_exec(
     segments: Vec<Segment>, 
     signed_asserts: Signatures,
     inpubkeys: PublicKeys,

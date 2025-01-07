@@ -1,9 +1,10 @@
 use std::ops::Neg;
 use std::str::FromStr;
 
+use crate::bn254::curves::G1Affine;
 use crate::bn254::{self};
 use crate::bn254::fr::Fr;
-use crate::bn254::utils::fq_push_not_montgomery;
+use crate::bn254::utils::{fq_push_not_montgomery, Hint};
 use crate::chunk::primitves::extern_hash_fps;
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
@@ -18,187 +19,97 @@ use super::hint_models::{ElemFq, ElemG1Point};
 use super::primitves::{hash_fp2, HashBytes};
 use crate::bn254::fq2::Fq2;
 
-pub(crate) fn tap_msm(window: usize, msm_tap_index: usize, ks: Vec<ark_bn254::Fr>, qs: Vec<ark_bn254::G1Affine>) -> Script {
-    let mut g1acc = if msm_tap_index == 0 {
-        ark_bn254::G1Affine::identity()
-    } else {
-        let acc_hints = calc_hints_for_scalar_mul_by_constant_g1(ks.clone(), qs.clone(), window as u32);
-        acc_hints[msm_tap_index-1]
-    };
+pub(crate) fn tap_msm(window: usize, ks: Vec<ark_bn254::Fr>, qs: Vec<ark_bn254::G1Affine>) -> Vec<Script> {
     let num_pubs = qs.len();
-    let (_, loop_script, _)= bn254::curves::G1Affine::hinted_scalar_mul_by_constant_g1_ith_step(&mut g1acc, ks, qs, window as u32, msm_tap_index as u32);
+    let chunks = G1Affine::hinted_scalar_mul_by_constant_g1(ks.clone(), qs.clone(), window as u32);
 
     // [G1AccDashHash, G1AccHash, k0, k1, k2]
     // [Dec, G1Acc]
-    let ops_script = 
-    if msm_tap_index == 0 {
-        script!(
-            for _ in 0..num_pubs {
-                {Fr::fromaltstack()}
-            }
-            // [Dec, k2, k1, k0]
-            for i in 0..num_pubs {
-                {Fr::roll(i as u32)}
-            }
-            // [Dec, k0, k1, k2]
-            {loop_script}
+
+    let mut chunk_scripts = vec![];
+    for (msm_tap_index, chunk) in chunks.iter().enumerate() {
+        let ops_script = 
+        if msm_tap_index == 0 {
+            script!(
+                for _ in 0..num_pubs {
+                    {Fr::fromaltstack()}
+                }
+                // [Dec, k2, k1, k0]
+                for i in 0..num_pubs {
+                    {Fr::roll(i as u32)}
+                }
+                // [Dec, k0, k1, k2]
+                {chunk.1.clone()}
+                //M: [G1AccDash]
+                //A: [G1AccDashHash]
+            )
+        } else {
+            script!(
+                // [Dec, G1Acc]
+                for _ in 0..num_pubs {
+                    {Fr::fromaltstack()}
+                }
+                for i in 0..num_pubs {
+                    {Fr::roll(i as u32)}
+                }
+                for i in 0..Fq::N_LIMBS * 2 { // bring acc from top of stack
+                    OP_DEPTH {i+1} OP_SUB OP_PICK 
+                }
+                {Fq2::toaltstack()}
+                // [Dec, k0, k1, k2]
+                {chunk.1.clone()}
+                //M: [G1AccDash]
+                //A: [G1AccDashHash, G1AccHash, G1Acc]
+            )
+        };
+
+        let hash_script = if msm_tap_index == 0 {
             //M: [G1AccDash]
             //A: [G1AccDashHash]
-        )
-    } else {
-        script!(
-            // [Dec, G1Acc]
-            for _ in 0..num_pubs {
-                {Fr::fromaltstack()}
-            }
-            // [Dec, G1Acc, k2, k1, k0]
-            {Fq2::copy(num_pubs as u32)}
-            // [Dec, G1Acc, k2, k1, k0, G1Acc]
-            {Fq2::toaltstack()}
-            // [Dec, G1Acc, k2, k1, k0]
-            for i in 0..num_pubs {
-                {Fr::roll(i as u32)}
-            }
-            // [Dec, G1Acc, k0, k1, k2]
-            {loop_script}
+            script!(
+                {hash_fp2()} // [nt]
+                {Fq::fromaltstack()}
+                {Fq::equal(1,0)} OP_NOT OP_VERIFY
+            )
+        } else {
             //M: [G1AccDash]
             //A: [G1AccDashHash, G1AccHash, G1Acc]
-        )
-    };
+            script!(
+                {hash_fp2()}
+                {Fq2::fromaltstack()}
+                {Fq::roll(2)} {Fq::toaltstack()}
+                {hash_fp2()} 
+                {Fq::fromaltstack()}
+                {Fq2::fromaltstack()}
+                // [nth, th, th, nth]
+ 
+                {Fq::equalverify(1, 3)}
+                {Fq::equal(1, 0)}
+                OP_NOT OP_VERIFY
+            )
+        };
 
-    let hash_script = if msm_tap_index == 0 {
-        //M: [G1AccDash]
-        //A: [G1AccDashHash]
-        script!(
-            {hash_fp2()} // [nt]
-            {Fq::fromaltstack()}
-            {Fq::equal(1,0)} OP_NOT OP_VERIFY
-        )
-    } else {
-        //M: [G1AccDash]
-        //A: [G1AccDashHash, G1AccHash, G1Acc]
-        script!(
-            {hash_fp2()}
-            {Fq2::fromaltstack()}
-            {Fq::roll(2)} {Fq::toaltstack()}
-            {hash_fp2()} {Fq::fromaltstack()}
-            {Fq2::fromaltstack()}
-            // [nth, th, th, nth]
-            {Fq::equalverify(1, 3)}
-            {Fq::equal(1, 0)}
-            OP_NOT OP_VERIFY
-        )
-    };
-
-    let sc = script! {
-        {ops_script}
-        {hash_script}
-        OP_TRUE
-    };
-    sc
-}
-
-fn calc_hints_for_scalar_mul_by_constant_g1(
-    g16_scalars: Vec<ark_bn254::Fr>,
-    g16_bases: Vec<ark_bn254::G1Affine>,
-    window: u32,
-) -> Vec<ark_bn254::G1Affine> {
-    assert_eq!(g16_scalars.len(), g16_bases.len());
-
-    let glv_scalars: Vec<((u8, ark_bn254::Fr), (u8, ark_bn254::Fr))> = g16_scalars.iter().map(|s| bn254::curves::G1Affine::calculate_scalar_decomposition(*s)).collect();
-    let endo_coeffs = BigUint::from_str("21888242871839275220042445260109153167277707414472061641714758635765020556616").unwrap();
-    let endo_coeffs = ark_bn254::Fq::from(endo_coeffs);
-    let glv_bases: Vec<(ark_bn254::G1Affine, ark_bn254::G1Affine)> = g16_bases.iter().map(|b| 
-        (*b, ark_bn254::G1Affine::new_unchecked(b.x * endo_coeffs, b.y))
-    ).collect();       
-    
-    let mut scalars: Vec<ark_bn254::Fr> = vec![];
-    let mut bases: Vec<ark_bn254::G1Affine> = vec![];
-
-    glv_scalars.iter().enumerate().for_each(|(idx, stup)| {
-        let (s0, s1) = stup;
-        scalars.push(s0.1);
-        scalars.push(s1.1);
-        let (mut g0, mut g1) = glv_bases[idx];
-        if s0.0 == 2 {
-            g0 = g0.neg();
-        } 
-        if s1.0 == 2 {
-            g1 = g1.neg();
-        }
-        bases.push(g0);
-        bases.push(g1);
-    });
-
-    let mut expected: ark_bn254::G1Affine = ark_bn254::G1Affine::identity();
-    let mut chunks: Vec<Vec<u32>> = vec![];
-
-
-    let num_bits = (bn254::fr::Fr::N_BITS + 1) / 2;
-    for i in 0..scalars.len() {
-        let scalar = scalars[i];
-
-        let tmp = scalar
-            .into_bigint()
-            .to_bits_be()[(256-num_bits as usize)..256]
-            .iter()
-            .map(|b| if *b { 1_u8 } else { 0_u8 })
-            .collect::<Vec<_>>()
-            .chunks(window as usize)
-            .map(|slice| slice.into_iter().fold(0, |acc, &b| (acc << 1) + b as u32))
-            .collect::<Vec<u32>>();
-    
-        chunks.push(tmp);
-
-        let cur: ark_bn254::G1Affine = (bases[i] * scalars[i]).into_affine();
-        expected = (expected + cur).into();
+        let sc = script! {
+            {ops_script}
+            {hash_script}
+            OP_TRUE
+        };
+        chunk_scripts.push(sc);
     }
-    
-    let mut accs: Vec<ark_bn254::G1Affine> = vec![];
-    let mut acc = ark_bn254::G1Affine::identity();
-    for itr in 0..((num_bits + window -1)/window) {
-        if !acc.is_zero() {
-            let depth = std::cmp::min(num_bits - window * itr as u32, window);
-            for _ in 0..depth {
-                acc = (acc + acc).into_affine();
-            }
-        }
-        for j in 0..bases.len() {
-            let base_i = (bases[j]  * ark_bn254::Fr::from(chunks[j][itr as usize])).into_affine();
-            acc = (acc + base_i).into_affine();
-        }
-        accs.push(acc);
-    }
-    assert_eq!(acc, expected);
-    accs
+    chunk_scripts
 }
 
-
-
-pub(crate) fn hint_msm(window: usize, msm_tap_index: usize, ks: Vec<ark_bn254::Fr>, qs: Vec<ark_bn254::G1Affine>) -> (ark_bn254::G1Affine, Script) {
-    let aux_hints_scalar_decs = bn254::curves::G1Affine::aux_hints_for_scalar_decomposition(ks.clone());
-    let acc_hints = calc_hints_for_scalar_mul_by_constant_g1(ks.clone(), qs.clone(), window as u32);
-    let mut g1acc = if msm_tap_index == 0 {
-        ark_bn254::G1Affine::identity()
-    } else {
-        acc_hints[msm_tap_index-1]
-    };
-    let (_, _, loop_hints)= bn254::curves::G1Affine::hinted_scalar_mul_by_constant_g1_ith_step(&mut g1acc, ks, qs, window as u32, msm_tap_index as u32);
-    let hint_script = script!(
-        for h in &loop_hints {
-            {h.push()}
-        }
-        for h in &aux_hints_scalar_decs {
-            {h.push()}
-        }
-        if msm_tap_index > 0 {
-            {fq_push_not_montgomery(acc_hints[msm_tap_index-1].x)}
-            {fq_push_not_montgomery(acc_hints[msm_tap_index-1].y)}
-        }
-    );
-    (acc_hints[msm_tap_index], hint_script)
+pub(crate) fn hint_msm(window: usize, ks: Vec<ark_bn254::Fr>, qs: Vec<ark_bn254::G1Affine>) -> Vec<(ElemG1Point, Script)> {
+    let res: Vec<(ElemG1Point, Script)> = bn254::curves::G1Affine::hinted_scalar_mul_by_constant_g1(ks, qs, window as u32).iter().map(|f| {
+        let hint_script = script!(
+            for hint in &f.2 {
+                {hint.push()}
+            }            
+        );
+        (f.0, hint_script)
+    }).collect();
+    res
 }
-
 
 // Hash P
 //vk0: G1Affine
@@ -547,51 +458,44 @@ mod test {
         let scalars = vec![scalar];
         let qs = vec![q];
 
-        let msm_tap_index = 1;
         let window = 7;
-        let tap_msm = tap_msm(window, msm_tap_index, scalars.clone(), qs.clone());
-        let acc_hints = calc_hints_for_scalar_mul_by_constant_g1(scalars.clone(), qs.clone(), window as u32);
-        let t: ElemG1Point = if msm_tap_index == 0 {
-            ark_bn254::G1Affine::identity()
-        } else {
-            acc_hints[msm_tap_index-1]
-        };
-        let (hint_out, hint_script) = hint_msm(window, msm_tap_index, scalars.clone(), qs.clone());
+        let scrs_msm = tap_msm(window, scalars.clone(), qs.clone());
+        let hints_msm = hint_msm(window, scalars.clone(), qs.clone());
 
-        let bitcom_scr = script!{
-            for i in extern_nibbles_to_limbs(hint_out.out()) {
-                {i}
-            }
-            {Fq::toaltstack()}
-            if msm_tap_index > 0 {
-                for i in extern_nibbles_to_limbs(t.out()) {
+        for msm_chunk_index in 0..scrs_msm.len() {
+            let bitcom_scr = script!{
+                for i in extern_nibbles_to_limbs(hints_msm[msm_chunk_index].0.out()) {
                     {i}
                 }
                 {Fq::toaltstack()}
-            }
-
-            for scalar in scalars {
-                {fr_push_not_montgomery(scalar)}
-                {Fq::toaltstack()}  
-            }
-        };
-
-
-        let tap_len = tap_msm.len();
-        let script = script! {
-            {hint_script}
-            {bitcom_scr}
-            {tap_msm}
-        };
-
-        let res = execute_script_without_stack_limit(script);
-        for i in 0..res.final_stack.len() {
-            println!("{i:} {:?}", res.final_stack.get(i));
+                if msm_chunk_index > 0 {
+                    for i in extern_nibbles_to_limbs(hints_msm[msm_chunk_index-1].0.out()) {
+                        {i}
+                    }
+                    {Fq::toaltstack()}
+                }
+    
+                for scalar in &scalars {
+                    {fr_push_not_montgomery(*scalar)}
+                    {Fr::toaltstack()}  
+                }
+            };
+    
+    
+            let tap_len = scrs_msm[msm_chunk_index].len();
+            let script = script! {
+                {hints_msm[msm_chunk_index].1.clone()}
+                {bitcom_scr}
+                {scrs_msm[msm_chunk_index].clone()}
+            };
+    
+            let res = execute_script_without_stack_limit(script);
+            println!("{} script {} stack {}", msm_chunk_index, tap_len, res.stats.max_nb_stack_items);
+    
+            assert!(!res.success);
+            assert!(res.final_stack.len() == 1);
         }
-        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
 
-        assert!(!res.success);
-        assert!(res.final_stack.len() == 1);
 
     }
 

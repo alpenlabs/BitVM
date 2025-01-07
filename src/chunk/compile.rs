@@ -94,7 +94,7 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
     let mut tap_frob_fp12 = cached(tap_frob_fp12);
     let mut tap_point_add_with_frob = cached(tap_point_add_with_frob);
     let mut tap_hash_p = cached(tap_hash_p);
-    // let mut tap_msm = cached(|(a, b, c)| tap_msm(a, b, c ));
+    let mut tap_msm = cached(|(a, b, c)| tap_msm(a, b, c ));
     let mut tap_double_eval_mul_for_fixed_qs = cached(|(a, b)| tap_double_eval_mul_for_fixed_qs(a, b));
     let mut tap_add_eval_mul_for_fixed_qs = cached(|(a, b, c, d, e)| tap_add_eval_mul_for_fixed_qs(a, b, c, d, e));
     let mut tap_add_eval_mul_for_fixed_qs_with_frob = cached(|(a, b, c, d, e)| tap_add_eval_mul_for_fixed_qs_with_frob(a, b, c, d, e));
@@ -108,7 +108,6 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
     let tap_dense_dense_mul0 = tap_dense_dense_mul0();
     let tap_dense_dense_mul1 = tap_dense_dense_mul1();
 
-    let msm_window = 7;
     let mut op_scripts: Vec<treepp::Script> = vec![];
     for seg in segments {
         let scr_type = seg.scr_type.clone();
@@ -167,9 +166,10 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
             },
 
             ScriptType::MSM(inp) => {
+                let msm_window = 7;
                 let g16_scalars = (0..inp.1.len()).into_iter().map(|_| ElemFr::mock()).collect();
-                let msm_scr = tap_msm(msm_window, inp.0, g16_scalars, inp.1);
-                op_scripts.push(msm_scr);
+                let msm_scr = tap_msm((msm_window, g16_scalars, inp.1));
+                op_scripts.push(msm_scr[inp.0].clone());
             },
             ScriptType::PostMillerFrobFp12(power) => {
                 op_scripts.push(tap_frob_fp12(power as usize));

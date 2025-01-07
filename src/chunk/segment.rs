@@ -1,6 +1,6 @@
 
 
-use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::taps_msm::tap_hash_p, execute_script, treepp};
+use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fr::Fr, utils::fq_push_not_montgomery}, chunk::taps_msm::tap_hash_p, execute_script, treepp};
 
 use super::{hint_models::Element, primitves::extern_nibbles_to_limbs, taps_msm::hint_msm, taps_point_eval::*, taps_premiller::*};
 
@@ -58,44 +58,62 @@ use super::{hint_models::*, taps_msm::{hint_hash_p}, primitves::extern_hash_fps,
 pub(crate) fn wrap_hint_msm(
     skip: bool,
     segment_id: usize,
-    prev_msm: Option<Segment>,
     scalars: Vec<Segment>,
-    msm_chain_index: usize,
     pub_vky: Vec<ark_bn254::G1Affine>,
-) -> Segment {
-    let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
-   // let sig = &mut Sig { msk: None, cache: HashMap::new() };
-
-    let mut acc = ark_bn254::G1Affine::identity();
-    if prev_msm.is_some() {
-        let prev_msm = prev_msm.unwrap();
-        acc = prev_msm.output.try_into().unwrap();
-        input_segment_info.push((prev_msm.id, prev_msm.output_type));
-    }
-
+) -> Vec<Segment> {
+    let mut scalar_input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
     let hint_scalars: Vec<ark_bn254::Fr> = scalars
     .iter()
     .map(|f| {
-        input_segment_info.push((f.id, f.output_type));
-        f.output.try_into().unwrap()
+        scalar_input_segment_info.push((f.id, f.output_type));
+        f.output.try_into().unwrap() 
     })
     .collect();
-
-
-    let mut hout_msm: ElemG1Point = ElemG1Point::mock();
-    let mut hint_script = script!();
 
     let mut window = 7;
     if hint_scalars.len() == 2 {
         window = 5;
     }
-    if !skip {
-        (hout_msm, hint_script) = hint_msm(window, msm_chain_index, 
-            hint_scalars, pub_vky.clone());
-    }
-    let output_type = hout_msm.ret_type();
-    Segment { id: segment_id as u32 as u32, output_type, inputs: input_segment_info, output: Element::MSMG1(hout_msm), hint_script, scr_type: ScriptType::MSM((msm_chain_index, pub_vky)) }
 
+    let num_chunks = (Fr::N_BITS + 2 * window - 1)/(2 * window);
+    let mut segments = vec![];
+    if !skip {
+        let houts = hint_msm(window as usize, hint_scalars, pub_vky.clone());
+        assert_eq!(houts.len() as u32, num_chunks);
+        for (msm_chunk_index, (hout_msm, hint_script)) in houts.into_iter().enumerate() {
+            let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
+            if msm_chunk_index > 0 {
+                let prev_msm_id = (segment_id + msm_chunk_index -1) as u32;
+                input_segment_info.push((prev_msm_id, hout_msm.ret_type()));
+            }
+            input_segment_info.extend_from_slice(&scalar_input_segment_info);
+
+            segments.push(Segment { 
+                id: (segment_id + msm_chunk_index) as u32, 
+                output_type: hout_msm.ret_type(), inputs: input_segment_info, 
+                output: Element::MSMG1(hout_msm), 
+                hint_script, scr_type: ScriptType::MSM((msm_chunk_index, pub_vky.clone())),
+            });
+        }
+    } else {
+        let hout_msm: ElemG1Point = ElemG1Point::mock();
+        for msm_chunk_index in 0..num_chunks {
+            let mut input_segment_info: Vec<(SegmentID, SegmentOutputType)> = vec![];
+            if msm_chunk_index > 0 {
+                let prev_msm_id = segment_id as u32 + msm_chunk_index -1;
+                input_segment_info.push((prev_msm_id, hout_msm.ret_type()));
+            }
+            input_segment_info.extend_from_slice(&scalar_input_segment_info);
+
+            segments.push(Segment { 
+                id: (segment_id as u32 + msm_chunk_index), 
+                output_type: hout_msm.ret_type(), inputs: input_segment_info, 
+                output: Element::MSMG1(hout_msm), 
+                hint_script: script!(), scr_type: ScriptType::MSM((msm_chunk_index as usize, pub_vky.clone())),
+            });
+        }
+    }
+    segments
 }
 
 
