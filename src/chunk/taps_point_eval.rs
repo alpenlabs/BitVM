@@ -16,7 +16,7 @@ use super::hint_models::*;
 
 // DOUBLE EVAL
 
-pub(crate) fn hint_double_eval_mul_for_fixed_qs(
+pub(crate) fn chunk_double_eval_mul_for_fixed_qs(
     hint_in_p3y: ElemFq,
     hint_in_p3x: ElemFq,
     hint_in_p2y: ElemFq,
@@ -25,6 +25,108 @@ pub(crate) fn hint_double_eval_mul_for_fixed_qs(
     hint_in_t2: ark_bn254::G2Affine,
     hint_in_t3: ark_bn254::G2Affine,
 ) -> (ElemSparseEval, Script) {
+    fn tap_double_eval_mul_for_fixed_qs(
+        t2: G2Affine,
+        t3: G2Affine,
+    ) -> (Script, G2Affine, G2Affine) {
+        // First
+        let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
+        let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
+        let mut alpha_t2 = t2.x.square();
+        alpha_t2 /= t2.y;
+        alpha_t2.mul_assign_by_fp(&three_div_two);
+        let bias_t2 = alpha_t2 * t2.x - t2.y;
+        let x2 = alpha_t2.square() - t2.x.double();
+        let y2 = bias_t2 - alpha_t2 * x2;
+    
+        // Second
+        let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
+        let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
+        let mut alpha_t3 = t3.x.square();
+        alpha_t3 /= t3.y;
+        alpha_t3.mul_assign_by_fp(&three_div_two);
+        let bias_t3 = alpha_t3 * t3.x - t3.y;
+        let x3 = alpha_t3.square() - t3.x.double();
+        let y3 = bias_t3 - alpha_t3 * x3;
+    
+        let (hinted_ell_t2, _) = hinted_ell_by_constant_affine(
+            ark_bn254::Fq::one(),
+            ark_bn254::Fq::one(),
+            alpha_t2,
+            bias_t2,
+        );
+        let (hinted_ell_t3, _) = hinted_ell_by_constant_affine(
+            ark_bn254::Fq::one(),
+            ark_bn254::Fq::one(),
+            alpha_t2,
+            bias_t2,
+        );
+        let (hinted_sparse_dense_mul, _) = Fq12::hinted_mul_by_34(
+            ark_bn254::Fq12::one(),
+            ark_bn254::Fq2::one(),
+            ark_bn254::Fq2::one(),
+        );
+    
+        let ops_scr = script! {
+            // Altstack: [bhash, P3y, P3x, P2y, P2x]
+            for _ in 0..4 {
+                {Fq::fromaltstack()}
+            }
+            // Altstack: [bhash: out]
+            // Stack: [P2x, P2y, P3x, P3y]
+            // tmul hints
+            // Bitcommits:
+            // claimed_fp12_output
+            // P2
+            // P3
+            {fq2_push_not_montgomery(alpha_t2)} // baked
+            {fq2_push_not_montgomery(bias_t2)}
+            {fq2_push_not_montgomery(alpha_t3)}
+            {fq2_push_not_montgomery(bias_t3)}
+    
+            { Fq2::roll(8) } // P3
+            { hinted_ell_t3 }
+            {Fq2::toaltstack()} // c4
+            {Fq2::toaltstack()} // c3
+    
+            { Fq2::roll(4) } // P2
+            { hinted_ell_t2 }
+            {Fq2::toaltstack()} // c4
+            {Fq2::toaltstack()} // c3
+    
+            //insert fp12
+            {fq2_push_not_montgomery(ark_bn254::Fq2::one())} // f0
+            {fq2_push_not_montgomery(ark_bn254::Fq2::zero())} // f1
+            {fq2_push_not_montgomery(ark_bn254::Fq2::zero())} // f2
+            {Fq2::fromaltstack()} // f3
+            {Fq2::fromaltstack()} // f4
+            {fq2_push_not_montgomery(ark_bn254::Fq2::zero())} // f5
+    
+            {Fq2::fromaltstack()} // c3
+            {Fq2::fromaltstack()} // c4
+    
+            {hinted_sparse_dense_mul}
+        };
+    
+        let hash_scr = script! {
+            { hash_fp12_192() }
+            { Fq::fromaltstack() } // bhash:out
+            {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+        };
+    
+        let sc = script! {
+            {ops_scr}
+            {hash_scr}
+            OP_TRUE
+        };
+        (
+            sc,
+            G2Affine::new_unchecked(x2, y2),
+            G2Affine::new_unchecked(x3, y3),
+        )
+    }
+    
+    
     // assert_eq!(sec_in.len(), 4);
     let (t2, t3) = (hint_in_t2, hint_in_t3);
     let (p2, p3) = (ark_bn254::G1Affine::new_unchecked(hint_in_p2x, hint_in_p2y), ark_bn254::G1Affine::new_unchecked(hint_in_p3x, hint_in_p3y));
@@ -109,106 +211,6 @@ pub(crate) fn hint_double_eval_mul_for_fixed_qs(
     (hint_out, simulate_stack_input)
 }
 
-pub(crate) fn tap_double_eval_mul_for_fixed_qs(
-    t2: G2Affine,
-    t3: G2Affine,
-) -> (Script, G2Affine, G2Affine) {
-    // First
-    let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
-    let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
-    let mut alpha_t2 = t2.x.square();
-    alpha_t2 /= t2.y;
-    alpha_t2.mul_assign_by_fp(&three_div_two);
-    let bias_t2 = alpha_t2 * t2.x - t2.y;
-    let x2 = alpha_t2.square() - t2.x.double();
-    let y2 = bias_t2 - alpha_t2 * x2;
-
-    // Second
-    let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
-    let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
-    let mut alpha_t3 = t3.x.square();
-    alpha_t3 /= t3.y;
-    alpha_t3.mul_assign_by_fp(&three_div_two);
-    let bias_t3 = alpha_t3 * t3.x - t3.y;
-    let x3 = alpha_t3.square() - t3.x.double();
-    let y3 = bias_t3 - alpha_t3 * x3;
-
-    let (hinted_ell_t2, _) = hinted_ell_by_constant_affine(
-        ark_bn254::Fq::one(),
-        ark_bn254::Fq::one(),
-        alpha_t2,
-        bias_t2,
-    );
-    let (hinted_ell_t3, _) = hinted_ell_by_constant_affine(
-        ark_bn254::Fq::one(),
-        ark_bn254::Fq::one(),
-        alpha_t2,
-        bias_t2,
-    );
-    let (hinted_sparse_dense_mul, _) = Fq12::hinted_mul_by_34(
-        ark_bn254::Fq12::one(),
-        ark_bn254::Fq2::one(),
-        ark_bn254::Fq2::one(),
-    );
-
-    let ops_scr = script! {
-        // Altstack: [bhash, P3y, P3x, P2y, P2x]
-        for _ in 0..4 {
-            {Fq::fromaltstack()}
-        }
-        // Altstack: [bhash: out]
-        // Stack: [P2x, P2y, P3x, P3y]
-        // tmul hints
-        // Bitcommits:
-        // claimed_fp12_output
-        // P2
-        // P3
-        {fq2_push_not_montgomery(alpha_t2)} // baked
-        {fq2_push_not_montgomery(bias_t2)}
-        {fq2_push_not_montgomery(alpha_t3)}
-        {fq2_push_not_montgomery(bias_t3)}
-
-        { Fq2::roll(8) } // P3
-        { hinted_ell_t3 }
-        {Fq2::toaltstack()} // c4
-        {Fq2::toaltstack()} // c3
-
-        { Fq2::roll(4) } // P2
-        { hinted_ell_t2 }
-        {Fq2::toaltstack()} // c4
-        {Fq2::toaltstack()} // c3
-
-        //insert fp12
-        {fq2_push_not_montgomery(ark_bn254::Fq2::one())} // f0
-        {fq2_push_not_montgomery(ark_bn254::Fq2::zero())} // f1
-        {fq2_push_not_montgomery(ark_bn254::Fq2::zero())} // f2
-        {Fq2::fromaltstack()} // f3
-        {Fq2::fromaltstack()} // f4
-        {fq2_push_not_montgomery(ark_bn254::Fq2::zero())} // f5
-
-        {Fq2::fromaltstack()} // c3
-        {Fq2::fromaltstack()} // c4
-
-        {hinted_sparse_dense_mul}
-    };
-
-    let hash_scr = script! {
-        { hash_fp12_192() }
-        { Fq::fromaltstack() } // bhash:out
-        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
-    };
-
-    let sc = script! {
-        {ops_scr}
-        {hash_scr}
-        OP_TRUE
-    };
-    (
-        sc,
-        G2Affine::new_unchecked(x2, y2),
-        G2Affine::new_unchecked(x3, y3),
-    )
-}
 
 // ADD EVAL
 

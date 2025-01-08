@@ -148,12 +148,11 @@ mod test {
 
     #[test]
     fn test_tap_init_t4() {
-        let init_t4_tap = tap_init_t4();
 
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let q = ark_bn254::G2Affine::rand(&mut prng);
 
-        let (hint_out, hint_script) = hint_init_t4(q.y.c1, q.y.c0, q.x.c1, q.x.c0);
+        let (hint_out, init_t4_tap, hint_script) = chunk_init_t4(q.y.c1, q.y.c0, q.x.c1, q.x.c0);
 
         let bitcom_script = script!{
             for i in extern_nibbles_to_limbs(hint_out.out()) {
@@ -764,7 +763,7 @@ mod test {
         let t2 = ark_bn254::G2Affine::rand(&mut prng);
         let t3 = ark_bn254::G2Affine::rand(&mut prng);
 
-        let (hint_out, hint_script) = hint_double_eval_mul_for_fixed_qs(p3.y, p3.x, p2.y, p2.x, t2, t3);
+        let (hint_out, hint_script) = chunk_double_eval_mul_for_fixed_qs(p3.y, p3.x, p2.y, p2.x, t2, t3);
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.out()) {
@@ -781,7 +780,7 @@ mod test {
             {Fq::toaltstack()}                
         };
 
-        let (tap_scr, nt2, nt3) = tap_double_eval_mul_for_fixed_qs(t2, t3);
+        let (tap_scr, nt2, nt3) = chunk_double_eval_mul_for_fixed_qs(t2, t3);
         assert_eq!(nt2, (t2 + t2).into_affine());
         assert_eq!(nt3, (t3 + t3).into_affine());
 
@@ -910,8 +909,7 @@ mod test {
             let a = ark_bn254::Fq12::rand(&mut prng);
 
             let hash_in = extern_hash_fps(fp12_to_vec(a), true);
-            let (hout0, hscr0) = hint_inv0(ElemFp12Acc { f: a, hash: hash_in });
-            let tscr0 = tap_inv0();
+            let (hout0,tscr0,  hscr0) = chunk_inv0(ElemFp12Acc { f: a, hash: hash_in });
             let bscr0 = script!{
                 for h in hout0.hash {
                     {h}
@@ -937,9 +935,8 @@ mod test {
             println!("inv0 len {} and stack {}", len, res.stats.max_nb_stack_items);
 
 
-            let (hout1, hscr1) = hint_inv1(hout0);
+            let (hout1,tscr1, hscr1) = chunk_inv1(hout0);
 
-            let tscr1 = tap_inv1();
             let bscr1 = script!{
                 for h in hout1.hash {
                     {h}
@@ -967,8 +964,7 @@ mod test {
 
 
 
-            let (hout2, hscr2) = hint_inv2(hout1, ElemFp12Acc { f: a, hash: hash_in });
-            let tscr2 = tap_inv2();
+            let (hout2,tscr2, hscr2) = chunk_inv2(hout1, ElemFp12Acc { f: a, hash: hash_in });
             assert_eq!(hout2.f, a.inverse().unwrap());
             let bscr2 = script!{
                 for h in hout2.hash {

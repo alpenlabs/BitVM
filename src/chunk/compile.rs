@@ -98,10 +98,10 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
     let mut tap_point_add_with_frob = cached(|a| chunk_point_add_with_frob(ElemG2PointAcc::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), a));
     let mut chunk_hash_p = cached(|(a, b, c, d)| chunk_hash_p(a, b, c, d ));
     let mut tap_msm = cached(|(a, b, c)| chunk_msm(a, b, c ));
-    let mut tap_double_eval_mul_for_fixed_qs = cached(|(a, b)| tap_double_eval_mul_for_fixed_qs(a, b));
+    let mut tap_double_eval_mul_for_fixed_qs = cached(|(a, b)| chunk_double_eval_mul_for_fixed_qs(a, b));
     let mut tap_add_eval_mul_for_fixed_qs = cached(|(a, b, c, d, e)| tap_add_eval_mul_for_fixed_qs(a, b, c, d, e));
     let mut tap_add_eval_mul_for_fixed_qs_with_frob = cached(|(a, b, c, d, e)| tap_add_eval_mul_for_fixed_qs_with_frob(a, b, c, d, e));
-    let tap_init_t4 = tap_init_t4();
+    let tap_init_t4 = chunk_init_t4(ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock());
     // let tap_precompute_py = chunk_precompute_py();
     // let tap_precompute_px = chunk_precompute_px();
     // let tap_hash_c = chunk_hash_c();
@@ -120,7 +120,7 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
                 op_scripts.push(script!());
             },
             ScriptType::PreMillerInitT4 => {
-                op_scripts.push(tap_init_t4.clone());
+                op_scripts.push(tap_init_t4.1.clone());
             }
             ScriptType::PreMillerPrecomputePy => {
                 op_scripts.push(chunk_precompute_py(ElemFq::mock()).1);
@@ -135,13 +135,13 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
                 op_scripts.push(chunk_hash_c2(ElemFp12Acc::mock()).1);
             },
             ScriptType::PreMillerInv0 => {
-                op_scripts.push(tap_inv0());
+                op_scripts.push(chunk_inv0(ElemFp12Acc::mock()).1);
             },
             ScriptType::PreMillerInv1 => {
-                op_scripts.push(tap_inv1());
+                op_scripts.push(chunk_inv1(ElemFp12Acc::mock()).1);
             },
             ScriptType::PreMillerInv2 => {
-                op_scripts.push(tap_inv2());
+                op_scripts.push(chunk_inv2(ElemFp12Acc::mock(), ElemFp12Acc::mock()).1);
             },
             ScriptType::MillerSquaring => {
                 op_scripts.push(tap_squaring( ElemFp12Acc::mock()).1);

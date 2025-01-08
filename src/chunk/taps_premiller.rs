@@ -289,52 +289,52 @@ pub(crate) fn chunk_precompute_py(
 }
 
 // hash T4
-pub(crate) fn tap_init_t4() -> Script {
-    let (on_curve_scr, _) =
-        bn254::curves::G2Affine::hinted_is_on_curve(ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE);
 
-    let hash_scr = script! {
-        for _ in 0..4 {
-            {Fq::fromaltstack()}
-        }
-        // Stack:[f_hash_claim, x0,x1,y0,y1]
-        // Altstack : [f_hash]
-        {Fq2::copy(2)}
-        {Fq2::copy(2)}
-        {on_curve_scr}
-        OP_IF
-            for _ in 0..9 { // aux_le
-                {0}
-            }
-            {Fq::fromaltstack()}
-            {hash_g2acc_with_hashed_le()}
-            OP_NOT OP_VERIFY
-        OP_ELSE
-            {Fq2::drop()}
-            {Fq2::drop()}
-            {Fq::fromaltstack()} {Fq::drop()}
-        OP_ENDIF
-        // if the point is not on curve
-    };
-    let sc = script! {
-        {hash_scr}
-        OP_TRUE
-    };
-
-    sc
-}
-
-pub(crate) fn hint_init_t4(
+pub(crate) fn chunk_init_t4(
     hint_q4y1: ElemFq,
     hint_q4y0: ElemFq,
     hint_q4x1: ElemFq,
     hint_q4x0: ElemFq,
-) -> (ElemG2PointAcc, Script) {
+) -> (ElemG2PointAcc, Script, Script) {
+
+    fn tap_init_t4(on_curve_scr: Script) -> Script {
+        let hash_scr = script! {
+            for _ in 0..4 {
+                {Fq::fromaltstack()}
+            }
+            // Stack:[f_hash_claim, x0,x1,y0,y1]
+            // Altstack : [f_hash]
+            {Fq2::copy(2)}
+            {Fq2::copy(2)}
+            {on_curve_scr}
+            OP_IF
+                for _ in 0..9 { // aux_le
+                    {0}
+                }
+                {Fq::fromaltstack()}
+                {hash_g2acc_with_hashed_le()}
+                OP_NOT OP_VERIFY
+            OP_ELSE
+                {Fq2::drop()}
+                {Fq2::drop()}
+                {Fq::fromaltstack()} {Fq::drop()}
+            OP_ENDIF
+            // if the point is not on curve
+        };
+        let sc = script! {
+            {hash_scr}
+            OP_TRUE
+        };
+
+        sc
+    }
+
+
     let t4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0, hint_q4x1), ark_bn254::Fq2::new(hint_q4y0, hint_q4y1));
     let t4hash = extern_hash_fps(vec![t4.x.c0, t4.x.c1, t4.y.c0, t4.y.c1], false);
     let t4hash = extern_hash_nibbles(vec![t4hash, [0u8; 64]], true);
 
-    let (_, hints) = bn254::curves::G2Affine::hinted_is_on_curve(t4.x, t4.y);
+    let (on_curve_scr, hints) = bn254::curves::G2Affine::hinted_is_on_curve(t4.x, t4.y);
 
     let simulate_stack_input = script! {
         // bit commits raw
@@ -348,173 +348,85 @@ pub(crate) fn hint_init_t4(
         add_le: None,
         // hash: t4hash,
     };
-    (hint_out, simulate_stack_input)
+    (hint_out, tap_init_t4(on_curve_scr), simulate_stack_input)
 }
 
 
 // INVERSE
-pub(crate) fn tap_inv0() -> Script {
-
-    let a = ElemFp12Acc::mock();
-
-    let a = a.f;
-
-    let (s_t1, _) = Fq6::hinted_square(a.c1);
-    let (s_t0, _) = Fq6::hinted_square(a.c0);
-
-    let ops_scr = script!{
-        // [c0, c1]
-       { Fq6::copy(0) }
-
-        // compute beta * v1 = beta * c1^2
-        { s_t1 }
-        { Fq12::mul_fq6_by_nonresidue() }
-        // [c0, beta * c1^2]
-
-        // copy c0
-        { Fq6::copy(12) }
-
-        // compute v0 = c0^2 + beta * v1
-        { s_t0 }
-        // [yt1, t0]
-        { Fq6::sub(0, 6) }
-        // [c0, c1, t0]
-    };
-
-    let hash_scr = script!{
-        {Fq6::toaltstack()}
-        {hash_fp12()}
-        {Fq6::fromaltstack()}
-        {Fq::roll(6)} {Fq::toaltstack()}
-        {hash_fp6()}
-        {Fq::fromaltstack()}
-        {Fq::roll(1)}
-        // [Hc, Ht0]
-        { Fq::fromaltstack() }
-        { Fq::fromaltstack() }
-        // [Hc, Ht0, HKc, HKt0]
-        {Fq::equalverify(1, 3)}
-        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
-    };
-
-    let scr = script!{
-        {ops_scr}
-        {hash_scr}
-        OP_TRUE
-    };
-    scr
-}
-
-pub(crate) fn tap_inv1() -> Script {
-    let a = ElemFp12Acc::mock();
-    let t0 = a.f.c0;
-
-    let (s_t0inv, _) = Fq6::hinted_inv(t0);
-
-    let ops_scr = script!{
-        // [aux, t0]
-        {Fq6::copy(0)}
-        // [aux, t0, t0]
-        {Fq6::toaltstack()}
-        {s_t0inv}
-        {Fq6::fromaltstack()}
-        {Fq6::roll(6)}
-    }; // [t0, t1]
-    let hash_scr = script!{
-        {Fq6::toaltstack()}
-        {hash_fp6()}
-        {Fq6::fromaltstack()}
-        {Fq::roll(6)} {Fq::toaltstack()}
-        {hash_fp6()}
-        {Fq::fromaltstack()}
-        {Fq::roll(1)}
-        // [Hc, Ht0]
-        { Fq::fromaltstack() }
-        { Fq::fromaltstack() }
-        // [Hc, Ht0, HKc, HKt0]
-        {Fq::equalverify(1, 3)}
-        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
-    };
-    let scr = script!{
-        {ops_scr}
-        {hash_scr}
-        OP_TRUE
-    };
-    scr
-}
-
-pub(crate) fn tap_inv2() -> Script {
-    let (a, t1) = (ElemFp12Acc::mock(), ElemFp12Acc::mock());
-    let t1 = t1.f.c0;
-    let a = a.f;
-
-    let (s_c0, _) = Fq6::hinted_mul(0, t1, 18, a.c0);
-    let (s_c1, _) = Fq6::hinted_mul(0, -a.c1, 12, t1);
-
-    let ops_scr = script!{
-        {Fq12::copy(6)}
-        // [c0, c1, t1]
-        { Fq6::copy(12) }
-        // [c0, c1, t1, c0, c1, t1]
-
-        // dup inv v0
-        { Fq6::copy(0) }
-        // [c0, c1, t1, t1]
-
-        // compute c0
-        { s_c0 }
-        // [c1, t1, d0]
-
-        // compute c1
-        { Fq6::neg(12) }
-        // [t1, d0, -c1]
-        { s_c1 }
-        // [c0, c1, t1, d0, d1]
-    };
-    let hash_scr = script!{
-        {Fq12::toaltstack()}
-        {Fq6::toaltstack()}
-        {hash_fp12()}
-
-        {Fq6::fromaltstack()}
-        {Fq::roll(6)} {Fq::toaltstack()}
-        {hash_fp6()} {Fq::fromaltstack()}
-
-        {Fq12::fromaltstack()}
-        {Fq2::roll(12)} {Fq2::toaltstack()}
-        {hash_fp12_192()} {Fq2::fromaltstack()}
-
-        // [Hd, Ht, Hc]
-
-        {Fq::fromaltstack()}
-        {Fq::fromaltstack()}
-        {Fq::fromaltstack()}
-        // // [Hd, Ht, Hc, HKc, HKt, HKd]
-
-        {Fq::equalverify(1, 4)}
-        {Fq::equalverify(1, 2)}
-        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
-    };
-    let scr = script!{
-        {ops_scr}
-        {hash_scr}
-        OP_TRUE
-    };
-    scr
-}
-
-pub(crate) fn hint_inv2(
+pub(crate) fn chunk_inv2(
     t1: ElemFp12Acc,
     a: ElemFp12Acc,
-) -> (ElemFp12Acc, Script) {
+) -> (ElemFp12Acc, Script, Script) {
+
+    fn tap_inv2(s_c0: Script, s_c1: Script) -> Script {
+        let (a, t1) = (ElemFp12Acc::mock(), ElemFp12Acc::mock());
+        let t1 = t1.f.c0;
+        let a = a.f;
+
+        // let (s_c0, _) = Fq6::hinted_mul(0, t1, 18, a.c0);
+        // let (s_c1, _) = Fq6::hinted_mul(0, -a.c1, 12, t1);
+
+        let ops_scr = script!{
+            {Fq12::copy(6)}
+            // [c0, c1, t1]
+            { Fq6::copy(12) }
+            // [c0, c1, t1, c0, c1, t1]
+
+            // dup inv v0
+            { Fq6::copy(0) }
+            // [c0, c1, t1, t1]
+
+            // compute c0
+            { s_c0 }
+            // [c1, t1, d0]
+
+            // compute c1
+            { Fq6::neg(12) }
+            // [t1, d0, -c1]
+            { s_c1 }
+            // [c0, c1, t1, d0, d1]
+        };
+        let hash_scr = script!{
+            {Fq12::toaltstack()}
+            {Fq6::toaltstack()}
+            {hash_fp12()}
+
+            {Fq6::fromaltstack()}
+            {Fq::roll(6)} {Fq::toaltstack()}
+            {hash_fp6()} {Fq::fromaltstack()}
+
+            {Fq12::fromaltstack()}
+            {Fq2::roll(12)} {Fq2::toaltstack()}
+            {hash_fp12_192()} {Fq2::fromaltstack()}
+
+            // [Hd, Ht, Hc]
+
+            {Fq::fromaltstack()}
+            {Fq::fromaltstack()}
+            {Fq::fromaltstack()}
+            // // [Hd, Ht, Hc, HKc, HKt, HKd]
+
+            {Fq::equalverify(1, 4)}
+            {Fq::equalverify(1, 2)}
+            {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+        };
+        let scr = script!{
+            {ops_scr}
+            {hash_scr}
+            OP_TRUE
+        };
+        scr
+    }
+
+
     let t1 = t1.f.c0;
     let a = a.f;
 
     let c0 = a.c0 * t1;
     let c1 = -a.c1 * t1;
 
-    let (_, h_c0) = Fq6::hinted_mul(0, t1, 18, a.c0);
-    let (_, h_c1) = Fq6::hinted_mul(0, -a.c1, 12, t1);
+    let (s_c0, h_c0) = Fq6::hinted_mul(0, t1, 18, a.c0);
+    let (s_c1, h_c1) = Fq6::hinted_mul(0, -a.c1, 12, t1);
 
     let mut hints: Vec<Hint> = vec![];
     for hint in vec![h_c0, h_c1] {
@@ -538,17 +450,58 @@ pub(crate) fn hint_inv2(
     let hout: ElemFp12Acc = ElemFp12Acc { f: ark_bn254::Fq12::new(c0, c1), hash: hash_h };
     (
         hout,
+        tap_inv2(s_c0, s_c1),
         simulate_stack_input,
     )
 }
 
-pub(crate) fn hint_inv1(
+pub(crate) fn chunk_inv1(
     a: ElemFp12Acc
-) -> (ElemFp12Acc, Script) {
+) -> (ElemFp12Acc, Script, Script) {
+
+    fn tap_inv1(s_t0inv: Script) -> Script {
+        let a = ElemFp12Acc::mock();
+        let t0 = a.f.c0;
+
+        // let (s_t0inv, _) = Fq6::hinted_inv(t0);
+
+        let ops_scr = script!{
+            // [aux, t0]
+            {Fq6::copy(0)}
+            // [aux, t0, t0]
+            {Fq6::toaltstack()}
+            {s_t0inv}
+            {Fq6::fromaltstack()}
+            {Fq6::roll(6)}
+        }; // [t0, t1]
+        let hash_scr = script!{
+            {Fq6::toaltstack()}
+            {hash_fp6()}
+            {Fq6::fromaltstack()}
+            {Fq::roll(6)} {Fq::toaltstack()}
+            {hash_fp6()}
+            {Fq::fromaltstack()}
+            {Fq::roll(1)}
+            // [Hc, Ht0]
+            { Fq::fromaltstack() }
+            { Fq::fromaltstack() }
+            // [Hc, Ht0, HKc, HKt0]
+            {Fq::equalverify(1, 3)}
+            {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+        };
+        let scr = script!{
+            {ops_scr}
+            {hash_scr}
+            OP_TRUE
+        };
+        scr
+    }
+
+
     let t0 = a.f.c0;
     let t1 = t0.inverse().unwrap();
 
-    let (_, h_t0inv) = Fq6::hinted_inv(t0);
+    let (s_t0inv, h_t0inv) = Fq6::hinted_inv(t0);
     let aux_t6 = Fq6::calc_fp2_inv_aux(t0);
 
     let hash_h = extern_hash_fps(
@@ -570,13 +523,68 @@ pub(crate) fn hint_inv1(
     let hout: ElemFp12Acc = ElemFp12Acc { f: ark_bn254::Fq12::new(t1, ark_bn254::Fq6::ZERO), hash: hash_h };
     (
         hout,
+        tap_inv1(s_t0inv),
         simulate_stack_input,
     )
 }
 
-pub(crate) fn hint_inv0(
+pub(crate) fn chunk_inv0(
     a: ElemFp12Acc
-) -> (ElemFp12Acc, Script) {
+) -> (ElemFp12Acc, Script, Script) {
+
+    fn tap_inv0(s_t1: Script, s_t0: Script) -> Script {
+
+        let a = ElemFp12Acc::mock();
+
+        let a = a.f;
+
+        // let (s_t1, _) = Fq6::hinted_square(a.c1);
+        // let (s_t0, _) = Fq6::hinted_square(a.c0);
+
+        let ops_scr = script!{
+            // [c0, c1]
+        { Fq6::copy(0) }
+
+            // compute beta * v1 = beta * c1^2
+            { s_t1 }
+            { Fq12::mul_fq6_by_nonresidue() }
+            // [c0, beta * c1^2]
+
+            // copy c0
+            { Fq6::copy(12) }
+
+            // compute v0 = c0^2 + beta * v1
+            { s_t0 }
+            // [yt1, t0]
+            { Fq6::sub(0, 6) }
+            // [c0, c1, t0]
+        };
+
+        let hash_scr = script!{
+            {Fq6::toaltstack()}
+            {hash_fp12()}
+            {Fq6::fromaltstack()}
+            {Fq::roll(6)} {Fq::toaltstack()}
+            {hash_fp6()}
+            {Fq::fromaltstack()}
+            {Fq::roll(1)}
+            // [Hc, Ht0]
+            { Fq::fromaltstack() }
+            { Fq::fromaltstack() }
+            // [Hc, Ht0, HKc, HKt0]
+            {Fq::equalverify(1, 3)}
+            {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+        };
+
+        let scr = script!{
+            {ops_scr}
+            {hash_scr}
+            OP_TRUE
+        };
+        scr
+    }
+
+
     let a = a.f;
 
     fn mul_fp6_by_nonresidue_in_place(fe: ark_bn254::Fq6) -> ark_bn254::Fq6 {
@@ -594,8 +602,8 @@ pub(crate) fn hint_inv0(
     let yt1 = mul_fp6_by_nonresidue_in_place(t1);
     let t0 = t0-yt1;
 
-    let (_, h_t1) = Fq6::hinted_square(a.c1);
-    let (_, h_t0) = Fq6::hinted_square(a.c0);
+    let (s_t1, h_t1) = Fq6::hinted_square(a.c1);
+    let (s_t0, h_t0) = Fq6::hinted_square(a.c0);
 
     let mut hints: Vec<Hint> = vec![];
     for hint in vec![h_t1, h_t0] {
@@ -621,6 +629,7 @@ pub(crate) fn hint_inv0(
     let hout: ElemFp12Acc = ElemFp12Acc { f: ark_bn254::Fq12::new(t0, ark_bn254::Fq6::ZERO), hash: hash_h };
     (
         hout,
+        tap_inv0(s_t1, s_t0),
         simulate_stack_input,
     )
 }

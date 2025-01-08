@@ -246,7 +246,7 @@ pub(crate) fn wrap_inv0(
 
     let (mut dmul0, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul0, hint_script) = hint_inv0(in_a.output.try_into().unwrap());
+        (dmul0,_, hint_script) = chunk_inv0(in_a.output.try_into().unwrap());
     }
     let output_type = dmul0.ret_type();
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(dmul0), hint_script, scr_type: ScriptType::PreMillerInv0 }
@@ -263,7 +263,7 @@ pub(crate) fn wrap_inv1(
 
     let (mut dmul0, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul0, hint_script) = hint_inv1(in_a.output.try_into().unwrap());
+        (dmul0,_, hint_script) = chunk_inv1(in_a.output.try_into().unwrap());
     }
     let output_type = dmul0.ret_type();
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(dmul0), hint_script, scr_type: ScriptType::PreMillerInv1 }
@@ -282,7 +282,7 @@ pub(crate) fn wrap_inv2(
 
     let (mut dmul0, mut hint_script) = (ElemFp12Acc::mock(), script!());
     if !skip {
-        (dmul0, hint_script) = hint_inv2(in_t1.output.try_into().unwrap(), in_a.output.try_into().unwrap());
+        (dmul0,_, hint_script) = chunk_inv2(in_t1.output.try_into().unwrap(), in_a.output.try_into().unwrap());
     }
     let output_type = dmul0.ret_type();
     Segment { id:  segment_id as u32, output_type, inputs: input_segment_info, output: Element::Fp12(dmul0), hint_script, scr_type: ScriptType::PreMillerInv2 }
@@ -312,7 +312,7 @@ pub(crate) fn wrap_hint_init_t4(
 
     let (mut tmpt4, mut hint_script) = (ElemG2PointAcc::mock(), script!());
     if !skip {
-        (tmpt4, hint_script) = hint_init_t4(
+        (tmpt4,_, hint_script) = chunk_init_t4(
             q4yc1,
             q4yc0,
             q4xc1,
@@ -517,7 +517,7 @@ pub(crate) fn wrap_hint_double_eval_mul_for_fixed_qs(
 
     let (mut leval, mut hint_script) = (ElemSparseEval::mock(), script!());
     if !skip {
-        (leval, hint_script) = hint_double_eval_mul_for_fixed_qs(
+        (leval, hint_script) = chunk_double_eval_mul_for_fixed_qs(
             // sig,(segment_id as u32, output_type),
             // input_segment_info.clone(),
             p3y,
