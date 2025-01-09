@@ -763,7 +763,7 @@ mod test {
         let t2 = ark_bn254::G2Affine::rand(&mut prng);
         let t3 = ark_bn254::G2Affine::rand(&mut prng);
 
-        let (hint_out, hint_script) = chunk_double_eval_mul_for_fixed_qs(p3.y, p3.x, p2.y, p2.x, t2, t3);
+        let (hint_out, tap_scr, hint_script) = chunk_double_eval_mul_for_fixed_qs(p3.y, p3.x, p2.y, p2.x, t2, t3);
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.out()) {
@@ -780,7 +780,7 @@ mod test {
             {Fq::toaltstack()}                
         };
 
-        let (tap_scr, nt2, nt3) = chunk_double_eval_mul_for_fixed_qs(t2, t3);
+        let (nt2, nt3) = (hint_out.t2, hint_out.t3);
         assert_eq!(nt2, (t2 + t2).into_affine());
         assert_eq!(nt3, (t3 + t3).into_affine());
 
@@ -811,7 +811,7 @@ mod test {
         let q3 = ark_bn254::G2Affine::rand(&mut prng);
         let ate = -1;
 
-        let (hint_out, hint_script) = hint_add_eval_mul_for_fixed_qs(p3.y, p3.x, p2.y, p2.x, t2, t3, q2, q3, ate);
+        let (hint_out, tap_scr, hint_script) = chunk_add_eval_mul_for_fixed_qs(p3.y, p3.x, p2.y, p2.x, t2, t3, q2, q3, ate);
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.out()) {
@@ -828,7 +828,7 @@ mod test {
             {Fq::toaltstack()}                
         };
 
-        let (tap_scr, nt2, nt3) = tap_add_eval_mul_for_fixed_qs(t2, t3, q2, q3, ate);
+        let (nt2, nt3) = (hint_out.t2, hint_out.t3);
 
         if ate == 1 {
            assert_eq!( (nt2, nt3), ((t2 + q2).into_affine(), (t3 + q3).into_affine()));
@@ -863,7 +863,7 @@ mod test {
         let q3 = ark_bn254::G2Affine::rand(&mut prng);
         let ate = -1;
 
-        let (hint_out, hint_script) = hint_add_eval_mul_for_fixed_qs_with_frob(p3.y, p3.x, p2.y, p2.x, t2, t3, q2, q3, ate);
+        let (hint_out, tap_scr, hint_script) = chunk_add_eval_mul_for_fixed_qs_with_frob(p3.y, p3.x, p2.y, p2.x, t2, t3, q2, q3, ate);
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.out()) {
@@ -880,7 +880,7 @@ mod test {
             {Fq::toaltstack()}                
         };
 
-        let (tap_scr, nt2, nt3) = tap_add_eval_mul_for_fixed_qs_with_frob(t2, t3, q2, q3, ate);
+        let (nt2, nt3) = (hint_out.t2, hint_out.t3);
 
         assert_eq!( nt3, get_hint_for_add_with_frob(q3, t3, ate));
 

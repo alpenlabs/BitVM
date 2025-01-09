@@ -98,9 +98,9 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
     let mut tap_point_add_with_frob = cached(|a| chunk_point_add_with_frob(ElemG2PointAcc::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), a));
     let mut chunk_hash_p = cached(|(a, b, c, d)| chunk_hash_p(a, b, c, d ));
     let mut tap_msm = cached(|(a, b, c)| chunk_msm(a, b, c ));
-    let mut tap_double_eval_mul_for_fixed_qs = cached(|(a, b)| chunk_double_eval_mul_for_fixed_qs(a, b));
-    let mut tap_add_eval_mul_for_fixed_qs = cached(|(a, b, c, d, e)| tap_add_eval_mul_for_fixed_qs(a, b, c, d, e));
-    let mut tap_add_eval_mul_for_fixed_qs_with_frob = cached(|(a, b, c, d, e)| tap_add_eval_mul_for_fixed_qs_with_frob(a, b, c, d, e));
+    let mut tap_double_eval_mul_for_fixed_qs = cached(|(a, b)| chunk_double_eval_mul_for_fixed_qs(ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), a, b));
+    let mut tap_add_eval_mul_for_fixed_qs = cached(|(a, b, c, d, e)| chunk_add_eval_mul_for_fixed_qs(ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), a, b, c, d, e));
+    let mut tap_add_eval_mul_for_fixed_qs_with_frob = cached(|(a, b, c, d, e)| chunk_add_eval_mul_for_fixed_qs_with_frob(ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), a, b, c, d, e));
     let tap_init_t4 = chunk_init_t4(ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock());
     // let tap_precompute_py = chunk_precompute_py();
     // let tap_precompute_px = chunk_precompute_px();
@@ -185,13 +185,13 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
                 op_scripts.push(chp.1);
             },
             ScriptType::MillerSparseSparseDbl(inp) => {
-                op_scripts.push(tap_double_eval_mul_for_fixed_qs((inp.0, inp.1)).0);
+                op_scripts.push(tap_double_eval_mul_for_fixed_qs((inp.0, inp.1)).1);
             },
             ScriptType::MillerSparseSparseAdd(inp) => {
-                op_scripts.push(tap_add_eval_mul_for_fixed_qs((inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1)).0);
+                op_scripts.push(tap_add_eval_mul_for_fixed_qs((inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1)).1);
             },
             ScriptType::PostMillerSparseAddWithFrob(inp) => {
-                op_scripts.push(tap_add_eval_mul_for_fixed_qs_with_frob((inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1)).0);
+                op_scripts.push(tap_add_eval_mul_for_fixed_qs_with_frob((inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1)).1);
             },
         }
     }
