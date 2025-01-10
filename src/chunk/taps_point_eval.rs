@@ -24,7 +24,7 @@ pub(crate) fn chunk_double_eval_mul_for_fixed_qs(
     
     hint_in_t2: ark_bn254::G2Affine,
     hint_in_t3: ark_bn254::G2Affine,
-) -> (ElemSparseEval, Script, Script) {
+) -> (ElemSparseEval, Script, Vec<Hint>) {
     fn tap_double_eval_mul_for_fixed_qs(
         t2: G2Affine,
         t3: G2Affine,
@@ -195,15 +195,8 @@ pub(crate) fn chunk_double_eval_mul_for_fixed_qs(
     let p3dash_x = extern_fq_to_nibbles(p3.x);
     let p3dash_y = extern_fq_to_nibbles(p3.y);
 
-
-    let simulate_stack_input = script! {
-        for hint in hints {
-            { hint.push() }
-        }
-
-        // { bc_elems }
-
-    };
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&hints);
 
     let hint_out = ElemSparseEval {
         t2: G2Affine::new_unchecked(x2, y2),
@@ -228,7 +221,7 @@ pub(crate) fn chunk_add_eval_mul_for_fixed_qs(
     hint_in_q2: ark_bn254::G2Affine,
     hint_in_q3: ark_bn254::G2Affine,
     ate: i8,
-) -> (ElemSparseEval, Script, Script) {
+) -> (ElemSparseEval, Script, Vec<Hint>) {
 
     fn tap_add_eval_mul_for_fixed_qs(
         t2: G2Affine,
@@ -405,13 +398,9 @@ pub(crate) fn chunk_add_eval_mul_for_fixed_qs(
     let p3dash_x = extern_fq_to_nibbles(p3.x);
     let p3dash_y = extern_fq_to_nibbles(p3.y);
 
-    let simulate_stack_input = script! {
-        for hint in hints {
-            { hint.push() }
-        }
-        // bit commits
-        // { bc_elems }
-    };
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&hints);
+    
 
     let hint_out = ElemSparseEval {
         t2: G2Affine::new_unchecked(x2, y2),
@@ -447,7 +436,7 @@ pub(crate) fn chunk_add_eval_mul_for_fixed_qs_with_frob(
     hint_in_q2: ark_bn254::G2Affine,
     hint_in_q3: ark_bn254::G2Affine,
     ate: i8,
-) -> (ElemSparseEval, Script, Script) {
+) -> (ElemSparseEval, Script, Vec<Hint>) {
 
     fn tap_add_eval_mul_for_fixed_qs_with_frob(
         t2: G2Affine,
@@ -628,13 +617,8 @@ pub(crate) fn chunk_add_eval_mul_for_fixed_qs_with_frob(
     let p3dash_x = extern_fq_to_nibbles(p3.x);
     let p3dash_y = extern_fq_to_nibbles(p3.y);
 
-    let simulate_stack_input = script! {
-        for hint in hints {
-            { hint.push() }
-        }
-        // bit commits
-        // { bc_elems }
-    };
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&hints);
 
     let hint_out = ElemSparseEval {
         t2: G2Affine::new_unchecked(x2, y2),

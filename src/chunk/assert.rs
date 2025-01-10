@@ -5,7 +5,7 @@ use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::{Field, PrimeField};
 use bitcoin_script::script;
 
-use crate::{chunk::{primitves::{tup_to_scr, HashBytes, Sig, SigData}, segment::*, taps_point_eval::{get_hint_for_add_with_frob}}, execute_script, groth16::g16::{Assertions, PublicKeys, Signatures, N_TAPLEAVES, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}, treepp};
+use crate::{bn254::utils::Hint, chunk::{primitves::{tup_to_scr, HashBytes, Sig, SigData}, segment::*, taps_point_eval::get_hint_for_add_with_frob}, execute_script, groth16::g16::{Assertions, PublicKeys, Signatures, N_TAPLEAVES, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}, treepp};
 
 
 use super::{api::nib_to_byte_array, compile::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, hint_models::*, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles},  wots::WOTSPubKey};
@@ -85,7 +85,7 @@ pub(crate) fn groth16(
         output_type: true,
         inputs: vec![],
         output: Element::ScalarElem(*f),
-        hint_script: script!(),
+        hint_script: vec![],
         scr_type: ScriptType::NonDeterministic,
     }).collect();
     all_output_hints.extend_from_slice(&pub_scalars);
@@ -97,7 +97,7 @@ pub(crate) fn groth16(
         output_type: true,
         inputs: vec![],
         output: Element::FieldElem(*f),
-        hint_script: script!(),
+        hint_script: vec![],
         scr_type: ScriptType::NonDeterministic
     }).collect();
     all_output_hints.extend_from_slice(&p4vec);
@@ -130,7 +130,7 @@ pub(crate) fn groth16(
         output_type: true,
         inputs: vec![],
         output: Element::FieldElem(*f),
-        hint_script: script!(),
+        hint_script: vec![],
         scr_type: ScriptType::NonDeterministic
     }).collect();
     all_output_hints.extend_from_slice(&gc);
@@ -144,7 +144,7 @@ pub(crate) fn groth16(
         output_type: true,
         inputs: vec![],
         output: Element::FieldElem(*f),
-        hint_script: script!(),
+        hint_script: vec![],
         scr_type: ScriptType::NonDeterministic
     }).collect();
     all_output_hints.extend_from_slice(&gs);
@@ -156,7 +156,7 @@ pub(crate) fn groth16(
         output_type: true,
         inputs: vec![],
         output: Element::FieldElem(*f),
-        hint_script: script!(),
+        hint_script: vec![],
         scr_type: ScriptType::NonDeterministic
     }).collect();
     all_output_hints.extend_from_slice(&temp_q4);
@@ -602,7 +602,7 @@ pub(crate) fn script_exec(
         bc_hints.push(bcelems);
     }
 
-    let aux_hints: Vec<treepp::Script> = segments.iter().map(|f| f.hint_script.clone()).collect();
+    let aux_hints: Vec<Vec<Hint>> = segments.iter().map(|f| f.hint_script.clone()).collect();
 
     let mut tap_script_index = 0;
     for i in 0..aux_hints.len() {
@@ -610,7 +610,9 @@ pub(crate) fn script_exec(
             continue;
         }
         let hint_script = script!{
-            {aux_hints[i].clone()}
+            for h in &aux_hints[i] {
+                {h.push()}
+            }
             {bc_hints[i].clone()}
         };
         let total_script = script!{

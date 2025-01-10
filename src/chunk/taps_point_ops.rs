@@ -108,7 +108,7 @@ pub(crate) fn chunk_point_dbl(
     hint_t: ElemG2PointAcc,
     hint_py: ElemFq,
     hint_px: ElemFq,
-) -> (ElemG2PointAcc, Script, Script) {
+) -> (ElemG2PointAcc, Script, Vec<Hint>) {
 
     fn chunk_point_dbl(hinted_check_tangent: Script, hinted_double_line: Script, hinted_ell_tangent: Script) -> Script {
         let ops_script = script! {
@@ -237,24 +237,18 @@ pub(crate) fn chunk_point_dbl(
     let hash_input = extern_hash_nibbles(vec![hash_t, hash_le_aux], true);
 
 
-    let simulate_stack_input = script! {
-        // tmul_hints
-        for hint in all_qs {
-            { hint.push() }
-        }
-        // aux
-        { fq2_push_not_montgomery(alpha_tangent)}
-        { fq2_push_not_montgomery(bias_minus_tangent)}
-        { fq2_push_not_montgomery(t.x) }
-        { fq2_push_not_montgomery(t.y) }
-
-        for i in 0..aux_hash_le.len() {
-            {aux_hash_le[i]}
-        }
-        // bit commits raw
-
-        // {bc_elems}
-    };
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&all_qs);
+    simulate_stack_input.push(Hint::Fq(alpha_tangent.c0));
+    simulate_stack_input.push(Hint::Fq(alpha_tangent.c1));
+    simulate_stack_input.push(Hint::Fq(bias_minus_tangent.c0));
+    simulate_stack_input.push(Hint::Fq(bias_minus_tangent.c1));
+    simulate_stack_input.push(Hint::Fq(t.x.c0));
+    simulate_stack_input.push(Hint::Fq(t.x.c1));
+    simulate_stack_input.push(Hint::Fq(t.y.c0));
+    simulate_stack_input.push(Hint::Fq(t.y.c1));
+    simulate_stack_input.push(Hint::Hash(aux_hash_le));
+    
     let hint_out: ElemG2PointAcc = ElemG2PointAcc {
         t: G2Affine::new_unchecked(new_tx, new_ty),
         dbl_le: Some((dbl_le0, dbl_le1)),
@@ -273,7 +267,7 @@ pub(crate) fn chunk_point_add_with_frob(
     hint_py: ElemFq,
     hint_px: ElemFq,
     ate: i8,
-) -> (ElemG2PointAcc, Script, Script) {
+) -> (ElemG2PointAcc, Script, Vec<Hint>) {
 
     fn tap_point_add_with_frob(ate: i8, scripts: [Script; 5]) -> Script {
         assert!(ate == 1 || ate == -1);
@@ -469,24 +463,18 @@ pub(crate) fn chunk_point_add_with_frob(
     let aux_hash_le = extern_nibbles_to_limbs(hash_le_aux); // mock
     let hash_input = extern_hash_nibbles(vec![hash_t, hash_le_aux], true);
 
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&all_qs);
+    simulate_stack_input.push(Hint::Fq(alpha_chord.c0));
+    simulate_stack_input.push(Hint::Fq(alpha_chord.c1));
+    simulate_stack_input.push(Hint::Fq(bias_minus_chord.c0));
+    simulate_stack_input.push(Hint::Fq(bias_minus_chord.c1));
+    simulate_stack_input.push(Hint::Fq(tt.x.c0));
+    simulate_stack_input.push(Hint::Fq(tt.x.c1));
+    simulate_stack_input.push(Hint::Fq(tt.y.c0));
+    simulate_stack_input.push(Hint::Fq(tt.y.c1));
+    simulate_stack_input.push(Hint::Hash(aux_hash_le));
 
-    let simulate_stack_input = script! {
-        // tmul_hints
-        for hint in all_qs {
-            { hint.push() }
-        }
-        // aux
-        { fq2_push_not_montgomery(alpha_chord)}
-        { fq2_push_not_montgomery(bias_minus_chord)}
-        { fq2_push_not_montgomery(tt.x) }
-        { fq2_push_not_montgomery(tt.y) }
-
-        for i in 0..aux_hash_le.len() {
-            {aux_hash_le[i]}
-        }
-
-        // bit commits raw
-    };
     let hint_out = ElemG2PointAcc {
         t: G2Affine::new_unchecked(new_tx, new_ty),
         add_le: Some((add_le0, add_le1)),
@@ -507,7 +495,7 @@ pub(crate) fn chunk_point_ops(
     hint_py: ElemFq,
     hint_px: ElemFq,
     ate: i8,
-) -> (ElemG2PointAcc, Script, Script) {
+) -> (ElemG2PointAcc, Script, Vec<Hint>) {
     pub(crate) fn tap_point_ops(ate: i8, scripts: [Script; 7]) -> Script {
         assert!(ate == 1 || ate == -1);
     
@@ -791,26 +779,21 @@ pub(crate) fn chunk_point_ops(
     let aux_hash_le = extern_nibbles_to_limbs(hash_le_aux);
     let hash_input = extern_hash_nibbles(vec![hash_t, hash_le_aux], true);
 
-    let simulate_stack_input = script! {
-        // tmul_hints
-        for hint in all_qs {
-            { hint.push() }
-        }
-        // aux
-        { fq2_push_not_montgomery(alpha_chord)}
-        { fq2_push_not_montgomery(bias_minus_chord)}
-        { fq2_push_not_montgomery(alpha_tangent)}
-        { fq2_push_not_montgomery(bias_minus_tangent)}
-        { fq2_push_not_montgomery(t.x) }
-        { fq2_push_not_montgomery(t.y) }
-
-        for i in 0..aux_hash_le.len() {
-            {aux_hash_le[i]}
-        }
-
-        // bit commits
-        // { bc_elems }
-    };
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&all_qs);
+    simulate_stack_input.push(Hint::Fq(alpha_chord.c0));
+    simulate_stack_input.push(Hint::Fq(alpha_chord.c1));
+    simulate_stack_input.push(Hint::Fq(bias_minus_chord.c0));
+    simulate_stack_input.push(Hint::Fq(bias_minus_chord.c1));
+    simulate_stack_input.push(Hint::Fq(alpha_tangent.c0));
+    simulate_stack_input.push(Hint::Fq(alpha_tangent.c1));
+    simulate_stack_input.push(Hint::Fq(bias_minus_tangent.c0));
+    simulate_stack_input.push(Hint::Fq(bias_minus_tangent.c1));
+    simulate_stack_input.push(Hint::Fq(t.x.c0));
+    simulate_stack_input.push(Hint::Fq(t.x.c1));
+    simulate_stack_input.push(Hint::Fq(t.y.c0));
+    simulate_stack_input.push(Hint::Fq(t.y.c1));
+    simulate_stack_input.push(Hint::Hash(aux_hash_le));
 
     let hint_out = ElemG2PointAcc {
         t: G2Affine::new_unchecked(new_tx, new_ty),

@@ -52,7 +52,9 @@ mod test {
 
         let tap_len = tap_frob.len();
         let script = script! {
-            {hint_script}
+                        for h in hint_script {
+                        { h.push() }
+            }
             {bitcom_scr}
             {tap_frob}
         };
@@ -92,7 +94,9 @@ mod test {
 
         let tap_len = tap_hash_c.len();
         let script = script! {
-            {hint_script}
+                        for h in hint_script {
+                        { h.push() }
+            }
             {bitcom_scr}
             {tap_hash_c}
         };
@@ -133,7 +137,9 @@ mod test {
 
         let tap_len = tap_hash_c2.len();
         let script = script! {
-            {hint_script}
+                        for h in hint_script {
+                        { h.push() }
+            }
             {bitcom_scr}
             {tap_hash_c2}
         };
@@ -173,7 +179,9 @@ mod test {
 
         let tap_len = init_t4_tap.len();
         let script = script! {
-            {hint_script}
+                        for h in hint_script {
+                        { h.push() }
+            }
             {bitcom_script}
             {init_t4_tap}
         };
@@ -210,7 +218,9 @@ mod test {
 
         let tap_len = tap_prex.len();
         let script = script! {
-            {hint_script}
+                        for h in hint_script {
+                        { h.push() }
+            }
             {bitcom_scr}
             {tap_prex}
         };
@@ -240,7 +250,9 @@ mod test {
 
         let tap_len = tap_prey.len();
         let script = script! {
-            {hint_script}
+                        for h in hint_script {
+                        { h.push() }
+            }
             {bitcom_scr}
             {tap_prey}
         };
@@ -292,7 +304,9 @@ mod test {
 
         let tap_len = tap_scr.len();
         let script = script! {
-            {hint_script}
+                        for h in hint_script {
+                        { h.push() }
+            }
             {bitcom_scr}
             {tap_scr}
         };
@@ -349,7 +363,9 @@ mod test {
 
         let tap_len = tap_scr.len();
         let script = script! {
-            {hint_script}
+                        for h in hint_script {
+                        { h.push() }
+            }
             {bitcom_scr}
             {tap_scr}
         };
@@ -420,7 +436,9 @@ mod test {
 
         let tap_len = tap_scr.len();
         let script = script! {
-            {hint_script}
+                        for h in hint_script {
+                        { h.push() }
+            }
             {bitcom_scr}
             {tap_scr}
         };
@@ -475,7 +493,9 @@ mod test {
 
         let tap_len = tap_scr.len();
         let script = script! {
-            {hint_script}
+                        for h in hint_script {
+                        { h.push() }
+            }
             {bitcom_scr}
             {tap_scr}
         };
@@ -540,7 +560,9 @@ mod test {
 
         let tap_len = tap_scr.len();
         let script = script! {
-            {hint_script}
+                        for h in hint_script {
+                        { h.push() }
+            }
             {bitcom_scr}
             {tap_scr}
         };
@@ -583,7 +605,9 @@ mod test {
 
         let tap_len = tap_scr.len();
         let script = script! {
-            {hint_script}
+                        for h in hint_script {
+                        { h.push() }
+            }
             {bitcom_scr}
             {tap_scr}
         };
@@ -641,7 +665,9 @@ mod test {
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {
-            {hint_script}
+                        for h in hint_script {
+                        { h.push() }
+            }
             {bitcom_script}
             {point_ops_tapscript}
         };
@@ -684,7 +710,9 @@ mod test {
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {
-            {hint_script}
+                        for h in hint_script {
+                        { h.push() }
+            }
             {bitcom_values}
             {point_ops_tapscript}
         };
@@ -740,7 +768,9 @@ mod test {
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {
-            {hint_script}
+                        for h in hint_script {
+                        { h.push() }
+            }
             {bitcom_script}
             {point_ops_tapscript}
         };
@@ -786,7 +816,9 @@ mod test {
 
         let tap_len = tap_scr.len();
         let script = script! {
-            {hint_script}
+                        for h in hint_script {
+                        { h.push() }
+            }
             {bitcom_scr}
             {tap_scr}
         };
@@ -838,7 +870,9 @@ mod test {
 
         let tap_len = tap_scr.len();
         let script = script! {
-            {hint_script}
+                        for h in hint_script {
+                        { h.push() }
+            }
             {bitcom_scr}
             {tap_scr}
         };
@@ -889,7 +923,9 @@ mod test {
 
         let tap_len = tap_scr.len();
         let script = script! {
-            {hint_script}
+                        for h in hint_script {
+                        { h.push() }
+            }
             {bitcom_scr}
             {tap_scr}
         };
@@ -923,7 +959,9 @@ mod test {
                 {Fq::toaltstack()}
             };
             let script = script! {
-                { hscr0 }
+                for h in hscr0 {
+                    { h.push() }
+                }
                 { bscr0 }
                 { tscr0 }
             };
@@ -951,7 +989,9 @@ mod test {
             };
 
             let script = script! {
-                { hscr1 }
+                for h in hscr1 {
+                    { h.push() }
+                }
                 { bscr1 }
                 { tscr1 }
             };
@@ -986,7 +1026,9 @@ mod test {
 
             let script = script! {
                 { bscr2 }
-                { hscr2 }
+                for h in hscr2 {
+                    { h.push() }
+                }
                 { tscr2 }
             };
             let len = script.len();

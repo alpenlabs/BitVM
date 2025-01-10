@@ -19,7 +19,7 @@ use super::hint_models::{ElemFq, ElemG1Point};
 use super::primitves::{hash_fp2, HashBytes};
 use crate::bn254::fq2::Fq2;
 
-pub(crate) fn chunk_msm(window: usize, ks: Vec<ark_bn254::Fr>, qs: Vec<ark_bn254::G1Affine>) -> Vec<(ElemG1Point, Script, Script)> {
+pub(crate) fn chunk_msm(window: usize, ks: Vec<ark_bn254::Fr>, qs: Vec<ark_bn254::G1Affine>) -> Vec<(ElemG1Point, Script, Vec<Hint>)> {
     let num_pubs = qs.len();
     let chunks = G1Affine::hinted_scalar_mul_by_constant_g1(ks.clone(), qs.clone(), window as u32);
 
@@ -95,13 +95,8 @@ pub(crate) fn chunk_msm(window: usize, ks: Vec<ark_bn254::Fr>, qs: Vec<ark_bn254
             OP_TRUE
         };
 
-        let hint_script = script!(
-            for hint in &chunk.2 {
-                {hint.push()}
-            }            
-        );
 
-        chunk_scripts.push((chunk.0, sc, hint_script));
+        chunk_scripts.push((chunk.0, sc, chunk.2.clone()));
     }
     chunk_scripts
 }
@@ -113,7 +108,7 @@ pub(crate) fn chunk_hash_p(
     hint_in_ry: ElemFq,
     hint_in_rx: ElemFq,
     hint_in_q: ark_bn254::G1Affine,
-) -> (HashBytes, Script, Script) {
+) -> (HashBytes, Script, Vec<Hint>) {
     // r (gp3) = t(msm) + q(vk0)
     let (tx, qx, ty, qy) = (hint_in_t.x, hint_in_q.x, hint_in_t.y, hint_in_q.y);
     
@@ -134,24 +129,15 @@ pub(crate) fn chunk_hash_p(
 
 
 
-    let simulate_stack_input = script! {
-        // bit commits raw
-        for hint in hints_check_chord_t {
-            {hint.push()}
-        }
-        for hint in hints_check_chord_q {
-            {hint.push()}
-        }
-        for hint in hints_add_line {
-            {hint.push()}
-        }
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&hints_check_chord_t);
+    simulate_stack_input.extend_from_slice(&hints_check_chord_q);
+    simulate_stack_input.extend_from_slice(&hints_add_line);
 
-        {fq_push_not_montgomery(alpha_chord)}
-        {fq_push_not_montgomery(bias_minus_chord)}
-
-        {fq_push_not_montgomery(tx)}
-        {fq_push_not_montgomery(ty)}
-    };
+    simulate_stack_input.push(Hint::Fq(alpha_chord));
+    simulate_stack_input.push(Hint::Fq(bias_minus_chord));
+    simulate_stack_input.push(Hint::Fq(tx));
+    simulate_stack_input.push(Hint::Fq(ty));
 
     let ops_script = script!{
         // Altstack:[identity, th, gpy, gpx]
@@ -414,7 +400,9 @@ mod test {
 
         let tap_len = hash_c_scr.len();
         let script = script! {
-            {hint_script}
+            for h in hint_script {
+                { h.push() }
+            }
             {bitcom_scr}
             {hash_c_scr}
         };
@@ -463,7 +451,9 @@ mod test {
     
             let tap_len = hints_msm[msm_chunk_index].2.len();
             let script = script! {
-                {hints_msm[msm_chunk_index].2.clone()}
+                for h in &hints_msm[msm_chunk_index].2 {
+                    {h.push()}
+                }
                 {bitcom_scr}
                 {hints_msm[msm_chunk_index].1.clone()}
             };

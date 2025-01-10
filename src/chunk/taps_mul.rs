@@ -1,6 +1,6 @@
 use crate::bn254::fq6::Fq6;
 use crate::bn254::utils::{
-    fq12_push_not_montgomery, fq2_push_not_montgomery, fq_push_not_montgomery,
+    fq12_push_not_montgomery, fq2_push_not_montgomery, fq_push_not_montgomery, Hint,
 };
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::primitves::{
@@ -23,7 +23,7 @@ pub(crate) fn chunk_sparse_dense_mul(
     hint_in_a: ElemFp12Acc,
     hint_in_g: ElemG2PointAcc,
     dbl_blk: bool,
-) -> (ElemFp12Acc, Script, Script) {
+) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
     fn tap_sparse_dense_mul(dbl_blk: bool, hinted_script: Script) -> Script {
     
@@ -113,11 +113,12 @@ pub(crate) fn chunk_sparse_dense_mul(
     }
     let hash_sparse_input = extern_hash_nibbles(vec![hash_new_t, hash_le], true);
 
+    let fvec = vec![
+        f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
+        f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
+    ];
     let hash_dense_input = extern_hash_fps(
-        vec![
-            f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-            f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-        ],
+        fvec.clone(),
         true,
     );
     let hash_dense_output = extern_hash_fps(
@@ -142,25 +143,17 @@ pub(crate) fn chunk_sparse_dense_mul(
 
     // data passed to stack in runtime
 
-    let simulate_stack_input = script! {
-        // quotients for tmul
-        for hint in hints {
-            { hint.push() }
-        }
-        // aux_a
-        {fq12_push_not_montgomery(f)}
-        {fq2_push_not_montgomery(cur_le0)}
-        {fq2_push_not_montgomery(cur_le1)}
-
-        for i in 0..hash_other_le_limbs.len() {
-            {hash_other_le_limbs[i]}
-        }
-        for i in 0..hash_t_limbs.len() {
-            {hash_t_limbs[i]}
-        }
-
-        // { bc_elems }
-    };
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&hints);
+    for f in &fvec {
+        simulate_stack_input.push(Hint::Fq(*f));
+    }
+    simulate_stack_input.push(Hint::Fq(cur_le0.c0));
+    simulate_stack_input.push(Hint::Fq(cur_le0.c1));
+    simulate_stack_input.push(Hint::Fq(cur_le1.c0));
+    simulate_stack_input.push(Hint::Fq(cur_le1.c1));
+    simulate_stack_input.push(Hint::Hash(hash_other_le_limbs));
+    simulate_stack_input.push(Hint::Hash(hash_t_limbs));
 
     (
         ElemFp12Acc {
@@ -169,7 +162,6 @@ pub(crate) fn chunk_sparse_dense_mul(
         },
         tap_sparse_dense_mul(dbl_blk, hinted_script),
         simulate_stack_input,
-       // should_validate
     )
 }
 
@@ -208,7 +200,7 @@ fn hash_mul(is_zero: bool) -> Script {
 pub(crate) fn chunk_dense_dense_mul0(
     hint_in_a: ElemFp12Acc,
     hint_in_b: ElemFp12Acc,
-) -> (ElemFp12Acc, Script, Script) {
+) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
     fn tap_dense_dense_mul0(hinted_mul: Script) -> Script {
         let check_is_identity: bool = false;
@@ -245,18 +237,21 @@ pub(crate) fn chunk_dense_dense_mul0(
 
     let (hinted_mul_scr, mul_hints) = Fq12::hinted_mul_first(12, f, 0, g);
 
+    let fvec = vec![
+        f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
+        f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
+    ];
     let hash_f = extern_hash_fps(
-        vec![
-            f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-            f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-        ],
+        fvec.clone(),
         true,
     ); // dense
+
+    let gvec = vec![
+        g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
+        g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
+    ];
     let hash_g = extern_hash_fps(
-        vec![
-            g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-            g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
-        ],
+        gvec.clone(),
         false,
     ); // sparse
     let hash_h = extern_hash_fps(
@@ -266,23 +261,14 @@ pub(crate) fn chunk_dense_dense_mul0(
         true,
     );
 
-    // data passed to stack in runtime
-    let simulate_stack_input = script! {
-        // quotients for tmul
-        for hint in mul_hints {
-            { hint.push() }
-        }
-        // aux_a
-        {fq12_push_not_montgomery(f)}
-        {fq12_push_not_montgomery(g)}
-
-        // aux_hashes
-        // bit commit hashes
-        // in2: SS or c' link
-        // in1: SD or DD1 link
-        // out
-        // { bc_elems }
-    };
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&mul_hints);
+    for f in &fvec {
+        simulate_stack_input.push(Hint::Fq(*f));
+    }
+    for f in &gvec {
+        simulate_stack_input.push(Hint::Fq(*f));
+    }
 
     (
         ElemFp12Acc {
@@ -301,7 +287,7 @@ pub(crate) fn chunk_dense_dense_mul1(
     hint_in_a: ElemFp12Acc,
     hint_in_b: ElemFp12Acc,
     hint_in_c0: ElemFp12Acc,
-) -> (ElemFp12Acc, Script, Script) {
+) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
 
     fn tap_dense_dense_mul1(hinted_mul: Script) -> Script {
@@ -335,18 +321,20 @@ pub(crate) fn chunk_dense_dense_mul1(
     let (hinted_mul_scr, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
     let h = f * g;
 
+    let fvec = vec![
+        f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
+        f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
+    ];
     let hash_f = extern_hash_fps(
-        vec![
-            f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-            f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-        ],
+        fvec.clone(),
         true,
     );
+    let gvec = vec![
+        g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
+        g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
+    ];
     let hash_g = extern_hash_fps(
-        vec![
-            g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-            g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
-        ],
+        gvec.clone(),
         false,
     );
 
@@ -365,25 +353,15 @@ pub(crate) fn chunk_dense_dense_mul1(
     );
 
 
-    // data passed to stack in runtime
-    let simulate_stack_input = script! {
-        // quotients for tmul
-        for hint in mul_hints {
-            { hint.push() }
-        }
-        // aux_a
-        {fq12_push_not_montgomery(f)}
-        {fq12_push_not_montgomery(g)}
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&mul_hints);
+    for f in &fvec {
+        simulate_stack_input.push(Hint::Fq(*f));
+    }
+    for f in &gvec {
+        simulate_stack_input.push(Hint::Fq(*f));
+    }
 
-        // aux_hashes
-        // bit commit hashes
-
-        // in3: links to DD0
-        // in2: SS or c' link
-        // in1: SD or DD1 link
-        // out
-        // { bc_elems }
-    };
     (
         ElemFp12Acc {
             f: h,
@@ -399,7 +377,7 @@ pub(crate) fn chunk_dense_dense_mul1(
 
 pub(crate) fn chunk_squaring(
     hint_in_a: ElemFp12Acc,
-) -> (ElemFp12Acc, Script, Script) {
+) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
     fn tap_squaring(sq_script: Script) -> Script {
         let hash_sc = script! {
@@ -433,11 +411,12 @@ pub(crate) fn chunk_squaring(
     let a = hint_in_a.f;
     let (sq_script, hints) = Fq12::hinted_square(a);
     let b = a.square();
+    let avec = vec![
+        a.c0.c0.c0, a.c0.c0.c1, a.c0.c1.c0, a.c0.c1.c1, a.c0.c2.c0, a.c0.c2.c1, a.c1.c0.c0,
+        a.c1.c0.c1, a.c1.c1.c0, a.c1.c1.c1, a.c1.c2.c0, a.c1.c2.c1,
+    ];
     let a_hash = extern_hash_fps(
-        vec![
-            a.c0.c0.c0, a.c0.c0.c1, a.c0.c1.c0, a.c0.c1.c1, a.c0.c2.c0, a.c0.c2.c1, a.c1.c0.c0,
-            a.c1.c0.c1, a.c1.c1.c0, a.c1.c1.c1, a.c1.c2.c0, a.c1.c2.c1,
-        ],
+        avec.clone(),
         true,
     );
     let b_hash = extern_hash_fps(
@@ -452,17 +431,12 @@ pub(crate) fn chunk_squaring(
     // let tup = vec![(sec_in[0], a_hash), (sec_out, b_hash)];
     // let (bc_elems, should_validate) = tup_to_scr(sig, tup);
 
-    // data passed to stack in runtime
-    let simulate_stack_input = script! {
-        // quotients for tmul
-        for hint in hints {
-            { hint.push() }
-        }
-        // aux_a
-        {fq12_push_not_montgomery(a)}
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&hints);
+    for f in &avec {
+        simulate_stack_input.push(Hint::Fq(*f));
+    } 
 
-        // {bc_elems}
-    };
     let hint_out = ElemFp12Acc { hash: b_hash, f: b };
     return (hint_out, tap_squaring(sq_script), simulate_stack_input);
 }
@@ -475,7 +449,7 @@ pub(crate) fn chunk_squaring(
 pub(crate) fn chunk_dense_dense_mul0_by_constant(
     hint_in_a: ElemFp12Acc,
     hint_in_b: ElemFp12Acc,
-) -> (ElemFp12Acc, Script, Script) {
+) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
     fn tap_dense_dense_mul0_by_constant(g: ark_bn254::Fq12, hinted_mul: Script) -> Script {
         let check_is_identity: bool = true;
@@ -517,11 +491,16 @@ pub(crate) fn chunk_dense_dense_mul0_by_constant(
 
     let (hint_mul_scr, mul_hints) = Fq12::hinted_mul_first(12, f, 0, g);
 
+    let fvec = vec![
+        f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
+        f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
+    ];
+    let gvec = vec![
+        g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
+        g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
+    ];
     let hash_f = extern_hash_fps(
-        vec![
-            f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-            f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-        ],
+        fvec.clone(),
         true,
     ); // dense
     // let hash_g = emulate_extern_hash_fps(
@@ -538,23 +517,14 @@ pub(crate) fn chunk_dense_dense_mul0_by_constant(
         true,
     );
 
-    // data passed to stack in runtime
-    let simulate_stack_input = script! {
-        // quotients for tmul
-        for hint in mul_hints {
-            { hint.push() }
-        }
-        // aux_a
-        {fq12_push_not_montgomery(f)}
-        {fq12_push_not_montgomery(g)}
-
-        // aux_hashes
-        // bit commit hashes
-        // in2: SS or c' link
-        // in1: SD or DD1 link
-        // out
-        // { bc_elems }
-    };
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&mul_hints);
+    for f in &fvec {
+        simulate_stack_input.push(Hint::Fq(*f));
+    } 
+    for f in &gvec {
+        simulate_stack_input.push(Hint::Fq(*f));
+    } 
 
     (
         ElemFp12Acc {
@@ -571,7 +541,7 @@ pub(crate) fn chunk_dense_dense_mul1_by_constant(
     hint_in_a: ElemFp12Acc,
     hint_in_c0: ElemFp12Acc,
     hint_in_b: ElemFp12Acc,
-) -> (ElemFp12Acc, Script, Script) {
+) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
 
     fn tap_dense_dense_mul1_by_constant(g: ark_bn254::Fq12, hinted_mul: Script) -> Script {
@@ -618,11 +588,12 @@ pub(crate) fn chunk_dense_dense_mul1_by_constant(
     let (hinted_mul_scr, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
     let h = f * g;
 
+    let fvec = vec![
+        f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
+        f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
+    ];
     let hash_f = extern_hash_fps(
-        vec![
-            f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-            f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-        ],
+        fvec.clone(),
         true,
     );
 
@@ -639,25 +610,20 @@ pub(crate) fn chunk_dense_dense_mul1_by_constant(
         ],
         true,
     );
+    let gvec = vec![
+        g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
+        g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
+    ];
 
-    // data passed to stack in runtime
-    let simulate_stack_input = script! {
-        // quotients for tmul
-        for hint in mul_hints {
-            { hint.push() }
-        }
-        // aux_a
-        {fq12_push_not_montgomery(f)}
-        {fq12_push_not_montgomery(g)}
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&mul_hints);
+    for f in &fvec {
+        simulate_stack_input.push(Hint::Fq(*f));
+    } 
+    for f in &gvec {
+        simulate_stack_input.push(Hint::Fq(*f));
+    } 
 
-        // aux_hashes
-        // bit commit hashes
-
-        // in3: links to DD0
-        // in2: SS or c' link
-        // in1: SD or DD1 link
-        // out
-    };
     (
         ElemFp12Acc {
             f: h,
@@ -672,7 +638,7 @@ pub(crate) fn chunk_dense_dense_mul1_by_constant(
 pub(crate) fn chunk_frob_fp12(
     hint_in_f: ElemFp12Acc,
     power: usize,
-) -> (ElemFp12Acc, Script, Script) {
+) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
     fn tap_frob_fp12(power: usize, hinted_frobenius_map: Script) -> Script {
 
@@ -709,11 +675,12 @@ pub(crate) fn chunk_frob_fp12(
 
     let g = f.frobenius_map(power);
 
+    let fvec = vec![
+        f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
+        f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
+    ];
     let fhash = extern_hash_fps(
-        vec![
-            f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-            f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-        ],
+        fvec.clone(),
         false,
     );
     let ghash = extern_hash_fps(
@@ -724,11 +691,11 @@ pub(crate) fn chunk_frob_fp12(
         false,
     );
 
-    let simulate_stack_input = script! {
-        for hint in hints_frobenius_map {
-            { hint.push() }
-        }
-        { fq12_push_not_montgomery(f) }
-    };
+
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&hints_frobenius_map);
+    for f in &fvec {
+        simulate_stack_input.push(Hint::Fq(*f));
+    } 
     (ElemFp12Acc { f: g, hash: ghash }, tap_frob_fp12(power, hinted_frob_scr), simulate_stack_input)
 }

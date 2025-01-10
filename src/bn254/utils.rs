@@ -104,6 +104,7 @@ pub enum Hint {
     U32(u32),
     Fq(ark_bn254::Fq),
     Fr(ark_bn254::Fr),
+    Hash([u32; 9]),
     BigIntegerTmulLC1(num_bigint::BigInt),
     BigIntegerTmulLC2(num_bigint::BigInt),
 }
@@ -123,6 +124,11 @@ impl Hint {
             },
             Hint::Fr(fr) => script! {
                 { fr_push_not_montgomery(*fr) }
+            },
+            Hint::Hash(hash) => script! {
+                for h in hash {
+                    {*h}
+                }
             },
             Hint::BigIntegerTmulLC1(a) => script! {
                 { T1::push_u32_le(&bigint_to_u32_limbs(a.clone(), T1::N_BITS)) }

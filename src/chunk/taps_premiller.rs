@@ -21,7 +21,7 @@ use super::taps_point_ops::hash_g2acc_with_hashed_le;
 
 pub(crate) fn chunk_hash_c(
     hint_in_c: Vec<ElemFq>,
-) -> (ElemFp12Acc, Script, Script) {
+) -> (ElemFp12Acc, Script, Vec<Hint>) {
     fn chunk_hash_c() -> Script {
         let hash_scr = script! {
             for _ in 0..12 {
@@ -64,10 +64,7 @@ pub(crate) fn chunk_hash_c(
     let fvec = hint_in_c;
     let fhash = extern_hash_fps(fvec.clone(), false);
 
-    let simulate_stack_input = script! {
-        // bit commits raw
-        // { bc_elems }
-    };
+    let simulate_stack_input = vec![];
     let f = ark_bn254::Fq12::new(
         ark_bn254::Fq6::new(
             ark_bn254::Fq2::new(fvec[0], fvec[1]),
@@ -93,7 +90,7 @@ pub(crate) fn chunk_hash_c(
 // HASH_C
 pub(crate) fn chunk_hash_c2(
     hint_in_c: ElemFp12Acc,
-) -> (ElemFp12Acc, Script, Script) {
+) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
     fn chunk_hash_c2() -> Script {
         let hash_scr = script! {
@@ -120,17 +117,18 @@ pub(crate) fn chunk_hash_c2(
     }
 
     let f = hint_in_c.f;
-    let f = vec![
+    let fvec = vec![
         f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
         f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
     ];
-    let inhash = extern_hash_fps(f.clone(), false);
-    let outhash = extern_hash_fps(f.clone(), true);
+    let inhash = extern_hash_fps(fvec.clone(), false);
+    let outhash = extern_hash_fps(fvec.clone(), true);
 
-    let simulate_stack_input = script! {
-        // bit commits raw
-        {fq12_push_not_montgomery(hint_in_c.f)}
-    };
+    let mut simulate_stack_input = vec![];
+    for f in &fvec {
+        simulate_stack_input.push(Hint::Fq(*f));
+    }
+
     (
         ElemFp12Acc {
             f: hint_in_c.f,
@@ -146,7 +144,7 @@ pub(crate) fn chunk_precompute_px(
     hint_in_py: ark_bn254::Fq,
     hint_in_px: ark_bn254::Fq,
     hint_in_pdy: ark_bn254::Fq,
-) -> (ark_bn254::Fq, Script, Script) {
+) -> (ark_bn254::Fq, Script, Vec<Hint>) {
     fn tap_precompute_px(on_curve_scr: Script) -> Script {
         let (eval_x, _) = hinted_x_from_eval_point(
             G1Affine::new_unchecked(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE),
@@ -211,23 +209,17 @@ pub(crate) fn chunk_precompute_px(
 
     let (on_curve_scr, on_curve_hint) = crate::bn254::curves::G1Affine::hinted_is_on_curve(p.x, p.y);
 
-    let simulate_stack_input = script! {
-        for hint in on_curve_hint {
-            { hint.push() }
-        }
-        for hint in hints {
-            { hint.push() }
-        }
-        // bit commits raw
-        // { bc_elems }
-    };
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&on_curve_hint);
+    simulate_stack_input.extend_from_slice(&hints);
+
     (pdx, tap_precompute_px(on_curve_scr), simulate_stack_input)
 }
 
 // precompute P
 pub(crate) fn chunk_precompute_py(
     hint_in_p: ark_bn254::Fq,
-) -> (ark_bn254::Fq, Script, Script) {
+) -> (ark_bn254::Fq, Script, Vec<Hint>) {
     // assert_eq!(sec_in.len(), 1);
     fn tap_precompute_py(y_eval_scr: Script) -> Script {
     
@@ -276,15 +268,10 @@ pub(crate) fn chunk_precompute_py(
     let p_y = extern_fq_to_nibbles(p);
 
 
-    let simulate_stack_input = script! {
-        for hint in hints {
-            { hint.push() }
-        }
-        {fq_push_not_montgomery(pdy)} // calc pdy
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&hints);
+    simulate_stack_input.push(Hint::Fq(pdy));
 
-        // bit commits raw
-        // { bc_elems }
-    };
     (pdy, tap_precompute_py(y_eval_scr), simulate_stack_input)
 }
 
@@ -295,7 +282,7 @@ pub(crate) fn chunk_init_t4(
     hint_q4y0: ElemFq,
     hint_q4x1: ElemFq,
     hint_q4x0: ElemFq,
-) -> (ElemG2PointAcc, Script, Script) {
+) -> (ElemG2PointAcc, Script, Vec<Hint>) {
 
     fn tap_init_t4(on_curve_scr: Script) -> Script {
         let hash_scr = script! {
@@ -336,12 +323,9 @@ pub(crate) fn chunk_init_t4(
 
     let (on_curve_scr, hints) = bn254::curves::G2Affine::hinted_is_on_curve(t4.x, t4.y);
 
-    let simulate_stack_input = script! {
-        // bit commits raw
-        for hint in hints {
-            {hint.push()}
-        }
-    };
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&hints);
+
     let hint_out: ElemG2PointAcc = ElemG2PointAcc {
         t: t4,
         dbl_le: None,
@@ -356,7 +340,7 @@ pub(crate) fn chunk_init_t4(
 pub(crate) fn chunk_inv2(
     t1: ElemFp12Acc,
     a: ElemFp12Acc,
-) -> (ElemFp12Acc, Script, Script) {
+) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
     fn tap_inv2(s_c0: Script, s_c1: Script) -> Script {
         let (a, t1) = (ElemFp12Acc::mock(), ElemFp12Acc::mock());
@@ -433,14 +417,15 @@ pub(crate) fn chunk_inv2(
         hints.extend_from_slice(&hint);
     }
 
-    let simulate_stack_input = script! {
-        // quotients for tmul
-        for hint in hints {
-            { hint.push() }
-        }
-        {fq12_push_not_montgomery(a)}
-        {fq6_push_not_montgomery(t1)}
-    };
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&hints);
+    for elem in a.to_base_prime_field_elements() {
+        simulate_stack_input.push(Hint::Fq(elem));
+    }
+    for elem in t1.to_base_prime_field_elements() {
+        simulate_stack_input.push(Hint::Fq(elem));
+    }
+
 
     let hash_h = extern_hash_fps(
         fp12_to_vec(ark_bn254::Fq12::new(c0, c1)),
@@ -457,7 +442,7 @@ pub(crate) fn chunk_inv2(
 
 pub(crate) fn chunk_inv1(
     a: ElemFp12Acc
-) -> (ElemFp12Acc, Script, Script) {
+) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
     fn tap_inv1(s_t0inv: Script) -> Script {
         let a = ElemFp12Acc::mock();
@@ -511,14 +496,12 @@ pub(crate) fn chunk_inv1(
         true,
     );
 
-    let simulate_stack_input = script! {
-        // quotients for tmul
-        for hint in h_t0inv {
-            { hint.push() }
-        }
-        {fq_push_not_montgomery(aux_t6)}
-        {fq6_push_not_montgomery(t0)}
-    };
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&h_t0inv);
+    simulate_stack_input.push(Hint::Fq(aux_t6));
+    for elem in t0.to_base_prime_field_elements() {
+        simulate_stack_input.push(Hint::Fq(elem));
+    }
 
     let hout: ElemFp12Acc = ElemFp12Acc { f: ark_bn254::Fq12::new(t1, ark_bn254::Fq6::ZERO), hash: hash_h };
     (
@@ -530,7 +513,7 @@ pub(crate) fn chunk_inv1(
 
 pub(crate) fn chunk_inv0(
     a: ElemFp12Acc
-) -> (ElemFp12Acc, Script, Script) {
+) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
     fn tap_inv0(s_t1: Script, s_t0: Script) -> Script {
 
@@ -610,14 +593,11 @@ pub(crate) fn chunk_inv0(
         hints.extend_from_slice(&hint);
     }
 
-    // data passed to stack in runtime
-    let simulate_stack_input = script! {
-        // quotients for tmul
-        for hint in hints {
-            { hint.push() }
-        }
-        {fq12_push_not_montgomery(a)}
-    };
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&hints);
+    for elem in a.to_base_prime_field_elements() {
+        simulate_stack_input.push(Hint::Fq(elem));
+    }
 
     let hash_h = extern_hash_fps(
         vec![
