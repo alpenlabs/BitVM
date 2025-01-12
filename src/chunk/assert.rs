@@ -63,7 +63,7 @@ pub(crate) fn groth16(
     macro_rules! push_compare_or_return {
         ($seg:ident) => {{
             all_output_hints.push($seg.clone());
-            let matches = compare(&$seg.output, claimed_assertions);
+            let matches = compare(&$seg.result, claimed_assertions);
             if matches.is_some() && matches.unwrap() == false {
                 return false;
             }
@@ -73,9 +73,9 @@ pub(crate) fn groth16(
     let pub_scalars: Vec<Segment> = eval_ins.ks.iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         
-        inputs: vec![],
-        output: Element::ScalarElem(*f),
-        hint_script: vec![],
+        parameter_ids: vec![],
+        result: Element::ScalarElem(*f),
+        hints: vec![],
         scr_type: ScriptType::NonDeterministic,
     }).collect();
     all_output_hints.extend_from_slice(&pub_scalars);
@@ -85,9 +85,9 @@ pub(crate) fn groth16(
     ].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         
-        inputs: vec![],
-        output: Element::FieldElem(*f),
-        hint_script: vec![],
+        parameter_ids: vec![],
+        result: Element::FieldElem(*f),
+        hints: vec![],
         scr_type: ScriptType::NonDeterministic
     }).collect();
     all_output_hints.extend_from_slice(&p4vec);
@@ -118,9 +118,9 @@ pub(crate) fn groth16(
     ].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         
-        inputs: vec![],
-        output: Element::FieldElem(*f),
-        hint_script: vec![],
+        parameter_ids: vec![],
+        result: Element::FieldElem(*f),
+        hints: vec![],
         scr_type: ScriptType::NonDeterministic
     }).collect();
     all_output_hints.extend_from_slice(&gc);
@@ -132,9 +132,9 @@ pub(crate) fn groth16(
     ].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         
-        inputs: vec![],
-        output: Element::FieldElem(*f),
-        hint_script: vec![],
+        parameter_ids: vec![],
+        result: Element::FieldElem(*f),
+        hints: vec![],
         scr_type: ScriptType::NonDeterministic
     }).collect();
     all_output_hints.extend_from_slice(&gs);
@@ -144,9 +144,9 @@ pub(crate) fn groth16(
     ].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         
-        inputs: vec![],
-        output: Element::FieldElem(*f),
-        hint_script: vec![],
+        parameter_ids: vec![],
+        result: Element::FieldElem(*f),
+        hints: vec![],
         scr_type: ScriptType::NonDeterministic
     }).collect();
     all_output_hints.extend_from_slice(&temp_q4);
@@ -344,7 +344,7 @@ pub(crate) fn groth16(
     push_compare_or_return!(dmul1);
     f_acc = dmul1;
 
-    let result: ElemFp12Acc = f_acc.output.try_into().unwrap();
+    let result: ElemFp12Acc = f_acc.result.try_into().unwrap();
     if result.f != ark_bn254::Fq12::ONE {
         return false;
     }
@@ -358,7 +358,7 @@ pub(crate) fn groth16(
 pub(crate) fn hint_to_data(segments: Vec<Segment>) -> Assertions {
     let mut vs: Vec<[u8; 64]> = vec![];
     for v in segments {
-        let x = match v.output {
+        let x = match v.result {
             Element::G2Acc(r) => r.out(),
             Element::Fp12(r) => r.out(),
             Element::FieldElem(f) => f.out(),
@@ -579,10 +579,10 @@ pub(crate) fn script_exec(
     let mut bc_hints = vec![];
     for i in 0..segments.len() {
         let seg = &segments[i];
-        let sec_out = ((seg.id, segments[seg.id as usize].output.ret_type()), assertions[seg.id as usize]);
-        let sec_in: Vec<((u32, bool), [u8; 64])> = seg.inputs.iter().rev().map(|k| {
+        let sec_out = ((seg.id, segments[seg.id as usize].result.ret_type()), assertions[seg.id as usize]);
+        let sec_in: Vec<((u32, bool), [u8; 64])> = seg.parameter_ids.iter().rev().map(|k| {
             let v = &segments[*(k) as usize];
-            let v = v.output.ret_type();
+            let v = v.result.ret_type();
             ((*k, v), assertions[*k as usize])
         }).collect();
         let mut tot: Vec<((u32, bool), [u8;64])> = vec![];
@@ -595,7 +595,7 @@ pub(crate) fn script_exec(
         bc_hints.push(bcelems);
     }
 
-    let aux_hints: Vec<Vec<Hint>> = segments.iter().map(|f| f.hint_script.clone()).collect();
+    let aux_hints: Vec<Vec<Hint>> = segments.iter().map(|f| f.hints.clone()).collect();
 
     let mut tap_script_index = 0;
     for i in 0..aux_hints.len() {

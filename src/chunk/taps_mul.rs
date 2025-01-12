@@ -203,24 +203,8 @@ pub(crate) fn chunk_dense_dense_mul0(
 ) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
     fn tap_dense_dense_mul0(hinted_mul: Script) -> Script {
-        let check_is_identity: bool = false;
-        let mut check_id = 1;
-        if !check_is_identity {
-            check_id = 0;
-        }
-
-
         let ops_scr = script! {
             { hinted_mul }
-            {check_id} 1 OP_NUMEQUAL
-            OP_IF
-                {Fq6::copy(0)}
-                {fq_push_not_montgomery(ark_bn254::Fq::one())}
-                for _ in 0..5 {
-                    {fq_push_not_montgomery(ark_bn254::Fq::zero())}
-                }
-                {Fq6::equalverify()}
-            OP_ENDIF
         };
         let scr = script! {
             {ops_scr}
