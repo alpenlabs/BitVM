@@ -5,10 +5,8 @@ use bitcoin_script_stack::stack::StackTracker;
 fn wrap_scr(scr: Script) -> Script {
     script! {
         { scr }
-        for _ in 0..40 { OP_TOALTSTACK }
         for _ in 0..(64-40)/2 { OP_2DROP }
         for _ in 0..(64-40) { 0 }
-        for _ in 0..40 { OP_FROMALTSTACK  }
     }
 }
 
