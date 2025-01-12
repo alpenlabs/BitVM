@@ -41,17 +41,7 @@ fn compare(hint_out: &Element, claimed_assertions: &mut Option<Intermediates>) -
             panic!()
         }
     }
-
-    let (x, is_field) = match hint_out {
-        Element::G2Acc(r) => (r.out(), r.ret_type()),
-        Element::Fp12(r) => (r.out(), r.ret_type()),
-        Element::FieldElem(f) => (f.out(), f.ret_type()),
-        Element::MSMG1(r) => (r.out(), r.ret_type()),
-        Element::MSMG2(r) => (r.out(), r.ret_type()),
-        Element::ScalarElem(r) => (r.out(), r.ret_type()),
-        Element::SparseEval(r) => (r.out(), r.ret_type()),
-        Element::HashBytes(r) => (r.out(), r.ret_type()),
-    };
+    let (x, is_field) = (hint_out.out(), hint_out.ret_type());
 
     let matches = if is_field {
         let r = get_fq(claimed_assertions);
@@ -82,7 +72,7 @@ pub(crate) fn groth16(
 
     let pub_scalars: Vec<Segment> = eval_ins.ks.iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
-        output_type: true,
+        
         inputs: vec![],
         output: Element::ScalarElem(*f),
         hint_script: vec![],
@@ -94,7 +84,7 @@ pub(crate) fn groth16(
         eval_ins.p4.y, eval_ins.p4.x, eval_ins.p3.y, eval_ins.p3.x, eval_ins.p2.y, eval_ins.p2.x
     ].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
-        output_type: true,
+        
         inputs: vec![],
         output: Element::FieldElem(*f),
         hint_script: vec![],
@@ -127,7 +117,7 @@ pub(crate) fn groth16(
         eval_ins.c.c1.c1.c0, eval_ins.c.c1.c1.c1, eval_ins.c.c1.c2.c0, eval_ins.c.c1.c2.c1,
     ].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
-        output_type: true,
+        
         inputs: vec![],
         output: Element::FieldElem(*f),
         hint_script: vec![],
@@ -141,7 +131,7 @@ pub(crate) fn groth16(
         eval_ins.s.c1.c1.c0, eval_ins.s.c1.c1.c1, eval_ins.s.c1.c2.c0, eval_ins.s.c1.c2.c1,
     ].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
-        output_type: true,
+        
         inputs: vec![],
         output: Element::FieldElem(*f),
         hint_script: vec![],
@@ -153,7 +143,7 @@ pub(crate) fn groth16(
         eval_ins.q4.x.c0, eval_ins.q4.x.c1, eval_ins.q4.y.c0, eval_ins.q4.y.c1
     ].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
-        output_type: true,
+        
         inputs: vec![],
         output: Element::FieldElem(*f),
         hint_script: vec![],
@@ -373,7 +363,6 @@ pub(crate) fn hint_to_data(segments: Vec<Segment>) -> Assertions {
             Element::Fp12(r) => r.out(),
             Element::FieldElem(f) => f.out(),
             Element::MSMG1(r) => r.out(),
-            Element::MSMG2(r) => r.out(),
             Element::ScalarElem(r) => r.out(),
             Element::SparseEval(r) => r.out(),
             Element::HashBytes(r) => r.out(),
@@ -590,8 +579,12 @@ pub(crate) fn script_exec(
     let mut bc_hints = vec![];
     for i in 0..segments.len() {
         let seg = &segments[i];
-        let sec_out = ((seg.id, seg.output_type), assertions[seg.id as usize]);
-        let sec_in: Vec<((u32, bool), [u8; 64])> = seg.inputs.iter().rev().map(|(k, v)| ((*k, *v), assertions[*k as usize])).collect();
+        let sec_out = ((seg.id, segments[seg.id as usize].output.ret_type()), assertions[seg.id as usize]);
+        let sec_in: Vec<((u32, bool), [u8; 64])> = seg.inputs.iter().rev().map(|k| {
+            let v = &segments[*(k) as usize];
+            let v = v.output.ret_type();
+            ((*k, v), assertions[*k as usize])
+        }).collect();
         let mut tot: Vec<((u32, bool), [u8;64])> = vec![];
         tot.extend_from_slice(&sec_in);
         tot.push(sec_out);

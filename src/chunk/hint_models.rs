@@ -12,7 +12,28 @@ pub(crate) enum Element {
     ScalarElem(ElemFr),
     HashBytes(ElemHashBytes),
     MSMG1(ElemG1Point),
-    MSMG2(ElemG2Point),
+}
+
+impl Element {
+    pub fn ret_type(&self) -> bool {
+        match *self {
+            Element::FieldElem(_) => true, 
+            Element::ScalarElem(_) => true, 
+            _ => false,
+        }
+    }
+
+    pub fn out(&self) -> HashBytes {
+        match self {
+            Element::G2Acc(r) => r.out(),
+            Element::Fp12(r) => r.out(),
+            Element::FieldElem(f) => f.out(),
+            Element::MSMG1(r) => r.out(),
+            Element::ScalarElem(r) => r.out(),
+            Element::SparseEval(r) => r.out(),
+            Element::HashBytes(r) => r.out(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -89,11 +110,6 @@ impl ElemTraitExt for ElemFp12Acc {
         );
         ElemFp12Acc { f, hash }
     }
-
-    fn ret_type(&self) -> bool {
-        false // is not field
-    }
-
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -163,10 +179,6 @@ impl ElemTraitExt for ElemG2PointAcc {
         let t = ark_bn254::G2Affine::new(tx, ty);
         ElemG2PointAcc { t, dbl_le: Some((tx, ty)), add_le: Some((tx, ty)) }
     }
-
-    fn ret_type(&self) -> bool {
-        false // is not field
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -185,10 +197,6 @@ impl ElemSparseEval {
         let t = ark_bn254::G2Affine::identity();
         Self { t2: t, t3: t, f: ElemFp12Acc::mock() }
     }
-
-    pub(crate) fn ret_type(&self) -> bool {
-        false // is not field
-    }
 }
 
 // Define the type alias
@@ -200,7 +208,6 @@ pub type ElemG2Point = (ark_bn254::Fq2, ark_bn254::Fq2);
 pub(crate) trait ElemTraitExt {
     fn out(&self) -> HashBytes;
     fn mock() -> Self;
-    fn ret_type(&self) -> bool;
 }
 
 // Implement the trait for ark_bn254::G1Affine
@@ -213,9 +220,6 @@ impl ElemTraitExt for ElemG1Point {
         let g1x: ark_bn254::Fq = MontFp!("5567084537907487155917146166615783238769284480674905823618779044732684151587");
         let g1y: ark_bn254::Fq = MontFp!("6500138522353517220105129525103627482682148482121078429366182801568786680416");
         ark_bn254::G1Affine::new(g1x, g1y)
-    }
-    fn ret_type(&self) -> bool {
-        false // is not field
     }
 }
 
@@ -230,17 +234,11 @@ impl ElemTraitExt for ElemG2Point {
         let g1y: ark_bn254::Fq = MontFp!("6500138522353517220105129525103627482682148482121078429366182801568786680416");
         (ark_bn254::Fq2::new(g1x, g1x), ark_bn254::Fq2::new(g1y, g1y))
     }
-    fn ret_type(&self) -> bool {
-        false // is not field
-    }
 }
 
 impl ElemTraitExt for ElemFq {
     fn mock() -> Self {
         ark_bn254::Fq::ONE
-    }
-    fn ret_type(&self) -> bool {
-        true
     }
     fn out(&self) -> HashBytes {
         extern_fq_to_nibbles(*self)
@@ -252,10 +250,6 @@ impl ElemTraitExt for ElemFr {
     fn mock() -> Self {
         ark_bn254::Fr::ONE
     }
-    fn ret_type(&self) -> bool {
-        true
-    }
-
     fn out(&self) -> HashBytes {
         extern_fr_to_nibbles(*self)
     }
@@ -265,9 +259,6 @@ impl ElemTraitExt for ElemFr {
 impl ElemTraitExt for HashBytes {
     fn mock() -> Self {
         [0u8; 64]
-    }
-    fn ret_type(&self) -> bool {
-        false
     }
     fn out(&self) -> HashBytes {
         *self

@@ -201,8 +201,12 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
 pub(crate) fn bitcom_scripts_from_segments(segments: &Vec<Segment>, pubkeys_map: HashMap<u32, WOTSPubKey>) -> Vec<treepp::Script> {
     let mut bitcom_scripts: Vec<treepp::Script> = vec![];
     for seg in segments {
-        let sec_out = (seg.id as u32, seg.output_type);
-        let sec_in: Vec<(u32, bool)> = seg.inputs.iter().map(|f| (f.0 as u32, f.1)).collect();
+        let sec_out = (seg.id as u32, segments[seg.id as usize].output.ret_type());
+        let sec_in: Vec<(u32, bool)> = seg.inputs.iter().map(|f| {
+            let elem = &segments[*(f) as usize];
+            let elem_type = elem.output.ret_type();
+            (*f, elem_type)
+        }).collect();
         match seg.scr_type {
             ScriptType::NonDeterministic => {
                 bitcom_scripts.push(script!());
