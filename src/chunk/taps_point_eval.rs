@@ -12,7 +12,7 @@ use num_traits::One;
 use std::ops::Neg;
 
 use super::primitves::{extern_hash_fps, hash_fp12_192};
-use super::hint_models::*;
+use super::element::*;
 
 // DOUBLE EVAL
 

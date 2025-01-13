@@ -13,7 +13,7 @@ use ark_ff::{AdditiveGroup, Field, MontFp};
 
 
 use super::primitves::{extern_hash_fps, hash_fp12_192};
-use super::hint_models::*;
+use super::element::*;
 use super::taps_point_ops::hash_g2acc_with_hashed_le;
 
 

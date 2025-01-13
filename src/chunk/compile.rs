@@ -5,12 +5,12 @@ use ark_ec::bn::BnConfig;
 use bitcoin_script::script;
 use treepp::Script;
 
-use crate::{chunk::hint_models::ElemG1Point, treepp};
-use crate::chunk::hint_models::ElemTraitExt;
+use crate::{chunk::element::ElemG1Point, treepp};
+use crate::chunk::element::ElemTraitExt;
 
-use super::hint_models::ElemFq;
+use super::element::ElemFq;
 use super::taps_msm::chunk_msm;
-use super::{assert::{groth16, Pubs}, hint_models::{ElemFp12Acc, ElemFr, ElemG2PointAcc, EvalIns}, primitves::gen_bitcom, segment::{ScriptType, Segment}, taps_msm::{chunk_hash_p}, taps_mul::*, taps_point_eval::*, taps_point_ops::*, taps_premiller::*, wots::WOTSPubKey};
+use super::{assert::{groth16, Pubs}, element::{ElemFp12Acc, ElemFr, ElemG2PointAcc, EvalIns}, primitves::gen_bitcom, segment::{ScriptType, Segment}, taps_msm::{chunk_hash_p}, taps_mul::*, taps_point_eval::*, taps_point_ops::*, taps_premiller::*, wots::WOTSPubKey};
 
 pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 pub const NUM_PUBS: usize = 1;
@@ -201,10 +201,10 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
 pub(crate) fn bitcom_scripts_from_segments(segments: &Vec<Segment>, pubkeys_map: HashMap<u32, WOTSPubKey>) -> Vec<treepp::Script> {
     let mut bitcom_scripts: Vec<treepp::Script> = vec![];
     for seg in segments {
-        let sec_out = (seg.id as u32, segments[seg.id as usize].result.ret_type());
+        let sec_out = (seg.id as u32, segments[seg.id as usize].result.output_is_field_element());
         let sec_in: Vec<(u32, bool)> = seg.parameter_ids.iter().map(|f| {
             let elem = &segments[*(f) as usize];
-            let elem_type = elem.result.ret_type();
+            let elem_type = elem.result.output_is_field_element();
             (*f, elem_type)
         }).collect();
         match seg.scr_type {

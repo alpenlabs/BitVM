@@ -15,7 +15,7 @@ use ark_ff::{AdditiveGroup, BigInteger, PrimeField};
 use num_bigint::BigUint;
 use num_traits::One;
 
-use super::hint_models::{ElemFq, ElemG1Point};
+use super::element::{ElemFq, ElemG1Point};
 use super::primitves::{hash_fp2, HashBytes};
 use crate::bn254::fq2::Fq2;
 
@@ -220,7 +220,7 @@ mod test {
     
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
-    use crate::chunk::hint_models::ElemTraitExt;
+    use crate::chunk::element::ElemTraitExt;
 
     fn u32_to_bits_vec(value: u32, window: usize) -> Vec<u8> {
         let mut bits = Vec::with_capacity(window);
@@ -431,12 +431,12 @@ mod test {
 
         for msm_chunk_index in 0..hints_msm.len() {
             let bitcom_scr = script!{
-                for i in extern_nibbles_to_limbs(hints_msm[msm_chunk_index].0.out()) {
+                for i in extern_nibbles_to_limbs(hints_msm[msm_chunk_index].0.hashed_output()) {
                     {i}
                 }
                 {Fq::toaltstack()}
                 if msm_chunk_index > 0 {
-                    for i in extern_nibbles_to_limbs(hints_msm[msm_chunk_index-1].0.out()) {
+                    for i in extern_nibbles_to_limbs(hints_msm[msm_chunk_index-1].0.hashed_output()) {
                         {i}
                     }
                     {Fq::toaltstack()}

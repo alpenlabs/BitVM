@@ -11,7 +11,7 @@ use num_traits::One;
 use std::ops::Neg;
 
 use super::primitves::{extern_hash_fps};
-use super::hint_models::*;
+use super::element::*;
 
 
 pub(crate) fn hash_g2acc_with_hashed_le() -> Script {

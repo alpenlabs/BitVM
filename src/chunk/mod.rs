@@ -1,7 +1,7 @@
 pub mod api;
 mod blake3compiled;
 pub mod compile;
-pub mod hint_models;
+pub mod element;
 #[allow(unused_variables)]
 mod taps_msm;
 mod primitves;

@@ -2,7 +2,7 @@
 
 use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fr::Fr, utils::{fq_push_not_montgomery, Hint}}, chunk::taps_msm::{chunk_hash_p, chunk_msm}, execute_script, treepp};
 
-use super::{hint_models::Element, primitves::extern_nibbles_to_limbs, taps_point_eval::*, taps_premiller::*};
+use super::{element::Element, primitves::extern_nibbles_to_limbs, taps_point_eval::*, taps_premiller::*};
 use crate::treepp::Script;
 
 pub type SegmentID = u32;
@@ -56,7 +56,7 @@ pub enum ScriptType {
 
 use bitcoin_script::script;
 
-use super::{hint_models::*, primitves::extern_hash_fps,  taps_point_ops::*, taps_mul::*};
+use super::{element::*, primitves::extern_hash_fps,  taps_point_ops::*, taps_mul::*};
 
 pub(crate) fn wrap_hint_msm(
     skip: bool,
@@ -175,7 +175,7 @@ pub(crate) fn wrap_hint_hash_c(
             );
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12(c), hints: hint_script, scr_type: ScriptType::PreMillerHashC }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12v1(c), hints: hint_script, scr_type: ScriptType::PreMillerHashC }
 }
 
 
@@ -235,7 +235,7 @@ pub(crate) fn wrap_hint_hash_c2(
         (c2, _, hint_script) = chunk_hash_c2(in_c.result.try_into().unwrap());
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12(c2), hints: hint_script, scr_type: ScriptType::PreMillerHashC2 }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12v0(c2), hints: hint_script, scr_type: ScriptType::PreMillerHashC2 }
 }
 
 pub(crate) fn wrap_inv0(
@@ -252,7 +252,7 @@ pub(crate) fn wrap_inv0(
         (dmul0,_, hint_script) = chunk_inv0(in_a.result.try_into().unwrap());
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12(dmul0), hints: hint_script, scr_type: ScriptType::PreMillerInv0 }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12v0(dmul0), hints: hint_script, scr_type: ScriptType::PreMillerInv0 }
 }
 
 pub(crate) fn wrap_inv1(
@@ -269,7 +269,7 @@ pub(crate) fn wrap_inv1(
         (dmul0,_, hint_script) = chunk_inv1(in_a.result.try_into().unwrap());
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12(dmul0), hints: hint_script, scr_type: ScriptType::PreMillerInv1 }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12v0(dmul0), hints: hint_script, scr_type: ScriptType::PreMillerInv1 }
 }
 
 pub(crate) fn wrap_inv2(
@@ -288,7 +288,7 @@ pub(crate) fn wrap_inv2(
         (dmul0,_, hint_script) = chunk_inv2(in_t1.result.try_into().unwrap(), in_a.result.try_into().unwrap());
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12(dmul0), hints: hint_script, scr_type: ScriptType::PreMillerInv2 }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12v0(dmul0), hints: hint_script, scr_type: ScriptType::PreMillerInv2 }
 }
 
 
@@ -327,7 +327,7 @@ pub(crate) fn wrap_hint_init_t4(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::G2Acc(tmpt4),
+        result: Element::G2T(tmpt4),
         hints: hint_script,
         scr_type: ScriptType::PreMillerInitT4,
     }
@@ -355,7 +355,7 @@ pub(crate) fn wrap_hint_squaring(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12(sq),
+        result: Element::Fp12v0(sq),
         hints: hint_script,
         scr_type: ScriptType::MillerSquaring,
     }
@@ -393,7 +393,7 @@ pub(crate) fn wrap_hint_point_dbl(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::G2Acc(dbl),
+        result: Element::G2DblEval(dbl),
         hints: hint_script,
         scr_type: ScriptType::MillerDouble,
     }
@@ -453,7 +453,7 @@ pub(crate) fn wrap_hint_point_ops(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::G2Acc(dbladd),
+        result: Element::G2DblAddEval(dbladd),
         hints: hint_script,
         scr_type: ScriptType::MillerDoubleAdd(ate),
     }
@@ -486,7 +486,7 @@ pub(crate) fn wrap_hint_sparse_dense_mul(
     Segment {
         id: segment_id as u32,
         parameter_ids: input_segment_info,
-        result: Element::Fp12(temp),
+        result: Element::Fp12v0(temp),
         hints: hint_script,
         scr_type: ScriptType::SparseDenseMul(is_dbl_blk),
     }
@@ -568,7 +568,7 @@ pub(crate) fn wrap_hints_dense_dense_mul0(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12(dmul0),
+        result: Element::Fp12v0(dmul0),
         hints: hint_script,
         scr_type: ScriptType::DenseDenseMul0(),
     }
@@ -608,7 +608,7 @@ pub(crate) fn wrap_hints_dense_dense_mul1(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12(dmul1),
+        result: Element::Fp12v0(dmul1),
         hints: hint_script,
         scr_type: ScriptType::DenseDenseMul1(),
     }
@@ -644,7 +644,7 @@ pub(crate) fn wrap_hints_dense_le_mul0(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12(dmul0),
+        result: Element::Fp12v0(dmul0), // todo: fp12->fp6
         hints: hint_script,
         scr_type: ScriptType::DenseDenseMul0(),
     }
@@ -684,7 +684,7 @@ pub(crate) fn wrap_hints_dense_le_mul1(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12(dmul1),
+        result: Element::Fp12v1(dmul1),
         hints: hint_script,
         scr_type: ScriptType::DenseDenseMul1(),
     }
@@ -771,7 +771,7 @@ pub(crate) fn wrap_hints_frob_fp12(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12(cp),
+        result: Element::Fp12v0(cp),
         hints: hint_script,
         scr_type: ScriptType::PostMillerFrobFp12(power as u8),
     }
@@ -829,7 +829,7 @@ pub(crate) fn wrap_hint_point_add_with_frob(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::G2Acc(temp),
+        result: Element::G2AddEval(temp),
         hints: hint_script,
         scr_type: ScriptType::PostMillerAddWithFrob(power),
     }
@@ -936,7 +936,7 @@ pub(crate) fn wrap_hints_dense_dense_mul0_by_constant(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12(dmul0),
+        result: Element::Fp12v0(dmul0),
         hints: hint_script,
         scr_type: ScriptType::PostMillerDenseDenseMulByConst0(constant),
     }
@@ -990,7 +990,7 @@ pub(crate) fn wrap_hints_dense_dense_mul1_by_constant(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12(dmul1),
+        result: Element::Fp12v0(dmul1),
         hints: hint_script,
         scr_type: ScriptType::PostMillerDenseDenseMulByConst1(constant),
     }
@@ -1016,7 +1016,7 @@ mod test {
             id: 0,
             
             parameter_ids: vec![],
-            result: Element::Fp12(c),
+            result: Element::Fp12v0(c),
             hints: vec![],
             scr_type: ScriptType::NonDeterministic,
         };

@@ -5,7 +5,7 @@ mod test {
     use crate::bn254::fp254impl::Fp254Impl;
     use crate::bn254::fq::Fq;
     use crate::bn254::utils::{fq2_push_not_montgomery, fq_push_not_montgomery};
-    use crate::chunk::hint_models::*;
+    use crate::chunk::element::*;
     use crate::chunk::primitves::{fp12_to_vec, pack_nibbles_to_limbs};
     use crate::chunk::taps_point_ops::*;
     use crate::chunk::primitves::{extern_hash_fps, extern_nibbles_to_limbs};
@@ -40,11 +40,11 @@ mod test {
         let (hint_out, tap_frob, hint_script) = chunk_frob_fp12(hint_in, power);
 
         let bitcom_scr = script!{
-            for i in extern_nibbles_to_limbs(hint_out.out()) {
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_in.out()) {
+            for i in extern_nibbles_to_limbs(hint_in.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
@@ -82,7 +82,7 @@ mod test {
         let (hint_out, tap_hash_c, hint_script) = chunk_hash_c(fqvec.clone());
 
         let bitcom_scr = script!{
-            for i in extern_nibbles_to_limbs(hint_out.out()) {
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
@@ -125,11 +125,11 @@ mod test {
         let (hint_out, tap_hash_c2, hint_script) = chunk_hash_c2(hint_in);
 
         let bitcom_scr = script!{
-            for i in extern_nibbles_to_limbs(hint_out.out()) {
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_in.out()) {
+            for i in extern_nibbles_to_limbs(hint_in.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
@@ -161,7 +161,7 @@ mod test {
         let (hint_out, init_t4_tap, hint_script) = chunk_init_t4(q.y.c1, q.y.c0, q.x.c1, q.x.c0);
 
         let bitcom_script = script!{
-            for i in extern_nibbles_to_limbs(hint_out.out()) {
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
@@ -288,15 +288,15 @@ mod test {
         let (hint_out, tap_scr, hint_script) = chunk_sparse_dense_mul(hint_f, hint_t, dbl_blk);
 
         let bitcom_scr = script!{
-            for i in extern_nibbles_to_limbs(hint_out.out()) {
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_f.out()) {
+            for i in extern_nibbles_to_limbs(hint_f.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_t.out()) {
+            for i in extern_nibbles_to_limbs(hint_t.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
@@ -347,15 +347,15 @@ mod test {
         let (hint_out, tap_scr, hint_script) = chunk_dense_dense_mul0(hint_f, hint_g);
 
         let bitcom_scr = script!{
-            for i in extern_nibbles_to_limbs(hint_out.out()) {
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_f.out()) {
+            for i in extern_nibbles_to_limbs(hint_f.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_g.out()) {
+            for i in extern_nibbles_to_limbs(hint_g.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
@@ -415,19 +415,19 @@ mod test {
         let (hint_out, tap_scr, hint_script) = chunk_dense_dense_mul1(hint_f, hint_g, hint_c0);
 
         let bitcom_scr = script!{
-            for i in extern_nibbles_to_limbs(hint_out.out()) {
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_f.out()) {
+            for i in extern_nibbles_to_limbs(hint_f.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_g.out()) {
+            for i in extern_nibbles_to_limbs(hint_g.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_c0.out()) {
+            for i in extern_nibbles_to_limbs(hint_c0.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
@@ -481,11 +481,11 @@ mod test {
         let (hint_out, tap_scr, hint_script) = chunk_dense_dense_mul0_by_constant(hint_f, hint_g);
 
         let bitcom_scr = script!{
-            for i in extern_nibbles_to_limbs(hint_out.out()) {
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_f.out()) {
+            for i in extern_nibbles_to_limbs(hint_f.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
@@ -544,15 +544,15 @@ mod test {
         let (hint_out, tap_scr, hint_script) = chunk_dense_dense_mul1_by_constant(hint_f, hint_c0, hint_g);
 
         let bitcom_scr = script!{
-            for i in extern_nibbles_to_limbs(hint_out.out()) {
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_f.out()) {
+            for i in extern_nibbles_to_limbs(hint_f.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_c0.out()) {
+            for i in extern_nibbles_to_limbs(hint_c0.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
@@ -593,11 +593,11 @@ mod test {
         let (hint_out, tap_scr, hint_script) = chunk_squaring(hint_f);
 
         let bitcom_scr = script!{
-            for i in extern_nibbles_to_limbs(hint_out.out()) {
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_f.out()) {
+            for i in extern_nibbles_to_limbs(hint_f.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
@@ -640,11 +640,11 @@ mod test {
               p.y, p.x, ate);
 
         let bitcom_script = script!{
-            for i in extern_nibbles_to_limbs(hint_out.out()) {
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(t.out()) {
+            for i in extern_nibbles_to_limbs(t.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
@@ -690,8 +690,8 @@ mod test {
 
         let (hint_out, point_ops_tapscript, hint_script) = chunk_point_dbl(t4acc, p.y, p.x);
 
-        let hint_out_hash = extern_nibbles_to_limbs(hint_out.out());
-        let hint_in_hash = extern_nibbles_to_limbs(t4acc.out());
+        let hint_out_hash = extern_nibbles_to_limbs(hint_out.hashed_output());
+        let hint_in_hash = extern_nibbles_to_limbs(t4acc.hashed_output());
 
         let bitcom_values = script!{
             for i in hint_out_hash {
@@ -743,11 +743,11 @@ mod test {
             t,
              q.y.c1, q.y.c0, q.x.c1, q.x.c0, p.y, p.x, ate);
         let bitcom_script = script!{
-            for i in extern_nibbles_to_limbs(hint_out.out()) {
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(t.out()) {
+            for i in extern_nibbles_to_limbs(t.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
@@ -796,7 +796,7 @@ mod test {
         let (hint_out, tap_scr, hint_script) = chunk_double_eval_mul_for_fixed_qs(p3.y, p3.x, p2.y, p2.x, t2, t3);
 
         let bitcom_scr = script!{
-            for i in extern_nibbles_to_limbs(hint_out.out()) {
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}    
@@ -846,7 +846,7 @@ mod test {
         let (hint_out, tap_scr, hint_script) = chunk_add_eval_mul_for_fixed_qs(p3.y, p3.x, p2.y, p2.x, t2, t3, q2, q3, ate);
 
         let bitcom_scr = script!{
-            for i in extern_nibbles_to_limbs(hint_out.out()) {
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}    
@@ -900,7 +900,7 @@ mod test {
         let (hint_out, tap_scr, hint_script) = chunk_add_eval_mul_for_fixed_qs_with_frob(p3.y, p3.x, p2.y, p2.x, t2, t3, q2, q3, ate);
 
         let bitcom_scr = script!{
-            for i in extern_nibbles_to_limbs(hint_out.out()) {
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}    
@@ -1059,7 +1059,7 @@ mod test {
             for i in extern_nibbles_to_limbs(t.hash_le()) {
                 {i}
             }
-            for i in extern_nibbles_to_limbs(t.out()) {
+            for i in extern_nibbles_to_limbs(t.hashed_output()) {
                 {i}
             }
             {hash_g2acc_with_hashed_le()}
@@ -1088,7 +1088,7 @@ mod test {
             {fq2_push_not_montgomery(t.dbl_le.unwrap().0)}
             {fq2_push_not_montgomery(t.dbl_le.unwrap().1)}
 
-            for i in extern_nibbles_to_limbs(t.out()) {
+            for i in extern_nibbles_to_limbs(t.hashed_output()) {
                 {i}
             }
             {hash_g2acc_with_raw_le(true)}
@@ -1116,7 +1116,7 @@ mod test {
             {fq2_push_not_montgomery(t.add_le.unwrap().0)}
             {fq2_push_not_montgomery(t.add_le.unwrap().1)}
 
-            for i in extern_nibbles_to_limbs(t.out()) {
+            for i in extern_nibbles_to_limbs(t.hashed_output()) {
                 {i}
             }
             {hash_g2acc_with_raw_le(false)}
@@ -1147,7 +1147,7 @@ mod test {
             for i in extern_nibbles_to_limbs(t.hash_other_le(true)) {
                 {i}
             }
-            for i in extern_nibbles_to_limbs(t.out()) {
+            for i in extern_nibbles_to_limbs(t.hashed_output()) {
                 {i}
             }
             {hash_g2acc_with_hashed_t(true)}

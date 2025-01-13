@@ -467,7 +467,7 @@ fn replace_first_n_with_zero(hex_string: &str, n: usize) -> String {
         result.push_str(&"0".repeat(hex_string.len())); // If n >= string length, replace all
     } else {
         result.push_str(&"0".repeat(n)); // Replace first n characters
-        result.push_str(&hex_string[n..]); // Keep the rest of the string
+        result.push_str(&hex_string[0..(hex_string.len()-n)]); // Keep the rest of the string
     }
     result
 }

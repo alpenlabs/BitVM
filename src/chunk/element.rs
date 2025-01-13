@@ -5,17 +5,33 @@ use super::primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_f
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Element {
-    Fp12(ElemFp12Acc),
-    G2Acc(ElemG2PointAcc),
+    Fp12v0(ElemFp12Acc),
+    Fp12v1(ElemFp12Acc),
+    G2T(ElemG2PointAcc),
+    G2DblEval(ElemG2PointAcc),
+    G2DblAddEval(ElemG2PointAcc),
+    G2AddEval(ElemG2PointAcc),
     SparseEval(ElemSparseEval),
     FieldElem(ElemFq),
     ScalarElem(ElemFr),
     HashBytes(ElemHashBytes),
     MSMG1(ElemG1Point),
+    MSMG2(ElemG2Point),
 }
 
+// #[derive(Debug, Clone, Copy)]
+// pub(crate) enum Element {
+//     Fp12(ElemFp12Acc),
+//     G2Acc(ElemG2PointAcc),
+//     SparseEval(ElemSparseEval),
+//     FieldElem(ElemFq),
+//     ScalarElem(ElemFr),
+//     HashBytes(ElemHashBytes),
+//     MSMG1(ElemG1Point),
+// }
+
 impl Element {
-    pub fn ret_type(&self) -> bool {
+    pub fn output_is_field_element(&self) -> bool {
         match *self {
             Element::FieldElem(_) => true, 
             Element::ScalarElem(_) => true, 
@@ -23,15 +39,20 @@ impl Element {
         }
     }
 
-    pub fn out(&self) -> HashBytes {
+    pub fn hashed_output(&self) -> HashBytes {
         match self {
-            Element::G2Acc(r) => r.out(),
-            Element::Fp12(r) => r.out(),
-            Element::FieldElem(f) => f.out(),
-            Element::MSMG1(r) => r.out(),
-            Element::ScalarElem(r) => r.out(),
-            Element::SparseEval(r) => r.out(),
-            Element::HashBytes(r) => r.out(),
+            Element::G2AddEval(r) => r.hashed_output(),
+            Element::G2DblAddEval(r) => r.hashed_output(),
+            Element::G2T(r) => r.hashed_output(),
+            Element::G2DblEval(r) => r.hashed_output(),
+            Element::Fp12v0(r) => r.hashed_output(),
+            Element::Fp12v1(r) => r.hashed_output(),
+            Element::FieldElem(f) => f.hashed_output(),
+            Element::MSMG1(r) => r.hashed_output(),
+            Element::MSMG2(r) => r.hashed_output(),
+            Element::ScalarElem(r) => r.hashed_output(),
+            Element::SparseEval(r) => r.hashed_output(),
+            Element::HashBytes(r) => r.hashed_output(),
         }
     }
 }
@@ -59,30 +80,33 @@ pub(crate) enum ElementConversionError {
 
 /// Helper macro to reduce repetitive code for `TryFrom<Element>`.
 macro_rules! impl_try_from_element {
-    ($t:ty, $variant:ident) => {
+    ($t:ty, { $($variant:ident),+ }) => {
         impl TryFrom<Element> for $t {
             type Error = ElementConversionError;
 
             fn try_from(value: Element) -> Result<Self, Self::Error> {
                 match value {
-                    Element::$variant(v) => Ok(v),
-                    other => Err(ElementConversionError::InvalidVariantConversion {
+                    $(
+                        Element::$variant(v) => Ok(v),
+                    )+
+                    other => {
+                        Err(ElementConversionError::InvalidVariantConversion {
                         attempted: stringify!($t),
                         found: stringify!(other),
-                    }),
+                    })},
                 }
             }
         }
     };
 }
 
-impl_try_from_element!(ElemG2PointAcc, G2Acc);
-impl_try_from_element!(ElemFp12Acc, Fp12);
-impl_try_from_element!(ElemSparseEval, SparseEval);
-impl_try_from_element!(ElemFq, FieldElem);
-impl_try_from_element!(ElemFr, ScalarElem);
-impl_try_from_element!(ElemHashBytes, HashBytes);
-impl_try_from_element!(ElemG1Point, MSMG1);
+impl_try_from_element!(ElemFp12Acc, { Fp12v0, Fp12v1 });
+impl_try_from_element!(ElemG2PointAcc, { G2T, G2DblEval, G2DblAddEval, G2AddEval });
+impl_try_from_element!(ElemSparseEval, { SparseEval });
+impl_try_from_element!(ElemFq, { FieldElem });
+impl_try_from_element!(ElemFr, { ScalarElem });
+impl_try_from_element!(ElemHashBytes, { HashBytes });
+impl_try_from_element!(ElemG1Point, { MSMG1 });
 
 pub type ElemFq = ark_bn254::Fq;
 pub type ElemFr = ark_bn254::Fr;
@@ -95,7 +119,7 @@ pub(crate) struct ElemFp12Acc {
 }
 
 impl ElemTraitExt for ElemFp12Acc {
-    fn out(&self) -> HashBytes {
+    fn hashed_output(&self) -> HashBytes {
          self.hash
     }
 
@@ -162,7 +186,7 @@ impl ElemG2PointAcc {
 }
 
 impl ElemTraitExt for ElemG2PointAcc {
-    fn out(&self) -> HashBytes {
+    fn hashed_output(&self) -> HashBytes {
         let hash_t = self.hash_t();
         let hash_le = self.hash_le();
         let hash = extern_hash_nibbles(vec![hash_t, hash_le], true);
@@ -189,7 +213,7 @@ pub(crate) struct ElemSparseEval {
 }
 
 impl ElemSparseEval {
-    pub(crate) fn out(&self) -> HashBytes {
+    pub(crate) fn hashed_output(&self) -> HashBytes {
         self.f.hash
     }
 
@@ -206,13 +230,13 @@ pub type ElemG2Point = (ark_bn254::Fq2, ark_bn254::Fq2);
 
 // Define a trait to extend the functionality
 pub(crate) trait ElemTraitExt {
-    fn out(&self) -> HashBytes;
+    fn hashed_output(&self) -> HashBytes;
     fn mock() -> Self;
 }
 
 // Implement the trait for ark_bn254::G1Affine
 impl ElemTraitExt for ElemG1Point {
-    fn out(&self) -> HashBytes {
+    fn hashed_output(&self) -> HashBytes {
         extern_hash_fps(vec![self.x, self.y], true)
     }
 
@@ -225,7 +249,7 @@ impl ElemTraitExt for ElemG1Point {
 
 // Implement the trait for ark_bn254::G1Affine
 impl ElemTraitExt for ElemG2Point {
-    fn out(&self) -> HashBytes {
+    fn hashed_output(&self) -> HashBytes {
         extern_hash_fps(vec![self.0.c0, self.0.c1, self.1.c0, self.1.c1], true)
     }
 
@@ -240,7 +264,7 @@ impl ElemTraitExt for ElemFq {
     fn mock() -> Self {
         ark_bn254::Fq::ONE
     }
-    fn out(&self) -> HashBytes {
+    fn hashed_output(&self) -> HashBytes {
         extern_fq_to_nibbles(*self)
     }
 }
@@ -250,7 +274,7 @@ impl ElemTraitExt for ElemFr {
     fn mock() -> Self {
         ark_bn254::Fr::ONE
     }
-    fn out(&self) -> HashBytes {
+    fn hashed_output(&self) -> HashBytes {
         extern_fr_to_nibbles(*self)
     }
 }
@@ -260,7 +284,7 @@ impl ElemTraitExt for HashBytes {
     fn mock() -> Self {
         [0u8; 64]
     }
-    fn out(&self) -> HashBytes {
+    fn hashed_output(&self) -> HashBytes {
         *self
     }
 }

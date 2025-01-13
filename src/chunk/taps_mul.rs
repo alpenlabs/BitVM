@@ -1,6 +1,6 @@
 use crate::bn254::fq6::Fq6;
 use crate::bn254::utils::{
-    fq12_push_not_montgomery, fq2_push_not_montgomery, fq_push_not_montgomery, Hint,
+    fq_push_not_montgomery, Hint,
 };
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::primitves::{
@@ -15,7 +15,7 @@ use ark_ff::{AdditiveGroup, Field, Zero};
 use num_traits::One;
 
 use super::primitves::{extern_hash_fps, hash_fp12_192};
-use super::hint_models::*;
+use super::element::*;
 use super::taps_point_ops::hash_g2acc_with_hashed_t;
 
 // SPARSE DENSE
@@ -167,6 +167,8 @@ pub(crate) fn chunk_sparse_dense_mul(
 
 // DENSE DENSE MUL ZERO
 
+// Altstack: [Hc, Hb, Ha]
+// Stack: [a, b, c]
 fn hash_mul(is_zero: bool) -> Script {
     script!{
         {Fq6::toaltstack()}
@@ -213,7 +215,6 @@ pub(crate) fn chunk_dense_dense_mul0(
         };
         scr
     }
-
 
 
     let (f, g) = (hint_in_a.f, hint_in_b.f);

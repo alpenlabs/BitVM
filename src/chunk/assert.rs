@@ -8,7 +8,7 @@ use bitcoin_script::script;
 use crate::{bn254::utils::Hint, chunk::{primitves::{tup_to_scr, HashBytes, Sig, SigData}, segment::*, taps_point_eval::get_hint_for_add_with_frob}, execute_script, groth16::g16::{Assertions, PublicKeys, Signatures, N_TAPLEAVES, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}, treepp};
 
 
-use super::{api::nib_to_byte_array, compile::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, hint_models::*, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles},  wots::WOTSPubKey};
+use super::{api::nib_to_byte_array, compile::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, element::*, primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles},  wots::WOTSPubKey};
 
 
 
@@ -41,7 +41,7 @@ fn compare(hint_out: &Element, claimed_assertions: &mut Option<Intermediates>) -
             panic!()
         }
     }
-    let (x, is_field) = (hint_out.out(), hint_out.ret_type());
+    let (x, is_field) = (hint_out.hashed_output(), hint_out.output_is_field_element());
 
     let matches = if is_field {
         let r = get_fq(claimed_assertions);
@@ -358,15 +358,7 @@ pub(crate) fn groth16(
 pub(crate) fn hint_to_data(segments: Vec<Segment>) -> Assertions {
     let mut vs: Vec<[u8; 64]> = vec![];
     for v in segments {
-        let x = match v.result {
-            Element::G2Acc(r) => r.out(),
-            Element::Fp12(r) => r.out(),
-            Element::FieldElem(f) => f.out(),
-            Element::MSMG1(r) => r.out(),
-            Element::ScalarElem(r) => r.out(),
-            Element::SparseEval(r) => r.out(),
-            Element::HashBytes(r) => r.out(),
-        };
+        let x = v.result.hashed_output();
         vs.push(x);
     }
     let mut batch1 = vec![];
@@ -579,10 +571,10 @@ pub(crate) fn script_exec(
     let mut bc_hints = vec![];
     for i in 0..segments.len() {
         let seg = &segments[i];
-        let sec_out = ((seg.id, segments[seg.id as usize].result.ret_type()), assertions[seg.id as usize]);
+        let sec_out = ((seg.id, segments[seg.id as usize].result.output_is_field_element()), assertions[seg.id as usize]);
         let sec_in: Vec<((u32, bool), [u8; 64])> = seg.parameter_ids.iter().rev().map(|k| {
             let v = &segments[*(k) as usize];
-            let v = v.result.ret_type();
+            let v = v.result.output_is_field_element();
             ((*k, v), assertions[*k as usize])
         }).collect();
         let mut tot: Vec<((u32, bool), [u8;64])> = vec![];

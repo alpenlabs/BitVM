@@ -4,8 +4,8 @@ use bitcoin_script::script;
 
 use crate::{bn254::{curves::G2Affine, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, g2_subgroup_check, utils::fq2_push_not_montgomery}, chunk::primitves::hash_fp4, treepp};
 
-use super::hint_models::{ElemFq, ElemG2Point};
-use crate::chunk::hint_models::ElemTraitExt;
+use super::element::{ElemFq, ElemG2Point};
+use crate::chunk::element::ElemTraitExt;
 
 fn tap_g2_subgroup_check_msm(
     ith_index: usize,
@@ -247,7 +247,7 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::{hint_models::{ElemG2Point, ElemTraitExt}, primitves::extern_nibbles_to_limbs}, execute_script, execute_script_without_stack_limit, treepp};
+    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::{element::{ElemG2Point, ElemTraitExt}, primitves::extern_nibbles_to_limbs}, execute_script, execute_script_without_stack_limit, treepp};
 
     use super::{hint_g2_subgroup_check, tap_g2_subgroup_check};
 
@@ -269,7 +269,7 @@ mod test {
         println!("num_msm_chunks {:?}", num_msm_chunks);
         for i in 0..num_msm_chunks {
             let (hout, tmul_hints): (ElemG2Point, treepp::Script) = hints[i].clone();
-            let hout_hash = hout.out();
+            let hout_hash = hout.hashed_output();
             let bitcom_scr = script!(
                 for i in extern_nibbles_to_limbs(hout_hash) {
                     {i}
@@ -306,7 +306,7 @@ mod test {
 
         // ENDO CHUNK
         let (hout, tmul_hints): (ElemG2Point, treepp::Script) = hints[num_msm_chunks].clone();
-        let hout_hash = hout.out();
+        let hout_hash = hout.hashed_output();
         let bitcom_scr = script!(
             for i in extern_nibbles_to_limbs(hout_hash) {
                 {i}
@@ -331,7 +331,7 @@ mod test {
 
         // FINAL CHUNK
         let (hout, tmul_hints): (ElemG2Point, treepp::Script) = hints[num_msm_chunks+1].clone();
-        let final_hash = hout.out();
+        let final_hash = hout.hashed_output();
         let bitcom_scr = script!(
             for i in extern_nibbles_to_limbs(final_hash) { // final_out
                 {i}
