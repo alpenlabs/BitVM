@@ -4,9 +4,9 @@ mod test {
 
     use crate::bn254::fp254impl::Fp254Impl;
     use crate::bn254::fq::Fq;
-    use crate::bn254::utils::{fq2_push_not_montgomery, fq_push_not_montgomery};
+    use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery};
     use crate::chunk::element::*;
-    use crate::chunk::primitves::{fp12_to_vec, pack_nibbles_to_limbs};
+    use crate::chunk::primitves::{fp12_to_vec, hash_fp12, hash_fp12_with_hints, pack_nibbles_to_limbs};
     use crate::chunk::taps_point_ops::*;
     use crate::chunk::primitves::{extern_hash_fps, extern_nibbles_to_limbs};
     use crate::chunk::taps_mul::*;
@@ -351,14 +351,15 @@ mod test {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_f.hashed_output()) {
-                {i}
-            }
-            {Fq::toaltstack()}
             for i in extern_nibbles_to_limbs(hint_g.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
+            for i in extern_nibbles_to_limbs(hint_f.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}
+
         };
 
         let tap_len = tap_scr.len();
@@ -404,12 +405,12 @@ mod test {
 
 
         let c = hint_f.f * hint_g.f;
-        let hash_c = extern_hash_fps(
+        let hash_c0 = extern_hash_fps(
             vec![
                 c.c0.c0.c0, c.c0.c0.c1, c.c0.c1.c0, c.c0.c1.c1, c.c0.c2.c0, c.c0.c2.c1,
             ], true);
 
-        let hint_c0 = ElemFp12Acc {f: ark_bn254::Fq12::new(c.c0, ark_bn254::Fq6::ZERO), hash: hash_c};
+        let hint_c0 = ElemFp12Acc {f: ark_bn254::Fq12::new(c.c0, ark_bn254::Fq6::ZERO), hash: hash_c0};
 
 
         let (hint_out, tap_scr, hint_script) = chunk_dense_dense_mul1(hint_f, hint_g, hint_c0);
@@ -419,7 +420,8 @@ mod test {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_f.hashed_output()) {
+
+            for i in extern_nibbles_to_limbs(hint_c0.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
@@ -427,7 +429,8 @@ mod test {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_c0.hashed_output()) {
+
+            for i in extern_nibbles_to_limbs(hint_f.hashed_output()) {
                 {i}
             }
             {Fq::toaltstack()}
@@ -446,7 +449,8 @@ mod test {
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
-        assert!(!res.success && res.final_stack.len() == 1);
+        assert!(!res.success);
+        assert!(res.final_stack.len() == 1);
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
 

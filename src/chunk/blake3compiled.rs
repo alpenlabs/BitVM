@@ -1,7 +1,7 @@
 use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fq12::Fq12, fq6::Fq6}, hash::blake3_u4, treepp::*};
 use bitcoin_script_stack::stack::StackTracker;
 
-use super::primitves::{hash_fp12, hash_fp6};
+use super::{element::ElementType, primitves::{hash_fp12, hash_fp12_192, hash_fp12_with_hints, hash_fp6}};
 
 
 fn wrap_scr(scr: Script) -> Script {
@@ -32,7 +32,7 @@ pub fn hash_192b() -> Script {
     wrap_scr(stack.get_script())
 }
 
-pub fn hash_messages(elem_types: Vec<u32>) -> Script {
+pub fn hash_messages(elem_types: Vec<ElementType>) -> Script {
     // Altstack: [Hc, Hb, Ha]
     // Stack: [a, b, c]
     let mut loop_script = script!();
@@ -41,37 +41,38 @@ pub fn hash_messages(elem_types: Vec<u32>) -> Script {
         // send other elems to altstack
         let mut remaining = elem_types[msg_index+1..].to_vec();
         let mut from_altstack = script!();
-        for rem_index in &remaining {
+        for elem_type in &remaining {
             from_altstack = script!(
                 {from_altstack}
-                if *rem_index == 12 {
-                    {Fq12::fromaltstack()}
-                } else if *rem_index == 6 {
-                    {Fq6::fromaltstack()}
-                } 
+                for _ in 0..elem_type.num_limbs() {
+                    {Fq::fromaltstack()}
+                }
             );
         }
         remaining.reverse();
         let mut to_altstack = script!();
-        for rem_index in &remaining {
+        for elem_type in &remaining {
             to_altstack = script!(
                 {to_altstack}
-                if *rem_index == 12 {
-                    {Fq12::toaltstack()}
-                } else if *rem_index == 6 {
-                    {Fq6::toaltstack()}
-                } 
+                for _ in 0..elem_type.num_limbs() {
+                    {Fq::toaltstack()}
+                }
             );
         }
 
         // hash remaining element
-        let cur_elem = elem_types[msg_index];
+        let elem_type = elem_types[msg_index];
         let hash_scr = script!(
-            if cur_elem == 12 {
+            if elem_type == ElementType::Fp12v0 {
                 {hash_fp12()}
-            } else if cur_elem == 6 {
+            } else if elem_type == ElementType::Fp12v1 {
+                {hash_fp12_192()}
+            } else if elem_type == ElementType::Fp12v2 {
+                {hash_fp12_with_hints()}
+            } else if elem_type == ElementType::Fp6 {
                 {hash_fp6()}
-            }
+            } else if elem_type == ElementType::HashBytes {
+            } 
         );
 
         let verify_scr = script!(
@@ -107,7 +108,7 @@ mod test {
 
     #[test]
     fn test_sth() {
-        let hash_scr = hash_messages(vec![12, 6]);
+        let hash_scr = hash_messages(vec![ElementType::Fp12v0, ElementType::Fp6]);
         let a = ark_bn254::Fq12::ONE;
         let b = ark_bn254::Fq6::ONE + ark_bn254::Fq6::ONE;
         let ahash = extern_hash_fps(a.to_base_prime_field_elements().collect(), true);

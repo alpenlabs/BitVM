@@ -548,8 +548,8 @@ pub(crate) fn wrap_hints_dense_dense_mul0(
 ) -> Segment {
 
     let input_segment_info = vec![
-        (in_a.id),
         (in_b.id),
+        (in_a.id),
     ];
 
     let a: ElemFp12Acc = in_a.result.try_into().unwrap();

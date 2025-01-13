@@ -5,30 +5,60 @@ use super::primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_f
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Element {
-    Fp12v0(ElemFp12Acc),
-    Fp12v1(ElemFp12Acc),
-    G2T(ElemG2PointAcc),
-    G2DblEval(ElemG2PointAcc),
-    G2DblAddEval(ElemG2PointAcc),
-    G2AddEval(ElemG2PointAcc),
-    SparseEval(ElemSparseEval),
-    FieldElem(ElemFq),
-    ScalarElem(ElemFr),
-    HashBytes(ElemHashBytes),
-    MSMG1(ElemG1Point),
-    MSMG2(ElemG2Point),
+    Fp12v0(ElemFp12Acc), // 2,4, 2, 4
+    Fp12v1(ElemFp12Acc),  // 6, 6
+    Fp12v2(ElemFp12Acc), // 6, 1
+    G2T(ElemG2PointAcc), // 4
+    G2DblEval(ElemG2PointAcc), // 4, 4
+    G2DblAddEval(ElemG2PointAcc), // 4,4,4
+    G2AddEval(ElemG2PointAcc), // 4,4
+    SparseEval(ElemSparseEval), // 6, 6
+    FieldElem(ElemFq), // 1
+    ScalarElem(ElemFr), // 1
+    HashBytes(ElemHashBytes), // 1
+    MSMG1(ElemG1Point), // 2
+    MSMG2(ElemG2Point), // 4
 }
 
-// #[derive(Debug, Clone, Copy)]
-// pub(crate) enum Element {
-//     Fp12(ElemFp12Acc),
-//     G2Acc(ElemG2PointAcc),
-//     SparseEval(ElemSparseEval),
-//     FieldElem(ElemFq),
-//     ScalarElem(ElemFr),
-//     HashBytes(ElemHashBytes),
-//     MSMG1(ElemG1Point),
-// }
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum ElementType {
+    Fp12v0, // 2,4, 2, 4
+    Fp12v1,  // 6, 6
+    Fp12v2, // 6, 1
+    Fp6,
+    G2T, // 4
+    G2DblEval, // 4, 4
+    G2DblAddEval, // 4,4,4
+    G2AddEval, // 4,4
+    SparseEval, // 6, 6
+    FieldElem, // 1
+    ScalarElem, // 1
+    HashBytes, // 1
+    MSMG1, // 2
+    MSMG2, // 4
+}
+
+impl ElementType {
+    pub fn num_limbs(&self) -> usize {
+        match self {
+            ElementType::G2AddEval => 4 + 4 + 1,
+            ElementType::G2DblAddEval => 4 + 4 + 4,
+            ElementType::G2T => 4 + 1,
+            ElementType::G2DblEval => 4 + 4 + 1,
+            ElementType::Fp12v0 => 12,
+            ElementType::Fp12v1 => 12,
+            ElementType::Fp12v2 => 6 + 1,
+            ElementType::Fp6 => 6,
+            ElementType::FieldElem => 1,
+            ElementType::MSMG1 => 2,
+            ElementType::MSMG2 => 4,
+            ElementType::ScalarElem => 1,
+            ElementType::SparseEval => 12,
+            ElementType::HashBytes => 1,
+        }
+    }
+
+}
 
 impl Element {
     pub fn output_is_field_element(&self) -> bool {
@@ -36,6 +66,24 @@ impl Element {
             Element::FieldElem(_) => true, 
             Element::ScalarElem(_) => true, 
             _ => false,
+        }
+    }
+
+    pub fn element_type(&self) -> ElementType {
+        match self {
+            Element::G2AddEval(_) => ElementType::G2AddEval, 
+            Element::G2DblAddEval(_) => ElementType::G2DblAddEval,
+            Element::G2T(_) => ElementType::G2T,
+            Element::G2DblEval(_) => ElementType::G2DblEval,
+            Element::Fp12v0(_) => ElementType::Fp12v0, // 2, 4
+            Element::Fp12v1(_) => ElementType::Fp12v1, // 6
+            Element::Fp12v2(_) => ElementType::Fp12v2, // 6,1
+            Element::FieldElem(_) => ElementType::FieldElem,
+            Element::MSMG1(_) => ElementType::MSMG1,
+            Element::MSMG2(_) => ElementType::MSMG2,
+            Element::ScalarElem(_) => ElementType::ScalarElem,
+            Element::SparseEval(_) => ElementType::SparseEval,
+            Element::HashBytes(_) => ElementType::HashBytes,
         }
     }
 
@@ -47,6 +95,7 @@ impl Element {
             Element::G2DblEval(r) => r.hashed_output(),
             Element::Fp12v0(r) => r.hashed_output(),
             Element::Fp12v1(r) => r.hashed_output(),
+            Element::Fp12v2(r) => r.hashed_output(),
             Element::FieldElem(f) => f.hashed_output(),
             Element::MSMG1(r) => r.hashed_output(),
             Element::MSMG2(r) => r.hashed_output(),
@@ -100,7 +149,7 @@ macro_rules! impl_try_from_element {
     };
 }
 
-impl_try_from_element!(ElemFp12Acc, { Fp12v0, Fp12v1 });
+impl_try_from_element!(ElemFp12Acc, { Fp12v0, Fp12v1, Fp12v2 });
 impl_try_from_element!(ElemG2PointAcc, { G2T, G2DblEval, G2DblAddEval, G2AddEval });
 impl_try_from_element!(ElemSparseEval, { SparseEval });
 impl_try_from_element!(ElemFq, { FieldElem });

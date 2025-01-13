@@ -3,6 +3,7 @@ use crate::bn254::utils::{
     fq_push_not_montgomery, Hint,
 };
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
+use crate::chunk::blake3compiled::hash_messages;
 use crate::chunk::primitves::{
     extern_hash_nibbles,  extern_nibbles_to_limbs, hash_fp12,
     hash_fp12_with_hints, hash_fp6, 
@@ -210,7 +211,7 @@ pub(crate) fn chunk_dense_dense_mul0(
         };
         let scr = script! {
             {ops_scr}
-            {hash_mul(true)}
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v1, ElementType::Fp6])} //{hash_mul(true)}
             OP_TRUE
         };
         scr
@@ -276,25 +277,21 @@ pub(crate) fn chunk_dense_dense_mul1(
 
 
     fn tap_dense_dense_mul1(hinted_mul: Script) -> Script {
-        let check_is_identity: bool = false;
-        let mut check_id = 1;
-        if !check_is_identity {
-            check_id = 0;
-        }
+
         let ops_scr = script! {
+            // [f, g, hc0, hc1_aux]
+            { Fq2::toaltstack() }
             { hinted_mul }
-            {check_id} 1 OP_NUMEQUAL
-            OP_IF
-                {Fq6::copy(0)}
-                for _ in 0..6 {
-                    {fq_push_not_montgomery(ark_bn254::Fq::zero())}
-                }
-                {Fq6::equalverify()}
-            OP_ENDIF
+            { Fq2::fromaltstack() }
+            // [f, g, c1, hc0, hc1_aux]
+            { Fq6::roll(2)}
+            { Fq::roll(6) }
+            // [f, g, hc0, c1, hc1_aux]
+            // [Fp12v0, Fp12v1, HashBytes, Fp12v2]
         };
         let scr = script! {
             {ops_scr}
-            {hash_mul(false)}
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v1, ElementType::HashBytes, ElementType::Fp12v2])} 
             OP_TRUE
         };
         scr
@@ -323,12 +320,12 @@ pub(crate) fn chunk_dense_dense_mul1(
         false,
     );
 
-    // let hash_c0 = extern_hash_fps(
-    //     vec![
-    //         h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
-    //     ],
-    //     true,
-    // );
+    let hash_c0 = extern_hash_fps(
+        vec![
+            h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
+        ],
+        true,
+    );
     let hash_c = extern_hash_fps(
         vec![
             h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1, h.c1.c0.c0,
@@ -346,6 +343,8 @@ pub(crate) fn chunk_dense_dense_mul1(
     for f in &gvec {
         simulate_stack_input.push(Hint::Fq(*f));
     }
+    simulate_stack_input.push(Hint::Hash(extern_nibbles_to_limbs(hash_c0)));
+    simulate_stack_input.push(Hint::Hash(extern_nibbles_to_limbs(hash_c0)));
 
     (
         ElemFp12Acc {
@@ -366,23 +365,7 @@ pub(crate) fn chunk_squaring(
 
     fn tap_squaring(sq_script: Script) -> Script {
         let hash_sc = script! {
-            {Fq12::toaltstack()}
-            { hash_fp12() }
-            {Fq12::fromaltstack()}
-            {Fq::roll(12)} {Fq::toaltstack()}
-            { hash_fp12() } 
-            //Alt:[hash_out, hash_in, hash_calc_out]
-            //Main:[hash_calc_in]
-            { Fq::fromaltstack() }
-            {Fq::roll(1)}
-            { Fq::fromaltstack() }
-            { Fq::fromaltstack() }
-            //Alt:[]
-            //Main:[hash_calc_in, hash_calc_out, hash_in, hash_out]
-            { Fq::equalverify(3, 1)}
-            { Fq::equal(1, 0)} // 1 if matches, 0 doesn't match
-            OP_NOT // 0 if matches, 1 doesn't match
-            OP_VERIFY // verify that output doesn't match
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v0])} 
         };
         let sc = script! {
             {Fq12::copy(0)}
@@ -437,14 +420,9 @@ pub(crate) fn chunk_dense_dense_mul0_by_constant(
 ) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
     fn tap_dense_dense_mul0_by_constant(g: ark_bn254::Fq12, hinted_mul: Script) -> Script {
-        let check_is_identity: bool = true;
         let ghash = extern_hash_fps(vec![g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
             g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1], false);
         let const_hash_limb = extern_nibbles_to_limbs(ghash);
-        let mut check_id = 1;
-        if !check_is_identity {
-            check_id = 0;
-        }
 
         let ops_scr = script! {
             for l in const_hash_limb {
@@ -453,15 +431,13 @@ pub(crate) fn chunk_dense_dense_mul0_by_constant(
             {Fq::toaltstack()}
             { hinted_mul }
 
-            {check_id} 1 OP_NUMEQUAL
-            OP_IF
-                {Fq6::copy(0)}
-                {fq_push_not_montgomery(ark_bn254::Fq::one())}
-                for _ in 0..5 {
-                    {fq_push_not_montgomery(ark_bn254::Fq::zero())}
-                }
-                {Fq6::equalverify()}
-            OP_ENDIF
+
+            {Fq6::copy(0)}
+            {fq_push_not_montgomery(ark_bn254::Fq::one())}
+            for _ in 0..5 {
+                {fq_push_not_montgomery(ark_bn254::Fq::zero())}
+            }
+            {Fq6::equalverify()}
         };
         let scr = script! {
             {ops_scr}
