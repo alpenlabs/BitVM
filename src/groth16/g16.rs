@@ -119,9 +119,9 @@ mod test {
 
         pub fn write_scripts_to_separate_files(sig_cache: HashMap<u32, Vec<Script>>, file: &str) {
             let mut buf: HashMap<u32, Vec<Vec<u8>>> = HashMap::new();
-            let _ = std::fs::create_dir("chunker_data");
+            let _ = std::fs::create_dir("bridge_data/chunker_data");
             for (k, v) in sig_cache {
-                let file = format!("chunker_data/{file}_{k}.json");
+                let file = format!("bridge_data/chunker_data/{file}_{k}.json");
                 let vs = v.into_iter().map(|x| x.compile().to_bytes()).collect();
                 buf.insert(k, vs);
                 write_map_to_file(&buf, &file).unwrap();
@@ -313,7 +313,7 @@ mod test {
 
         println!("load scripts from file");
         for index in 0..N_TAPLEAVES {
-            let read = read_scripts_from_file(&format!("chunker_data/tapnode_{index}.json"));
+            let read = read_scripts_from_file(&format!("bridge_data/chunker_data/tapnode_{index}.json"));
             let read_scr = read.get(&(index as u32)).unwrap();
             assert_eq!(read_scr.len(), 1);
             let tap_node = read_scr[0].clone();
@@ -341,7 +341,7 @@ mod test {
         let proof_asserts = generate_proof_assertions(mock_vk, proof, public_inputs);
         println!("signed_asserts {:?}", proof_asserts);
    
-        write_asserts_to_file(proof_asserts, "chunker_data/assert.json");
+        write_asserts_to_file(proof_asserts, "bridge_data/chunker_data/assert.json");
         let _signed_asserts = sign_assertions(proof_asserts);
     }
 
@@ -355,7 +355,7 @@ mod test {
         let mut op_scripts = vec![];
         println!("load scripts from file");
         for index in 0..N_TAPLEAVES {
-            let read = read_scripts_from_file(&format!("chunker_data/tapnode_{index}.json"));
+            let read = read_scripts_from_file(&format!("bridge_data/chunker_data/tapnode_{index}.json"));
             let read_scr = read.get(&(index as u32)).unwrap();
             assert_eq!(read_scr.len(), 1);
             let tap_node = read_scr[0].clone();
@@ -368,7 +368,7 @@ mod test {
        let verifier_scripts = generate_disprove_scripts(mock_pubks, &ops_scripts);
 
         // let proof_asserts = generate_proof_assertions(mock_vk.clone(), proof, public_inputs);
-        let proof_asserts = read_asserts_from_file("chunker_data/assert.json");
+        let proof_asserts = read_asserts_from_file("bridge_data/chunker_data/assert.json");
         let signed_asserts = sign_assertions(proof_asserts);
         let mock_pubks = mock_pubkeys(MOCK_SECRET);
 
@@ -438,7 +438,7 @@ mod test {
         let mut op_scripts = vec![];
         println!("load scripts from file");
         for index in 0..N_TAPLEAVES {
-            let read = read_scripts_from_file(&format!("chunker_data/tapnode_{index}.json"));
+            let read = read_scripts_from_file(&format!("bridge_data/chunker_data/tapnode_{index}.json"));
             let read_scr = read.get(&(index as u32)).unwrap();
             assert_eq!(read_scr.len(), 1);
             let tap_node = read_scr[0].clone();
@@ -454,7 +454,7 @@ mod test {
         let total = N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES;
         for i in 0..total {
             println!("ITERATION {:?}", i);
-            let mut proof_asserts = read_asserts_from_file("chunker_data/assert.json");
+            let mut proof_asserts = read_asserts_from_file("bridge_data/chunker_data/assert.json");
             corrupt(&mut proof_asserts, Some(i));
             let signed_asserts = sign_assertions(proof_asserts);
     
@@ -472,7 +472,7 @@ mod test {
                     println!("{i:} {:?}", res.final_stack.get(i));
                 }
                 let mut disprove_map: HashMap<u32, Vec<Script>> = HashMap::new();
-                let disprove_f = &format!("chunker_data/disprove_{index}.json");
+                let disprove_f = &format!("bridge_data/chunker_data/disprove_{index}.json");
                 disprove_map.insert(index as u32, vec![hint_script]);
                 write_scripts_to_file(disprove_map, disprove_f);
                 assert!(res.success);
@@ -582,7 +582,7 @@ mod test {
         // let mock_pubks = mock_pubkeys(MOCK_SECRET);
 
         // full_exec(segments, signed_asserts, mock_pubks);
-        // write_asserts_to_file(proof_asserts, "chunker_data/assert2.json");
+        // write_asserts_to_file(proof_asserts, "bridge_data/chunker_data/assert2.json");
 
     }
 
