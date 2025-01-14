@@ -583,9 +583,9 @@ pub(crate) fn wrap_hints_dense_dense_mul1(
 ) -> Segment {
 
     let input_segment_info = vec![
-        (in_a.id),
-        (in_b.id),
         (in_c.id),
+        (in_b.id),
+        (in_a.id),
     ];
 
     let a: ElemFp12Acc = in_a.result.try_into().unwrap();
@@ -623,8 +623,8 @@ pub(crate) fn wrap_hints_dense_le_mul0(
 ) -> Segment {
 
     let input_segment_info = vec![
-        (in_a.id),
         (in_b.id),
+        (in_a.id),
     ];
 
     let a: ElemFp12Acc = in_a.result.try_into().unwrap();
@@ -659,9 +659,9 @@ pub(crate) fn wrap_hints_dense_le_mul1(
 ) -> Segment {
 
     let input_segment_info = vec![
-        (in_a.id),
-        (in_b.id),
         (in_c.id),
+        (in_b.id),
+        (in_a.id),
     ];
 
     let a: ElemFp12Acc = in_a.result.try_into().unwrap();
