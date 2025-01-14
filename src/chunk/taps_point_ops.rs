@@ -18,12 +18,8 @@ pub(crate) fn hash_g2acc_with_hashed_le() -> Script {
     script! {
         //Stack: [tx, ty, hash_inaux, hash_result]
         //T
-        {Fq2::toaltstack()} 
-        {hash_fp4()} // HT
-
-        {Fq::fromaltstack()}
-        {hash_fp2()}
-
+        {Fq::toaltstack()} 
+        {new_hash_g2acc_with_hashed_le()}
         { Fq::fromaltstack()}
         {Fq::equal(1, 0)}
     }
@@ -32,20 +28,8 @@ pub(crate) fn hash_g2acc_with_hashed_le() -> Script {
 pub(crate) fn hash_g2acc_with_raw_le(is_dbl:bool) -> Script {
     script!{
          // Stack: [tx, ty, dbl_le, hash_result]
-        {Fq::toaltstack()} {Fq2::toaltstack()} {Fq2::toaltstack()}
-        {hash_fp4()} {Fq2::fromaltstack()} {Fq2::fromaltstack()}  // [HT, dbl_le]
-        {Fq::roll(4)} {Fq::toaltstack()} // [dbl_le]
-        {hash_fp4()} // [Hdbl_le]
-        for _ in 0..9 {
-            {0}
-        }
-        if !is_dbl {
-            {Fq::roll(1)}
-        }
-        {hash_fp2()} // [Hle]
-        {Fq::fromaltstack()} // [Hle, HT]
-        {Fq::roll(1)}
-        {hash_fp2()} // [Hash_calc]
+        {Fq::toaltstack()} 
+        {new_hash_g2acc_with_raw_le(is_dbl)}
         {Fq::fromaltstack()}
         {Fq::equal(1, 0)}
     }
@@ -55,22 +39,7 @@ pub(crate) fn hash_g2acc_with_both_raw_le() -> Script {
     script!{
         //Stack: [tx, ty, dbl_le, add_le, hash_result]
         {Fq::toaltstack()} 
-        {Fq2::toaltstack()} {Fq2::toaltstack()}
-        {Fq2::toaltstack()} {Fq2::toaltstack()}
-        {hash_fp4()} 
-        {Fq2::fromaltstack()} {Fq2::fromaltstack()} // [HT, dbl_le]
-        {Fq::roll(4)} {Fq::toaltstack()} // [dbl_le]
-        {hash_fp4()} // [Hdbl_le]
-        {Fq::fromaltstack()} // [Hdbl_le, HT]
-        {Fq2::fromaltstack()} {Fq2::fromaltstack()} // [Hdbl_le, HT, add_le]
-        {Fq2::roll(4)} {Fq2::toaltstack()} // [add_le]
-        {hash_fp4()} // [Hadd_le]
-        {Fq::fromaltstack()} // [Hadd_le, Hdbl_le]
-        {Fq::roll(1)}
-        {hash_fp2()} // [Hle]
-        {Fq::fromaltstack()} // [Hle, HT]
-        {Fq::roll(1)}
-        {hash_fp2()} // [HTcacl]
+        {new_hash_g2acc_with_both_raw_le()}
         {Fq::fromaltstack()}
         {Fq::equal(1, 0)}
     }
@@ -80,27 +49,12 @@ pub(crate) fn hash_g2acc_with_hashed_t(is_dbl: bool) -> Script {
     script!{
         //Stack: [Ht, cur_le, Hother_le, hash_result]
         {Fq::toaltstack()} 
-        {Fq::roll(5)} {Fq::toaltstack()} 
-        {Fq::toaltstack()}
-        // A:[hash_result, Ht, Hother_le]
-        // M:[cur_le]
-        {hash_fp4()} 
-
-        {Fq::fromaltstack()}
-        // [HC_le, HO_le]
-        if !is_dbl {
-            {Fq::roll(1)}
-        }
-        {hash_fp2()}
-        // [Hle]
-        {Fq::fromaltstack()}
-        // [Hle, HT]
-        {Fq::roll(1)}
-        {hash_fp2()}
+        {new_hash_g2acc_with_hashed_t(is_dbl)}
         {Fq::fromaltstack()}
         {Fq::equal(1, 0)}
     }
 }
+
 
 // POINT DBL
 

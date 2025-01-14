@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
-use ark_ff::{BigInt, BigInteger};
+use ark_ff::{AdditiveGroup, BigInt, BigInteger};
 
 use crate::bigint::U254;
 use crate::bn254::fq2::Fq2;
+use crate::bn254::utils::fq_push_not_montgomery;
 use crate::chunk::blake3compiled::{hash_128b, hash_192b, hash_64b};
 use crate::pseudo::NMUL;
 use crate::signatures::wots::{wots160, wots256};
@@ -577,6 +578,68 @@ pub(crate) fn new_hash_g2acc_with_hashed_le() -> Script {
         {Fq::fromaltstack()}
         {hash_fp2()}
     }
+}
+
+pub(crate) fn new_hash_g2acc_with_raw_le(is_dbl:bool) -> Script {
+    script!{
+         // Stack: [tx, ty, dbl_lex, dbl_ley]
+        {Fq2::toaltstack()} {Fq2::toaltstack()}
+        {hash_fp4()} {Fq2::fromaltstack()} {Fq2::fromaltstack()}  // [HT, dbl_le]
+        {Fq::roll(4)} {Fq::toaltstack()} // [dbl_le]
+        {hash_fp4()} // [Hdbl_le]
+        {fq_push_not_montgomery(ark_bn254::Fq::ZERO)}
+        if !is_dbl {
+            {Fq::roll(1)}
+        }
+        {hash_fp2()} // [Hle]
+        {Fq::fromaltstack()} // [Hle, HT]
+        {Fq::roll(1)}
+        {hash_fp2()} // [Hash_calc]
+    }
+}
+
+pub(crate) fn new_hash_g2acc_with_both_raw_le() -> Script {
+    script!(
+        {Fq2::toaltstack()} {Fq2::toaltstack()}
+        {Fq2::toaltstack()} {Fq2::toaltstack()}
+        {hash_fp4()} 
+        {Fq2::fromaltstack()} {Fq2::fromaltstack()} // [HT, dbl_le]
+        {Fq::roll(4)} {Fq::toaltstack()} // [dbl_le]
+        {hash_fp4()} // [Hdbl_le]
+        {Fq::fromaltstack()} // [Hdbl_le, HT]
+        {Fq2::fromaltstack()} {Fq2::fromaltstack()} // [Hdbl_le, HT, add_le]
+        {Fq2::roll(4)} {Fq2::toaltstack()} // [add_le]
+        {hash_fp4()} // [Hadd_le]
+        {Fq::fromaltstack()} // [Hadd_le, Hdbl_le]
+        {Fq::roll(1)}
+        {hash_fp2()} // [Hle]
+        {Fq::fromaltstack()} // [Hle, HT]
+        {Fq::roll(1)}
+        {hash_fp2()} // [HTcacl]
+    )
+}
+
+pub(crate) fn new_hash_g2acc_with_hashed_t(is_dbl: bool) -> Script {
+    script!(
+        {Fq::roll(5)} {Fq::toaltstack()} 
+        {Fq::toaltstack()}
+        // A:[hash_result, Ht, Hother_le]
+        // M:[cur_le]
+        {hash_fp4()} 
+    
+        {Fq::fromaltstack()}
+        // [HC_le, HO_le]
+        if !is_dbl {
+            {Fq::roll(1)}
+        }
+        {hash_fp2()}
+        // [Hle]
+        {Fq::fromaltstack()}
+        // [Hle, HT]
+        {Fq::roll(1)}
+        {hash_fp2()}
+    )
+
 }
 
 pub(crate) fn hash_fp6() -> Script {
