@@ -611,17 +611,7 @@ pub(crate) fn chunk_frob_fp12(
             // [f, g]
         };
         let hash_scr = script! {
-            {Fq12::toaltstack()}
-            { hash_fp12_192() }
-            {Fq12::fromaltstack()}
-            { Fq::roll(12) } {Fq::toaltstack()}
-            { hash_fp12_192() }
-            {Fq::fromaltstack()}
-
-            {Fq::fromaltstack()} {Fq::fromaltstack()}
-
-            {Fq::equalverify(1, 2)}
-            {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+            {hash_messages(vec![ElementType::Fp12v1, ElementType::Fp12v1])}
         };
         let sc = script! {
             {ops_scr}

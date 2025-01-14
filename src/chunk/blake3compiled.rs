@@ -1,7 +1,7 @@
 use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fq12::Fq12, fq6::Fq6}, hash::blake3_u4, treepp::*};
 use bitcoin_script_stack::stack::StackTracker;
 
-use super::{element::ElementType, primitves::{hash_fp12, hash_fp12_192, hash_fp12_with_hints, hash_fp6}};
+use super::{element::ElementType, primitves::{hash_fp12, hash_fp12_192, hash_fp12_with_hints, hash_fp6, new_hash_g2acc_with_hashed_le}};
 
 
 fn wrap_scr(scr: Script) -> Script {
@@ -71,8 +71,10 @@ pub fn hash_messages(elem_types: Vec<ElementType>) -> Script {
                 {hash_fp12_with_hints()}
             } else if elem_type == ElementType::Fp6 {
                 {hash_fp6()}
-            } else if elem_type == ElementType::HashBytes {
-            } 
+            } else if elem_type == ElementType::G2T {
+                {new_hash_g2acc_with_hashed_le()}
+            } else {
+            }
         );
 
         let verify_scr = script!(

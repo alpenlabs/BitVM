@@ -2,6 +2,7 @@ use crate::bigint::U254;
 use crate::bn254::fq6::Fq6;
 use crate::bn254::utils::*;
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
+use crate::chunk::blake3compiled::hash_messages;
 use crate::chunk::primitves::*;
 use crate::bn254;
 use crate::{
@@ -43,9 +44,7 @@ pub(crate) fn chunk_hash_c(
                 OP_BOOLAND
             }
             OP_IF // all less than p
-                { hash_fp12_192() }
-                {Fq::fromaltstack()}
-                {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+                {hash_messages(vec![ElementType::Fp12v1])}
             OP_ELSE
                 for _ in 0..12 {
                     {Fq::drop()}
@@ -92,21 +91,10 @@ pub(crate) fn chunk_hash_c2(
     hint_in_c: ElemFp12Acc,
 ) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
-    fn chunk_hash_c2() -> Script {
+    fn tap_hash_c2() -> Script {
         let hash_scr = script! {
             {Fq12::copy(0)}
-            {Fq12::toaltstack()}
-            { hash_fp12() }
-            {Fq12::fromaltstack()}
-            { Fq::roll(12) } { Fq::toaltstack() }
-            {hash_fp12_192()}
-
-            {Fq::fromaltstack()}
-            {Fq::fromaltstack()}
-            {Fq::fromaltstack()}
-            // [calc_192, calc_12, claim_12, inp_192]
-            {Fq::equalverify(3, 1)}
-            {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+            {hash_messages(vec![ElementType::Fp12v1, ElementType::Fp12v0])}
         };
 
         let sc = script! {
@@ -134,7 +122,7 @@ pub(crate) fn chunk_hash_c2(
             f: hint_in_c.f,
             hash: outhash,
         },
-        chunk_hash_c2(),
+        tap_hash_c2(),
         simulate_stack_input,
     )
 }
@@ -295,12 +283,8 @@ pub(crate) fn chunk_init_t4(
             {Fq2::copy(2)}
             {on_curve_scr}
             OP_IF
-                for _ in 0..9 { // aux_le
-                    {0}
-                }
-                {Fq::fromaltstack()}
-                {hash_g2acc_with_hashed_le()}
-                OP_NOT OP_VERIFY
+                {fq_push_not_montgomery(ark_bn254::Fq::ZERO)}
+                {hash_messages(vec![ElementType::G2T])}
             OP_ELSE
                 {Fq2::drop()}
                 {Fq2::drop()}

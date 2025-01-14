@@ -567,6 +567,17 @@ pub(crate) fn extern_hash_nibbles(msgs: Vec<[u8; 64]>, mode: bool) -> [u8; 64] {
     }
 }
 
+pub(crate) fn new_hash_g2acc_with_hashed_le() -> Script {
+    script! {
+        //Stack: [tx, ty, hash_inaux]
+        //T
+        {Fq::toaltstack()} 
+        {hash_fp4()} // HT
+
+        {Fq::fromaltstack()}
+        {hash_fp2()}
+    }
+}
 
 pub(crate) fn hash_fp6() -> Script {
     script! {

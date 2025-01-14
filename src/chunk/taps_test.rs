@@ -67,7 +67,6 @@ mod test {
     }
 
 
-
     #[test]
     fn test_tap_hash_c() {
 
@@ -193,8 +192,6 @@ mod test {
         assert!(!res.success && res.final_stack.len() == 1);
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
-
-    
 
     #[test]
     fn test_tap_precompute_x() {
