@@ -184,10 +184,7 @@ pub(crate) fn chunk_double_eval_mul_for_fixed_qs(
     }
 
     let b_hash = extern_hash_fps(
-        vec![
-            b.c0.c0.c0, b.c0.c0.c1, b.c0.c1.c0, b.c0.c1.c1, b.c0.c2.c0, b.c0.c2.c1, b.c1.c0.c0,
-            b.c1.c0.c1, b.c1.c1.c0, b.c1.c1.c1, b.c1.c2.c0, b.c1.c2.c1,
-        ],
+        b.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
         false,
     );
     let p2dash_x = extern_fq_to_nibbles(p2.x);
@@ -387,10 +384,7 @@ pub(crate) fn chunk_add_eval_mul_for_fixed_qs(
     }
 
     let b_hash = extern_hash_fps(
-        vec![
-            b.c0.c0.c0, b.c0.c0.c1, b.c0.c1.c0, b.c0.c1.c1, b.c0.c2.c0, b.c0.c2.c1, b.c1.c0.c0,
-            b.c1.c0.c1, b.c1.c1.c0, b.c1.c1.c1, b.c1.c2.c0, b.c1.c2.c1,
-        ],
+        b.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
         false,
     );
     let p2dash_x = extern_fq_to_nibbles(p2.x);
@@ -606,10 +600,7 @@ pub(crate) fn chunk_add_eval_mul_for_fixed_qs_with_frob(
     }
 
     let b_hash = extern_hash_fps(
-        vec![
-            b.c0.c0.c0, b.c0.c0.c1, b.c0.c1.c0, b.c0.c1.c1, b.c0.c2.c0, b.c0.c2.c1, b.c1.c0.c0,
-            b.c1.c0.c1, b.c1.c1.c0, b.c1.c1.c1, b.c1.c2.c0, b.c1.c2.c1,
-        ],
+        b.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
         false,
     );
     let p2dash_x = extern_fq_to_nibbles(p2.x);

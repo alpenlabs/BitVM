@@ -111,11 +111,7 @@ pub(crate) fn groth16(
     let p2x = wrap_hints_precompute_px(is_compile_mode, all_output_hints.len(), &gp2y, &gp2x, &p2y);
     push_compare_or_return!(p2x);
 
-    let gc: Vec<Segment> = vec![
-        eval_ins.c.c0.c0.c0, eval_ins.c.c0.c0.c1, eval_ins.c.c0.c1.c0, eval_ins.c.c0.c1.c1,
-        eval_ins.c.c0.c2.c0, eval_ins.c.c0.c2.c1, eval_ins.c.c1.c0.c0, eval_ins.c.c1.c0.c1,
-        eval_ins.c.c1.c1.c0, eval_ins.c.c1.c1.c1, eval_ins.c.c1.c2.c0, eval_ins.c.c1.c2.c1,
-    ].iter().enumerate().map(|(idx, f)| Segment {
+    let gc: Vec<Segment> = eval_ins.c.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>().iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         
         parameter_ids: vec![],
@@ -125,11 +121,7 @@ pub(crate) fn groth16(
     }).collect();
     all_output_hints.extend_from_slice(&gc);
 
-    let gs: Vec<Segment> = vec![
-        eval_ins.s.c0.c0.c0, eval_ins.s.c0.c0.c1, eval_ins.s.c0.c1.c0, eval_ins.s.c0.c1.c1,
-        eval_ins.s.c0.c2.c0, eval_ins.s.c0.c2.c1, eval_ins.s.c1.c0.c0, eval_ins.s.c1.c0.c1,
-        eval_ins.s.c1.c1.c0, eval_ins.s.c1.c1.c1, eval_ins.s.c1.c2.c0, eval_ins.s.c1.c2.c1,
-    ].iter().enumerate().map(|(idx, f)| Segment {
+    let gs: Vec<Segment> = eval_ins.s.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>().iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         
         parameter_ids: vec![],

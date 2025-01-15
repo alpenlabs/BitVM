@@ -64,7 +64,7 @@ pub(crate) fn chunk_point_dbl(
     hint_px: ElemFq,
 ) -> (ElemG2PointAcc, Script, Vec<Hint>) {
 
-    fn chunk_point_dbl(hinted_check_tangent: Script, hinted_double_line: Script, hinted_ell_tangent: Script) -> Script {
+    fn tap_point_dbl(hinted_check_tangent: Script, hinted_double_line: Script, hinted_ell_tangent: Script) -> Script {
         let ops_script = script! {
             {Fq::fromaltstack()}
             {Fq::fromaltstack()} // py
@@ -182,7 +182,7 @@ pub(crate) fn chunk_point_dbl(
         extern_hash_fps(vec![new_tx.c0, new_tx.c1, new_ty.c0, new_ty.c1], true);
     let hash_dbl_le =
         extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
-    let hash_add_le = [0u8; 64]; // constant
+    let hash_add_le = extern_hash_fps(vec![ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO], true);
     let hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
     let hash_root_claim = extern_hash_nibbles(vec![hash_new_t, hash_le], true);
 
@@ -209,7 +209,7 @@ pub(crate) fn chunk_point_dbl(
         add_le: None,
         // hash: hash_root_claim,
     };
-    (hint_out, chunk_point_dbl(hinted_check_tangent, hinted_double_line, hinted_ell_tangent), simulate_stack_input)
+    (hint_out, tap_point_dbl(hinted_check_tangent, hinted_double_line, hinted_ell_tangent), simulate_stack_input)
 }
 
 pub(crate) fn chunk_point_add_with_frob(
@@ -407,7 +407,8 @@ pub(crate) fn chunk_point_add_with_frob(
 
     let hash_new_t =
         extern_hash_fps(vec![new_tx.c0, new_tx.c1, new_ty.c0, new_ty.c1], true);
-    let hash_dbl_le = [0u8; 64];
+    let hash_dbl_le = extern_hash_fps(vec![ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO], true);
+
     let hash_add_le =
         extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
     let hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);

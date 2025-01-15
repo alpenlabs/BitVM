@@ -15,7 +15,6 @@ use ark_ff::{AdditiveGroup, Field, MontFp};
 
 use super::primitves::{extern_hash_fps, hash_fp12_192};
 use super::element::*;
-use super::taps_point_ops::hash_g2acc_with_hashed_le;
 
 
 // HASH_C
@@ -105,10 +104,7 @@ pub(crate) fn chunk_hash_c2(
     }
 
     let f = hint_in_c.f;
-    let fvec = vec![
-        f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-        f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-    ];
+    let fvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
     let inhash = extern_hash_fps(fvec.clone(), false);
     let outhash = extern_hash_fps(fvec.clone(), true);
 
@@ -273,6 +269,12 @@ pub(crate) fn chunk_init_t4(
 ) -> (ElemG2PointAcc, Script, Vec<Hint>) {
 
     fn tap_init_t4(on_curve_scr: Script) -> Script {
+        let zero = ark_bn254::Fq::ZERO;
+        let dle_hash = extern_hash_fps(vec![zero, zero, zero, zero], true);
+        let ale_hash = dle_hash.clone();
+        let le_hash = extern_hash_nibbles(vec![dle_hash, ale_hash], true);
+        let le_nibs = extern_nibbles_to_limbs(le_hash);
+        
         let hash_scr = script! {
             for _ in 0..4 {
                 {Fq::fromaltstack()}
@@ -283,7 +285,9 @@ pub(crate) fn chunk_init_t4(
             {Fq2::copy(2)}
             {on_curve_scr}
             OP_IF
-                {fq_push_not_montgomery(ark_bn254::Fq::ZERO)}
+                for le in le_nibs {
+                    {le}
+                }
                 {hash_messages(vec![ElementType::G2T])}
             OP_ELSE
                 {Fq2::drop()}
@@ -300,10 +304,14 @@ pub(crate) fn chunk_init_t4(
         sc
     }
 
+    let zero = ark_bn254::Fq::ZERO;
+    let dle_hash = extern_hash_fps(vec![zero, zero, zero, zero], true);
+    let ale_hash = dle_hash.clone();
+    let le_hash = extern_hash_nibbles(vec![dle_hash, ale_hash], true);
 
     let t4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0, hint_q4x1), ark_bn254::Fq2::new(hint_q4y0, hint_q4y1));
     let t4hash = extern_hash_fps(vec![t4.x.c0, t4.x.c1, t4.y.c0, t4.y.c1], false);
-    let t4hash = extern_hash_nibbles(vec![t4hash, [0u8; 64]], true);
+    let t4hash = extern_hash_nibbles(vec![t4hash, le_hash], true);
 
     let (on_curve_scr, hints) = bn254::curves::G2Affine::hinted_is_on_curve(t4.x, t4.y);
 
@@ -412,7 +420,7 @@ pub(crate) fn chunk_inv2(
 
 
     let hash_h = extern_hash_fps(
-        fp12_to_vec(ark_bn254::Fq12::new(c0, c1)),
+        ark_bn254::Fq12::new(c0, c1).to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
         false,
     );
 

@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 
-use ark_ff::{AdditiveGroup, BigInt, BigInteger};
+use ark_ff::{AdditiveGroup, BigInt, BigInteger, Field};
 
 use crate::bigint::U254;
 use crate::bn254::fq2::Fq2;
-use crate::bn254::utils::fq_push_not_montgomery;
 use crate::chunk::blake3compiled::{hash_128b, hash_192b, hash_64b};
 use crate::pseudo::NMUL;
 use crate::signatures::wots::{wots160, wots256};
@@ -473,12 +472,6 @@ fn replace_first_n_with_zero(hex_string: &str, n: usize) -> String {
     result
 }
 
-pub(crate) fn fp12_to_vec(f: ark_bn254::Fq12) -> Vec<ark_bn254::Fq> {
-        vec![f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1,
-        f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0, f.c1.c0.c1,
-        f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1]
-}
-
 pub(crate) fn extern_hash_fps(fqs: Vec<ark_bn254::Fq>, mode: bool) -> [u8; 64] {
     let mut msgs: Vec<[u8; 64]> = Vec::new();
     for fq in fqs {
@@ -581,13 +574,17 @@ pub(crate) fn new_hash_g2acc_with_hashed_le() -> Script {
 }
 
 pub(crate) fn new_hash_g2acc_with_raw_le(is_dbl:bool) -> Script {
+    let hash_zero_le = extern_hash_fps(vec![ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO], true);
+    let hash_zero_le = extern_nibbles_to_limbs(hash_zero_le);
     script!{
          // Stack: [tx, ty, dbl_lex, dbl_ley]
         {Fq2::toaltstack()} {Fq2::toaltstack()}
         {hash_fp4()} {Fq2::fromaltstack()} {Fq2::fromaltstack()}  // [HT, dbl_le]
         {Fq::roll(4)} {Fq::toaltstack()} // [dbl_le]
         {hash_fp4()} // [Hdbl_le]
-        {fq_push_not_montgomery(ark_bn254::Fq::ZERO)}
+        for li in hash_zero_le { // this is hash other le
+            {li}
+        }
         if !is_dbl {
             {Fq::roll(1)}
         }
@@ -956,10 +953,7 @@ mod test {
         let _f = ark_bn254::Fq12::rand(&mut prng);
         let g = ark_bn254::Fq12::rand(&mut prng);
 
-        let ps = vec![
-            g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1,
-            g.c1.c0.c0, g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
-        ];
+        let ps = g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
 
 
         let res = emulate_extern_hash_fps_scripted(ps.clone(), true);

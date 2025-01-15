@@ -54,6 +54,7 @@ pub enum ScriptType {
 
 
 
+use ark_ff::Field;
 use bitcoin_script::script;
 
 use super::{element::*, primitves::extern_hash_fps,  taps_point_ops::*, taps_mul::*};
@@ -902,20 +903,7 @@ pub(crate) fn wrap_hints_dense_dense_mul0_by_constant(
     let fixedacc = ElemFp12Acc {
         f: constant,
         hash: extern_hash_fps(
-            vec![
-                constant.c0.c0.c0,
-                constant.c0.c0.c1,
-                constant.c0.c1.c0,
-                constant.c0.c1.c1,
-                constant.c0.c2.c0,
-                constant.c0.c2.c1,
-                constant.c1.c0.c0,
-                constant.c1.c0.c1,
-                constant.c1.c1.c0,
-                constant.c1.c1.c1,
-                constant.c1.c2.c0,
-                constant.c1.c2.c1,
-            ],
+            constant.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
             false,
         ),
     };
@@ -958,20 +946,7 @@ pub(crate) fn wrap_hints_dense_dense_mul1_by_constant(
     let fixedacc = ElemFp12Acc {
         f: constant,
         hash: extern_hash_fps(
-            vec![
-                constant.c0.c0.c0,
-                constant.c0.c0.c1,
-                constant.c0.c1.c0,
-                constant.c0.c1.c1,
-                constant.c0.c2.c0,
-                constant.c0.c2.c1,
-                constant.c1.c0.c0,
-                constant.c1.c0.c1,
-                constant.c1.c1.c0,
-                constant.c1.c1.c1,
-                constant.c1.c2.c0,
-                constant.c1.c2.c1,
-            ],
+            constant.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
             false,
         ),
     };
@@ -998,9 +973,6 @@ pub(crate) fn wrap_hints_dense_dense_mul1_by_constant(
 
 #[cfg(test)]
 mod test {
-    use bitcoin_script::script;
-
-    use crate::chunk::primitves::fp12_to_vec;
 
     use super::*;
     use ark_ff::{Field};
@@ -1009,7 +981,7 @@ mod test {
     #[test]
     fn test_wrap_cinv() {
         let f = ark_bn254::Fq12::ONE + ark_bn254::Fq12::ONE +  ark_bn254::Fq12::ONE;
-        let hash = extern_hash_fps(fp12_to_vec(f), true);
+        let hash = extern_hash_fps(f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), true);
         let c = ElemFp12Acc {f, hash};
         
         let seg = Segment {

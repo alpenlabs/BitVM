@@ -175,10 +175,7 @@ impl ElemTraitExt for ElemFp12Acc {
     fn mock() -> Self {
         let f = ark_bn254::Fq12::ONE;
         let hash = extern_hash_fps(
-            vec![
-                f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-                f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-            ],
+            f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
             true,
         );
         ElemFp12Acc { f, hash }
@@ -198,14 +195,16 @@ impl ElemG2PointAcc {
     }
 
     pub(crate) fn hash_le(&self) -> HashBytes {
-        let mut hash_le = [0u8; 64];
+        let zero = ark_bn254::Fq::ZERO;
+        let mut hash_dbl_le = extern_hash_fps(vec![zero, zero, zero, zero], true);
+        let mut hash_add_le = hash_dbl_le.clone();
+        let mut hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
+
         if self.dbl_le.is_some() || self.add_le.is_some() {
-            let mut hash_dbl_le = [0u8; 64];
             if self.dbl_le.is_some() {
                 let (dbl_le0, dbl_le1) = self.dbl_le.unwrap();
                 hash_dbl_le = extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
             }
-            let mut hash_add_le = [0u8; 64];
             if self.add_le.is_some() {
                 let add_le = self.add_le.unwrap();
                 hash_add_le = extern_hash_fps(vec![add_le.0.c0, add_le.0.c1, add_le.1.c0, add_le.1.c1], true);
@@ -216,18 +215,23 @@ impl ElemG2PointAcc {
     }
 
     pub(crate) fn hash_other_le(&self, dbl: bool) -> [u8; 64] {
-        if (dbl && self.add_le.is_none()) || (!dbl && self.dbl_le.is_none()) {
-            return [0u8; 64];
+        let zero = ark_bn254::Fq::ZERO;
+        let hash_dbl_le = extern_hash_fps(vec![zero, zero, zero, zero], true);
+        let hash_add_le = hash_dbl_le.clone();
+
+        if dbl && self.add_le.is_none() {
+            return hash_add_le;
         }
-        let mut le = (ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO);
-        if dbl {
-            le = self.add_le.unwrap();
+        if !dbl && self.dbl_le.is_none() {
+            return hash_dbl_le;
+        }
+
+        let le = if dbl {
+            self.add_le.unwrap()
         } else {
-            le = self.dbl_le.unwrap();
-        }
-        let (le0, le1) = le;
-        let le = extern_hash_fps(vec![le0.c0, le0.c1, le1.c0, le1.c1], true);
-        le
+            self.dbl_le.unwrap()
+        };
+        extern_hash_fps(vec![le.0.c0, le.0.c1, le.1.c0, le.1.c1], true)
     }
 
 

@@ -114,29 +114,13 @@ pub(crate) fn chunk_sparse_dense_mul(
     }
     let hash_sparse_input = extern_hash_nibbles(vec![hash_new_t, hash_le], true);
 
-    let fvec = vec![
-        f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-        f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-    ];
+    let fvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
     let hash_dense_input = extern_hash_fps(
         fvec.clone(),
         true,
     );
     let hash_dense_output = extern_hash_fps(
-        vec![
-            f1.c0.c0.c0,
-            f1.c0.c0.c1,
-            f1.c0.c1.c0,
-            f1.c0.c1.c1,
-            f1.c0.c2.c0,
-            f1.c0.c2.c1,
-            f1.c1.c0.c0,
-            f1.c1.c0.c1,
-            f1.c1.c1.c0,
-            f1.c1.c1.c1,
-            f1.c1.c2.c0,
-            f1.c1.c2.c1,
-        ],
+        f1.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
         true,
     );
     let hash_other_le_limbs = extern_nibbles_to_limbs(hash_other_le);
@@ -223,27 +207,19 @@ pub(crate) fn chunk_dense_dense_mul0(
 
     let (hinted_mul_scr, mul_hints) = Fq12::hinted_mul_first(12, f, 0, g);
 
-    let fvec = vec![
-        f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-        f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-    ];
+    let fvec: Vec<ark_bn254::Fq> = f.to_base_prime_field_elements().collect();
     let hash_f = extern_hash_fps(
         fvec.clone(),
         true,
     ); // dense
 
-    let gvec = vec![
-        g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-        g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
-    ];
+    let gvec: Vec<ark_bn254::Fq> = g.to_base_prime_field_elements().collect();
     let hash_g = extern_hash_fps(
         gvec.clone(),
         false,
     ); // sparse
     let hash_h = extern_hash_fps(
-        vec![
-            h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
-        ],
+        h.c0.to_base_prime_field_elements().collect(),
         true,
     );
 
@@ -303,34 +279,23 @@ pub(crate) fn chunk_dense_dense_mul1(
     let (hinted_mul_scr, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
     let h = f * g;
 
-    let fvec = vec![
-        f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-        f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-    ];
+    let fvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
     let hash_f = extern_hash_fps(
         fvec.clone(),
         true,
     );
-    let gvec = vec![
-        g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-        g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
-    ];
+    let gvec = g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
     let hash_g = extern_hash_fps(
         gvec.clone(),
         false,
     );
 
     let hash_c0 = extern_hash_fps(
-        vec![
-            h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
-        ],
+        h.c0.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
         true,
     );
     let hash_c = extern_hash_fps(
-        vec![
-            h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1, h.c1.c0.c0,
-            h.c1.c0.c1, h.c1.c1.c0, h.c1.c1.c1, h.c1.c2.c0, h.c1.c2.c1,
-        ],
+        h.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
         true,
     );
 
@@ -379,19 +344,13 @@ pub(crate) fn chunk_squaring(
     let a = hint_in_a.f;
     let (sq_script, hints) = Fq12::hinted_square(a);
     let b = a.square();
-    let avec = vec![
-        a.c0.c0.c0, a.c0.c0.c1, a.c0.c1.c0, a.c0.c1.c1, a.c0.c2.c0, a.c0.c2.c1, a.c1.c0.c0,
-        a.c1.c0.c1, a.c1.c1.c0, a.c1.c1.c1, a.c1.c2.c0, a.c1.c2.c1,
-    ];
+    let avec = a.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
     let a_hash = extern_hash_fps(
         avec.clone(),
         true,
     );
     let b_hash = extern_hash_fps(
-        vec![
-            b.c0.c0.c0, b.c0.c0.c1, b.c0.c1.c0, b.c0.c1.c1, b.c0.c2.c0, b.c0.c2.c1, b.c1.c0.c0,
-            b.c1.c0.c1, b.c1.c1.c0, b.c1.c1.c1, b.c1.c2.c0, b.c1.c2.c1,
-        ],
+        b.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
         true,
     );
    //assert_eq!(hint_in.ahash, a_hash);
@@ -420,8 +379,7 @@ pub(crate) fn chunk_dense_dense_mul0_by_constant(
 ) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
     fn tap_dense_dense_mul0_by_constant(g: ark_bn254::Fq12, hinted_mul: Script) -> Script {
-        let ghash = extern_hash_fps(vec![g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-            g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1], false);
+        let ghash = extern_hash_fps(g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), false);
         let const_hash_limb = extern_nibbles_to_limbs(ghash);
 
         let ops_scr = script! {
@@ -452,29 +410,18 @@ pub(crate) fn chunk_dense_dense_mul0_by_constant(
 
     let (hint_mul_scr, mul_hints) = Fq12::hinted_mul_first(12, f, 0, g);
 
-    let fvec = vec![
-        f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-        f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-    ];
-    let gvec = vec![
-        g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-        g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
-    ];
+    let fvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
+    let gvec = g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
     let hash_f = extern_hash_fps(
         fvec.clone(),
         true,
     ); // dense
     // let hash_g = emulate_extern_hash_fps(
-    //     vec![
-    //         g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-    //         g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
-    //     ],
+    //        gvec
     //     false,
     // ); // sparse => constant => bakedin
     let hash_h = extern_hash_fps(
-        vec![
-            h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
-        ],
+            h.c0.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
         true,
     );
 
@@ -512,8 +459,7 @@ pub(crate) fn chunk_dense_dense_mul1_by_constant(
             check_id = 0;
         }
     
-        let ghash = extern_hash_fps(vec![g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-            g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1], false);
+        let ghash = extern_hash_fps(g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), false);
         let const_hash_limb = extern_nibbles_to_limbs(ghash);
 
 
@@ -549,32 +495,21 @@ pub(crate) fn chunk_dense_dense_mul1_by_constant(
     let (hinted_mul_scr, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
     let h = f * g;
 
-    let fvec = vec![
-        f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-        f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-    ];
+    let fvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
     let hash_f = extern_hash_fps(
         fvec.clone(),
         true,
     );
 
     // let hash_c0 = extern_hash_fps(
-    //     vec![
-    //         h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1,
-    //     ],
+    //     hc0_vec
     //     true,
     // );
     let hash_c = extern_hash_fps(
-        vec![
-            h.c0.c0.c0, h.c0.c0.c1, h.c0.c1.c0, h.c0.c1.c1, h.c0.c2.c0, h.c0.c2.c1, h.c1.c0.c0,
-            h.c1.c0.c1, h.c1.c1.c0, h.c1.c1.c1, h.c1.c2.c0, h.c1.c2.c1,
-        ],
+        h.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
         true,
     );
-    let gvec = vec![
-        g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-        g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
-    ];
+    let gvec = g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
 
     let mut simulate_stack_input = vec![];
     simulate_stack_input.extend_from_slice(&mul_hints);
@@ -626,19 +561,13 @@ pub(crate) fn chunk_frob_fp12(
 
     let g = f.frobenius_map(power);
 
-    let fvec = vec![
-        f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-        f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-    ];
+    let fvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
     let fhash = extern_hash_fps(
         fvec.clone(),
         false,
     );
     let ghash = extern_hash_fps(
-        vec![
-            g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-            g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
-        ],
+        g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
         false,
     );
 

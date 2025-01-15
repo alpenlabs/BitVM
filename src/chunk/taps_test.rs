@@ -6,7 +6,7 @@ mod test {
     use crate::bn254::fq::Fq;
     use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery};
     use crate::chunk::element::*;
-    use crate::chunk::primitves::{fp12_to_vec, hash_fp12, hash_fp12_with_hints, pack_nibbles_to_limbs};
+    use crate::chunk::primitves::{hash_fp12, hash_fp12_with_hints, pack_nibbles_to_limbs};
     use crate::chunk::taps_point_ops::*;
     use crate::chunk::primitves::{extern_hash_fps, extern_nibbles_to_limbs};
     use crate::chunk::taps_mul::*;
@@ -30,10 +30,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fhash = extern_hash_fps(
-            vec![
-                f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-                f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-            ],
+            f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
             false,
         );
         let hint_in = ElemFp12Acc { f, hash: fhash };
@@ -73,10 +70,7 @@ mod test {
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
-        let fqvec = vec![
-            f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-            f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-        ];
+        let fqvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
 
         let (hint_out, tap_hash_c, hint_script) = chunk_hash_c(fqvec.clone());
 
@@ -114,10 +108,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fhash = extern_hash_fps(
-            vec![
-                f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-                f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-            ],
+            f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
             false,
         );
         let hint_in = ElemFp12Acc { f, hash: fhash };
@@ -267,10 +258,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fhash = extern_hash_fps(
-            vec![
-                f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-                f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-            ],
+            f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
             true,
         );
         let hint_f = ElemFp12Acc { f, hash: fhash };
@@ -321,20 +309,14 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fhash = extern_hash_fps(
-            vec![
-                f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-                f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-            ],
+            f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
             true,
         );
         let hint_f = ElemFp12Acc { f, hash: fhash };
 
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fhash = extern_hash_fps(
-            vec![
-                f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-                f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-            ],
+            f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
             false,
         );
         let hint_g = ElemFp12Acc { f, hash: fhash };
@@ -382,20 +364,14 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fhash = extern_hash_fps(
-            vec![
-                f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-                f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-            ],
+            f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
             true,
         );
         let hint_f = ElemFp12Acc { f, hash: fhash };
 
         let g = ark_bn254::Fq12::rand(&mut prng);
         let ghash = extern_hash_fps(
-            vec![
-                g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-                g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
-            ],
+            g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
             false,
         );
         let hint_g = ElemFp12Acc { f: g, hash: ghash };
@@ -403,9 +379,7 @@ mod test {
 
         let c = hint_f.f * hint_g.f;
         let hash_c0 = extern_hash_fps(
-            vec![
-                c.c0.c0.c0, c.c0.c0.c1, c.c0.c1.c0, c.c0.c1.c1, c.c0.c2.c0, c.c0.c2.c1,
-            ], true);
+            c.c0.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), true);
 
         let hint_c0 = ElemFp12Acc {f: ark_bn254::Fq12::new(c.c0, ark_bn254::Fq6::ZERO), hash: hash_c0};
 
@@ -459,20 +433,14 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fhash = extern_hash_fps(
-            vec![
-                f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-                f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-            ],
+            f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
             true,
         );
         let hint_f = ElemFp12Acc { f, hash: fhash };
 
         let f = f.inverse().unwrap();
         let fhash = extern_hash_fps(
-            vec![
-                f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-                f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-            ],
+            f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
             false,
         );
         let hint_g = ElemFp12Acc { f, hash: fhash };
@@ -514,20 +482,14 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fhash = extern_hash_fps(
-            vec![
-                f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-                f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-            ],
+            f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
             true,
         );
         let hint_f = ElemFp12Acc { f, hash: fhash };
 
         let g = f.inverse().unwrap();
         let ghash = extern_hash_fps(
-            vec![
-                g.c0.c0.c0, g.c0.c0.c1, g.c0.c1.c0, g.c0.c1.c1, g.c0.c2.c0, g.c0.c2.c1, g.c1.c0.c0,
-                g.c1.c0.c1, g.c1.c1.c0, g.c1.c1.c1, g.c1.c2.c0, g.c1.c2.c1,
-            ],
+            g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
             false,
         );
         let hint_g = ElemFp12Acc { f: g, hash: ghash };
@@ -535,9 +497,7 @@ mod test {
 
         let c = hint_f.f * hint_g.f;
         let hash_c = extern_hash_fps(
-            vec![
-                c.c0.c0.c0, c.c0.c0.c1, c.c0.c1.c0, c.c0.c1.c1, c.c0.c2.c0, c.c0.c2.c1,
-            ], true);
+            c.c0.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), true);
 
         let hint_c0 = ElemFp12Acc {f: ark_bn254::Fq12::new(c.c0, ark_bn254::Fq6::ZERO), hash: hash_c};
 
@@ -583,10 +543,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fhash = extern_hash_fps(
-            vec![
-                f.c0.c0.c0, f.c0.c0.c1, f.c0.c1.c0, f.c0.c1.c1, f.c0.c2.c0, f.c0.c2.c1, f.c1.c0.c0,
-                f.c1.c0.c1, f.c1.c1.c0, f.c1.c1.c1, f.c1.c2.c0, f.c1.c2.c1,
-            ],
+            f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
             true,
         );
         let hint_f = ElemFp12Acc { f, hash: fhash };
@@ -945,7 +902,7 @@ mod test {
 
             let a = ark_bn254::Fq12::rand(&mut prng);
 
-            let hash_in = extern_hash_fps(fp12_to_vec(a), true);
+            let hash_in = extern_hash_fps(a.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), true);
             let (hout0,tscr0,  hscr0) = chunk_inv0(ElemFp12Acc { f: a, hash: hash_in });
             let bscr0 = script!{
                 for h in hout0.hash {
