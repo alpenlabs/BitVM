@@ -327,6 +327,11 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
         }
     }
 
+    /// Unpacks the limbs of the big integer into smaller parts (nibbles) based on a given window size.
+    ///
+    /// This function decomposes the limbs of a `BigIntImpl` into smaller components  
+    /// determined by the specified `WINDOW` size.
+
     pub fn unpack_limbs<const WINDOW: u32>() -> Script {
         let n_digits: u32 = (N_BITS + WINDOW - 1) / WINDOW;
 
@@ -414,26 +419,38 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
         }
     }
 
-    pub fn pack_limbs<const WINDOW : u32>() -> Script {
-        fn split_digit(window: u32, index: u32) -> Script {
+    /// doesn't do input validation
+    /// All the bits before start_index must be 0 for the extract to work properly
+    /// doesnot work when start_index is 32
+    /// Properties to test for Property based testing:
+    /// - if window == start_index, the entire thing should be copied.
+    /// 
+    /// 
+    pub fn extract_digits(start_index: u32, window: u32) -> Script {
+        // doesnot work if start_index is 32
+        assert!(start_index != 32, "start_index mustn't be 32");
+
+        //panics if the window exceeds the number of bits on the left of start_index
+        assert!(start_index >= window, "not enough bits left of start_index to fill the window!");
+
             script! {
                 // {v}
                 0                           // {v} {A}
                 OP_SWAP
-                for i in 0..index {
+            for i in 0..window {
                     OP_TUCK                 // {v} {A} {v}
-                    { 1 << (window - i - 1) }   // {v} {A} {v} {1000}
+                { 1 << (start_index - i - 1) }   // {v} {A} {v} {1000}
                     OP_GREATERTHANOREQUAL   // {v} {A} {1/0}
                     OP_TUCK                 // {v} {1/0} {A} {1/0}
                     OP_ADD                  // {v} {1/0} {A+1/0}
-                    if i < index - 1 { { NMUL(2) } }
+                if i < window - 1 { { NMUL(2) } }
                     OP_ROT OP_ROT
                     OP_IF
-                        { 1 << (window - i - 1) }
+                    { 1 << (start_index - i - 1) }
                         OP_SUB
                     OP_ENDIF
                 }
-                OP_SWAP
+            // OP_SWAP
             }
         }
 
