@@ -573,28 +573,6 @@ pub(crate) fn new_hash_g2acc_with_hashed_le() -> Script {
     }
 }
 
-pub(crate) fn new_hash_g2acc_with_raw_le(is_dbl:bool) -> Script {
-    let hash_zero_le = extern_hash_fps(vec![ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO], true);
-    let hash_zero_le = extern_nibbles_to_limbs(hash_zero_le);
-    script!{
-         // Stack: [tx, ty, dbl_lex, dbl_ley]
-        {Fq2::toaltstack()} {Fq2::toaltstack()}
-        {hash_fp4()} {Fq2::fromaltstack()} {Fq2::fromaltstack()}  // [HT, dbl_le]
-        {Fq::roll(4)} {Fq::toaltstack()} // [dbl_le]
-        {hash_fp4()} // [Hdbl_le]
-        for li in hash_zero_le { // this is hash other le
-            {li}
-        }
-        if !is_dbl {
-            {Fq::roll(1)}
-        }
-        {hash_fp2()} // [Hle]
-        {Fq::fromaltstack()} // [Hle, HT]
-        {Fq::roll(1)}
-        {hash_fp2()} // [Hash_calc]
-    }
-}
-
 pub(crate) fn new_hash_g2acc_with_both_raw_le() -> Script {
     script!(
         {Fq2::toaltstack()} {Fq2::toaltstack()}

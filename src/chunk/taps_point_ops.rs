@@ -1,5 +1,6 @@
 use crate::bn254::{self, utils::*};
 use crate::bn254::{fq2::Fq2};
+use crate::chunk::blake3compiled::hash_messages;
 use crate::chunk::primitves::*;
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
@@ -20,36 +21,6 @@ pub(crate) fn hash_g2acc_with_hashed_le() -> Script {
         //T
         {Fq::toaltstack()} 
         {new_hash_g2acc_with_hashed_le()}
-        { Fq::fromaltstack()}
-        {Fq::equal(1, 0)}
-    }
-}
-
-pub(crate) fn hash_g2acc_with_raw_le(is_dbl:bool) -> Script {
-    script!{
-         // Stack: [tx, ty, dbl_le, hash_result]
-        {Fq::toaltstack()} 
-        {new_hash_g2acc_with_raw_le(is_dbl)}
-        {Fq::fromaltstack()}
-        {Fq::equal(1, 0)}
-    }
-}
-
-pub(crate) fn hash_g2acc_with_both_raw_le() -> Script {
-    script!{
-        //Stack: [tx, ty, dbl_le, add_le, hash_result]
-        {Fq::toaltstack()} 
-        {new_hash_g2acc_with_both_raw_le()}
-        {Fq::fromaltstack()}
-        {Fq::equal(1, 0)}
-    }
-}
-
-pub(crate) fn hash_g2acc_with_hashed_t(is_dbl: bool) -> Script {
-    script!{
-        //Stack: [Ht, cur_le, Hother_le, hash_result]
-        {Fq::toaltstack()} 
-        {new_hash_g2acc_with_hashed_t(is_dbl)}
         {Fq::fromaltstack()}
         {Fq::equal(1, 0)}
     }
@@ -117,10 +88,11 @@ pub(crate) fn chunk_point_dbl(
             OP_VERIFY
     
             {Fq2::fromaltstack()} {Fq2::fromaltstack()} {Fq2::fromaltstack()} {Fq2::fromaltstack()}
-            {Fq::fromaltstack()}
-            // [Rx, Ry, le0, le1, hash_out]
-            {hash_g2acc_with_raw_le(true)}
-            OP_NOT OP_VERIFY
+            // [Rx, Ry, le0, le1] [hash_out]
+            {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
+            {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
+            {hash_messages(vec![ElementType::G2DblAddEval])}
+            // [Rx, Ry, le0, le1, 0, 0]
         };
     
         let sc = script! {
@@ -296,10 +268,14 @@ pub(crate) fn chunk_point_add_with_frob(
             OP_VERIFY
 
             {Fq2::fromaltstack()} {Fq2::fromaltstack()} {Fq2::fromaltstack()} {Fq2::fromaltstack()}
-            {Fq::fromaltstack()}
-            // [Rx, Ry, le0, le1, hash_out]
-            {hash_g2acc_with_raw_le(false)}
-            OP_NOT OP_VERIFY
+            // [Rx, Ry, le0, le1]
+
+            {Fq2::toaltstack()} {Fq2::toaltstack()}
+            {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
+            {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
+            {Fq2::fromaltstack()} {Fq2::fromaltstack()}
+            {hash_messages(vec![ElementType::G2DblAddEval])}
+            // [Rx, Ry, le0, le1, 0, 0]
         };
 
         let (_, beta_22_scr, _) = bn254::curves::G2Affine::hinted_endomorphism_affine(ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE));
@@ -610,8 +586,8 @@ pub(crate) fn chunk_point_ops(
             // [hash_out, R, dbl_le, add_le]
             {Fq::roll(12)}
             // [R, dbl_le, add_le, hash_out]
-            {hash_g2acc_with_both_raw_le()}
-            OP_NOT OP_VERIFY
+            {Fq::toaltstack()}
+            {hash_messages(vec![ElementType::G2DblAddEval])}
         };
     
         let sc = script! {

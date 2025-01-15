@@ -6,7 +6,7 @@ use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::blake3compiled::hash_messages;
 use crate::chunk::primitves::{
     extern_hash_nibbles,  extern_nibbles_to_limbs, hash_fp12,
-    hash_fp12_with_hints, hash_fp6, 
+    hash_fp12_with_hints, hash_fp6, new_hash_g2acc_with_hashed_t, 
 };
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
@@ -17,7 +17,16 @@ use num_traits::One;
 
 use super::primitves::{extern_hash_fps, hash_fp12_192};
 use super::element::*;
-use super::taps_point_ops::hash_g2acc_with_hashed_t;
+
+pub(crate) fn hash_g2acc_with_hashed_t(is_dbl: bool) -> Script {
+    script!{
+        //Stack: [Ht, cur_le, Hother_le, hash_result]
+        {Fq::toaltstack()} 
+        {new_hash_g2acc_with_hashed_t(is_dbl)}
+        {Fq::fromaltstack()}
+        {Fq::equal(1, 0)}
+    }
+}
 
 // SPARSE DENSE
 pub(crate) fn chunk_sparse_dense_mul(
@@ -65,16 +74,8 @@ pub(crate) fn chunk_sparse_dense_mul(
             OP_VERIFY
     
             {Fq12::fromaltstack()}
-            {hash_fp12()} // Hf
-            {Fq12::fromaltstack()} // f1
-            {Fq::roll(12)} {Fq::toaltstack()}
-            {hash_fp12()} {Fq::fromaltstack()}
-    
-            // [Hf1, Hf]
-            {Fq::fromaltstack()} {Fq::fromaltstack()}
-            // [Hf1, Hf, Hin_f, Hout]
-            {Fq::equalverify(2, 1)}
-            {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+            {Fq12::fromaltstack()}
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v0])}
         };
         let scr = script! {
             {ops_script}

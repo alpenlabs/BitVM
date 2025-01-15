@@ -1,5 +1,6 @@
 use crate::bn254::{self, utils::*};
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
+use crate::chunk::blake3compiled::hash_messages;
 use crate::chunk::primitves::*;
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
@@ -111,9 +112,7 @@ pub(crate) fn chunk_double_eval_mul_for_fixed_qs(
         };
     
         let hash_scr = script! {
-            { hash_fp12_192() }
-            { Fq::fromaltstack() } // bhash:out
-            {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+            {hash_messages(vec![ElementType::Fp12v1])}
         };
     
         let sc = script! {
@@ -306,10 +305,7 @@ pub(crate) fn chunk_add_eval_mul_for_fixed_qs(
         };
 
         let hash_scr = script! {
-            { hash_fp12_192() }
-            { Fq::fromaltstack() }
-            {Fq::equal(1, 0)}
-            OP_NOT OP_VERIFY
+            {hash_messages(vec![ElementType::Fp12v1])}
         };
         let sc = script! {
             {ops_scr}
@@ -513,10 +509,7 @@ pub(crate) fn chunk_add_eval_mul_for_fixed_qs_with_frob(
         };
     
         let hash_scr = script! {
-            { hash_fp12_192() }
-            {Fq::fromaltstack()}
-            {Fq::equal(1, 0)}
-            OP_NOT OP_VERIFY
+            {hash_messages(vec![ElementType::Fp12v1])}
         };
         let sc = script! {
             {ops_scr}

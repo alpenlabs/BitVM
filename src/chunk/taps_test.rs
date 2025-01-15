@@ -5,8 +5,9 @@ mod test {
     use crate::bn254::fp254impl::Fp254Impl;
     use crate::bn254::fq::Fq;
     use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery};
+    use crate::chunk::blake3compiled::hash_messages;
     use crate::chunk::element::*;
-    use crate::chunk::primitves::{hash_fp12, hash_fp12_with_hints, pack_nibbles_to_limbs};
+    use crate::chunk::primitves::{hash_fp12, hash_fp12_with_hints, new_hash_g2acc_with_both_raw_le, pack_nibbles_to_limbs};
     use crate::chunk::taps_point_ops::*;
     use crate::chunk::primitves::{extern_hash_fps, extern_nibbles_to_limbs};
     use crate::chunk::taps_mul::*;
@@ -1045,11 +1046,18 @@ mod test {
             {fq2_push_not_montgomery(t.t.y)}
             {fq2_push_not_montgomery(t.dbl_le.unwrap().0)}
             {fq2_push_not_montgomery(t.dbl_le.unwrap().1)}
+            {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
+            {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
 
             for i in extern_nibbles_to_limbs(t.hashed_output()) {
                 {i}
             }
-            {hash_g2acc_with_raw_le(true)}
+            {Fq::toaltstack()}
+
+            {new_hash_g2acc_with_both_raw_le()}
+            {Fq::fromaltstack()}
+            {Fq::equalverify(1, 0)}
+            OP_TRUE
         };
         let res = execute_script(scr);
         for i in 0..res.final_stack.len() {
@@ -1071,13 +1079,19 @@ mod test {
         let scr = script!{
             {fq2_push_not_montgomery(t.t.x)}
             {fq2_push_not_montgomery(t.t.y)}
+            {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
+            {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
             {fq2_push_not_montgomery(t.add_le.unwrap().0)}
             {fq2_push_not_montgomery(t.add_le.unwrap().1)}
 
             for i in extern_nibbles_to_limbs(t.hashed_output()) {
                 {i}
             }
-            {hash_g2acc_with_raw_le(false)}
+            {Fq::toaltstack()}
+            {new_hash_g2acc_with_both_raw_le()}
+            {Fq::fromaltstack()}
+            {Fq::equalverify(1, 0)}
+            OP_TRUE
         };
         let res = execute_script(scr);
         for i in 0..res.final_stack.len() {

@@ -363,28 +363,7 @@ pub(crate) fn chunk_inv2(
             // [c0, c1, t1, d0, d1]
         };
         let hash_scr = script!{
-            {Fq12::toaltstack()}
-            {Fq6::toaltstack()}
-            {hash_fp12()}
-
-            {Fq6::fromaltstack()}
-            {Fq::roll(6)} {Fq::toaltstack()}
-            {hash_fp6()} {Fq::fromaltstack()}
-
-            {Fq12::fromaltstack()}
-            {Fq2::roll(12)} {Fq2::toaltstack()}
-            {hash_fp12_192()} {Fq2::fromaltstack()}
-
-            // [Hd, Ht, Hc]
-
-            {Fq::fromaltstack()}
-            {Fq::fromaltstack()}
-            {Fq::fromaltstack()}
-            // // [Hd, Ht, Hc, HKc, HKt, HKd]
-
-            {Fq::equalverify(1, 4)}
-            {Fq::equalverify(1, 2)}
-            {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp6, ElementType::Fp12v1])}
         };
         let scr = script!{
             {ops_scr}
@@ -452,19 +431,7 @@ pub(crate) fn chunk_inv1(
             {Fq6::roll(6)}
         }; // [t0, t1]
         let hash_scr = script!{
-            {Fq6::toaltstack()}
-            {hash_fp6()}
-            {Fq6::fromaltstack()}
-            {Fq::roll(6)} {Fq::toaltstack()}
-            {hash_fp6()}
-            {Fq::fromaltstack()}
-            {Fq::roll(1)}
-            // [Hc, Ht0]
-            { Fq::fromaltstack() }
-            { Fq::fromaltstack() }
-            // [Hc, Ht0, HKc, HKt0]
-            {Fq::equalverify(1, 3)}
-            {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+            {hash_messages(vec![ElementType::Fp6, ElementType::Fp6])}
         };
         let scr = script!{
             {ops_scr}
@@ -536,19 +503,7 @@ pub(crate) fn chunk_inv0(
         };
 
         let hash_scr = script!{
-            {Fq6::toaltstack()}
-            {hash_fp12()}
-            {Fq6::fromaltstack()}
-            {Fq::roll(6)} {Fq::toaltstack()}
-            {hash_fp6()}
-            {Fq::fromaltstack()}
-            {Fq::roll(1)}
-            // [Hc, Ht0]
-            { Fq::fromaltstack() }
-            { Fq::fromaltstack() }
-            // [Hc, Ht0, HKc, HKt0]
-            {Fq::equalverify(1, 3)}
-            {Fq::equal(1, 0)} OP_NOT OP_VERIFY
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp6])}
         };
 
         let scr = script!{
