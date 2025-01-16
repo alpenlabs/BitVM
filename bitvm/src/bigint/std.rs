@@ -1,12 +1,23 @@
+use bitcoin::opcodes::all::{OP_DROP, OP_FROMALTSTACK, OP_ROT, OP_SWAP, OP_TOALTSTACK};
 use bitcoin::script::read_scriptint;
 use num_bigint::BigUint;
 use num_traits::Num;
-use std::str::FromStr;
 use std::cmp::Ordering;
+use std::collections::VecDeque;
+use std::str::FromStr;
 
 use crate::bigint::{BigIntImpl, U254};
 use crate::pseudo::{push_to_stack, NMUL};
 use crate::treepp::*;
+
+#[derive(Debug)]
+
+struct TransformStep {
+    current_limb_index: u32,
+    extract_window: u32,
+    drop_currentlimb: bool,
+    initiate_targetlimb: bool,
+}
 
 impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
     pub fn push_u32_le(v: &[u32]) -> Script {
@@ -197,9 +208,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
     }
 
     #[inline]
-    pub fn push_zero() -> Script {
-        push_to_stack(0, Self::N_LIMBS as usize)
-    }
+    pub fn push_zero() -> Script { push_to_stack(0, Self::N_LIMBS as usize) }
 
     #[inline]
     pub fn push_one() -> Script {
@@ -315,7 +324,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
                         { n_limbs_target - 1 } OP_ROLL
                     }
                 }
-            },
+            }
             Ordering::Less => {
                 let n_limbs_to_remove = n_limbs_self - n_limbs_target;
                 script! {
@@ -334,6 +343,7 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
 
     pub fn unpack_limbs<const WINDOW: u32>() -> Script {
         let n_digits: u32 = (N_BITS + WINDOW - 1) / WINDOW;
+        println!("n_digits: {}", n_digits);
 
         script! {
             { Self::toaltstack() }
@@ -424,70 +434,196 @@ impl<const N_BITS: u32, const LIMB_SIZE: u32> BigIntImpl<N_BITS, LIMB_SIZE> {
     /// doesnot work when start_index is 32
     /// Properties to test for Property based testing:
     /// - if window == start_index, the entire thing should be copied.
-    /// 
-    /// 
+    ///
+    ///
     pub fn extract_digits(start_index: u32, window: u32) -> Script {
         // doesnot work if start_index is 32
         assert!(start_index != 32, "start_index mustn't be 32");
 
         //panics if the window exceeds the number of bits on the left of start_index
-        assert!(start_index >= window, "not enough bits left of start_index to fill the window!");
-
-            script! {
-                // {v}
-                0                           // {v} {A}
-                OP_SWAP
-            for i in 0..window {
-                    OP_TUCK                 // {v} {A} {v}
-                { 1 << (start_index - i - 1) }   // {v} {A} {v} {1000}
-                    OP_GREATERTHANOREQUAL   // {v} {A} {1/0}
-                    OP_TUCK                 // {v} {1/0} {A} {1/0}
-                    OP_ADD                  // {v} {1/0} {A+1/0}
-                if i < window - 1 { { NMUL(2) } }
-                    OP_ROT OP_ROT
-                    OP_IF
-                    { 1 << (start_index - i - 1) }
-                        OP_SUB
-                    OP_ENDIF
-                }
-            // OP_SWAP
-            }
-        }
-
-        const LIMB_SIZE: u32 = 29;
-        const N_BITS: u32 = U254::N_BITS;
-        let n_digits: u32 = (N_BITS + WINDOW - 1) / WINDOW;
+        assert!(
+            start_index >= window,
+            "not enough bits left of start_index to fill the window!"
+        );
 
         script! {
-            for i in 1..64 { { i } OP_ROLL }
+            // {v}
+            0                           // {v} {A}
+            OP_SWAP
+            for i in 0..window {
+                OP_TUCK                 // {v} {A} {v}
+                { 1 << (start_index - i - 1) }   // {v} {A} {v} {1000}
+                OP_GREATERTHANOREQUAL   // {v} {A} {1/0}
+                OP_TUCK                 // {v} {1/0} {A} {1/0}
+                OP_ADD                  // {v} {1/0} {A+1/0}
+                if i < window - 1 { { NMUL(2) } }
+                OP_ROT OP_ROT
+                OP_IF
+                    { 1 << (start_index - i - 1) }
+                    OP_SUB
+                OP_ENDIF
+            }
+        }
+    }
+
+    pub fn pack_limbs<const WINDOW: u32>() -> Script {
+        let n_digits: u32 = (N_BITS + WINDOW - 1) / WINDOW;
+        print!("n_digits :: {}\n", n_digits);
+
+        let n_limbs: u32 = N_BITS.div_ceil(LIMB_SIZE);
+        print!("n_limbs :: {}\n", n_limbs);
+
+        for i in (1..=n_digits).rev() {
+            println!(
+                "for i = {}, modulo = {}",
+                i,
+                (i * WINDOW) % LIMB_SIZE < WINDOW
+            );
+        }
+
+        script! {
+            for i in 1..n_digits { { i } OP_ROLL }
             for i in (1..=n_digits).rev() {
                 if (i * WINDOW) % LIMB_SIZE == 0 {
                     OP_TOALTSTACK
-                } else if (i * WINDOW) % LIMB_SIZE > 0 &&
+                }
+                 else if (i * WINDOW) % LIMB_SIZE > 0 &&
                             (i * WINDOW) % LIMB_SIZE < WINDOW {
                     OP_SWAP
-                    { split_digit(WINDOW, (i * WINDOW) % LIMB_SIZE) }
+                    { Self::extract_digits(WINDOW, (i * WINDOW) % LIMB_SIZE) }
                     OP_ROT
                     { NMUL(1 << ((i * WINDOW) % LIMB_SIZE)) }
                     OP_ADD
                     OP_TOALTSTACK
-                } else if i != n_digits {
+                }
+                 else if i != n_digits {
                     { NMUL(1 << WINDOW) }
                     OP_ADD
                 }
             }
-            for _ in 1..U254::N_LIMBS { OP_FROMALTSTACK }
-            for i in 1..U254::N_LIMBS { { i } OP_ROLL }
+            for _ in 1..n_limbs { OP_FROMALTSTACK }
+            for i in 1..n_limbs { { i } OP_ROLL }
+        }
+    }
+
+    fn get_trasform_steps(source_limb_size: u32, target_limb_size: u32) -> Vec<TransformStep> {
+        let mut transform_steps: Vec<TransformStep> = Vec::new();
+
+
+
+        let target_n_limbs = N_BITS.div_ceil(target_limb_size);
+        let mut target_limb_remaining_bits = Self::N_BITS - (target_n_limbs - 1) * target_limb_size;
+        let mut first_iter_flag = true;
+
+
+        let source_n_limbs = N_BITS.div_ceil(source_limb_size); 
+        let source_head = Self::N_BITS - (source_n_limbs - 1) * source_limb_size;
+        let mut limb_sizes: Vec<u32> = Vec::new();
+        limb_sizes.push(source_head);
+        for _ in 0..(source_n_limbs - 1) {
+            limb_sizes.push(source_limb_size);
+        }
+
+
+        let mut count = 0;
+        while limb_sizes.len() > 0 {
+            while target_limb_remaining_bits > 0 {
+                println!("{}",count);
+                count += 1;
+
+                // if count == 1 {return transform_steps} 
+
+                let source_limb_remaining_bits = limb_sizes.get(0).unwrap();
+
+                println!(
+                    "\n Current_limb_remaining_bits{}",
+                    source_limb_remaining_bits
+                );
+                println!("Target_limb_remaining_bits{}", target_limb_remaining_bits);
+
+                match source_limb_remaining_bits.cmp(&target_limb_remaining_bits) {
+                    Ordering::Less => {
+                        transform_steps.push(TransformStep {
+                            current_limb_index: source_limb_remaining_bits.clone(),
+                            extract_window: source_limb_remaining_bits.clone(),
+                            drop_currentlimb: true,
+                            initiate_targetlimb: first_iter_flag,
+                        });
+                        target_limb_remaining_bits -= source_limb_remaining_bits.clone();
+                        limb_sizes.remove(0);
+                    }
+                    Ordering::Equal => {
+                        transform_steps.push(TransformStep {
+                            current_limb_index: source_limb_remaining_bits.clone(),
+                            extract_window: target_limb_remaining_bits,
+                            drop_currentlimb: true,
+                            initiate_targetlimb: first_iter_flag,
+                        });
+                        target_limb_remaining_bits = 0;
+                        limb_sizes.remove(0);
+                    }
+                    Ordering::Greater => {
+                        transform_steps.push(TransformStep {
+                            current_limb_index: source_limb_remaining_bits.clone(),
+                            extract_window: target_limb_remaining_bits,
+                            drop_currentlimb: false,
+                            initiate_targetlimb: first_iter_flag,
+                        });
+                        limb_sizes[0] = source_limb_remaining_bits - target_limb_remaining_bits;
+                        target_limb_remaining_bits = 0;
+                    }
+                }
+                println!("{:?}\n", transform_steps.last().unwrap());
+                first_iter_flag = false;
+            }
+            target_limb_remaining_bits = target_limb_size;
+            first_iter_flag = true;
+        }
+        transform_steps
+    }
+
+    /// assumptions:
+    /// - doesn't do input validation.
+    /// - The message is placed such that LSB is on top of stack.
+    fn transform_limbsize(source_limb_size: u32, target_limb_size: u32) -> Script {
+        if source_limb_size == target_limb_size {
+            script!()
+        } else {
+            let steps = Self::get_trasform_steps(source_limb_size, target_limb_size);
+
+            let source_n_limbs = N_BITS.div_ceil(source_limb_size); 
+            script!(
+            // send all limbs except the first to alt stack so that the MSB is handled first
+            for _ in 0..(source_n_limbs - 1){OP_TOALTSTACK}
+
+            for step in steps{
+                    {Self::extract_digits(step.current_limb_index, step.extract_window)}
+
+                    if !step.initiate_targetlimb{
+                        // add
+                        OP_ROT
+                        for _ in 0..step.extract_window {OP_DUP OP_ADD}
+                        OP_ROT
+                        OP_ADD
+                        OP_SWAP
+                    }
+
+                    if step.drop_currentlimb{
+                        OP_DROP
+                        OP_FROMALTSTACK
+                    }
+                }
+            )
         }
     }
 }
 
-
 #[cfg(test)]
 mod test {
-    use crate::bigint::{BigIntImpl, U254};
+    use crate::bigint::{BigIntImpl, U254, U64};
     use crate::run;
-    
+
+    use bitcoin::opcodes::all::OP_SWAP;
     use bitcoin_script::script;
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha20Rng;
@@ -794,5 +930,237 @@ mod test {
         };
 
         run(script);
+    }
+
+    #[test]
+    fn test_split_digits() {
+        const WINDOW: u32 = 4;
+
+        let script = script! {
+            { 0b11001010100001010111010011 }
+
+            // {U254::extract_digits(26,26)}
+            // OP_SWAP
+            // {U254::extract_digits(28,4)}
+            // OP_SWAP
+            // {U254::extract_digits(24,4)}
+            // OP_SWAP
+            // {U254::extract_digits(20,4)}
+            // OP_SWAP
+            // {U254::extract_digits(16,4)}
+            // OP_SWAP
+            // {U254::extract_digits(12,4)}
+            // OP_SWAP
+            // {U254::extract_digits(8,4)}
+            // OP_SWAP
+            // {U254::extract_digits(4,4)}
+            // OP_SWAP
+        };
+
+        let res = crate::execute_script(script);
+        for i in 0..res.final_stack.len() {
+            if res.final_stack.get(i).is_empty() {
+                println!("Pos : {} -- Value : {:?}", i, res.final_stack.get(i));
+            } else {
+                println!(
+                    "Pos : {} -- Value : {}",
+                    i,
+                    res.final_stack
+                        .get(i)
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_transform_sametargetandsource() {
+        type U84 = BigIntImpl<84, 14>;
+        let script = script!(
+            {0b11111111111111}
+            {0b11111111111111}
+            {0b11111111111111}
+            {0b11111111111111}
+            {0b11111111111111}
+            {0b11111111111111}
+
+            {U84::transform_limbsize(14, 14)}
+
+        );
+
+        let res = crate::execute_script(script);
+        for i in 0..res.final_stack.len() {
+            if res.final_stack.get(i).is_empty() {
+                println!("Pos : {} -- Value : {:?}", i, res.final_stack.get(i));
+            } else {
+                println!(
+                    "Pos : {} -- Value : {}",
+                    i,
+                    res.final_stack
+                        .get(i)
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_transform_to_nibbles_u64() {
+        let script = script!(
+            {0b1111111111111111}
+            {0b1111111111111111}
+            {0b1111111111111111}
+            {0b1111111111111111}
+            {U64::transform_limbsize(16, 4)}
+
+
+        );
+
+
+        let res = crate::execute_script(script);
+        for i in 0..res.final_stack.len() {
+            if res.final_stack.get(i).is_empty() {
+                println!("Pos : {} -- Value : {:?}", i, res.final_stack.get(i));
+            } else {
+                println!(
+                    "Pos : {} -- Value : {}",
+                    i,
+                    res.final_stack
+                        .get(i)
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_transform_to_nibbles_u254() {
+        let script = script!(
+            {0b1111111111111111111111}
+            {0b11111111111111111111111111111}
+            {0b11111111111111111111111111111}
+            {0b11111111111111111111111111111}
+            {0b11111111111111111111111111111}
+            {0b11111111111111111111111111111}
+            {0b11111111111111111111111111111}
+            {0b11111111111111111111111111111}
+            {0b11111111111111111111111111111}
+            {U254::transform_limbsize(29, 16)}
+
+
+        );
+
+        let res = crate::execute_script(script);
+        for i in 0..res.final_stack.len() {
+            if res.final_stack.get(i).is_empty() {
+                println!("Pos : {} -- Value : {:?}", i, res.final_stack.get(i));
+            } else {
+                println!(
+                    "Pos : {} -- Value : {}",
+                    i,
+                    res.final_stack
+                        .get(i)
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_transform_to_compact_from_nibbles_u254() {
+        let script = script!(
+            for _ in 0..64{
+                 {0b1111}
+            }
+            {U254::transform_limbsize(4, 29)}
+        );
+
+        let res = crate::execute_script(script);
+        for i in 0..res.final_stack.len() {
+            if res.final_stack.get(i).is_empty() {
+                println!("Pos : {} -- Value : {:?}", i, res.final_stack.get(i));
+            } else {
+                println!(
+                    "Pos : {} -- Value : {}",
+                    i,
+                    res.final_stack
+                        .get(i)
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
+    }
+    
+    #[test]
+    fn test_bits_to_compact(){
+        let script = script!(
+            for _ in 0..254{
+            {0b1}
+            }
+
+            {U254::transform_limbsize(1,32)}
+        );
+
+        let res = crate::execute_script(script);
+        for i in 0..res.final_stack.len() {
+            if res.final_stack.get(i).is_empty() {
+                println!("Pos : {} -- Value : {:?}", i, res.final_stack.get(i));
+            } else {
+                println!(
+                    "Pos : {} -- Value : {}",
+                    i,
+                    res.final_stack
+                        .get(i)
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_op_rot(){
+        let script = script!(
+            {1}
+            {2}
+            {3}
+            OP_ROT
+            // OP_ROT
+        );
+
+        let res = crate::execute_script(script);
+        for i in 0..res.final_stack.len() {
+            if res.final_stack.get(i).is_empty() {
+                println!("Pos : {} -- Value : {:?}", i, res.final_stack.get(i));
+            } else {
+                println!(
+                    "Pos : {} -- Value : {}",
+                    i,
+                    res.final_stack
+                        .get(i)
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
     }
 }
