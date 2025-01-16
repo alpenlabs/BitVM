@@ -226,12 +226,6 @@ pub(crate) fn chunk_dense_dense_mul0(
 
     let mut simulate_stack_input = vec![];
     simulate_stack_input.extend_from_slice(&mul_hints);
-    for f in &fvec {
-        simulate_stack_input.push(Hint::Fq(*f));
-    }
-    for f in &gvec {
-        simulate_stack_input.push(Hint::Fq(*f));
-    }
 
     (
         ElemFp12Acc {
@@ -303,14 +297,14 @@ pub(crate) fn chunk_dense_dense_mul1(
 
     let mut simulate_stack_input = vec![];
     simulate_stack_input.extend_from_slice(&mul_hints);
-    for f in &fvec {
-        simulate_stack_input.push(Hint::Fq(*f));
-    }
-    for f in &gvec {
-        simulate_stack_input.push(Hint::Fq(*f));
-    }
-    simulate_stack_input.push(Hint::Hash(extern_nibbles_to_limbs(hash_c0)));
-    simulate_stack_input.push(Hint::Hash(extern_nibbles_to_limbs(hash_c0)));
+    // for f in &fvec {
+    //     simulate_stack_input.push(Hint::Fq(*f));
+    // }
+    // for f in &gvec {
+    //     simulate_stack_input.push(Hint::Fq(*f));
+    // }
+    // simulate_stack_input.push(Hint::Hash(extern_nibbles_to_limbs(hash_c0)));
+    // simulate_stack_input.push(Hint::Hash(extern_nibbles_to_limbs(hash_c0)));
 
     (
         ElemFp12Acc {
@@ -361,9 +355,9 @@ pub(crate) fn chunk_squaring(
 
     let mut simulate_stack_input = vec![];
     simulate_stack_input.extend_from_slice(&hints);
-    for f in &avec {
-        simulate_stack_input.push(Hint::Fq(*f));
-    } 
+    // for f in &avec {
+    //     simulate_stack_input.push(Hint::Fq(*f));
+    // } 
 
     let hint_out = ElemFp12Acc { hash: b_hash, f: b };
     return (hint_out, tap_squaring(sq_script), simulate_stack_input);
@@ -575,8 +569,8 @@ pub(crate) fn chunk_frob_fp12(
 
     let mut simulate_stack_input = vec![];
     simulate_stack_input.extend_from_slice(&hints_frobenius_map);
-    for f in &fvec {
-        simulate_stack_input.push(Hint::Fq(*f));
-    } 
+    // for f in &fvec {
+    //     simulate_stack_input.push(Hint::Fq(*f));
+    // } 
     (ElemFp12Acc { f: g, hash: ghash }, tap_frob_fp12(power, hinted_frob_scr), simulate_stack_input)
 }

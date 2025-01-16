@@ -74,29 +74,31 @@ pub(crate) fn chunk_point_dbl(
             // Altstack: [hash_out, hash_in, hash_inaux]
             // Stack: [t, R, le]
         };
+        
+        let pre_hash_script = script!{
+            {Fq::fromaltstack()}
+            // Altstack: [hash_out, hash_in]
+            // Stack: [t, R, le, hash_inaux]
+            for _ in 0..8 {
+                {Fq::roll(8)}
+            }
+            // Altstack: [hash_out, hash_in]
+            // Stack: [t, hash_inaux, R, le]
+            {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
+            {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
+        };
     
         let hash_script = script! {
-            //Altstack: [hash_out, hash_in, hash_inaux]
-            //Stack: [tx, ty, Rx, Ry, le0, le1]
-            {Fq::fromaltstack()} {Fq::fromaltstack()}
-            //Stack: [tx, ty, Rx, Ry, le0, le1, hash_inaux, hash_in]
-            {Fq2::roll(8)} {Fq2::roll(8)} {Fq2::roll(8)} {Fq2::roll(8)}
-            // [tx, ty, hash_inaux, hash_in, Rx, Ry, le0, le1]
-            {Fq2::toaltstack()} {Fq2::toaltstack()} {Fq2::toaltstack()} {Fq2::toaltstack()}
-            // [tx, ty, hash_inaux, hash_in]
-            {hash_g2acc_with_hashed_le()} //[1]
-            OP_VERIFY
-    
-            {Fq2::fromaltstack()} {Fq2::fromaltstack()} {Fq2::fromaltstack()} {Fq2::fromaltstack()}
-            // [Rx, Ry, le0, le1] [hash_out]
-            {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
-            {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
-            {hash_messages(vec![ElementType::G2DblAddEval])}
+            //Altstack: [hash_out, hash_in]
+            //Stack: [tx, ty, hash_inaux, Rx, Ry, le0, le1, 0, 0]
+
+            {hash_messages(vec![ElementType::G2DblEval, ElementType::G2DblAddEval])}
             // [Rx, Ry, le0, le1, 0, 0]
         };
     
         let sc = script! {
             {ops_script}
+            {pre_hash_script}
             {hash_script}
             OP_TRUE
         };
@@ -169,11 +171,11 @@ pub(crate) fn chunk_point_dbl(
     simulate_stack_input.push(Hint::Fq(alpha_tangent.c1));
     simulate_stack_input.push(Hint::Fq(bias_minus_tangent.c0));
     simulate_stack_input.push(Hint::Fq(bias_minus_tangent.c1));
-    simulate_stack_input.push(Hint::Fq(t.x.c0));
-    simulate_stack_input.push(Hint::Fq(t.x.c1));
-    simulate_stack_input.push(Hint::Fq(t.y.c0));
-    simulate_stack_input.push(Hint::Fq(t.y.c1));
-    simulate_stack_input.push(Hint::Hash(aux_hash_le));
+    // simulate_stack_input.push(Hint::Fq(t.x.c0));
+    // simulate_stack_input.push(Hint::Fq(t.x.c1));
+    // simulate_stack_input.push(Hint::Fq(t.y.c0));
+    // simulate_stack_input.push(Hint::Fq(t.y.c1));
+    // simulate_stack_input.push(Hint::Hash(aux_hash_le));
     
     let hint_out: ElemG2PointAcc = ElemG2PointAcc {
         t: G2Affine::new_unchecked(new_tx, new_ty),
@@ -255,26 +257,26 @@ pub(crate) fn chunk_point_add_with_frob(
             // Stack: [tx, ty, Rx, Ry, le0, le1]
         };
 
-        let hash_script = script! {
-            //Altstack: [hash_out, hash_in, hash_inaux]
-            //Stack: [tx, ty, Rx, Ry, le0, le1]
-            {Fq::fromaltstack()} {Fq::fromaltstack()}
-            //Stack: [tx, ty, Rx, Ry, le0, le1, hash_inaux, hash_in]
-            {Fq2::roll(8)} {Fq2::roll(8)} {Fq2::roll(8)} {Fq2::roll(8)}
-            // [tx, ty, hash_inaux, hash_in, Rx, Ry, le0, le1]
-            {Fq2::toaltstack()} {Fq2::toaltstack()} {Fq2::toaltstack()} {Fq2::toaltstack()}
-            // [tx, ty, hash_inaux, hash_in]
-            {hash_g2acc_with_hashed_le()} //[1]
-            OP_VERIFY
-
-            {Fq2::fromaltstack()} {Fq2::fromaltstack()} {Fq2::fromaltstack()} {Fq2::fromaltstack()}
-            // [Rx, Ry, le0, le1]
-
+        let pre_hash_script = script!{
+            {Fq::fromaltstack()}
+            // Altstack: [hash_out, hash_in]
+            // Stack: [t, R, le, hash_inaux]
+            for _ in 0..8 {
+                {Fq::roll(8)}
+            }
+            // Altstack: [hash_out, hash_in]
+            // Stack: [t, hash_inaux, R, le]
             {Fq2::toaltstack()} {Fq2::toaltstack()}
             {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
             {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
             {Fq2::fromaltstack()} {Fq2::fromaltstack()}
-            {hash_messages(vec![ElementType::G2DblAddEval])}
+        };
+    
+        let hash_script = script! {
+            //Altstack: [hash_out, hash_in]
+            //Stack: [tx, ty, hash_inaux, Rx, Ry, 0, 0, le0, le1, le1]
+
+            {hash_messages(vec![ElementType::G2AddEval, ElementType::G2DblAddEval])}
             // [Rx, Ry, le0, le1, 0, 0]
         };
 
@@ -306,6 +308,7 @@ pub(crate) fn chunk_point_add_with_frob(
         let sc = script! {
             {precompute_script}
             {ops_script}
+            {pre_hash_script}
             {hash_script}
             OP_TRUE
         };
@@ -400,11 +403,11 @@ pub(crate) fn chunk_point_add_with_frob(
     simulate_stack_input.push(Hint::Fq(alpha_chord.c1));
     simulate_stack_input.push(Hint::Fq(bias_minus_chord.c0));
     simulate_stack_input.push(Hint::Fq(bias_minus_chord.c1));
-    simulate_stack_input.push(Hint::Fq(tt.x.c0));
-    simulate_stack_input.push(Hint::Fq(tt.x.c1));
-    simulate_stack_input.push(Hint::Fq(tt.y.c0));
-    simulate_stack_input.push(Hint::Fq(tt.y.c1));
-    simulate_stack_input.push(Hint::Hash(aux_hash_le));
+    // simulate_stack_input.push(Hint::Fq(tt.x.c0));
+    // simulate_stack_input.push(Hint::Fq(tt.x.c1));
+    // simulate_stack_input.push(Hint::Fq(tt.y.c0));
+    // simulate_stack_input.push(Hint::Fq(tt.y.c1));
+    // simulate_stack_input.push(Hint::Hash(aux_hash_le));
 
     let hint_out = ElemG2PointAcc {
         t: G2Affine::new_unchecked(new_tx, new_ty),
@@ -567,31 +570,29 @@ pub(crate) fn chunk_point_ops(
             // Stack: [t]
         };
     
-        let hash_script = script! {
-            // Altstack: [dbl_le, R, add_le, hash_out, hash_in, hash_inaux]
-            // Stack: [t]
-            
+        let pre_hash_script = script!(
             {Fq::fromaltstack()} {Fq::fromaltstack()}
-            // [tx, ty, hash_inaux, hash_in]
-            {hash_g2acc_with_hashed_le()} //[1]
-            OP_VERIFY
-    
+
             {Fq::fromaltstack()}
             {Fq2::fromaltstack()} {Fq2::fromaltstack()}
             {Fq2::fromaltstack()} {Fq2::fromaltstack()}
             {Fq2::fromaltstack()} {Fq2::fromaltstack()}
-            
-            //[hash_out, add_le, R, dbl_le]
+
+            // [t, hash_inaux, hash_in, hash_out, add_le, R, dbl_le]
+            {Fq::roll(13)} {Fq::roll(13)} {Fq2::toaltstack()}
+            // [t, hash_inaux, add_le, R, dbl_le], [hash_in, hash_out]
             {Fq2::roll(10)} {Fq2::roll(10)}
-            // [hash_out, R, dbl_le, add_le]
-            {Fq::roll(12)}
-            // [R, dbl_le, add_le, hash_out]
-            {Fq::toaltstack()}
-            {hash_messages(vec![ElementType::G2DblAddEval])}
+            // [t, hash_inaux, R, dbl_le, add_le], [hash_in, hash_out]
+        );
+
+        let hash_script = script! {
+        
+            {hash_messages(vec![ElementType::G2T, ElementType::G2DblAddEval])}
         };
     
         let sc = script! {
             {ops_script}
+            {pre_hash_script}
             {hash_script}
             OP_TRUE
         };
@@ -720,11 +721,11 @@ pub(crate) fn chunk_point_ops(
     simulate_stack_input.push(Hint::Fq(alpha_tangent.c1));
     simulate_stack_input.push(Hint::Fq(bias_minus_tangent.c0));
     simulate_stack_input.push(Hint::Fq(bias_minus_tangent.c1));
-    simulate_stack_input.push(Hint::Fq(t.x.c0));
-    simulate_stack_input.push(Hint::Fq(t.x.c1));
-    simulate_stack_input.push(Hint::Fq(t.y.c0));
-    simulate_stack_input.push(Hint::Fq(t.y.c1));
-    simulate_stack_input.push(Hint::Hash(aux_hash_le));
+    // simulate_stack_input.push(Hint::Fq(t.x.c0));
+    // simulate_stack_input.push(Hint::Fq(t.x.c1));
+    // simulate_stack_input.push(Hint::Fq(t.y.c0));
+    // simulate_stack_input.push(Hint::Fq(t.y.c1));
+    // simulate_stack_input.push(Hint::Hash(aux_hash_le));
 
     let hint_out = ElemG2PointAcc {
         t: G2Affine::new_unchecked(new_tx, new_ty),

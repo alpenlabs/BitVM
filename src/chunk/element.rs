@@ -1,13 +1,14 @@
-use crate::chunk::primitves::extern_hash_nibbles;
+use crate::{bn254::utils::Hint, chunk::primitves::extern_hash_nibbles};
 use ark_bn254::{G1Affine, G2Affine};
 use ark_ff::{AdditiveGroup, Field, MontFp};
-use super::primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps, HashBytes};
+use super::primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps, extern_nibbles_to_limbs, HashBytes};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Element {
     Fp12v0(ElemFp12Acc), // 2,4, 2, 4
     Fp12v1(ElemFp12Acc),  // 6, 6
     Fp12v2(ElemFp12Acc), // 6, 1
+    Fp6(ElemFp12Acc), // 6
     G2T(ElemG2PointAcc), // 4
     G2DblEval(ElemG2PointAcc), // 4, 4
     G2DblAddEval(ElemG2PointAcc), // 4,4,4
@@ -78,6 +79,7 @@ impl Element {
             Element::Fp12v0(_) => ElementType::Fp12v0, // 2, 4
             Element::Fp12v1(_) => ElementType::Fp12v1, // 6
             Element::Fp12v2(_) => ElementType::Fp12v2, // 6,1
+            Element::Fp6(_) => ElementType::Fp6,
             Element::FieldElem(_) => ElementType::FieldElem,
             Element::MSMG1(_) => ElementType::MSMG1,
             Element::MSMG2(_) => ElementType::MSMG2,
@@ -96,12 +98,61 @@ impl Element {
             Element::Fp12v0(r) => r.hashed_output(),
             Element::Fp12v1(r) => r.hashed_output(),
             Element::Fp12v2(r) => r.hashed_output(),
+            Element::Fp6(r) => {
+                extern_hash_fps(
+                    r.f.c0.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
+                    true,
+                )
+            },
             Element::FieldElem(f) => f.hashed_output(),
             Element::MSMG1(r) => r.hashed_output(),
             Element::MSMG2(r) => r.hashed_output(),
             Element::ScalarElem(r) => r.hashed_output(),
             Element::SparseEval(r) => r.hashed_output(),
             Element::HashBytes(r) => r.hashed_output(),
+        }
+    }
+
+    pub fn get_hash_preimage_as_hints(&self) -> Vec<Hint> {
+        match self {
+            Element::FieldElem(_) => vec![],
+            Element::ScalarElem(_) => vec![],
+            Element::SparseEval(_) => vec![], // never used as input
+            Element::HashBytes(h) => vec![Hint::Hash(extern_nibbles_to_limbs(*h))],
+            Element::Fp12v0(r) => r.f.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect(),
+            Element::Fp12v1(r) => r.f.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect(),
+            Element::Fp12v2(r) => vec![Hint::Hash(extern_nibbles_to_limbs(r.hash))],
+            Element::Fp6(r) => r.f.c0.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect(),
+            Element::G2T(_) => vec![],
+            Element::G2DblEval(g) => {
+                vec![
+                    Hint::Fq(g.t.x.c0),
+                    Hint::Fq(g.t.x.c1),
+                    Hint::Fq(g.t.y.c0),
+                    Hint::Fq(g.t.y.c1),
+                    Hint::Hash(extern_nibbles_to_limbs(g.hash_le())),
+                ]
+            },
+            Element::G2AddEval(g) => {
+                vec![
+                    Hint::Fq(g.t.x.c0),
+                    Hint::Fq(g.t.x.c1),
+                    Hint::Fq(g.t.y.c0),
+                    Hint::Fq(g.t.y.c1),
+                    Hint::Hash(extern_nibbles_to_limbs(g.hash_le())),
+                ]
+            },
+            Element::G2DblAddEval(g) => {
+                vec![
+                    Hint::Fq(g.t.x.c0),
+                    Hint::Fq(g.t.x.c1),
+                    Hint::Fq(g.t.y.c0),
+                    Hint::Fq(g.t.y.c1),
+                    Hint::Hash(extern_nibbles_to_limbs(g.hash_le())),
+                ]
+            },
+            Element::MSMG1(r) => vec![],
+            Element::MSMG2(r) => vec![],
         }
     }
 }

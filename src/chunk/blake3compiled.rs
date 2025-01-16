@@ -71,11 +71,12 @@ pub fn hash_messages(elem_types: Vec<ElementType>) -> Script {
                 {hash_fp12_with_hints()}
             } else if elem_type == ElementType::Fp6 {
                 {hash_fp6()}
-            } else if elem_type == ElementType::G2T {
-                {new_hash_g2acc_with_hashed_le()}
             } else if elem_type == ElementType::G2DblAddEval {
                 {new_hash_g2acc_with_both_raw_le()}
+            } else if elem_type == ElementType::G2DblEval || elem_type == ElementType::G2AddEval ||  elem_type == ElementType::G2T {
+                {new_hash_g2acc_with_hashed_le()}
             } else {
+
             }
         );
 

@@ -108,10 +108,10 @@ pub(crate) fn chunk_hash_c2(
     let inhash = extern_hash_fps(fvec.clone(), false);
     let outhash = extern_hash_fps(fvec.clone(), true);
 
-    let mut simulate_stack_input = vec![];
-    for f in &fvec {
-        simulate_stack_input.push(Hint::Fq(*f));
-    }
+    let simulate_stack_input = vec![];
+    // for f in &fvec {
+    //     simulate_stack_input.push(Hint::Fq(*f));
+    // }
 
     (
         ElemFp12Acc {
@@ -390,12 +390,12 @@ pub(crate) fn chunk_inv2(
 
     let mut simulate_stack_input = vec![];
     simulate_stack_input.extend_from_slice(&hints);
-    for elem in a.to_base_prime_field_elements() {
-        simulate_stack_input.push(Hint::Fq(elem));
-    }
-    for elem in t1.to_base_prime_field_elements() {
-        simulate_stack_input.push(Hint::Fq(elem));
-    }
+    // for elem in a.to_base_prime_field_elements() {
+    //     simulate_stack_input.push(Hint::Fq(elem));
+    // }
+    // for elem in t1.to_base_prime_field_elements() {
+    //     simulate_stack_input.push(Hint::Fq(elem));
+    // }
 
 
     let hash_h = extern_hash_fps(
@@ -458,9 +458,9 @@ pub(crate) fn chunk_inv1(
     let mut simulate_stack_input = vec![];
     simulate_stack_input.extend_from_slice(&h_t0inv);
     simulate_stack_input.push(Hint::Fq(aux_t6));
-    for elem in t0.to_base_prime_field_elements() {
-        simulate_stack_input.push(Hint::Fq(elem));
-    }
+    // for elem in t0.to_base_prime_field_elements() {
+    //     simulate_stack_input.push(Hint::Fq(elem));
+    // }
 
     let hout: ElemFp12Acc = ElemFp12Acc { f: ark_bn254::Fq12::new(t1, ark_bn254::Fq6::ZERO), hash: hash_h };
     (
@@ -542,9 +542,9 @@ pub(crate) fn chunk_inv0(
 
     let mut simulate_stack_input = vec![];
     simulate_stack_input.extend_from_slice(&hints);
-    for elem in a.to_base_prime_field_elements() {
-        simulate_stack_input.push(Hint::Fq(elem));
-    }
+    // for elem in a.to_base_prime_field_elements() {
+    //     simulate_stack_input.push(Hint::Fq(elem));
+    // }
 
     let hash_h = extern_hash_fps(
         vec![
