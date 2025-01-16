@@ -288,6 +288,13 @@ pub fn hinted_msm_with_constant_bases_affine(
     // Gather scripts
     let script = script! {
         for i in 0..msm_scripts.len() {
+            // G1Acc preimage
+            if i == 0 {
+                {G1Affine::push_not_montgomery( ark_bn254::G1Affine::new_unchecked(ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO))}
+            } else {
+                {G1Affine::push_not_montgomery(msm_results[i-1])}
+            }
+
             // Scalar_i: groth16 public inputs bitcommited input irl
             for msm_scalar in &msm_scalars {
                 {fr_push_not_montgomery(*msm_scalar)}

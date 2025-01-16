@@ -1788,10 +1788,10 @@ impl G1Affine {
 
         let mut loop_scripts = script!();
         let mut loop_hints = vec![];
-        if ith_step != 0 {
-            loop_hints.push(Hint::Fq(g1acc.x));
-            loop_hints.push(Hint::Fq(g1acc.y));
-        }
+        // if ith_step != 0 {
+        //     loop_hints.push(Hint::Fq(g1acc.x));
+        //     loop_hints.push(Hint::Fq(g1acc.y));
+        // }
 
         // Given: g16_bases = [p0, p1]
         // Extend bases to include point endomorphism => [p0, phi(p0)..]
@@ -1838,19 +1838,19 @@ impl G1Affine {
         let segment_len = 2 * Fr::N_LIMBS as usize + 2; // [s0, k0, s1, k1]
         // prepare stack order by moving hints from top of stack
         loop_scripts = loop_scripts.push_script(script!(
-            for _ in 0..g16_scalars.len() {
-                {Fr::toaltstack()}
-            }
-            if ith_step == 0 {
-                {G1Affine::push_not_montgomery(ark_bn254::G1Affine::zero())}
-            } else {
-                for _ in 0..Fq::N_LIMBS * 2 { // bring acc from top of stack
-                    OP_DEPTH OP_1SUB OP_ROLL 
-                }
-            }
-            for _ in 0..g16_scalars.len() {
-                {Fr::fromaltstack()}
-            }
+            // for _ in 0..g16_scalars.len() {
+            //     {Fr::toaltstack()}
+            // }
+            // if ith_step == 0 {
+            //     {G1Affine::push_not_montgomery(ark_bn254::G1Affine::zero())}
+            // } else {
+            //     for _ in 0..Fq::N_LIMBS * 2 { // bring acc from top of stack
+            //         OP_DEPTH OP_1SUB OP_ROLL 
+            //     }
+            // }
+            // for _ in 0..g16_scalars.len() {
+            //     {Fr::fromaltstack()}
+            // }
             // [G1Acc, K0, K1]
             for _ in 0..g16_scalars.len() {
                 for _ in 0..segment_len { // bring acc from top of stack
@@ -3288,12 +3288,15 @@ mod test {
                 window as u32,
             );
 
+        let mut prev_acc = ark_bn254::G1Affine::new_unchecked(ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO);
         for (itr, (output_acc, scalar_mul_affine_script, hints)) in all_loop_info.iter().enumerate() {
             
             let script = script! {
                 for hint in hints { // tmul + aux hints
                     { hint.push() }
                 }
+                // G1Acc preimage
+                {G1Affine::push_not_montgomery(prev_acc)}
                 for scalar in g16_scalars.iter() {
                     { fr_push_not_montgomery(*scalar) } // scalar bit committed
                 }
@@ -3303,6 +3306,7 @@ mod test {
                 { G1Affine::equalverify() }
                 OP_TRUE
             };
+            prev_acc = *output_acc;
             let exec_result = execute_script_without_stack_limit(script);
             println!(
                 "chunk {} script size: {} max_stack {}",
