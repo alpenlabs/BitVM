@@ -31,6 +31,7 @@ pub(crate) fn chunk_msm(window: usize, ks: Vec<ark_bn254::Fr>, qs: Vec<ark_bn254
         let ops_script = 
         if msm_tap_index == 0 {
             script!(
+                {bn254::curves::G1Affine::push_not_montgomery( ark_bn254::G1Affine::new_unchecked(ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO))}
                 for _ in 0..num_pubs {
                     {Fr::fromaltstack()}
                 }
@@ -52,11 +53,10 @@ pub(crate) fn chunk_msm(window: usize, ks: Vec<ark_bn254::Fr>, qs: Vec<ark_bn254
                 for i in 0..num_pubs {
                     {Fr::roll(i as u32)}
                 }
-                for i in 0..Fq::N_LIMBS * 2 { // bring acc from top of stack
-                    OP_DEPTH {i+1} OP_SUB OP_PICK 
-                }
+                // [Dec, G1Acc, k0, k1, k2]      
+                {Fq2::copy(num_pubs as u32)}          
                 {Fq2::toaltstack()}
-                // [Dec, k0, k1, k2]
+                // [Dec, G1Acc, k0, k1, k2]
                 {chunk.1.clone()}
                 //M: [G1AccDash]
                 //A: [G1AccDashHash, G1AccHash, G1Acc]
@@ -441,7 +441,7 @@ mod test {
                     }
                     {Fq::toaltstack()}
                 }
-    
+
                 for scalar in &scalars {
                     {fr_push_not_montgomery(*scalar)}
                     {Fr::toaltstack()}  
@@ -453,6 +453,9 @@ mod test {
             let script = script! {
                 for h in &hints_msm[msm_chunk_index].2 {
                     {h.push()}
+                }
+                if msm_chunk_index > 0 {
+                    {bn254::curves::G1Affine::push_not_montgomery(hints_msm[msm_chunk_index-1].0)}
                 }
                 {bitcom_scr}
                 {hints_msm[msm_chunk_index].1.clone()}
