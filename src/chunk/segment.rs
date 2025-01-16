@@ -54,7 +54,7 @@ pub enum ScriptType {
 
 
 
-use ark_ff::Field;
+use ark_ff::{AdditiveGroup, Field};
 
 use super::{element::*, primitves::extern_hash_fps,  taps_point_ops::*, taps_mul::*};
 
@@ -80,16 +80,22 @@ pub(crate) fn wrap_hint_msm(
 
     let num_chunks = (Fr::N_BITS + 2 * window - 1)/(2 * window);
     let mut segments = vec![];
+    let mut prev_input = ark_bn254::G1Affine::new_unchecked(ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO);
     if !skip {
         let houts = chunk_msm(window as usize, hint_scalars, pub_vky.clone());
         assert_eq!(houts.len() as u32, num_chunks);
-        for (msm_chunk_index, (hout_msm, _, op_hints)) in houts.into_iter().enumerate() {
+        for (msm_chunk_index, (hout_msm, _, mut op_hints)) in houts.into_iter().enumerate() {
             let mut input_segment_info: Vec<SegmentID> = vec![];
             if msm_chunk_index > 0 {
                 let prev_msm_id = (segment_id + msm_chunk_index -1) as u32;
                 input_segment_info.push(prev_msm_id);
             }
             input_segment_info.extend_from_slice(&scalar_input_segment_info);
+
+            if msm_chunk_index > 0 {
+                op_hints.extend_from_slice(&Element::MSMG1(prev_input).get_hash_preimage_as_hints());
+            }
+            prev_input = hout_msm.clone();
 
             segments.push(Segment { 
                 id: (segment_id + msm_chunk_index) as u32, 
@@ -147,6 +153,7 @@ pub(crate) fn wrap_hint_hash_p(
             rx,
             pub_vky0.clone(),
         );
+        op_hints.extend_from_slice(&Element::MSMG1(t).get_hash_preimage_as_hints());
     }
     
 

@@ -151,8 +151,8 @@ impl Element {
                     Hint::Hash(extern_nibbles_to_limbs(g.hash_le())),
                 ]
             },
-            Element::MSMG1(r) => vec![],
-            Element::MSMG2(r) => vec![],
+            Element::MSMG1(r) => vec![Hint::Fq(r.x), Hint::Fq(r.y)],
+            Element::MSMG2(_) => vec![],
         }
     }
 }

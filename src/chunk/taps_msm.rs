@@ -136,8 +136,8 @@ pub(crate) fn chunk_hash_p(
 
     simulate_stack_input.push(Hint::Fq(alpha_chord));
     simulate_stack_input.push(Hint::Fq(bias_minus_chord));
-    simulate_stack_input.push(Hint::Fq(tx));
-    simulate_stack_input.push(Hint::Fq(ty));
+    // simulate_stack_input.push(Hint::Fq(tx));
+    // simulate_stack_input.push(Hint::Fq(ty));
 
     let ops_script = script!{
         // Altstack:[identity, th, gpy, gpx]
@@ -212,7 +212,7 @@ pub(crate) fn chunk_hash_p(
 mod test {
 
     use crate::{
-        bn254::{curves, fq2::Fq2, utils::fr_push_not_montgomery}, chunk::primitves::extern_nibbles_to_limbs, execute_script_without_stack_limit
+        bn254::{curves, fq2::Fq2, utils::fr_push_not_montgomery}, chunk::{element::Element, primitves::extern_nibbles_to_limbs}, execute_script_without_stack_limit
     };
     use super::*;
     use ark_bn254::{G1Affine};
@@ -403,6 +403,9 @@ mod test {
             for h in hint_script {
                 { h.push() }
             }
+            for h in Element::MSMG1(t).get_hash_preimage_as_hints() {
+                {h.push()}
+            }
             {bitcom_scr}
             {hash_c_scr}
         };
@@ -448,14 +451,17 @@ mod test {
                 }
             };
     
-    
-            let tap_len = hints_msm[msm_chunk_index].2.len();
+            let mut op_hints = vec![];
+            if msm_chunk_index > 0 {
+                op_hints.extend_from_slice(&Element::MSMG1(hints_msm[msm_chunk_index-1].0).get_hash_preimage_as_hints());
+            }
+            let tap_len = hints_msm[msm_chunk_index].1.len();
             let script = script! {
                 for h in &hints_msm[msm_chunk_index].2 {
                     {h.push()}
                 }
-                if msm_chunk_index > 0 {
-                    {bn254::curves::G1Affine::push_not_montgomery(hints_msm[msm_chunk_index-1].0)}
+                for i in op_hints {
+                    {i.push()}
                 }
                 {bitcom_scr}
                 {hints_msm[msm_chunk_index].1.clone()}
