@@ -170,6 +170,114 @@ fn point_add_eval(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine, p: ark_bn254::
     (result, script, hints)
 }
 
+pub(crate) fn chunk_point_add_with_frob(
+    hint_t: ElemG2PointAcc,
+    hint_q4y1: ElemFq,
+    hint_q4y0: ElemFq,
+    hint_q4x1: ElemFq,
+    hint_q4x0: ElemFq,
+    hint_py: ElemFq,
+    hint_px: ElemFq,
+    ate: i8,
+) -> (ElemG2PointAcc, Script, Vec<Hint>) {
+    fn tap_point_add(frob_scr: Script, add_eval_scr: Script) -> Script {
+
+        let ops_script = script! {
+            {Fq2::fromaltstack()} {Fq2::fromaltstack()}
+            //[a, b, tx, ty, p, qx, qy]
+
+            {Fq2::roll(4)} {Fq2::copy(0)} {Fq2::toaltstack()} 
+            {Fq::roll(6)} {Fq::toaltstack()}
+
+            //[a, b, tx, ty, qx, qy, px, py]
+            {add_eval_scr}
+            // [t, R, le]
+    
+            // Altstack: [hash_out, hash_p, hash_t, p, hash_inaux]
+            // Stack: [t, R, le]
+        };
+
+        let pre_hash_script = script!{
+            {Fq::fromaltstack()}
+            {Fq2::fromaltstack()}
+            // Altstack: [hash_out, hash_in]
+            // Stack: [t, R, le, hash_inaux, p]
+            for _ in 0..8 {
+                {Fq::roll(10)}
+            }
+            // Altstack: [hash_out, hash_p_in, hash_t_in]
+            // Stack: [t, hash_inaux, p, R, le]
+            {Fq2::toaltstack()} {Fq2::toaltstack()}
+            {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
+            {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
+            {Fq2::fromaltstack()} {Fq2::fromaltstack()}
+            // [t, hash_inaux, p, R, 0, le]
+        };
+    
+        let hash_script = script! {
+            //Altstack: [hash_out, hash_in]
+            //Stack: [tx, ty, hash_inaux, Rx, Ry, 0, 0, le0, le1, le1]
+            {hash_messages(vec![ElementType::G2AddEval, ElementType::MSMG1, ElementType::G2DblAddEval])}
+            // [Rx, Ry, le0, le1, 0, 0]
+        };
+        
+        let precompute_script = script! {
+            // bring back from altstack
+            for _ in 0..4 {
+                {Fq::fromaltstack()}
+            }
+            {frob_scr}
+            for _ in 0..4 {
+                {Fq::toaltstack()}
+            }
+            // Output: [tx, ty, px, py] [Hout, Hpin, Htin, Q]
+        };
+    
+
+        let sc = script! {
+            {precompute_script}
+            {ops_script}
+            {pre_hash_script}
+            {hash_script}
+            OP_TRUE
+        };
+        sc
+    }
+    
+    
+    assert!(ate == 1 || ate == -1);
+    let t = hint_t.t;
+    let p = ark_bn254::G1Affine::new_unchecked(hint_px, hint_py);
+    let q = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0, hint_q4x1), ark_bn254::Fq2::new(hint_q4y0, hint_q4y1));
+    let mut qq = q.clone();
+
+    let mut frob_hint = vec![];
+    let mut frob_scr = script!();
+    if ate == 1 {
+        let (qdash, fscr, beta_12_hint) = bn254::curves::G2Affine::hinted_p_power_endomorphism(q);
+        qq = qdash;
+        frob_hint = beta_12_hint;
+        frob_scr = fscr;
+    } else {
+        let (qdash, fscr, beta_22_hint) = bn254::curves::G2Affine::hinted_endomorphism_affine(q);
+        qq = qdash;
+        frob_hint = beta_22_hint;
+        frob_scr = fscr;
+    }
+
+    let mut hints = frob_hint;
+    let ((new_t, (add_le0, add_le1)), add_scr, add_hint) = point_add_eval(t, qq, p);
+    hints.extend_from_slice(&add_hint);
+
+    let hint_out: ElemG2PointAcc = ElemG2PointAcc {
+        t: new_t,
+        add_le: Some((add_le0, add_le1)),
+        dbl_le: None,
+    };
+    (hint_out, tap_point_add(frob_scr, add_scr), hints)
+}
+
+
 
 pub(crate) fn chunk_point_dbl(
     hint_t: ElemG2PointAcc,
@@ -237,239 +345,6 @@ pub(crate) fn chunk_point_dbl(
     (hint_out, tap_point_dbl(scr), hints)
 }
 
-
-pub(crate) fn chunk_point_add_with_frob(
-    hint_t: ElemG2PointAcc,
-    hint_q4y1: ElemFq,
-    hint_q4y0: ElemFq,
-    hint_q4x1: ElemFq,
-    hint_q4x0: ElemFq,
-    hint_py: ElemFq,
-    hint_px: ElemFq,
-    ate: i8,
-) -> (ElemG2PointAcc, Script, Vec<Hint>) {
-
-    fn tap_point_add_with_frob(ate: i8, scripts: [Script; 5]) -> Script {
-        assert!(ate == 1 || ate == -1);
-        let mut ate_unsigned_bit = 1; // Q1 = pi(Q), T = T + Q1 // frob
-        if ate == -1 {
-            // Q2 = pi^2(Q), T = T - Q2 // frob_sq and negate
-            ate_unsigned_bit = 0;
-        }
-
-        let ops_script = script! {
-            // [hints tx,ty, taux, px, py], [Hout, Hin, Q]
-            for i in 0..4 {
-                {Fq::fromaltstack()}
-            }
-            // [hints tx,ty, taux, px, py, Q], [Hout, Hin]
-            {Fq2::copy(4)} {Fq2::toaltstack()} // p
-            {Fq::roll(6)} {Fq::toaltstack()} // hash aux in
-
-            // [hints tx,ty, px, py, Q], [Hout, Hin, p, hin_aux]
-            // hinted check chord // t.x, t.y
-            { Fq2::copy(12)} // alpha
-            { Fq2::copy(12)} // bias
-            { Fq2::copy(6) } // q.x
-            { Fq2::copy(6) } // q.y
-            { scripts[1].clone() }
-            { Fq2::copy(12)} // alpha
-            { Fq2::copy(12)} // bias
-            { Fq2::copy(12)} // tx
-            { Fq2::copy(12)} // ty
-            { scripts[2].clone() }
-
-
-            //[a, b, tx, ty, p, qx, qy]
-            { Fq2::copy(12) } // alpha
-            { Fq2::copy(12) } // bias
-            { Fq2::roll(8) } // p_dash
-            { scripts[3].clone() }
-            { Fq2::toaltstack() } // le.0
-            { Fq2::toaltstack() } // le.1
-
-            //[a, b, tx, ty, qx, qy]
-            { Fq2::roll(10) } // alpha
-            //[a, tx, ty, qx, qy, b]
-            { Fq2::roll(10) } // bias
-            //[tx, ty, qx, qy, a, b]
-            { Fq2::roll(6) } //q.x
-            //[tx, ty, qy, b, a, qx]
-            { Fq2::copy(10) } // t.x from altstack
-            //[tx, ty, qy, b, a, qx, tx]
-            { scripts[4].clone() } // alpha, bias chord consumed
-            //[tx, ty, qy, R]
-
-            { Fq2::fromaltstack() } // le
-            { Fq2::fromaltstack() } // le
-            // [tx, ty, qy, Rx, Ry, le0, le1]
-            {Fq2::roll(8)}
-            {Fq2::drop()}
-            // Altstack: [hash_out, hash_p, hash_t, p, hash_inaux]
-            // Stack: [tx, ty, Rx, Ry, le0, le1]
-        };
-
-        let pre_hash_script = script!{
-            {Fq::fromaltstack()}
-            {Fq2::fromaltstack()}
-            // Altstack: [hash_out, hash_in]
-            // Stack: [t, R, le, hash_inaux, p]
-            for _ in 0..8 {
-                {Fq::roll(10)}
-            }
-            // Altstack: [hash_out, hash_p_in, hash_t_in]
-            // Stack: [t, hash_inaux, p, R, le]
-            {Fq2::toaltstack()} {Fq2::toaltstack()}
-            {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
-            {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
-            {Fq2::fromaltstack()} {Fq2::fromaltstack()}
-            // [t, hash_inaux, p, R, 0, le]
-        };
-    
-        let hash_script = script! {
-            //Altstack: [hash_out, hash_in]
-            //Stack: [tx, ty, hash_inaux, Rx, Ry, 0, 0, le0, le1, le1]
-
-            {hash_messages(vec![ElementType::G2AddEval, ElementType::MSMG1, ElementType::G2DblAddEval])}
-            // [Rx, Ry, le0, le1, 0, 0]
-        };
-
-        let (_, beta_22_scr, _) = bn254::curves::G2Affine::hinted_endomorphism_affine(ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE));
-        let (_, beta_12_scr, _) = bn254::curves::G2Affine::hinted_p_power_endomorphism(ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ONE, ark_bn254::Fq2::ONE));
-
-        let precompute_script = script! {
-            // bring back from altstack
-            for _ in 0..4 {
-                {Fq::fromaltstack()}
-            }
-
-            {ate_unsigned_bit} 1 OP_NUMEQUAL
-            OP_IF
-                {beta_12_scr}
-            OP_ELSE
-                {beta_22_scr}
-            OP_ENDIF
-
-            for _ in 0..4 {
-                {Fq::toaltstack()}
-            }
-
-            // Output: [tx, ty, px, py] [Hout, Hpin, Htin, Q]
-        };
-
-        let sc = script! {
-            {precompute_script}
-            {ops_script}
-
-            {pre_hash_script}
-            {hash_script}
-            OP_TRUE
-        };
-        sc
-    }
-
-    assert!(ate == 1 || ate == -1);
-    let (tt, p) = (hint_t.t, ark_bn254::G1Affine::new_unchecked(hint_px, hint_py));
-    let q = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0, hint_q4x1), ark_bn254::Fq2::new(hint_q4y0, hint_q4y1));
-    let hash_le_aux = hint_t.hash_le();
-    let mut qq = q.clone();
-    let mut frob_hint = vec![];
-    let mut frob_scr = script!();
-    if ate == 1 {
-        let (qdash, fscr, beta_12_hint) = bn254::curves::G2Affine::hinted_p_power_endomorphism(q);
-        qq = qdash;
-        frob_hint = beta_12_hint;
-        frob_scr = fscr;
-    } else {
-        let (qdash, fscr, beta_22_hint) = bn254::curves::G2Affine::hinted_endomorphism_affine(q);
-        qq = qdash;
-        frob_hint = beta_22_hint;
-        frob_scr = fscr;
-    }
-
-    let alpha_chord = (tt.y - qq.y) / (tt.x - qq.x);
-    // -bias
-    let bias_minus_chord = alpha_chord * tt.x - tt.y;
-    assert_eq!(alpha_chord * tt.x - tt.y, bias_minus_chord);
-
-    let new_tx = alpha_chord.square() - tt.x - qq.x;
-    let new_ty = bias_minus_chord - alpha_chord * new_tx;
-    let p_dash_x = p.x;
-    let p_dash_y = p.y;
-
-    let (hinted_check_chord_t, hints_check_chord_t) =
-        hinted_check_line_through_point(tt.x, alpha_chord, bias_minus_chord);
-    let (hinted_check_chord_q, hints_check_chord_q) =
-        hinted_check_line_through_point(qq.x, alpha_chord, bias_minus_chord);
-    let (hinted_add_line, hints_add_line) = hinted_affine_add_line(tt.x, qq.x, alpha_chord, bias_minus_chord);
-
-    let mut add_le0 = alpha_chord;
-    add_le0.mul_assign_by_fp(&p.x);
-
-    let mut add_le1 = bias_minus_chord;
-    add_le1.mul_assign_by_fp(&p.y);
-
-    let (hinted_ell_chord, hints_ell_chord) =
-        hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_chord, bias_minus_chord);
-
-    let mut all_qs = vec![];
-    let all_scripts = [frob_scr, hinted_check_chord_q, hinted_check_chord_t, hinted_ell_chord, hinted_add_line];
-    for hint in frob_hint {
-        all_qs.push(hint);
-    }
-    for hint in hints_check_chord_q {
-        all_qs.push(hint)
-    }
-    for hint in hints_check_chord_t {
-        all_qs.push(hint)
-    }
-    for hint in hints_ell_chord {
-        all_qs.push(hint)
-    }
-    for hint in hints_add_line {
-        all_qs.push(hint)
-    }
-
-    let pdash_x = extern_fq_to_nibbles(p.x);
-    let pdash_y = extern_fq_to_nibbles(p.y);
-    let qdash_x0 = extern_fq_to_nibbles(q.x.c0);
-    let qdash_x1 = extern_fq_to_nibbles(q.x.c1);
-    let qdash_y0 = extern_fq_to_nibbles(q.y.c0);
-    let qdash_y1 = extern_fq_to_nibbles(q.y.c1);
-
-    let hash_new_t =
-        extern_hash_fps(vec![new_tx.c0, new_tx.c1, new_ty.c0, new_ty.c1], true);
-    let hash_dbl_le = extern_hash_fps(vec![ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO], true);
-
-    let hash_add_le =
-        extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
-    let hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
-    let hash_root_claim = extern_hash_nibbles(vec![hash_new_t, hash_le], true);
-
-    let hash_t = extern_hash_fps(vec![tt.x.c0, tt.x.c1, tt.y.c0, tt.y.c1], true);
-    let aux_hash_le = extern_nibbles_to_limbs(hash_le_aux); // mock
-    let hash_input = extern_hash_nibbles(vec![hash_t, hash_le_aux], true);
-
-    let mut simulate_stack_input = vec![];
-    simulate_stack_input.extend_from_slice(&all_qs);
-    simulate_stack_input.push(Hint::Fq(alpha_chord.c0));
-    simulate_stack_input.push(Hint::Fq(alpha_chord.c1));
-    simulate_stack_input.push(Hint::Fq(bias_minus_chord.c0));
-    simulate_stack_input.push(Hint::Fq(bias_minus_chord.c1));
-    // simulate_stack_input.push(Hint::Fq(tt.x.c0));
-    // simulate_stack_input.push(Hint::Fq(tt.x.c1));
-    // simulate_stack_input.push(Hint::Fq(tt.y.c0));
-    // simulate_stack_input.push(Hint::Fq(tt.y.c1));
-    // simulate_stack_input.push(Hint::Hash(aux_hash_le));
-
-    let hint_out = ElemG2PointAcc {
-        t: ark_bn254::G2Affine::new_unchecked(new_tx, new_ty),
-        add_le: Some((add_le0, add_le1)),
-        dbl_le: None,
-        // hash: hash_root_claim,
-    };
-    (hint_out, tap_point_add_with_frob(ate, all_scripts), simulate_stack_input)
-}
 
 // POINT DBL AND ADD
 
@@ -797,7 +672,7 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{bn254::{curves::{G1Affine, G2Affine}, fq2::Fq2}, chunk::taps_point_ops::{fq2_push_not_montgomery, point_add_eval}, execute_script};
+    use crate::{bn254::{curves::{G1Affine, G2Affine}, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2}, chunk::taps_point_ops::{extern_nibbles_to_limbs, fq2_push_not_montgomery, fq_push_not_montgomery, point_add_eval, ElemG2PointAcc, ElemTraitExt, Element}, execute_script, execute_script_without_stack_limit};
 
     use super::point_double_eval;
 
@@ -849,7 +724,7 @@ mod test {
 
 
     #[test]
-    fn test_g2_affine_hinted_check_add() {
+    fn test_point_add_eval() {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let t = ark_bn254::G2Affine::rand(&mut prng);
         let q = ark_bn254::G2Affine::rand(&mut prng);
@@ -907,6 +782,5 @@ mod test {
             exec_result.stats.max_nb_stack_items
         );
     }
-
 
 }

@@ -760,7 +760,7 @@ mod test {
             {point_ops_tapscript}
         };
 
-        let res = execute_script(script);
+        let res = execute_script_without_stack_limit(script);
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
