@@ -9,7 +9,7 @@ mod test {
     use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery, Hint};
     use crate::chunk::blake3compiled::hash_messages;
     use crate::chunk::element::*;
-    use crate::chunk::primitves::{hash_fp12, hash_fp12_with_hints, new_hash_g2acc_with_both_raw_le, pack_nibbles_to_limbs};
+    use crate::chunk::primitves::{hash_fp12, hash_fp12_with_hints, new_hash_g2acc_with_both_raw_le, new_hash_g2acc_with_hashed_le, pack_nibbles_to_limbs};
     use crate::chunk::taps_point_ops::*;
     use crate::chunk::primitves::{extern_hash_fps, extern_nibbles_to_limbs};
     use crate::chunk::taps_mul::*;
@@ -592,33 +592,41 @@ mod test {
 
         let (hint_out, point_ops_tapscript, mut hint_script) = chunk_point_ops(
             t,
-             q.y.c1, q.y.c0, q.x.c1, q.x.c0,
-              p.y, p.x, ate);
+            q.y.c1, q.y.c0, q.x.c1, q.x.c0,
+            p.y, p.x, ate);
 
               let preimage_hints = Element::G2AddEval(t).get_hash_preimage_as_hints();
               hint_script.extend_from_slice(& preimage_hints);
 
-        let bitcom_script = script!{
-            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
-                {i}
-            }
-            {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(t.hashed_output()) {
-                {i}
-            }
-            {Fq::toaltstack()}
+        let hint_out_hash = extern_nibbles_to_limbs(hint_out.hashed_output());
+        let hint_in_t4_hash = extern_nibbles_to_limbs(t.hashed_output());
+        let hint_in_p_hash = extern_nibbles_to_limbs(p.hashed_output());
 
+        let t4_hash_hints = Element::G2DblAddEval(t).get_hash_preimage_as_hints();
+        let p_hash_hints = Element::MSMG1(p).get_hash_preimage_as_hints();
+        hint_script.extend_from_slice(&t4_hash_hints);
+        hint_script.extend_from_slice(&p_hash_hints);
+
+        let bitcom_script = script!{
+            for i in hint_out_hash {
+                {i}
+            }
+            {Fq::toaltstack()}
+            for i in hint_in_p_hash {
+                {i}
+            }
+            {Fq::toaltstack()}
+            for i in hint_in_t4_hash {
+                {i}
+            }
+            {Fq::toaltstack()}
             {fq_push_not_montgomery(q.y.c1)}
             {Fq::toaltstack()}
             {fq_push_not_montgomery(q.y.c0)}
             {Fq::toaltstack()}
             {fq_push_not_montgomery(q.x.c1)}
             {Fq::toaltstack()}
-            {fq_push_not_montgomery(q.x.c0)}
-            {Fq::toaltstack()}
-            {fq_push_not_montgomery(p.y)}
-            {Fq::toaltstack()}
-            {fq_push_not_montgomery(p.x)}
+            {fq_push_not_montgomery(q.x.c0)} 
             {Fq::toaltstack()}
         };
 
@@ -650,10 +658,13 @@ mod test {
         let (hint_out, point_ops_tapscript, mut hint_script) = chunk_point_dbl(t4acc, p.y, p.x);
 
         let hint_out_hash = extern_nibbles_to_limbs(hint_out.hashed_output());
-        let hint_in_hash = extern_nibbles_to_limbs(t4acc.hashed_output());
+        let hint_in_t4_hash = extern_nibbles_to_limbs(t4acc.hashed_output());
+        let hint_in_p_hash = extern_nibbles_to_limbs(p.hashed_output());
 
-        let preimage_hints = Element::G2DblEval(t4acc).get_hash_preimage_as_hints();
-        hint_script.extend_from_slice(& preimage_hints);
+        let t4_hash_hints = Element::G2DblEval(t4acc).get_hash_preimage_as_hints();
+        let p_hash_hints = Element::MSMG1(p).get_hash_preimage_as_hints();
+        hint_script.extend_from_slice(&t4_hash_hints);
+        hint_script.extend_from_slice(&p_hash_hints);
         
 
         let bitcom_values = script!{
@@ -661,13 +672,13 @@ mod test {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in hint_in_hash {
+            for i in hint_in_p_hash {
                 {i}
             }
             {Fq::toaltstack()}
-            {fq_push_not_montgomery(p.y)}
-            {Fq::toaltstack()}
-            {fq_push_not_montgomery(p.x)}
+            for i in hint_in_t4_hash {
+                {i}
+            }
             {Fq::toaltstack()}
         };
 
@@ -706,19 +717,30 @@ mod test {
             t,
              q.y.c1, q.y.c0, q.x.c1, q.x.c0, p.y, p.x, ate);
 
-        let preimage_hints = Element::G2AddEval(t).get_hash_preimage_as_hints();
-        hint_script.extend_from_slice(& preimage_hints);
+
+        let hint_out_hash = extern_nibbles_to_limbs(hint_out.hashed_output());
+        let hint_in_t4_hash = extern_nibbles_to_limbs(t.hashed_output());
+        let hint_in_p_hash = extern_nibbles_to_limbs(p.hashed_output());
+
+
+        let t4_hash_hints = Element::G2DblEval(t).get_hash_preimage_as_hints();
+        let p_hash_hints = Element::MSMG1(p).get_hash_preimage_as_hints();
+        hint_script.extend_from_slice(&t4_hash_hints);
+        hint_script.extend_from_slice(&p_hash_hints);
 
         let bitcom_script = script!{
-            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
+            for i in hint_out_hash {
                 {i}
             }
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(t.hashed_output()) {
+            for i in hint_in_p_hash {
                 {i}
             }
             {Fq::toaltstack()}
-
+            for i in hint_in_t4_hash {
+                {i}
+            }
+            {Fq::toaltstack()}
             {fq_push_not_montgomery(q.y.c1)}
             {Fq::toaltstack()}
             {fq_push_not_montgomery(q.y.c0)}
@@ -726,10 +748,6 @@ mod test {
             {fq_push_not_montgomery(q.x.c1)}
             {Fq::toaltstack()}
             {fq_push_not_montgomery(q.x.c0)}
-            {Fq::toaltstack()}
-            {fq_push_not_montgomery(p.y)}
-            {Fq::toaltstack()}
-            {fq_push_not_montgomery(p.x)}
             {Fq::toaltstack()}
         };
 
@@ -1018,6 +1036,18 @@ mod test {
 
     #[test]
     fn test_hash_t_with_hashed_le() {
+
+        fn hash_g2acc_with_hashed_le() -> Script {
+            script! {
+                //Stack: [tx, ty, hash_inaux, hash_result]
+                //T
+                {Fq::toaltstack()} 
+                {new_hash_g2acc_with_hashed_le()}
+                {Fq::fromaltstack()}
+                {Fq::equal(1, 0)}
+            }
+        }
+
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let t = ark_bn254::G2Affine::rand(&mut prng);
         

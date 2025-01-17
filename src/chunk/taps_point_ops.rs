@@ -1,4 +1,5 @@
-use crate::bn254::{self, utils::*};
+use crate::bn254::curves::G1Affine;
+use crate::bn254::{self, g2_subgroup_check, utils::*};
 use crate::bn254::{fq2::Fq2};
 use crate::chunk::blake3compiled::hash_messages;
 use crate::chunk::primitves::*;
@@ -7,6 +8,7 @@ use crate::{
     treepp::*,
 };
 use ark_bn254::{ G2Affine};
+use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, Field};
 use num_traits::One;
 use std::ops::Neg;
@@ -15,85 +17,107 @@ use super::primitves::{extern_hash_fps};
 use super::element::*;
 
 
-pub(crate) fn hash_g2acc_with_hashed_le() -> Script {
-    script! {
-        //Stack: [tx, ty, hash_inaux, hash_result]
-        //T
-        {Fq::toaltstack()} 
-        {new_hash_g2acc_with_hashed_le()}
-        {Fq::fromaltstack()}
-        {Fq::equal(1, 0)}
+pub(crate) fn point_double_eval(t: ark_bn254::G2Affine, p: ark_bn254::G1Affine) -> ((ark_bn254::G2Affine, (ark_bn254::Fq2, ark_bn254::Fq2)), Script, Vec<Hint>) {
+    let mut hints = vec![];
+
+    let t_is_zero = t.is_zero() || (t == ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO)); // t is none or Some(0)
+    let (alpha, bias) = if t_is_zero {
+        (ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO)
+    } else {
+        let alpha = (t.x.square() + t.x.square() + t.x.square()) / (t.y + t.y); 
+        let bias = t.y - alpha * t.x;
+        (alpha, bias)
+    };
+
+    let (hinted_script1, hint1) = hinted_check_tangent_line(t,alpha, -bias);
+    let (hinted_script2, hint2) = hinted_affine_double_line(t.x,alpha, -bias);
+    let (hinted_script3, hint3) = hinted_ell_by_constant_affine(p.x, p.y,alpha, -bias);
+
+    let mut dbl_le0 = alpha;
+    dbl_le0.mul_assign_by_fp(&p.x);
+    let mut dbl_le1 = -bias;
+    dbl_le1.mul_assign_by_fp(&p.y);
+    
+    let result = ((t + t).into_affine(), (dbl_le0, dbl_le1));
+    if !t_is_zero { 
+        hints.push(Hint::Fq(alpha.c0));
+        hints.push(Hint::Fq(alpha.c1));
+        hints.push(Hint::Fq(-bias.c0));
+        hints.push(Hint::Fq(-bias.c1));
+        hints.extend(hint1);
+        hints.extend(hint2);
+        hints.extend(hint3);
     }
+ 
+    let script = script! {    
+        // a, b, tx, ty, px, py
+        { Fq2::toaltstack()}
+        { bn254::curves::G2Affine::is_zero_keep_element() }         // ... (dependent on input),  x, y, 0/1
+        OP_NOTIF                                     // c3 (alpha), c4 (-bias), ... (other hints), x, y
+            for _ in 0..Fq::N_LIMBS * 2 {
+                OP_DEPTH OP_1SUB OP_ROLL 
+            }                                        // -bias, ...,  x, y, alpha
+            for _ in 0..Fq::N_LIMBS * 2 {
+                OP_DEPTH OP_1SUB OP_ROLL 
+            }                                        // x, y, alpha, -bias
+            { Fq2::copy(2) }                          // x, y, alpha, -bias, alpha
+            { Fq2::copy(2) }                          // x, y, alpha, -bias, alpha, -bias
+            { Fq2::copy(10) }                          // x, y, alpha, -bias, alpha, -bias, x
+            { Fq2::copy(10) }                          // x, y, alpha, -bias, alpha, -bias, x, y
+            { hinted_script1 }                       // x, y, alpha, -bias, is_tangent_line_correct 
+            { Fq2::copy(2) } {Fq2::copy(2)}           // x, y alpha, -bias, alpha, -bias
+            { Fq2::copy(10) }                          // x, y alpha, -bias, alpha, -bias, x
+            { hinted_script2 }                       // x, y, alpha, -bias, x', y'
+            {Fq2::fromaltstack()}                   // x, y, alpha, -bias, x', y', px, py
+            {Fq2::roll(4)} {Fq2::roll(4)}           // x, y, alpha, -bias, px, py,  x', y'
+            {Fq2::toaltstack()} {Fq2::toaltstack()}
+            { hinted_script3 }                         // x, y, le,
+            {Fq2::fromaltstack()} {Fq2::fromaltstack()}  // x, y, le0, le1, x', y'
+            {Fq2::roll(6)} {Fq2::roll(6)}                            // x, y, x', y', le
+        OP_ENDIF
+    };
+    (result, script, hints)
 }
-
-
-// POINT DBL
 
 pub(crate) fn chunk_point_dbl(
     hint_t: ElemG2PointAcc,
     hint_py: ElemFq,
     hint_px: ElemFq,
 ) -> (ElemG2PointAcc, Script, Vec<Hint>) {
+    fn tap_point_dbl(dbl_eval_scr: Script) -> Script {
 
-    fn tap_point_dbl(hinted_check_tangent: Script, hinted_double_line: Script, hinted_ell_tangent: Script) -> Script {
         let ops_script = script! {
-            {Fq::fromaltstack()}
-            {Fq::fromaltstack()} // py
+            //[a, b, tx, ty, aux_t_in, px, py]
+            {Fq2::copy(0)} {Fq2::toaltstack()}
             {Fq::roll(2)}
-            {Fq::toaltstack()} // hash aux in
+            {Fq::toaltstack()} // hash aux_t_in
     
             //[a, b, tx, ty, px, py]
-            { Fq2::copy(8)} // alpha
-            { Fq2::copy(8)} // bias
-            { Fq2::copy(8)} // t.x
-            { Fq2::copy(8)} // t.y
-            { hinted_check_tangent }
-    
-            //[a, b, tx, ty, px, py]
-            { Fq2::copy(8) } // alpha
-            { Fq2::copy(8) } // bias
-            { Fq2::roll(4) } // p_dash
-            { hinted_ell_tangent }
-            { Fq2::toaltstack() } // le.0
-            { Fq2::toaltstack() } // le.1
-    
-            //[a, b, tx, ty]
-            { Fq2::roll(6)} // alpha
-            //[a, tx, ty, a]
-            { Fq2::roll(6)} // bias
-            //[tx, ty, a, b]
-            { Fq2::copy(6)} // t.x
-            //[tx, ty, a, b, tx]
-            { hinted_double_line } // R
-            // [t, R]
-    
-            { Fq2::fromaltstack() } // le.0
-            { Fq2::fromaltstack() } // le.1
+            {dbl_eval_scr}
             // [t, R, le]
     
-            // Altstack: [hash_out, hash_in, hash_inaux]
+            // Altstack: [hash_out, hash_p, hash_t, p, hash_inaux]
             // Stack: [t, R, le]
         };
         
         let pre_hash_script = script!{
             {Fq::fromaltstack()}
-            // Altstack: [hash_out, hash_in]
-            // Stack: [t, R, le, hash_inaux]
+            {Fq2::fromaltstack()}
+            // Altstack: [hash_out, hash_p_in, hash_t_in]
+            // Stack: [t, R, le, hash_inaux, p]
             for _ in 0..8 {
-                {Fq::roll(8)}
+                {Fq::roll(10)}
             }
-            // Altstack: [hash_out, hash_in]
-            // Stack: [t, hash_inaux, R, le]
+            // Altstack: [hash_out, hash_p_in, hash_t_in]
+            // Stack: [t, hash_inaux, p, R, le]
             {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
             {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
         };
     
         let hash_script = script! {
             //Altstack: [hash_out, hash_in]
-            //Stack: [tx, ty, hash_inaux, Rx, Ry, le0, le1, 0, 0]
-
-            {hash_messages(vec![ElementType::G2DblEval, ElementType::G2DblAddEval])}
-            // [Rx, Ry, le0, le1, 0, 0]
+            //Stack: [tx, ty, hash_inaux, p, Rx, Ry, le0, le1, 0, 0]
+            {hash_messages(vec![ElementType::G2DblEval, ElementType::MSMG1, ElementType::G2DblAddEval])}
         };
     
         let sc = script! {
@@ -109,81 +133,16 @@ pub(crate) fn chunk_point_dbl(
     // assert_eq!(sec_in.len(), 3);
     let t = hint_t.t;
     let p = ark_bn254::G1Affine::new_unchecked(hint_px, hint_py);
-    let hash_le_aux = hint_t.hash_le();
-
-    let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
-    let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
-    let mut alpha_tangent = t.x.square();
-    alpha_tangent /= t.y;
-    alpha_tangent.mul_assign_by_fp(&three_div_two);
-    // -bias
-    let bias_minus_tangent = alpha_tangent * t.x - t.y;
-
-    //println!("hint_point_dbl alpha {:?} bias {:?}",alpha_tangent, bias_minus_tangent);
-
-    let new_tx = alpha_tangent.square() - t.x.double();
-    let new_ty = bias_minus_tangent - alpha_tangent * new_tx;
-    let (hinted_double_line, hints_double_line) =
-        hinted_affine_double_line(t.x, alpha_tangent, bias_minus_tangent);
-    let (hinted_check_tangent, hints_check_tangent) =
-        hinted_check_tangent_line(t, alpha_tangent, bias_minus_tangent);
-
-    // affine mode as well
-    let mut dbl_le0 = alpha_tangent;
-    dbl_le0.mul_assign_by_fp(&p.x);
-
-    let mut dbl_le1 = bias_minus_tangent;
-    dbl_le1.mul_assign_by_fp(&p.y);
-
-    let (hinted_ell_tangent, hints_ell_tangent) =
-        hinted_ell_by_constant_affine(p.x, p.y, alpha_tangent, bias_minus_tangent);
-
-    let mut all_qs = vec![];
-    for hint in hints_check_tangent {
-        all_qs.push(hint)
-    }
-    for hint in hints_ell_tangent {
-        all_qs.push(hint)
-    }
-    for hint in hints_double_line {
-        all_qs.push(hint)
-    }
-
-    let pdash_x = extern_fq_to_nibbles(p.x);
-    let pdash_y = extern_fq_to_nibbles(p.y);
-
-    let hash_new_t =
-        extern_hash_fps(vec![new_tx.c0, new_tx.c1, new_ty.c0, new_ty.c1], true);
-    let hash_dbl_le =
-        extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
-    let hash_add_le = extern_hash_fps(vec![ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO], true);
-    let hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
-    let hash_root_claim = extern_hash_nibbles(vec![hash_new_t, hash_le], true);
-
-    let hash_t = extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
-    let aux_hash_le = extern_nibbles_to_limbs(hash_le_aux); // mock
-    let hash_input = extern_hash_nibbles(vec![hash_t, hash_le_aux], true);
-
-
-    let mut simulate_stack_input = vec![];
-    simulate_stack_input.extend_from_slice(&all_qs);
-    simulate_stack_input.push(Hint::Fq(alpha_tangent.c0));
-    simulate_stack_input.push(Hint::Fq(alpha_tangent.c1));
-    simulate_stack_input.push(Hint::Fq(bias_minus_tangent.c0));
-    simulate_stack_input.push(Hint::Fq(bias_minus_tangent.c1));
-    // simulate_stack_input.push(Hint::Fq(t.x.c0));
-    // simulate_stack_input.push(Hint::Fq(t.x.c1));
-    // simulate_stack_input.push(Hint::Fq(t.y.c0));
-    // simulate_stack_input.push(Hint::Fq(t.y.c1));
-    // simulate_stack_input.push(Hint::Hash(aux_hash_le));
     
+    let ((new_t, (dbl_le0, dbl_le1)), scr, hints) = point_double_eval(t, p);
+    // affine mode as well
+
     let hint_out: ElemG2PointAcc = ElemG2PointAcc {
-        t: G2Affine::new_unchecked(new_tx, new_ty),
+        t: new_t,
         dbl_le: Some((dbl_le0, dbl_le1)),
         add_le: None,
-        // hash: hash_root_claim,
     };
-    (hint_out, tap_point_dbl(hinted_check_tangent, hinted_double_line, hinted_ell_tangent), simulate_stack_input)
+    (hint_out, tap_point_dbl(scr), hints)
 }
 
 pub(crate) fn chunk_point_add_with_frob(
@@ -206,15 +165,15 @@ pub(crate) fn chunk_point_add_with_frob(
         }
 
         let ops_script = script! {
-            // [a,b,tx,ty, aux_in]
-            // [px, py, qx, qy, in, out]
+            // [hints tx,ty, taux, px, py], [Hout, Hin, Q]
+            for i in 0..4 {
+                {Fq::fromaltstack()}
+            }
+            // [hints tx,ty, taux, px, py, Q], [Hout, Hin]
+            {Fq2::copy(4)} {Fq2::toaltstack()} // p
+            {Fq::roll(6)} {Fq::toaltstack()} // hash aux in
 
-            {Fq::toaltstack()} // hash out
-            {Fq::toaltstack()} // hash in
-            {Fq::roll(6)}
-            {Fq::toaltstack()} // hash aux in
-
-            //[a, b, tx, ty, p, qx, qy]
+            // [hints tx,ty, px, py, Q], [Hout, Hin, p, hin_aux]
             // hinted check chord // t.x, t.y
             { Fq2::copy(12)} // alpha
             { Fq2::copy(12)} // bias
@@ -253,30 +212,32 @@ pub(crate) fn chunk_point_add_with_frob(
             // [tx, ty, qy, Rx, Ry, le0, le1]
             {Fq2::roll(8)}
             {Fq2::drop()}
-            // Altstack: [hash_out, hash_in, hash_inaux]
+            // Altstack: [hash_out, hash_p, hash_t, p, hash_inaux]
             // Stack: [tx, ty, Rx, Ry, le0, le1]
         };
 
         let pre_hash_script = script!{
             {Fq::fromaltstack()}
+            {Fq2::fromaltstack()}
             // Altstack: [hash_out, hash_in]
-            // Stack: [t, R, le, hash_inaux]
+            // Stack: [t, R, le, hash_inaux, p]
             for _ in 0..8 {
-                {Fq::roll(8)}
+                {Fq::roll(10)}
             }
-            // Altstack: [hash_out, hash_in]
-            // Stack: [t, hash_inaux, R, le]
+            // Altstack: [hash_out, hash_p_in, hash_t_in]
+            // Stack: [t, hash_inaux, p, R, le]
             {Fq2::toaltstack()} {Fq2::toaltstack()}
             {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
             {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
             {Fq2::fromaltstack()} {Fq2::fromaltstack()}
+            // [t, hash_inaux, p, R, 0, le]
         };
     
         let hash_script = script! {
             //Altstack: [hash_out, hash_in]
             //Stack: [tx, ty, hash_inaux, Rx, Ry, 0, 0, le0, le1, le1]
 
-            {hash_messages(vec![ElementType::G2AddEval, ElementType::G2DblAddEval])}
+            {hash_messages(vec![ElementType::G2AddEval, ElementType::MSMG1, ElementType::G2DblAddEval])}
             // [Rx, Ry, le0, le1, 0, 0]
         };
 
@@ -285,13 +246,9 @@ pub(crate) fn chunk_point_add_with_frob(
 
         let precompute_script = script! {
             // bring back from altstack
-            for _ in 0..8 {
+            for _ in 0..4 {
                 {Fq::fromaltstack()}
             }
-
-            // Input: [px, py, qx0, qx1, qy0, qy1, in, out]
-            {Fq::toaltstack()}
-            {Fq::toaltstack()}
 
             {ate_unsigned_bit} 1 OP_NUMEQUAL
             OP_IF
@@ -300,14 +257,17 @@ pub(crate) fn chunk_point_add_with_frob(
                 {beta_22_scr}
             OP_ENDIF
 
-            {Fq::fromaltstack()}
-            {Fq::fromaltstack()}
-            // Output: [px, py, qx0', qx1', qy0', qy1', in, out]
+            for _ in 0..4 {
+                {Fq::toaltstack()}
+            }
+
+            // Output: [tx, ty, px, py] [Hout, Hpin, Htin, Q]
         };
 
         let sc = script! {
             {precompute_script}
             {ops_script}
+
             {pre_hash_script}
             {hash_script}
             OP_TRUE
@@ -466,8 +426,6 @@ pub(crate) fn chunk_point_ops(
     
         let bcsize = 6 + 3;
         let ops_script = script! {
-            {precompute_scr}
-            
             // bring back from altstack
             for _ in 0..8 {
                 {Fq::fromaltstack()}
@@ -589,8 +547,10 @@ pub(crate) fn chunk_point_ops(
         
             {hash_messages(vec![ElementType::G2T, ElementType::G2DblAddEval])}
         };
-    
+
+        // [hints tx,ty, taux, px, py], [Hout, Hin, Q]
         let sc = script! {
+            {precompute_scr}
             {ops_script}
             {pre_hash_script}
             {hash_script}
@@ -737,3 +697,60 @@ pub(crate) fn chunk_point_ops(
     (hint_out, tap_point_ops(ate, all_scripts), simulate_stack_input)
 }
 
+#[cfg(test)]
+mod test {
+    use ark_ff::UniformRand;
+    use bitcoin_script::script;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
+
+    use crate::{bn254::{curves::{G1Affine, G2Affine}, fq2::Fq2}, chunk::taps_point_ops::fq2_push_not_montgomery, execute_script};
+
+    use super::point_double_eval;
+
+
+    #[test]
+    fn test_point_double_eval() {
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let t = ark_bn254::G2Affine::rand(&mut prng);
+        let p = ark_bn254::G1Affine::rand(&mut prng);
+        
+        let ((r, le), scr, hints) = point_double_eval(t, p);
+
+        // a, b, tx, ty, px, py
+
+        let script = script!(
+            for h in hints {
+                {h.push()}
+            }
+            {G2Affine::push_not_montgomery(t)}
+            {G1Affine::push_not_montgomery(p)}
+            // [hints, tx, ty, px, py]
+            {scr}
+            // t, R, dbl_le
+            {fq2_push_not_montgomery(le.1)}
+            {Fq2::equalverify()}
+            {fq2_push_not_montgomery(le.0)}
+            {Fq2::equalverify()}
+
+            {fq2_push_not_montgomery(r.y)}
+            {Fq2::equalverify()}
+            {fq2_push_not_montgomery(r.x)}
+            {Fq2::equalverify()}
+            
+            {fq2_push_not_montgomery(t.y)}
+            {Fq2::equalverify()}
+
+            {fq2_push_not_montgomery(t.x)}
+            {Fq2::equalverify()}
+
+            OP_TRUE
+        );
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        assert!(res.success);
+        assert!(res.final_stack.len() == 1);    
+    }
+}
