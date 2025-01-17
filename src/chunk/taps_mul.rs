@@ -368,8 +368,8 @@ pub(crate) fn chunk_squaring(
 
 // DENSE DENSE MUL BY CONSTANT
 
-pub(crate) fn chunk_dense_dense_mul0_by_constant(
-    hint_in_a: ElemFp12Acc,
+pub(crate) fn chunk_final_verify(
+    hint_in_a: ElemFp12Acc, // 
     hint_in_b: ElemFp12Acc,
 ) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
@@ -435,92 +435,6 @@ pub(crate) fn chunk_dense_dense_mul0_by_constant(
             hash: hash_h,
         },
         tap_dense_dense_mul0_by_constant(g, hint_mul_scr),
-        simulate_stack_input,
-    )
-}
-
-// DENSE DENSE MUL ONE
-pub(crate) fn chunk_dense_dense_mul1_by_constant(
-    hint_in_a: ElemFp12Acc,
-    hint_in_c0: ElemFp12Acc,
-    hint_in_b: ElemFp12Acc,
-) -> (ElemFp12Acc, Script, Vec<Hint>) {
-
-
-    fn tap_dense_dense_mul1_by_constant(g: ark_bn254::Fq12, hinted_mul: Script) -> Script {
-        let check_is_identity: bool = true;
-        let mut check_id = 1;
-        if !check_is_identity {
-            check_id = 0;
-        }
-    
-        let ghash = extern_hash_fps(g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), false);
-        let const_hash_limb = extern_nibbles_to_limbs(ghash);
-
-
-        let ops_scr = script! {
-            for l in const_hash_limb {
-                {l}
-            }
-            {Fq::fromaltstack()}
-            {Fq::roll(1)}
-            {Fq::toaltstack()}
-            {Fq::toaltstack()}
-            { hinted_mul }
-            {check_id} 1 OP_NUMEQUAL
-            OP_IF
-                {Fq6::copy(0)}
-                for _ in 0..6 {
-                    {fq_push_not_montgomery(ark_bn254::Fq::zero())}
-                }
-                {Fq6::equalverify()}
-            OP_ENDIF
-        };
-        let scr = script! {
-            {ops_scr}
-            {hash_mul(false)}
-            OP_TRUE
-        };
-        scr
-    }
-
-
-
-    let (f, g) = (hint_in_a.f, hint_in_b.f);
-    let (hinted_mul_scr, mul_hints) = Fq12::hinted_mul_second(12, f, 0, g);
-    let h = f * g;
-
-    let fvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
-    let hash_f = extern_hash_fps(
-        fvec.clone(),
-        true,
-    );
-
-    // let hash_c0 = extern_hash_fps(
-    //     hc0_vec
-    //     true,
-    // );
-    let hash_c = extern_hash_fps(
-        h.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-        true,
-    );
-    let gvec = g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
-
-    let mut simulate_stack_input = vec![];
-    simulate_stack_input.extend_from_slice(&mul_hints);
-    for f in &fvec {
-        simulate_stack_input.push(Hint::Fq(*f));
-    } 
-    for f in &gvec {
-        simulate_stack_input.push(Hint::Fq(*f));
-    } 
-
-    (
-        ElemFp12Acc {
-            f: h,
-            hash: hash_c,
-        },
-        tap_dense_dense_mul1_by_constant(g, hinted_mul_scr),
         simulate_stack_input,
     )
 }

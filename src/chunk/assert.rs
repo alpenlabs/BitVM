@@ -331,10 +331,7 @@ pub(crate) fn groth16(
 
     let dmul0 = wrap_hints_dense_dense_mul0_by_constant(is_compile_mode, all_output_hints.len(), &f_acc, pubs.fixed_acc);
     push_compare_or_return!(dmul0);
-
-    let dmul1 = wrap_hints_dense_dense_mul1_by_constant(is_compile_mode, all_output_hints.len(), &f_acc, &dmul0, pubs.fixed_acc);
-    push_compare_or_return!(dmul1);
-    f_acc = dmul1;
+    f_acc = dmul0;
 
     let result: ElemFp12Acc = f_acc.result.try_into().unwrap();
     if result.f != ark_bn254::Fq12::ONE {

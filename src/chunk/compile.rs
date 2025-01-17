@@ -92,8 +92,7 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
 
     let mut tap_point_ops = cached(|(a,b,c,d,e,f,g,h)| chunk_point_ops(a,b,c,d,e,f,g,h));
     let mut tap_sparse_dense_mul = cached(|(a, b, c)| chunk_sparse_dense_mul(a, b, c ));
-    let mut tap_dense_dense_mul0_by_constant = cached(|(a, b)| chunk_dense_dense_mul0_by_constant(a, b)); 
-    let mut tap_dense_dense_mul1_by_constant = cached(|(a, b, c)| chunk_dense_dense_mul1_by_constant(a, b, c)); 
+    let mut tap_dense_dense_mul0_by_constant = cached(|(a, b)| chunk_final_verify(a, b)); 
     let mut tap_frob_fp12 = cached(|(a, b)| chunk_frob_fp12(a,b));
     let mut tap_point_add_with_frob = cached(|a| chunk_point_add_with_frob(ElemG2PointAcc::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), a));
     let mut chunk_hash_p = cached(|(a, b, c, d)| chunk_hash_p(a, b, c, d ));
@@ -163,9 +162,6 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
             },
             ScriptType::PostMillerDenseDenseMulByConst0(inp) => {
                 op_scripts.push(tap_dense_dense_mul0_by_constant( (ElemFp12Acc::mock(), ElemFp12Acc {f: inp, hash: [0u8;64]}) ).1);
-            },
-            ScriptType::PostMillerDenseDenseMulByConst1(inp) => {
-                op_scripts.push(tap_dense_dense_mul1_by_constant( (ElemFp12Acc::mock(), ElemFp12Acc::mock(), ElemFp12Acc {f: inp, hash: [0u8;64]}) ).1);
             },
 
             ScriptType::MSM(inp) => {

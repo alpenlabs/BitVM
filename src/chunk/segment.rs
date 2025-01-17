@@ -49,7 +49,6 @@ pub enum ScriptType {
     PostMillerAddWithFrob(i8),
     PostMillerSparseAddWithFrob(([ark_bn254::G2Affine;4], i8)),
     PostMillerDenseDenseMulByConst0(ark_bn254::Fq12),
-    PostMillerDenseDenseMulByConst1(ark_bn254::Fq12),
 }
 
 
@@ -968,7 +967,7 @@ pub(crate) fn wrap_hints_dense_dense_mul0_by_constant(
 
     let (mut dmul0, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
     if !skip {
-        (dmul0,_, op_hints) = chunk_dense_dense_mul0_by_constant(
+        (dmul0,_, op_hints) = chunk_final_verify(
             a.clone(),
             fixedacc,
         );
@@ -982,47 +981,6 @@ pub(crate) fn wrap_hints_dense_dense_mul0_by_constant(
         result: Element::Fp12v0(dmul0),
         hints: op_hints,
         scr_type: ScriptType::PostMillerDenseDenseMulByConst0(constant),
-    }
-}
-
-pub(crate) fn wrap_hints_dense_dense_mul1_by_constant(
-    skip: bool,
-    segment_id: usize,
-    in_a: &Segment, in_c0: &Segment,
-    constant: ark_bn254::Fq12,
-) -> Segment {
-
-    let input_segment_info = vec![
-        (in_a.id),
-        (in_c0.id)
-    ];
-
-    let a: ElemFp12Acc = in_a.result.try_into().unwrap();
-    let fixedacc = ElemFp12Acc {
-        f: constant,
-        hash: extern_hash_fps(
-            constant.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-            false,
-        ),
-    };
-
-    let (mut dmul1, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
-    if !skip {
-        (dmul1,_, op_hints) = chunk_dense_dense_mul1_by_constant(
-            a.clone(),
-            in_c0.result.try_into().unwrap(),
-            fixedacc,
-        );
-    }
-
-    
-    Segment {
-        id: segment_id as u32,
-        
-        parameter_ids: input_segment_info,
-        result: Element::Fp12v0(dmul1),
-        hints: op_hints,
-        scr_type: ScriptType::PostMillerDenseDenseMulByConst1(constant),
     }
 }
 

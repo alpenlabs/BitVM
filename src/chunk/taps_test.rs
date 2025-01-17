@@ -465,7 +465,7 @@ mod test {
 
 
 
-        let (hint_out, tap_scr, hint_script) = chunk_dense_dense_mul0_by_constant(hint_f, hint_g);
+        let (hint_out, tap_scr, hint_script) = chunk_final_verify(hint_f, hint_g);
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
@@ -493,67 +493,6 @@ mod test {
         assert!(!res.success && res.final_stack.len() == 1);
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
-
-    #[test]
-    fn test_tap_dense_dense_mul1_by_constant() {
-        // runtime
-        let mut prng = ChaCha20Rng::seed_from_u64(0);
-        let f = ark_bn254::Fq12::rand(&mut prng);
-        let fhash = extern_hash_fps(
-            f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-            true,
-        );
-        let hint_f = ElemFp12Acc { f, hash: fhash };
-
-        let g = f.inverse().unwrap();
-        let ghash = extern_hash_fps(
-            g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-            false,
-        );
-        let hint_g = ElemFp12Acc { f: g, hash: ghash };
-
-
-        let c = hint_f.f * hint_g.f;
-        let hash_c = extern_hash_fps(
-            c.c0.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), true);
-
-        let hint_c0 = ElemFp12Acc {f: ark_bn254::Fq12::new(c.c0, ark_bn254::Fq6::ZERO), hash: hash_c};
-
-
-        let (hint_out, tap_scr, hint_script) = chunk_dense_dense_mul1_by_constant(hint_f, hint_c0, hint_g);
-
-        let bitcom_scr = script!{
-            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
-                {i}
-            }
-            {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_f.hashed_output()) {
-                {i}
-            }
-            {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_c0.hashed_output()) {
-                {i}
-            }
-            {Fq::toaltstack()}
-        };
-
-        let tap_len = tap_scr.len();
-        let script = script! {
-            for h in hint_script {
-                { h.push() }
-            }
-            {bitcom_scr}
-            {tap_scr}
-        };
-        let res = execute_script(script);
-        for i in 0..res.final_stack.len() {
-            println!("{i:} {:?}", res.final_stack.get(i));
-        }
-        assert!(!res.success && res.final_stack.len() == 1);
-        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
-    }
-
-
 
     #[test]
     fn test_tap_squaring() {
