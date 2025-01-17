@@ -8,6 +8,7 @@ use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use ark_ec::{bn::BnConfig, AffineRepr};
 use ark_ff::Field;
 use ark_ff::{AdditiveGroup, BigInt};
+use bitcoin::opcodes::all::OP_DEPTH;
 use num_bigint::BigUint;
 
 use crate::{
@@ -507,23 +508,26 @@ pub fn hinted_from_eval_point(p: ark_bn254::G1Affine) -> (Script, Vec<Hint>) {
     let (hinted_script1, hint1) = hinted_y_from_eval_point(p.y, py_inv);
     let (hinted_script2, hint2) = hinted_x_from_eval_point(p, py_inv);
 
-    let script_lines = vec![
+    let script = script!{
+        // [yinv, hints,.., x, y]
+        {Fq2::toaltstack()}
+        for _ in 0..Fq::N_LIMBS {
+            OP_DEPTH OP_1SUB OP_ROLL 
+        }
+        {Fq2::fromaltstack()}
         // [hints, yinv, x, y]
-        Fq::copy(2),
-        Fq::copy(1),
-        hinted_script1,
-
+        {Fq::copy(2)}
+        {Fq::copy(1)}
+        {hinted_script1}
         // [hints, yinv, x, y]
-        Fq::copy(2),
-        Fq::toaltstack(),
-        hinted_script2,
-        Fq::fromaltstack(),
-    ];
+        {Fq::copy(2)}
+        {Fq::toaltstack()}
+        {hinted_script2}
+        {Fq::fromaltstack()}
+    };
 
-    let mut script = script! {};
-    for script_line in script_lines {
-        script = script.push_script(script_line.compile());
-    }
+
+    hints.push(Hint::Fq(py_inv));
     hints.extend(hint1);
     hints.extend(hint2);
 
@@ -1573,7 +1577,7 @@ mod test {
             }
             { fq12_push_not_montgomery(f) }
 
-            { fq_push_not_montgomery(p.y.inverse().unwrap()) }
+            // { fq_push_not_montgomery(p.y.inverse().unwrap()) }
             { fq_push_not_montgomery(p.x) }
             { fq_push_not_montgomery(p.y) }
             { from_eval_point_script }
@@ -1613,8 +1617,6 @@ mod test {
             for tmp in hints {
                 { tmp.push() }
             }
-            { Fq::push_u32_le_not_montgomery(&BigUint::from(pyinv).to_u32_digits()) } // aux hint
-
             { Fq::push_u32_le_not_montgomery(&BigUint::from(p.x).to_u32_digits()) } // input
             { Fq::push_u32_le_not_montgomery(&BigUint::from(p.y).to_u32_digits()) }
             { eval_scr }
@@ -1624,6 +1626,9 @@ mod test {
             OP_TRUE
         };
         let exec_result = execute_script(script);
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:3}: {:?}", exec_result.final_stack.get(i));
+        }
         assert!(exec_result.success);
     }
 

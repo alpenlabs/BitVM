@@ -206,15 +206,12 @@ impl Verifier {
             hinted_script2, // Fq::mul()
             Fq::roll(1),
             // variants of G1 points
-            {fq_push_not_montgomery(p2.y.inverse().unwrap())},
             {fq_push_not_montgomery(p2.x)},
             {fq_push_not_montgomery(p2.y)},
             hinted_script3, // utils::from_eval_point(p2),
-            {fq_push_not_montgomery(p3.y.inverse().unwrap())},
             {fq_push_not_montgomery(p3.x)},
             {fq_push_not_montgomery(p3.y)},
             hinted_script4, // utils::from_eval_point(p3),
-            {fq_push_not_montgomery(p4.y.inverse().unwrap())},
             {fq_push_not_montgomery(p4.x)},
             {fq_push_not_montgomery(p4.y)},
             hinted_script5, // utils::from_eval_point(p4),

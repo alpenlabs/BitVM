@@ -2,8 +2,10 @@
 #[cfg(test)]
 mod test {
 
+    use crate::bn254::curves::G1Affine;
     use crate::bn254::fp254impl::Fp254Impl;
     use crate::bn254::fq::Fq;
+    use crate::bn254::fq2::Fq2;
     use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery, Hint};
     use crate::chunk::blake3compiled::hash_messages;
     use crate::chunk::element::*;
@@ -188,6 +190,41 @@ mod test {
         assert!(!res.success && res.final_stack.len() == 1);
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
+
+    #[test]
+    fn test_tap_precompute_p() {
+        // runtime
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let p = ark_bn254::G1Affine::rand(&mut prng);
+
+        let (hint_out, tap_prex, hint_script) = chunk_precompute_p(p.y, p.x);
+
+        let bitcom_scr = script!{
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}    
+            {G1Affine::push_not_montgomery(p)}
+            {Fq2::toaltstack()}     
+        };
+
+        let tap_len = tap_prex.len();
+        let script = script! {
+            for h in hint_script {
+                { h.push() }
+            }
+            {bitcom_scr}
+            {tap_prex}
+        };
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        assert!(!res.success);
+        assert!(res.final_stack.len() == 1);
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+    }
+
 
     #[test]
     fn test_tap_precompute_x() {

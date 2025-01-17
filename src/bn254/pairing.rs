@@ -1348,19 +1348,15 @@ mod test {
             { Fq::push_u32_le_not_montgomery(&BigUint::from_str("0").unwrap().to_u32_digits()) }
 
             // p1, p2, p3, p4
-            {fq_push_not_montgomery(p1.y.inverse().unwrap())}
             {fq_push_not_montgomery(p1.x)}
             {fq_push_not_montgomery(p1.y)}
             { from_eval_p1 }
-            {fq_push_not_montgomery(p2.y.inverse().unwrap())}
             {fq_push_not_montgomery(p2.x)}
             {fq_push_not_montgomery(p2.y)}
             {from_eval_p2 }// utils::from_eval_point(p2),
-            {fq_push_not_montgomery(p3.y.inverse().unwrap())}
             {fq_push_not_montgomery(p3.x)}
             {fq_push_not_montgomery(p3.y)}
             {from_eval_p3 }// utils::from_eval_point(p3),
-            {fq_push_not_montgomery(p4.y.inverse().unwrap())}
             {fq_push_not_montgomery(p4.x)}
             {fq_push_not_montgomery(p4.y)}
             { from_eval_p4 }

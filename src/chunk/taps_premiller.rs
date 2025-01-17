@@ -1,6 +1,6 @@
 use crate::bigint::U254;
 use crate::bn254::fq6::Fq6;
-use crate::bn254::utils::*;
+use crate::bn254::{curves, utils::*};
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::blake3compiled::hash_messages;
 use crate::chunk::primitves::*;
@@ -124,6 +124,74 @@ pub(crate) fn chunk_hash_c2(
 }
 
 // precompute P
+pub(crate) fn chunk_precompute_p(
+    hint_in_py: ark_bn254::Fq,
+    hint_in_px: ark_bn254::Fq,
+) -> (ark_bn254::G1Affine, Script, Vec<Hint>) {
+    fn tap_precompute_p() -> Script {
+        let (eval_xy, hints) = hinted_from_eval_point(
+            ark_bn254::G1Affine::new_unchecked(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE),
+        );
+        let (on_curve_scr, on_curve_hint) = crate::bn254::curves::G1Affine::hinted_is_on_curve(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE);
+    
+        let ops_scr = script! {
+            {Fq2::fromaltstack()}
+            // [hints, px, py] [pdash_hash]
+            {Fq::is_zero_keep_element(0)}
+            OP_IF 
+                {Fq::fromaltstack()} {Fq::drop()}
+                {curves::G1Affine::drop()}
+                for i in 0..hints.len()+on_curve_hint.len() {
+                    {Fq::drop()}
+                }
+            OP_ELSE
+                // [hints, px, py]
+                {Fq2::copy(0)}
+                {on_curve_scr}
+                OP_IF
+                    {eval_xy} 
+                    // [pdx, pdy]    
+                    {hash_messages(vec![ElementType::MSMG1])}
+                OP_ELSE
+                    {Fq::fromaltstack()} {Fq::drop()}
+                    {curves::G1Affine::drop()}
+                    for i in 0..hints.len() {
+                        {Fq::drop()}
+                    }
+                OP_ENDIF
+            OP_ENDIF
+        };
+
+    
+        script! {
+            {ops_scr}
+            OP_TRUE             
+        }
+    }
+
+
+    // assert_eq!(sec_in.len(), 3);
+    let mut p =  ark_bn254::G1Affine::new_unchecked(hint_in_px, hint_in_py);
+    if p.y.inverse().is_none() {
+        p = ElemG1Point::mock();
+    }
+    let pdy = p.y.inverse().unwrap();
+    let pdx = -p.x * pdy;
+    let pd = ark_bn254::G1Affine::new_unchecked(pdx, pdy);
+    let (_, hints) =  hinted_from_eval_point(p);
+
+    let (_, on_curve_hint) = crate::bn254::curves::G1Affine::hinted_is_on_curve(p.x, p.y);
+
+    let mut simulate_stack_input = vec![];
+    simulate_stack_input.extend_from_slice(&on_curve_hint);
+    simulate_stack_input.extend_from_slice(&hints);
+
+    (pd, tap_precompute_p(), simulate_stack_input)
+}
+
+
+
+
 pub(crate) fn chunk_precompute_px(
     hint_in_py: ark_bn254::Fq,
     hint_in_px: ark_bn254::Fq,
@@ -199,6 +267,8 @@ pub(crate) fn chunk_precompute_px(
 
     (pdx, tap_precompute_px(on_curve_scr), simulate_stack_input)
 }
+
+
 
 // precompute P
 pub(crate) fn chunk_precompute_py(
