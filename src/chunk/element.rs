@@ -19,6 +19,7 @@ pub(crate) enum Element {
     HashBytes(ElemHashBytes), // 1
     MSMG1(ElemG1Point), // 2
     MSMG2(ElemG2Point), // 4
+    NONE(),
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -37,6 +38,7 @@ pub(crate) enum ElementType {
     HashBytes, // 1
     MSMG1, // 2
     MSMG2, // 4
+    NONE,
 }
 
 impl ElementType {
@@ -56,6 +58,7 @@ impl ElementType {
             ElementType::ScalarElem => 1,
             ElementType::SparseEval => 12,
             ElementType::HashBytes => 1,
+            ElementType::NONE => 0,
         }
     }
 
@@ -86,6 +89,8 @@ impl Element {
             Element::ScalarElem(_) => ElementType::ScalarElem,
             Element::SparseEval(_) => ElementType::SparseEval,
             Element::HashBytes(_) => ElementType::HashBytes,
+            Element::NONE() => ElementType::NONE,
+
         }
     }
 
@@ -110,6 +115,7 @@ impl Element {
             Element::ScalarElem(r) => r.hashed_output(),
             Element::SparseEval(r) => r.hashed_output(),
             Element::HashBytes(r) => r.hashed_output(),
+            Element::NONE() => [0u8; 64],
         }
     }
 
@@ -153,6 +159,7 @@ impl Element {
             },
             Element::MSMG1(r) => vec![Hint::Fq(r.x), Hint::Fq(r.y)],
             Element::MSMG2(_) => vec![],
+            Element::NONE() => vec![],
         }
     }
 }

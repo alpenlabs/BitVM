@@ -138,9 +138,10 @@ pub(crate) fn wrap_hint_hash_p(
     let mut input_segment_info: Vec<SegmentID> = vec![];
     //let sig = &mut Sig { msk: None, cache: HashMap::new() };
     
-    input_segment_info.push(in_t.id);
     input_segment_info.push(in_ry.id);
     input_segment_info.push(in_rx.id);
+    input_segment_info.push(in_t.id);
+
 
     let t = in_t.result.try_into().unwrap();
     let ry = in_ry.result.try_into().unwrap();

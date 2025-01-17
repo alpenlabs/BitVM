@@ -117,7 +117,7 @@ pub(crate) fn chunk_hash_p(
 
     let rdash = (ark_bn254::G1Affine::new_unchecked(tx, ty) + hint_in_q).into_affine();
     // assert_eq!(rdash, ark_bn254::G1Affine::new_unchecked(rx, ry));
-    let zero_nib = [0u8;64];
+   
 
     let alpha_chord = (ty - qy) / (tx - qx);
     let bias_minus_chord = alpha_chord * tx - ty;
@@ -140,14 +140,6 @@ pub(crate) fn chunk_hash_p(
     // simulate_stack_input.push(Hint::Fq(ty));
 
     let ops_script = script!{
-        // Altstack:[identity, th, gpy, gpx]
-        {Fq::fromaltstack()} {Fq::fromaltstack()} {Fq::fromaltstack()}
-        // Stack:[..gpx, gpy, th]
-        {Fq::roll(1)} {Fq::roll(2)}
-        // Stack:[..th, gpy, gpx]
-        {Fq::toaltstack()} {Fq::toaltstack()} {Fq::toaltstack()}
-        // Altstack:[identity, gpx, gpy, th]
-
         //[hinttqa, alpha, bias, tx, ty]
         { Fq2::copy(2)}
         //[hinttqa, alpha, bias, tx, ty, alpha, bias]
@@ -173,7 +165,7 @@ pub(crate) fn chunk_hash_p(
         {fq_push_not_montgomery(qx)}
         { hinted_add_line.clone() }
 
-        // Altstack:[identity, gpx, gpy, th]
+        // Altstack:[rx, ry, th]
         //[ntx, nty, tx, ty]
 
         {Fq2::fromaltstack()} {Fq::fromaltstack()}
@@ -181,22 +173,11 @@ pub(crate) fn chunk_hash_p(
         { hash_fp2() }
         {Fq::fromaltstack()}
         {Fq::equalverify(1, 0)} {Fq2::fromaltstack()} 
-        {Fq2::fromaltstack()} {Fq::roll(1)}
-        // // [ntx, nty, gpx, gpy]
-        {Fq::fromaltstack()}
-        {fq_push_not_montgomery(ark_bn254::Fq::ZERO)}
-        // [ntx, nty, gpx, gpy, zero, 0]
-        {Fq::equal(1, 0)}
-        OP_IF 
-            // equal so, continue verify rest
-            {Fq2::equal()}
-            OP_NOT OP_VERIFY
-        OP_ELSE
-            // not equal, disproven, so drop and exit
-            {Fq2::drop()}
-            {Fq2::drop()}
-            {1} OP_VERIFY
-        OP_ENDIF
+        {Fq2::fromaltstack()}
+        // // [ntx, nty, rx, ry]
+        {Fq2::equal()}
+        OP_NOT OP_VERIFY
+
     };
 
     let sc = script! {
@@ -204,7 +185,7 @@ pub(crate) fn chunk_hash_p(
         OP_TRUE
     };
 
-    (zero_nib, sc, simulate_stack_input)
+    ([0u8;64], sc, simulate_stack_input)
 }
 
 
@@ -380,21 +361,17 @@ mod test {
         let r = (t + q).into_affine();
         let thash = extern_hash_fps(vec![t.x, t.y], false);
 
-        let (hint_out,  hash_c_scr, hint_script) = chunk_hash_p( t, r.y, r.x,q);
+        let (_,  hash_c_scr, hint_script) = chunk_hash_p( t, r.y, r.x,q);
 
         let bitcom_scr = script!{
-            for i in extern_nibbles_to_limbs(hint_out) {
-                {i}
-            }
-            {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(thash) {
-                {i}
-            }
-            {Fq::toaltstack()}
             {fq_push_not_montgomery(r.y)}
             {Fq::toaltstack()}   
             {fq_push_not_montgomery(r.x)}
             {Fq::toaltstack()}   
+            for i in extern_nibbles_to_limbs(thash) {
+                {i}
+            }
+            {Fq::toaltstack()}
         };
 
 
