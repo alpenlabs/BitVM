@@ -9,6 +9,7 @@ use crate::{
 };
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, Field};
+use bitcoin::opcodes::all::OP_ROLL;
 use num_traits::One;
 use std::ops::Neg;
 
@@ -153,6 +154,7 @@ fn point_add_eval(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine, p: ark_bn254::
                     { Fq2::copy(18) }
                     { Fq2::roll(18) }                    // qx tx ty c3 c4 c3 c4 tx ty qx qy
                     { hinted_script1 }                 // qx tx ty c3 c4 0/1
+
                     {Fq2::copy(2)} {Fq2::copy(2)}     // qx tx ty c3 c4, c3 c4
                     { Fq2::copy(10) }                    // qx tx ty c3 c4, c3 c4, tx
                     { Fq2::roll(14) }                    // c3 c4 tx qx
@@ -346,9 +348,127 @@ pub(crate) fn chunk_point_dbl(
 }
 
 
-// POINT DBL AND ADD
 
 pub(crate) fn chunk_point_ops(
+    hint_t: ElemG2PointAcc,
+    hint_q4y1: ElemFq,
+    hint_q4y0: ElemFq,
+    hint_q4x1: ElemFq,
+    hint_q4x0: ElemFq,
+    hint_py: ElemFq,
+    hint_px: ElemFq,
+    ate: i8,
+) -> (ElemG2PointAcc, Script, Vec<Hint>) {
+    fn tap_point_dbl_and_add(double_scr: Script, add_eval_scr: Script, ate: i8) -> Script {
+
+        let ops_script = script! {
+            //[a, b, tx, ty, p]
+
+            {Fq2::copy(0)} {Fq2::toaltstack()}
+            {Fq::roll(2)}
+            {Fq::toaltstack()} // hash aux_t_in
+
+            //[a, b, tx, ty px, py] [q, p, hash_t_in]
+            {double_scr}
+            // [hints.., t, 2t, dbl_le]
+
+            {Fq::fromaltstack()} {Fq2::fromaltstack()} // hash_t_in and p
+            {Fq2::fromaltstack()} {Fq2::fromaltstack()} // q
+            // [hints.., t, 2t, dbl_le, hash_t_in, p, q]
+            {Fq2::copy(4)} {Fq2::toaltstack()}
+            // [hints.., t, 2t, dbl_le, hash_t_in, p, q]
+            {Fq::roll(6)} {Fq::toaltstack()}
+            // [hints.., t, 2t, dbl_le, p, q]
+            {Fq2::copy(8)} {Fq2::copy(8)}
+            {Fq2::toaltstack()} {Fq2::toaltstack()}
+            // [hints.., t, 2t, p, q]
+            {Fq2::roll(4)}
+            // [hints.., t, 2t, q, p]
+            {add_eval_scr}
+
+            // [t, nt, add_le], [p, hash_t_in, dbl_le]
+            {Fq2::fromaltstack()} {Fq2::fromaltstack()} 
+            // [t, nt, add_le, dbl_le], [p, hash_t_in]
+            {Fq2::roll(6)} {Fq2::roll(6)}
+
+
+        };
+
+        let pre_hash_script = script!{
+            // [t, nt, dbl_le, add_le], [p, hash_t_in]
+            {Fq2::roll(14)} {Fq2::roll(14)}
+            // [nt, dbl_le, add_le, t], [p, hash_t_in]
+            {Fq2::fromaltstack()}
+            {Fq::fromaltstack()} 
+            // [nt, dbl_le, add_le, t, hash_t_in, p]
+            for _ in 0..12 {
+                OP_DEPTH OP_1SUB OP_ROLL
+            }
+            // [nt, dbl_le, add_le, t, hash_t_in, p]
+            // [t, hash_t_in, p, nt, dbl_le, add_le]
+        };
+    
+        let hash_script = script! {
+            //Altstack: [hash_out, hash_in]
+            //Stack: [tx, ty, hash_inaux, Rx, Ry, 0, 0, le0, le1, le1]
+            {hash_messages(vec![ElementType::G2AddEval, ElementType::MSMG1, ElementType::G2DblAddEval])}
+            // [Rx, Ry, le0, le1, 0, 0]
+        };
+        
+        let mut precompute_script = script!();
+        if ate == -1 {
+            precompute_script = script! {
+                // bring back from altstack
+                for _ in 0..4 {
+                    {Fq::fromaltstack()}
+                }
+                {Fq::neg(0)}
+                for _ in 0..4 {
+                    {Fq::toaltstack()}
+                }
+                // Output: [tx, ty, px, py] [Hout, Hpin, Htin, Q]
+            };
+        }
+
+        let sc = script! {
+            {precompute_script}
+            {ops_script}
+            {pre_hash_script}
+            {hash_script}
+            OP_TRUE
+        };
+        sc
+    }
+    
+    
+    assert!(ate == 1 || ate == -1);
+    let t = hint_t.t;
+    let p = ark_bn254::G1Affine::new_unchecked(hint_px, hint_py);
+    let q = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0, hint_q4x1), ark_bn254::Fq2::new(hint_q4y0, hint_q4y1));
+    
+    let mut qq = q.clone();
+    if ate == -1 {
+        qq = q.neg();
+    }
+
+    let mut hints = vec![];
+    let ((two_t, (dbl_le0, dbl_le1)), double_scr, double_hint) = point_double_eval(t, p);
+    let ((new_t, (add_le0, add_le1)), add_scr, add_hint) = point_add_eval(two_t, qq, p);
+    hints.extend_from_slice(&double_hint);    
+    hints.extend_from_slice(&add_hint);
+
+    let hint_out: ElemG2PointAcc = ElemG2PointAcc {
+        t: new_t,
+        add_le: Some((add_le0, add_le1)),
+        dbl_le: Some((dbl_le0, dbl_le1)),
+    };
+    (hint_out, tap_point_dbl_and_add(double_scr, add_scr, ate), hints)
+}
+
+
+// POINT DBL AND ADD
+
+pub(crate) fn chunk_point_ops2(
     hint_t: ElemG2PointAcc,
     hint_q4y1: ElemFq,
     hint_q4y0: ElemFq,
@@ -664,6 +784,8 @@ pub(crate) fn chunk_point_ops(
 
     (hint_out, tap_point_ops(ate, all_scripts), simulate_stack_input)
 }
+
+
 
 #[cfg(test)]
 mod test {

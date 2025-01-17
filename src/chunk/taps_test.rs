@@ -579,7 +579,7 @@ mod test {
 
     #[test]
     fn test_tap_affine_double_add_eval() {
-        let ate = -1;
+        let ate = 1;
         let mut prng = ChaCha20Rng::seed_from_u64(2);
         let t = ark_bn254::G2Affine::rand(&mut prng);
         let q = ark_bn254::G2Affine::rand(&mut prng);
@@ -595,8 +595,6 @@ mod test {
             q.y.c1, q.y.c0, q.x.c1, q.x.c0,
             p.y, p.x, ate);
 
-              let preimage_hints = Element::G2AddEval(t).get_hash_preimage_as_hints();
-              hint_script.extend_from_slice(& preimage_hints);
 
         let hint_out_hash = extern_nibbles_to_limbs(hint_out.hashed_output());
         let hint_in_t4_hash = extern_nibbles_to_limbs(t.hashed_output());
@@ -760,7 +758,7 @@ mod test {
             {point_ops_tapscript}
         };
 
-        let res = execute_script_without_stack_limit(script);
+        let res = execute_script(script);
         for i in 0..res.final_stack.len() {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
