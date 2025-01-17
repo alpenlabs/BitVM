@@ -579,7 +579,7 @@ mod test {
 
     #[test]
     fn test_tap_affine_double_add_eval() {
-        let ate = 1;
+        let ate = -1;
         let mut prng = ChaCha20Rng::seed_from_u64(2);
         let t = ark_bn254::G2Affine::rand(&mut prng);
         let q = ark_bn254::G2Affine::rand(&mut prng);
@@ -700,7 +700,7 @@ mod test {
     
     #[test]
     fn test_tap_affine_add_eval() {
-        let ate = 1;
+        let ate = -1;
 
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let t = ark_bn254::G2Affine::rand(&mut prng);

@@ -379,38 +379,46 @@ pub(crate) fn chunk_point_ops(
             // [hints.., t, 2t, dbl_le, hash_t_in, p, q]
             {Fq::roll(6)} {Fq::toaltstack()}
             // [hints.., t, 2t, dbl_le, p, q]
-            {Fq2::copy(8)} {Fq2::copy(8)}
+            {Fq2::roll(8)} {Fq2::roll(8)}
             {Fq2::toaltstack()} {Fq2::toaltstack()}
             // [hints.., t, 2t, p, q]
             {Fq2::roll(4)}
-            // [hints.., t, 2t, q, p]
+            // [hints.., t, 2t, q, p]            
             {add_eval_scr}
 
+            // [t, 2t, nt, add_le], [p, hash_t_in, dbl_le]
+            for _ in 0..4 {
+                {Fq2::toaltstack()}
+            }
+            {Fq2::drop()} {Fq2::drop()}
+            for _ in 0..4 {
+                {Fq2::fromaltstack()}
+            }
             // [t, nt, add_le], [p, hash_t_in, dbl_le]
             {Fq2::fromaltstack()} {Fq2::fromaltstack()} 
             // [t, nt, add_le, dbl_le], [p, hash_t_in]
             {Fq2::roll(6)} {Fq2::roll(6)}
-
-
+            // [t, nt, dbl_le, add_le], [p, hash_t_in]
         };
+
+
 
         let pre_hash_script = script!{
             // [t, nt, dbl_le, add_le], [p, hash_t_in]
             {Fq2::roll(14)} {Fq2::roll(14)}
             // [nt, dbl_le, add_le, t], [p, hash_t_in]
-            {Fq2::fromaltstack()}
-            {Fq::fromaltstack()} 
+            {Fq::fromaltstack()}
+            {Fq2::fromaltstack()} 
             // [nt, dbl_le, add_le, t, hash_t_in, p]
-            for _ in 0..12 {
+            for _ in 0..12*Fq::N_LIMBS {
                 OP_DEPTH OP_1SUB OP_ROLL
             }
-            // [nt, dbl_le, add_le, t, hash_t_in, p]
             // [t, hash_t_in, p, nt, dbl_le, add_le]
         };
     
         let hash_script = script! {
             //Altstack: [hash_out, hash_in]
-            //Stack: [tx, ty, hash_inaux, Rx, Ry, 0, 0, le0, le1, le1]
+            //Stack: [tx, ty, hash_inaux, p, Rx, Ry, 0, 0, le0, le1, le1]
             {hash_messages(vec![ElementType::G2AddEval, ElementType::MSMG1, ElementType::G2DblAddEval])}
             // [Rx, Ry, le0, le1, 0, 0]
         };
@@ -419,9 +427,11 @@ pub(crate) fn chunk_point_ops(
         if ate == -1 {
             precompute_script = script! {
                 // bring back from altstack
-                for _ in 0..4 {
-                    {Fq::fromaltstack()}
-                }
+                {Fq::fromaltstack()}
+                {Fq::fromaltstack()}
+                {Fq::fromaltstack()}
+                {Fq::neg(0)}
+                {Fq::fromaltstack()}
                 {Fq::neg(0)}
                 for _ in 0..4 {
                     {Fq::toaltstack()}
@@ -464,328 +474,6 @@ pub(crate) fn chunk_point_ops(
     };
     (hint_out, tap_point_dbl_and_add(double_scr, add_scr, ate), hints)
 }
-
-
-// POINT DBL AND ADD
-
-pub(crate) fn chunk_point_ops2(
-    hint_t: ElemG2PointAcc,
-    hint_q4y1: ElemFq,
-    hint_q4y0: ElemFq,
-    hint_q4x1: ElemFq,
-    hint_q4x0: ElemFq,
-    hint_py: ElemFq,
-    hint_px: ElemFq,
-    ate: i8,
-) -> (ElemG2PointAcc, Script, Vec<Hint>) {
-    pub(crate) fn tap_point_ops(ate: i8, scripts: [Script; 7]) -> Script {
-        assert!(ate == 1 || ate == -1);
-    
-        let mut ate_unsigned_bit = 1;
-        if ate == -1 {
-            ate_unsigned_bit = 0;
-        }
-        let ate_mul_y_toaltstack = script! {
-            {ate_unsigned_bit}
-            1 OP_NUMEQUAL
-            OP_IF
-                {Fq::toaltstack()}
-            OP_ELSE // -1
-                {Fq::neg(0)}
-                {Fq::toaltstack()}
-            OP_ENDIF
-        };
-        let precompute_scr = script!{
-            {Fq::fromaltstack()}
-            {Fq::fromaltstack()}
-            {Fq::fromaltstack()}
-            {Fq::fromaltstack()}
-            {Fq::fromaltstack()}
-            {Fq::fromaltstack()}
-    
-            {ate_mul_y_toaltstack.clone()}
-            {ate_mul_y_toaltstack}
-    
-            {Fq::toaltstack()}
-            {Fq::toaltstack()}
-            {Fq::toaltstack()}
-            {Fq::toaltstack()}
-        };
-    
-        let bcsize = 6 + 3;
-        let ops_script = script! {
-            // bring back from altstack
-            for _ in 0..8 {
-                {Fq::fromaltstack()}
-            }
-            // Altstack is empty
-            // View of stack:
-            // aux
-            // { fq2_push_not_montgomery(alpha_chord)}
-            // { fq2_push_not_montgomery(bias_minus_chord)}
-            // { fq2_push_not_montgomery(alpha_tangent)}
-            // { fq2_push_not_montgomery(bias_minus_tangent)}
-            // { fq2_push_not_montgomery(t.x) }
-            // { fq2_push_not_montgomery(t.y) }
-            // { fq_push_not_montgomery(aux_hash) } // AUX_HASH- not bc
-    
-            // bit commits
-            // { fq_push_not_montgomery(p_dash_x) }
-            // { fq_push_not_montgomery(p_dash_y) }
-            // { fq2_push_not_montgomery(q.x) }
-            // { fq2_push_not_montgomery(q.y) }
-            // { hash_in } // hash
-            // MOVE_AUX_HASH_HERE
-            // { hash_out_claim } // hash
-    
-            // move aux hash to MOVE_AUX_HASH_HERE
-            {Fq::toaltstack()}
-            {Fq::toaltstack()}
-            {Fq::roll(6)}
-            {Fq::fromaltstack()}
-            {Fq::fromaltstack()}
-    
-            { Fq2::copy(bcsize+6)} // alpha
-            { Fq2::copy(bcsize+6)} // bias
-            { Fq2::copy(bcsize+6)} // t.x
-            { Fq2::copy(bcsize+6)} // t.y
-            { scripts[0].clone() }
-    
-            { Fq2::copy(bcsize+6) } // alpha
-            { Fq2::copy(bcsize+6) } // bias
-            { Fq2::copy(4 + 7) } // p_dash
-            { scripts[1].clone() }
-            { Fq2::toaltstack() } // le.0
-            { Fq2::toaltstack() } // le.1
-    
-    
-            { Fq2::copy(bcsize+6)} // alpha
-            { Fq2::copy(bcsize+6)} // bias
-            { Fq2::copy(bcsize+6)} // t.x
-            { scripts[2].clone() }
-            { Fq2::toaltstack() }
-            { Fq2::toaltstack()}
-    
-            { Fq2::roll(bcsize+6) } // alpha tangent drop
-            { Fq2::drop() }
-            { Fq2::roll(bcsize+4) } // bias tangent drop
-            { Fq2::drop() }
-    
-            // hinted check chord // t.x, t.y
-            { Fq2::copy(bcsize+6)} // alpha
-            { Fq2::copy(bcsize+6)} // bias
-            { Fq2::copy(8+1) } // q.x
-            { Fq2::copy(8+1) } // q.y
-            { scripts[3].clone() }
-            { Fq2::copy(bcsize+6)} // alpha
-            { Fq2::copy(bcsize+6)} // bias
-            { Fq2::fromaltstack() } // TT
-            { Fq2::fromaltstack() }
-            { Fq2::copy(2)} // t.x
-            { Fq2::toaltstack() } // t.x to altstack
-            { scripts[4].clone() }
-    
-    
-            { Fq2::copy(bcsize+6) } // alpha
-            { Fq2::copy(bcsize+6) } // bias
-            { Fq2::copy(10+1) } // p_dash
-            { scripts[5].clone() }
-    
-            { Fq2::roll(6+bcsize+4) } // alpha
-            { Fq2::roll(6+bcsize+4) } // bias
-            { Fq2::copy(4+4+4+1) } //q.x
-            { Fq2::fromaltstack() } // t.x from altstack
-            { scripts[6].clone() } // alpha, bias chord consumed
-    
-            { Fq2::toaltstack() }//R
-            { Fq2::toaltstack() }
-    
-            { Fq2::toaltstack() } //le_add
-            { Fq2::toaltstack() }
-    
-    
-            { Fq::toaltstack() } //hashes
-            { Fq::toaltstack() }
-            { Fq::toaltstack() }
-            { Fq2::drop() } // drop Qy
-            { Fq2::drop() } // drop Qx
-            { Fq::drop() } // drop Py
-            { Fq::drop() } // drop Px
-    
-            // Altstack: [dbl_le, R, add_le, hash_out, hash_in, hash_inaux]
-            // Stack: [t]
-        };
-    
-        let pre_hash_script = script!(
-            {Fq::fromaltstack()} {Fq::fromaltstack()}
-
-            {Fq::fromaltstack()}
-            {Fq2::fromaltstack()} {Fq2::fromaltstack()}
-            {Fq2::fromaltstack()} {Fq2::fromaltstack()}
-            {Fq2::fromaltstack()} {Fq2::fromaltstack()}
-
-            // [t, hash_inaux, hash_in, hash_out, add_le, R, dbl_le]
-            {Fq::roll(13)} {Fq::roll(13)} {Fq2::toaltstack()}
-            // [t, hash_inaux, add_le, R, dbl_le], [hash_in, hash_out]
-            {Fq2::roll(10)} {Fq2::roll(10)}
-            // [t, hash_inaux, R, dbl_le, add_le], [hash_in, hash_out]
-        );
-
-        let hash_script = script! {
-        
-            {hash_messages(vec![ElementType::G2T, ElementType::G2DblAddEval])}
-        };
-
-        // [hints tx,ty, taux, px, py], [Hout, Hin, Q]
-        let sc = script! {
-            {precompute_scr}
-            {ops_script}
-            {pre_hash_script}
-            {hash_script}
-            OP_TRUE
-        };
-        sc
-    }
-    
-    // assert_eq!(sec_in.len(), 7);
-    let (t, p, hash_le_aux) = (hint_t.t, ark_bn254::G1Affine::new_unchecked(hint_px, hint_py), hint_t.hash_le());
-    let q = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0, hint_q4x1), ark_bn254::Fq2::new(hint_q4y0, hint_q4y1));
-    let mut qq = q.clone();
-    if ate == -1 {
-        qq = q.neg();
-    }
-
-    let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
-    let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
-    let mut alpha_tangent = t.x.square();
-    alpha_tangent /= t.y;
-    alpha_tangent.mul_assign_by_fp(&three_div_two);
-    // -bias
-    let bias_minus_tangent = alpha_tangent * t.x - t.y;
-
-    //println!("alphat {:?} biast {:?}", alpha_tangent, bias_minus_tangent);
-
-    let tx = alpha_tangent.square() - t.x.double();
-    let ty = bias_minus_tangent - alpha_tangent * tx;
-    let (hinted_double_line, hints_double_line) =
-        hinted_affine_double_line(t.x, alpha_tangent, bias_minus_tangent);
-    let (hinted_check_tangent, hints_check_tangent) =
-        hinted_check_tangent_line(t, alpha_tangent, bias_minus_tangent);
-
-    let tt = ark_bn254::G2Affine::new_unchecked(tx, ty);
-
-    let alpha_chord = (tt.y - qq.y) / (tt.x - qq.x);
-    // -bias
-    let bias_minus_chord = alpha_chord * tt.x - tt.y;
-    assert_eq!(alpha_chord * tt.x - tt.y, bias_minus_chord);
-
-    //println!("alphac {:?} biasc {:?}", alpha_chord, bias_minus_chord);
-
-    let new_tx = alpha_chord.square() - tt.x - qq.x;
-    let new_ty = bias_minus_chord - alpha_chord * new_tx;
-    let p_dash_x = p.x;
-    let p_dash_y = p.y;
-
-    let (hinted_check_chord_t, hints_check_chord_t) =
-        hinted_check_line_through_point(tt.x, alpha_chord, bias_minus_chord);
-    let (hinted_check_chord_q, hints_check_chord_q) =
-        hinted_check_line_through_point(qq.x, alpha_chord, bias_minus_chord);
-    let (hinted_add_line, hints_add_line) = hinted_affine_add_line(tt.x, qq.x, alpha_chord, bias_minus_chord);
-
-    // affine mode as well
-    let mut dbl_le0 = alpha_tangent;
-    dbl_le0.mul_assign_by_fp(&p.x);
-
-    let mut dbl_le1 = bias_minus_tangent;
-    dbl_le1.mul_assign_by_fp(&p.y);
-
-    let mut add_le0 = alpha_chord;
-    add_le0.mul_assign_by_fp(&p.x);
-
-    let mut add_le1 = bias_minus_chord;
-    add_le1.mul_assign_by_fp(&p.y);
-
-    let (hinted_ell_tangent, hints_ell_tangent) =
-        hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_tangent, bias_minus_tangent);
-    let (hinted_ell_chord, hints_ell_chord) =
-        hinted_ell_by_constant_affine(p_dash_x, p_dash_y, alpha_chord, bias_minus_chord);
-
-    let all_scripts = [
-        hinted_check_tangent, hinted_ell_tangent, 
-        hinted_double_line, hinted_check_chord_q, 
-        hinted_check_chord_t, hinted_ell_chord, 
-        hinted_add_line,
-    ];
-    let mut all_qs = vec![];
-    for hint in hints_check_tangent {
-        all_qs.push(hint)
-    }
-    for hint in hints_ell_tangent {
-        all_qs.push(hint)
-    }
-    for hint in hints_double_line {
-        all_qs.push(hint)
-    }
-    for hint in hints_check_chord_q {
-        all_qs.push(hint)
-    }
-    for hint in hints_check_chord_t {
-        all_qs.push(hint)
-    }
-    for hint in hints_ell_chord {
-        all_qs.push(hint)
-    }
-    for hint in hints_add_line {
-        all_qs.push(hint)
-    }
-
-    let pdash_x = extern_fq_to_nibbles(p.x);
-    let pdash_y = extern_fq_to_nibbles(p.y);
-    let qdash_x0 = extern_fq_to_nibbles(q.x.c0);
-    let qdash_x1 = extern_fq_to_nibbles(q.x.c1);
-    let qdash_y0 = extern_fq_to_nibbles(q.y.c0);
-    let qdash_y1 = extern_fq_to_nibbles(q.y.c1);
-
-    let hash_new_t =
-        extern_hash_fps(vec![new_tx.c0, new_tx.c1, new_ty.c0, new_ty.c1], true);
-    let hash_dbl_le =
-        extern_hash_fps(vec![dbl_le0.c0, dbl_le0.c1, dbl_le1.c0, dbl_le1.c1], true);
-    let hash_add_le =
-        extern_hash_fps(vec![add_le0.c0, add_le0.c1, add_le1.c0, add_le1.c1], true);
-    let hash_le = extern_hash_nibbles(vec![hash_dbl_le, hash_add_le], true);
-    let hash_root_claim = extern_hash_nibbles(vec![hash_new_t, hash_le], true);
-
-    let hash_t = extern_hash_fps(vec![t.x.c0, t.x.c1, t.y.c0, t.y.c1], true);
-    let aux_hash_le = extern_nibbles_to_limbs(hash_le_aux);
-    let hash_input = extern_hash_nibbles(vec![hash_t, hash_le_aux], true);
-
-    let mut simulate_stack_input = vec![];
-    simulate_stack_input.extend_from_slice(&all_qs);
-    simulate_stack_input.push(Hint::Fq(alpha_chord.c0));
-    simulate_stack_input.push(Hint::Fq(alpha_chord.c1));
-    simulate_stack_input.push(Hint::Fq(bias_minus_chord.c0));
-    simulate_stack_input.push(Hint::Fq(bias_minus_chord.c1));
-    simulate_stack_input.push(Hint::Fq(alpha_tangent.c0));
-    simulate_stack_input.push(Hint::Fq(alpha_tangent.c1));
-    simulate_stack_input.push(Hint::Fq(bias_minus_tangent.c0));
-    simulate_stack_input.push(Hint::Fq(bias_minus_tangent.c1));
-    // simulate_stack_input.push(Hint::Fq(t.x.c0));
-    // simulate_stack_input.push(Hint::Fq(t.x.c1));
-    // simulate_stack_input.push(Hint::Fq(t.y.c0));
-    // simulate_stack_input.push(Hint::Fq(t.y.c1));
-    // simulate_stack_input.push(Hint::Hash(aux_hash_le));
-
-    let hint_out = ElemG2PointAcc {
-        t: ark_bn254::G2Affine::new_unchecked(new_tx, new_ty),
-        add_le: Some((add_le0, add_le1)),
-        dbl_le: Some((dbl_le0, dbl_le1)),
-        // hash: hash_root_claim,
-    };
-
-    (hint_out, tap_point_ops(ate, all_scripts), simulate_stack_input)
-}
-
-
 
 #[cfg(test)]
 mod test {
