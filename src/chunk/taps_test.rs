@@ -6,10 +6,9 @@ mod test {
     use crate::bn254::fp254impl::Fp254Impl;
     use crate::bn254::fq::Fq;
     use crate::bn254::fq2::Fq2;
-    use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery, Hint};
-    use crate::chunk::blake3compiled::hash_messages;
+    use crate::bn254::utils::{fq2_push_not_montgomery, fq_push_not_montgomery, Hint};
     use crate::chunk::element::*;
-    use crate::chunk::primitves::{hash_fp12, hash_fp12_with_hints, new_hash_g2acc_with_both_raw_le, new_hash_g2acc_with_hashed_le, pack_nibbles_to_limbs};
+    use crate::chunk::primitves::{new_hash_g2acc_with_both_raw_le, new_hash_g2acc_with_hashed_le, pack_nibbles_to_limbs};
     use crate::chunk::taps_point_ops::*;
     use crate::chunk::primitves::{extern_hash_fps, extern_nibbles_to_limbs};
     use crate::chunk::taps_mul::*;

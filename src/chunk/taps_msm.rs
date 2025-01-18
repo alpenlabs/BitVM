@@ -4,18 +4,19 @@ use std::str::FromStr;
 use crate::bn254::curves::G1Affine;
 use crate::bn254::{self};
 use crate::bn254::fr::Fr;
-use crate::bn254::utils::{fq_push_not_montgomery, Hint};
+use crate::bn254::utils::{fq2_push_not_montgomery, fq_push_not_montgomery, hinted_from_eval_point, Hint};
 use crate::chunk::primitves::extern_hash_fps;
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
 };
 use ark_ec::{AffineRepr, CurveGroup};
-use ark_ff::{AdditiveGroup, BigInteger, PrimeField};
+use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
 use num_bigint::BigUint;
 use num_traits::One;
 
-use super::element::{ElemFq, ElemG1Point};
+use super::blake3compiled::hash_messages;
+use super::element::{ElemFq, ElemG1Point, ElemTraitExt, ElementType};
 use super::primitves::{hash_fp2, HashBytes};
 use crate::bn254::fq2::Fq2;
 
@@ -186,6 +187,76 @@ pub(crate) fn chunk_hash_p(
     };
 
     ([0u8;64], sc, simulate_stack_input)
+}
+
+pub(crate) fn chunk_hash_var_p(
+    hint_in_t: ElemG1Point,
+    hint_in_q: ark_bn254::G1Affine,
+) -> (ElemG1Point, Script, Vec<Hint>) {
+    // r (gp3) = t(msm) + q(vk0)
+    let (tx, qx, ty, qy) = (hint_in_t.x, hint_in_q.x, hint_in_t.y, hint_in_q.y);
+    let t = ark_bn254::G1Affine::new_unchecked(tx, ty);
+    let q = ark_bn254::G1Affine::new_unchecked(qx, qy);
+    let (add_scr, add_hints) = bn254::curves::G1Affine::hinted_check_add(t, q);
+    let mut r = (t + q).into_affine();
+    if r.y.inverse().is_none() {
+        r = ElemG1Point::mock();
+    }
+
+    let rdy = r.y.inverse().unwrap();
+    let rdx = -r.x * rdy;
+    let rd = ark_bn254::G1Affine::new_unchecked(rdx, rdy);
+
+    let (on_curve_scr, on_curve_hint) = crate::bn254::curves::G1Affine::hinted_is_on_curve(r.x, r.y);
+    let (eval_xy, eval_hints) = hinted_from_eval_point(ark_bn254::G1Affine::new_unchecked(r.x, r.y));    
+
+    let ops_script = script!{
+        // [t] [hash_rd, hash_t]
+        { Fq2::copy(0)} 
+        // [t, t]
+        {G1Affine::push_not_montgomery(q)}
+        // [t, t, q]
+        {add_scr}
+        // [t, r]
+        {Fq::is_zero_keep_element(0)}
+        OP_IF 
+            // drop altstack
+            {Fq2::fromaltstack()} {Fq2::drop()}
+            // drop stack
+            {G1Affine::drop()} {G1Affine::drop()}
+            for i in 0..eval_hints.len()+on_curve_hint.len() {
+                {Fq::drop()}
+            }
+        OP_ELSE
+            // [hints, r]
+            {Fq2::copy(0)}
+            {on_curve_scr}
+            OP_IF
+                {eval_xy} 
+                // [t, rd]    
+                {hash_messages(vec![ElementType::MSMG1, ElementType::MSMG1])}
+            OP_ELSE
+                {Fq2::fromaltstack()} {Fq2::drop()}
+                {G1Affine::drop()} {G1Affine::drop()}
+                for i in 0..eval_hints.len() {
+                    {Fq::drop()}
+                }
+            OP_ENDIF
+        OP_ENDIF
+
+    };
+
+    let sc = script! {
+        {ops_script}
+        OP_TRUE
+    };
+
+    let mut all_hints = vec![];
+    all_hints.extend_from_slice(&add_hints);
+    all_hints.extend_from_slice(&on_curve_hint);
+    all_hints.extend_from_slice(&eval_hints);
+
+    (rd, sc, all_hints)
 }
 
 
@@ -382,6 +453,49 @@ mod test {
             }
             for h in Element::MSMG1(t).get_hash_preimage_as_hints() {
                 {h.push()}
+            }
+            {bitcom_scr}
+            {hash_c_scr}
+        };
+
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        assert!(!res.success);
+        assert!(res.final_stack.len() == 1);
+
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+    }
+
+
+
+    #[test]
+    fn test_tap_hash_var_p() {
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let q = ark_bn254::G1Affine::rand(&mut prng);
+        let t = ark_bn254::G1Affine::rand(&mut prng);
+        let r = (t + q).into_affine();
+
+        let (hint_out,  hash_c_scr, mut hint_script) = chunk_hash_var_p( t, q);
+        hint_script.extend_from_slice(&Element::MSMG1(t).get_hash_preimage_as_hints());
+        
+        println!("hints len {:?}", hint_script.len());
+        let bitcom_scr = script!{
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}
+            for i in extern_nibbles_to_limbs(t.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}
+        };
+
+        let tap_len = hash_c_scr.len();
+        let script = script! {
+            for h in hint_script {
+                { h.push() }
             }
             {bitcom_scr}
             {hash_c_scr}
