@@ -523,7 +523,7 @@ pub(crate) fn wrap_hint_sparse_dense_mul(
     }
 }
 
-pub(crate) fn wrap_hint_double_eval_mul_for_fixed_qs(
+pub(crate) fn wrap_hint_multiply_point_evals_on_tangent_for_fixed_g2(
     skip: bool,
     segment_id: usize,
     in_p3y: &Segment,
@@ -548,7 +548,7 @@ pub(crate) fn wrap_hint_double_eval_mul_for_fixed_qs(
 
     let (mut leval, mut op_hints) = (ElemSparseEval::mock(), vec![]);
     if !skip {
-        (leval, _, op_hints) = chunk_double_eval_mul_for_fixed_qs(
+        (leval, _, op_hints) = chunk_multiply_point_evals_on_tangent_for_fixed_g2(
             // sig),
             // input_segment_info.clone(),
             p3y,
@@ -743,7 +743,7 @@ pub(crate) fn wrap_hints_dense_le_mul1(
 
 
 
-pub(crate) fn wrap_hint_add_eval_mul_for_fixed_qs(
+pub(crate) fn wrap_hint_multiply_point_evals_on_chord_for_fixed_g2(
     skip: bool,
     segment_id: usize,
     in_p3y: &Segment,
@@ -771,7 +771,7 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_qs(
 
     let (mut leval, mut op_hints) = (ElemSparseEval::mock(), vec![]);
     if !skip {
-        (leval,_, op_hints) = chunk_add_eval_mul_for_fixed_qs(
+        (leval,_, op_hints) = chunk_multiply_point_evals_on_chord_for_fixed_g2(
             p3y,
             p3x,
             p2y,
@@ -892,7 +892,7 @@ pub(crate) fn wrap_hint_point_add_with_frob(
     }
 }
 
-pub(crate) fn wrap_hint_add_eval_mul_for_fixed_qs_with_frob(
+pub(crate) fn wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
     skip: bool,
     segment_id: usize,
     in_p3y: &Segment,
@@ -920,7 +920,7 @@ pub(crate) fn wrap_hint_add_eval_mul_for_fixed_qs_with_frob(
 
     let (mut leval, mut op_hints) = (ElemSparseEval::mock(), vec![]);
     if !skip {
-        (leval, _, op_hints) = chunk_add_eval_mul_for_fixed_qs_with_frob(
+        (leval, _, op_hints) = chunk_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
             p3y,
             p3x,
             p2y,

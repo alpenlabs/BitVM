@@ -1,23 +1,18 @@
-use crate::bn254::curves::{G1Affine, G2Affine};
-use crate::bn254::{self, g2_subgroup_check, utils::*};
+use crate::bn254::curves::{G2Affine};
+use crate::bn254::{self, utils::*};
 use crate::bn254::{fq2::Fq2};
 use crate::chunk::blake3compiled::hash_messages;
-use crate::chunk::primitves::*;
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
 };
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, Field};
-use bitcoin::opcodes::all::OP_ROLL;
-use num_traits::One;
 use std::ops::Neg;
 
-use super::primitves::{extern_hash_fps};
 use super::element::*;
 
-
-pub(crate) fn point_double_eval(t: ark_bn254::G2Affine, p: ark_bn254::G1Affine) -> ((ark_bn254::G2Affine, (ark_bn254::Fq2, ark_bn254::Fq2)), Script, Vec<Hint>) {
+fn utils_point_double_eval(t: ark_bn254::G2Affine, p: ark_bn254::G1Affine) -> ((ark_bn254::G2Affine, (ark_bn254::Fq2, ark_bn254::Fq2)), Script, Vec<Hint>) {
     let mut hints = vec![];
 
     let t_is_zero = t.is_zero() || (t == ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO)); // t is none or Some(0)
@@ -79,8 +74,7 @@ pub(crate) fn point_double_eval(t: ark_bn254::G2Affine, p: ark_bn254::G1Affine) 
     (result, script, hints)
 }
 
-
-fn point_add_eval(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine, p: ark_bn254::G1Affine) -> ((ark_bn254::G2Affine, (ark_bn254::Fq2, ark_bn254::Fq2)), Script, Vec<Hint>) {
+fn utils_point_add_eval(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine, p: ark_bn254::G1Affine) -> ((ark_bn254::G2Affine, (ark_bn254::Fq2, ark_bn254::Fq2)), Script, Vec<Hint>) {
     let mut hints = vec![];
 
     let t_is_zero = t.is_zero() || (t == ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO)); // t is none or Some(0)
@@ -268,7 +262,7 @@ pub(crate) fn chunk_point_add_with_frob(
     }
 
     let mut hints = frob_hint;
-    let ((new_t, (add_le0, add_le1)), add_scr, add_hint) = point_add_eval(t, qq, p);
+    let ((new_t, (add_le0, add_le1)), add_scr, add_hint) = utils_point_add_eval(t, qq, p);
     hints.extend_from_slice(&add_hint);
 
     let hint_out: ElemG2PointAcc = ElemG2PointAcc {
@@ -278,8 +272,6 @@ pub(crate) fn chunk_point_add_with_frob(
     };
     (hint_out, tap_point_add(frob_scr, add_scr), hints)
 }
-
-
 
 pub(crate) fn chunk_point_dbl(
     hint_t: ElemG2PointAcc,
@@ -336,7 +328,7 @@ pub(crate) fn chunk_point_dbl(
     let t = hint_t.t;
     let p = ark_bn254::G1Affine::new_unchecked(hint_px, hint_py);
     
-    let ((new_t, (dbl_le0, dbl_le1)), scr, hints) = point_double_eval(t, p);
+    let ((new_t, (dbl_le0, dbl_le1)), scr, hints) = utils_point_double_eval(t, p);
     // affine mode as well
 
     let hint_out: ElemG2PointAcc = ElemG2PointAcc {
@@ -346,8 +338,6 @@ pub(crate) fn chunk_point_dbl(
     };
     (hint_out, tap_point_dbl(scr), hints)
 }
-
-
 
 pub(crate) fn chunk_point_ops(
     hint_t: ElemG2PointAcc,
@@ -462,8 +452,8 @@ pub(crate) fn chunk_point_ops(
     }
 
     let mut hints = vec![];
-    let ((two_t, (dbl_le0, dbl_le1)), double_scr, double_hint) = point_double_eval(t, p);
-    let ((new_t, (add_le0, add_le1)), add_scr, add_hint) = point_add_eval(two_t, qq, p);
+    let ((two_t, (dbl_le0, dbl_le1)), double_scr, double_hint) = utils_point_double_eval(t, p);
+    let ((new_t, (add_le0, add_le1)), add_scr, add_hint) = utils_point_add_eval(two_t, qq, p);
     hints.extend_from_slice(&double_hint);    
     hints.extend_from_slice(&add_hint);
 
@@ -482,9 +472,9 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{bn254::{curves::{G1Affine, G2Affine}, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2}, chunk::taps_point_ops::{extern_nibbles_to_limbs, fq2_push_not_montgomery, fq_push_not_montgomery, point_add_eval, ElemG2PointAcc, ElemTraitExt, Element}, execute_script, execute_script_without_stack_limit};
+    use crate::{bn254::{curves::{G1Affine, G2Affine}, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2}, chunk::taps_point_ops::{fq2_push_not_montgomery, fq_push_not_montgomery, utils_point_add_eval, ElemG2PointAcc, ElemTraitExt, Element}, execute_script, execute_script_without_stack_limit};
 
-    use super::point_double_eval;
+    use super::utils_point_double_eval;
 
 
     #[test]
@@ -493,7 +483,7 @@ mod test {
         let t = ark_bn254::G2Affine::rand(&mut prng);
         let p = ark_bn254::G1Affine::rand(&mut prng);
         
-        let ((r, le), scr, hints) = point_double_eval(t, p);
+        let ((r, le), scr, hints) = utils_point_double_eval(t, p);
 
         // a, b, tx, ty, px, py
 
@@ -546,7 +536,7 @@ mod test {
         let x = alpha.square() - t.x - q.x;
         let y = bias_minus - alpha * x;
 
-        let ((r, le), hinted_check_add, hints) = point_add_eval(t, q, p);
+        let ((r, le), hinted_check_add, hints) = utils_point_add_eval(t, q, p);
 
         let script = script! {
             for hint in hints {

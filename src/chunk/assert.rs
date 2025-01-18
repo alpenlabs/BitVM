@@ -205,7 +205,7 @@ pub(crate) fn groth16(
         push_compare_or_return!(sdmul);
         f_acc = sdmul;
 
-        let leval = wrap_hint_double_eval_mul_for_fixed_qs(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3);
+        let leval = wrap_hint_multiply_point_evals_on_tangent_for_fixed_g2(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3);
         push_compare_or_return!(leval);
         (t2, t3) = ((t2 + t2).into_affine(), (t3 + t3).into_affine());
 
@@ -234,7 +234,7 @@ pub(crate) fn groth16(
         push_compare_or_return!(sdmul);
         f_acc = sdmul;
 
-        let leval = wrap_hint_add_eval_mul_for_fixed_qs(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, ate);
+        let leval = wrap_hint_multiply_point_evals_on_chord_for_fixed_g2(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, ate);
         push_compare_or_return!(leval);
         if ate == 1 {
             (t2, t3) = ((t2 + pubs.q2).into_affine(), (t3 + pubs.q3).into_affine());
@@ -295,7 +295,7 @@ pub(crate) fn groth16(
     push_compare_or_return!(sdmul);
     f_acc = sdmul;
 
-    let leval = wrap_hint_add_eval_mul_for_fixed_qs_with_frob(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, 1);
+    let leval = wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, 1);
     push_compare_or_return!(leval);
     // (t2, t3) = (le.t2, le.t3);
     t2 = get_hint_for_add_with_frob(pubs.q2, t2, 1);
@@ -317,7 +317,7 @@ pub(crate) fn groth16(
     push_compare_or_return!(sdmul);
     f_acc = sdmul;
 
-    let leval = wrap_hint_add_eval_mul_for_fixed_qs_with_frob(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, -1);
+    let leval = wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, -1);
     push_compare_or_return!(leval);
     t2 = get_hint_for_add_with_frob(pubs.q2, t2, -1);
     t3 = get_hint_for_add_with_frob(pubs.q3, t3, -1);

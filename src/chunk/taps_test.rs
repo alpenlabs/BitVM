@@ -767,7 +767,7 @@ mod test {
     }
 
     #[test]
-    fn test_tap_double_eval_mul_for_fixed_qs() {
+    fn test_tap_multiply_point_evals_on_tangent_for_fixed_g2() {
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -776,21 +776,23 @@ mod test {
         let t2 = ark_bn254::G2Affine::rand(&mut prng);
         let t3 = ark_bn254::G2Affine::rand(&mut prng);
 
-        let (hint_out, tap_scr, hint_script) = chunk_double_eval_mul_for_fixed_qs(p3.y, p3.x, p2.y, p2.x, t2, t3);
+        let (hint_out, tap_scr, mut hint_script) = chunk_multiply_point_evals_on_tangent_for_fixed_g2(p3.y, p3.x, p2.y, p2.x, t2, t3);
+
+        hint_script.extend_from_slice(&vec![Hint::Fq(p2.x), Hint::Fq(p2.y), Hint::Fq(p3.x), Hint::Fq(p3.y)]);
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}
             }
-            {Fq::toaltstack()}    
-            {fq_push_not_montgomery(p3.y)}
-            {Fq::toaltstack()}          
-            {fq_push_not_montgomery(p3.x)}
-            {Fq::toaltstack()}          
-            {fq_push_not_montgomery(p2.y)}
-            {Fq::toaltstack()}           
-            {fq_push_not_montgomery(p2.x)}
-            {Fq::toaltstack()}                
+            {Fq::toaltstack()}  
+            for i in extern_nibbles_to_limbs(p3.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}  
+            for i in extern_nibbles_to_limbs(p2.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}                 
         };
 
         let (nt2, nt3) = (hint_out.t2, hint_out.t3);
@@ -814,7 +816,7 @@ mod test {
     }
 
     #[test]
-    fn test_tap_add_eval_mul_for_fixed_qs() {
+    fn test_tap_multiply_point_evals_on_chord_for_fixed_g2() {
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -824,32 +826,36 @@ mod test {
         let t3 = ark_bn254::G2Affine::rand(&mut prng);
         let q2 = ark_bn254::G2Affine::rand(&mut prng);
         let q3 = ark_bn254::G2Affine::rand(&mut prng);
-        let ate = -1;
 
-        let (hint_out, tap_scr, hint_script) = chunk_add_eval_mul_for_fixed_qs(p3.y, p3.x, p2.y, p2.x, t2, t3, q2, q3, ate);
+        let ate = -1;
+        let (hint_out, tap_scr, mut hint_script) = chunk_multiply_point_evals_on_chord_for_fixed_g2(p3.y, p3.x, p2.y, p2.x, t2, t3, q2, q3, ate);
+
+        hint_script.extend_from_slice(&vec![Hint::Fq(p2.x), Hint::Fq(p2.y), Hint::Fq(p3.x), Hint::Fq(p3.y)]);
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}
             }
-            {Fq::toaltstack()}    
-            {fq_push_not_montgomery(p3.y)}
-            {Fq::toaltstack()}          
-            {fq_push_not_montgomery(p3.x)}
-            {Fq::toaltstack()}          
-            {fq_push_not_montgomery(p2.y)}
-            {Fq::toaltstack()}           
-            {fq_push_not_montgomery(p2.x)}
-            {Fq::toaltstack()}                
+            {Fq::toaltstack()}  
+            for i in extern_nibbles_to_limbs(p3.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}  
+            for i in extern_nibbles_to_limbs(p2.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}                 
         };
 
         let (nt2, nt3) = (hint_out.t2, hint_out.t3);
-
         if ate == 1 {
-           assert_eq!( (nt2, nt3), ((t2 + q2).into_affine(), (t3 + q3).into_affine()));
+            assert_eq!(nt2, (t2 + q2).into_affine());
+            assert_eq!(nt3, (t3 + q3).into_affine());
         } else {
-            assert_eq!( (nt2, nt3), ((t2 - q2).into_affine(), (t3 - q3).into_affine()));
+            assert_eq!(nt2, (t2 - q2).into_affine());
+            assert_eq!(nt3, (t3 - q3).into_affine());
         }
+
 
         let tap_len = tap_scr.len();
         let script = script! {
@@ -867,8 +873,10 @@ mod test {
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
 
+
+
     #[test]
-    fn test_tap_add_eval_mul_for_fixed_qs_with_frob() {
+    fn test_tap_multiply_point_evals_on_chord_for_fixed_g2_with_frob() {
 
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -878,29 +886,29 @@ mod test {
         let t3 = ark_bn254::G2Affine::rand(&mut prng);
         let q2 = ark_bn254::G2Affine::rand(&mut prng);
         let q3 = ark_bn254::G2Affine::rand(&mut prng);
-        let ate = -1;
 
-        let (hint_out, tap_scr, hint_script) = chunk_add_eval_mul_for_fixed_qs_with_frob(p3.y, p3.x, p2.y, p2.x, t2, t3, q2, q3, ate);
+        let ate = 1;
+        let (hint_out, tap_scr, mut hint_script) = chunk_multiply_point_evals_on_chord_for_fixed_g2_with_frob(p3.y, p3.x, p2.y, p2.x, t2, t3, q2, q3, ate);
+
+        hint_script.extend_from_slice(&vec![Hint::Fq(p2.x), Hint::Fq(p2.y), Hint::Fq(p3.x), Hint::Fq(p3.y)]);
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}
             }
-            {Fq::toaltstack()}    
-            {fq_push_not_montgomery(p3.y)}
-            {Fq::toaltstack()}          
-            {fq_push_not_montgomery(p3.x)}
-            {Fq::toaltstack()}          
-            {fq_push_not_montgomery(p2.y)}
-            {Fq::toaltstack()}           
-            {fq_push_not_montgomery(p2.x)}
-            {Fq::toaltstack()}                
+            {Fq::toaltstack()}  
+            for i in extern_nibbles_to_limbs(p3.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}  
+            for i in extern_nibbles_to_limbs(p2.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}                 
         };
 
         let (nt2, nt3) = (hint_out.t2, hint_out.t3);
-
         assert_eq!( nt3, get_hint_for_add_with_frob(q3, t3, ate));
-
         assert_eq!( nt2, get_hint_for_add_with_frob(q2, t2, ate));
 
 
@@ -919,7 +927,6 @@ mod test {
         assert!(!res.success && res.final_stack.len() == 1);
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
-
 
     #[test]
     fn test_bn254_fq12_hinted_inv() {
@@ -1028,10 +1035,7 @@ mod test {
             println!("inv2 len {} and stack {}", len, res.stats.max_nb_stack_items);
     }   
 
-
-
     // TEST G2PointAcc Hasher
-
     #[test]
     fn test_hash_t_with_hashed_le() {
 
