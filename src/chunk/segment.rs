@@ -26,8 +26,7 @@ pub enum ScriptType {
     MSM((usize, Vec<ark_bn254::G1Affine>)),
 
     PreMillerInitT4,
-    PreMillerPrecomputePy,
-    PreMillerPrecomputePx,
+    PreMillerPrecomputeP,
     PreMillerHashC,
     PreMillerHashC2,
     PreMillerInv0,
@@ -189,7 +188,7 @@ pub(crate) fn wrap_hints_precompute_p(
         (p3d, _, op_hints) = chunk_precompute_p(in_py, in_px);
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::MSMG1(p3d), hints: op_hints, scr_type: ScriptType::PreMillerPrecomputePy }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::MSMG1(p3d), hints: op_hints, scr_type: ScriptType::PreMillerPrecomputeP }
 }
 
 pub(crate) fn wrap_hint_hash_c2(
@@ -818,7 +817,7 @@ pub(crate) fn wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
     ];
 
     let p2: ElemG1Point = in_p2.result.try_into().unwrap();
-    let p3: ElemG1Point = in_p2.result.try_into().unwrap();
+    let p3: ElemG1Point = in_p3.result.try_into().unwrap();
 
     let (mut leval, mut op_hints) = (ElemSparseEval::mock(), vec![]);
     if !skip {
@@ -844,7 +843,7 @@ pub(crate) fn wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
 }
 
 
-pub(crate) fn wrap_hints_dense_dense_mul0_by_constant(
+pub(crate) fn wrap_hints_final_verify(
     skip: bool,
     segment_id: usize,
     in_a: &Segment,

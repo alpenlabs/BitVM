@@ -414,7 +414,7 @@ mod test {
 
 
     #[test]
-    fn test_tap_dense_dense_mul0_by_constant() {
+    fn test_tap_final_verify() {
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);

@@ -373,7 +373,7 @@ pub(crate) fn chunk_final_verify(
     hint_in_b: ElemFp12Acc,
 ) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
-    fn tap_dense_dense_mul0_by_constant(g: ark_bn254::Fq12, hinted_mul: Script) -> Script {
+    fn tap_final_verify(g: ark_bn254::Fq12, hinted_mul: Script) -> Script {
         let ghash = extern_hash_fps(g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), false);
         let const_hash_limb = extern_nibbles_to_limbs(ghash);
 
@@ -406,15 +406,6 @@ pub(crate) fn chunk_final_verify(
     let (hint_mul_scr, mul_hints) = Fq12::hinted_mul_first(12, f, 0, g);
 
     let fvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
-    let gvec = g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
-    let hash_f = extern_hash_fps(
-        fvec.clone(),
-        true,
-    ); // dense
-    // let hash_g = emulate_extern_hash_fps(
-    //        gvec
-    //     false,
-    // ); // sparse => constant => bakedin
     let hash_h = extern_hash_fps(
             h.c0.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
         true,
@@ -425,16 +416,13 @@ pub(crate) fn chunk_final_verify(
     for f in &fvec {
         simulate_stack_input.push(Hint::Fq(*f));
     } 
-    for f in &gvec {
-        simulate_stack_input.push(Hint::Fq(*f));
-    } 
 
     (
         ElemFp12Acc {
             f: h,
             hash: hash_h,
         },
-        tap_dense_dense_mul0_by_constant(g, hint_mul_scr),
+        tap_final_verify(g, hint_mul_scr),
         simulate_stack_input,
     )
 }

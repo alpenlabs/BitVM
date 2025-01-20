@@ -92,7 +92,7 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
 
     let mut tap_point_ops = cached(|(a,b,c,d,e,f,g)| chunk_point_ops(a,b,c,d,e,f,g));
     let mut tap_sparse_dense_mul = cached(|(a, b, c)| chunk_sparse_dense_mul(a, b, c ));
-    let mut tap_dense_dense_mul0_by_constant = cached(|(a, b)| chunk_final_verify(a, b)); 
+    let mut tap_final_verify = cached(|(a, b)| chunk_final_verify(a, b)); 
     let mut tap_frob_fp12 = cached(|(a, b)| chunk_frob_fp12(a,b));
     let mut tap_point_add_with_frob = cached(|a| chunk_point_add_with_frob(ElemG2PointAcc::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemG1Point::mock(), a));
     let mut chunk_hash_p = cached(|(a, b)| chunk_hash_p(a, b ));
@@ -121,11 +121,8 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
             ScriptType::PreMillerInitT4 => {
                 op_scripts.push(tap_init_t4.1.clone());
             }
-            ScriptType::PreMillerPrecomputePy => {
-                op_scripts.push(chunk_precompute_py(ElemFq::mock()).1);
-            },
-            ScriptType::PreMillerPrecomputePx => {
-                op_scripts.push(chunk_precompute_px(ElemFq::mock(), ElemFq::mock(), ElemFq::mock()).1);
+            ScriptType::PreMillerPrecomputeP => {
+                op_scripts.push(chunk_precompute_p(ElemFq::mock(), ElemFq::mock()).1);
             },
             ScriptType::PreMillerHashC => {
                 op_scripts.push(chunk_hash_c([ElemFq::mock(); 12].to_vec()).1);
@@ -161,7 +158,7 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
                 op_scripts.push(tap_dense_dense_mul1( (ElemFp12Acc::mock(), ElemFp12Acc::mock(), ElemFp12Acc::mock())  ).1);
             },
             ScriptType::PostMillerDenseDenseMulByConst0(inp) => {
-                op_scripts.push(tap_dense_dense_mul0_by_constant( (ElemFp12Acc::mock(), ElemFp12Acc {f: inp, hash: [0u8;64]}) ).1);
+                op_scripts.push(tap_final_verify( (ElemFp12Acc::mock(), ElemFp12Acc {f: inp, hash: [0u8;64]}) ).1);
             },
 
             ScriptType::MSM(inp) => {
