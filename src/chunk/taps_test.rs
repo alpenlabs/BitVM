@@ -226,74 +226,6 @@ mod test {
 
 
     #[test]
-    fn test_tap_precompute_x() {
-
-        // runtime
-        let mut prng = ChaCha20Rng::seed_from_u64(0);
-        let p = ark_bn254::G1Affine::rand(&mut prng);
-
-        let (hint_out, tap_prex, hint_script) = chunk_precompute_px(p.y, p.x, p.y.inverse().unwrap());
-
-        let bitcom_scr = script!{
-            {fq_push_not_montgomery(hint_out)}
-            {Fq::toaltstack()}    
-            {fq_push_not_montgomery(p.y)}
-            {Fq::toaltstack()}          
-            {fq_push_not_montgomery(p.x)}
-            {Fq::toaltstack()}          
-            {fq_push_not_montgomery(p.y.inverse().unwrap())}
-            {Fq::toaltstack()}                
-        };
-
-        let tap_len = tap_prex.len();
-        let script = script! {
-            for h in hint_script {
-                { h.push() }
-            }
-            {bitcom_scr}
-            {tap_prex}
-        };
-        let res = execute_script(script);
-        for i in 0..res.final_stack.len() {
-            println!("{i:} {:?}", res.final_stack.get(i));
-        }
-        assert!(!res.success && res.final_stack.len() == 1);
-        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
-    }
-
-    #[test]
-    fn test_tap_precompute_y() {
-
-        // runtime
-        let mut prng = ChaCha20Rng::seed_from_u64(0);
-        let p = ark_bn254::G1Affine::rand(&mut prng);
-
-        let (hint_out, tap_prey, hint_script) = chunk_precompute_py(p.y);
-
-        let bitcom_scr = script!{
-            {fq_push_not_montgomery(hint_out)}
-            {Fq::toaltstack()}    
-            {fq_push_not_montgomery(p.y)}
-            {Fq::toaltstack()}                       
-        };
-
-        let tap_len = tap_prey.len();
-        let script = script! {
-            for h in hint_script {
-                { h.push() }
-            }
-            {bitcom_scr}
-            {tap_prey}
-        };
-        let res = execute_script(script);
-        for i in 0..res.final_stack.len() {
-            println!("{i:} {:?}", res.final_stack.get(i));
-        }
-        assert!(!res.success && res.final_stack.len() == 1);
-        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
-    }
-
-    #[test]
     fn test_tap_sparse_dense_mul() {
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -592,7 +524,7 @@ mod test {
         let (hint_out, point_ops_tapscript, mut hint_script) = chunk_point_ops(
             t,
             q.y.c1, q.y.c0, q.x.c1, q.x.c0,
-            p.y, p.x, ate);
+            p, ate);
 
 
         let hint_out_hash = extern_nibbles_to_limbs(hint_out.hashed_output());
@@ -652,7 +584,7 @@ mod test {
         let p = ark_bn254::g1::G1Affine::rand(&mut prng);
         let t4acc: ElemG2PointAcc = ElemG2PointAcc { t: ark_bn254::G2Affine::rand(&mut prng), dbl_le: None, add_le: None };
 
-        let (hint_out, point_ops_tapscript, mut hint_script) = chunk_point_dbl(t4acc, p.y, p.x);
+        let (hint_out, point_ops_tapscript, mut hint_script) = chunk_point_dbl(t4acc, p);
 
         let hint_out_hash = extern_nibbles_to_limbs(hint_out.hashed_output());
         let hint_in_t4_hash = extern_nibbles_to_limbs(t4acc.hashed_output());
@@ -711,8 +643,7 @@ mod test {
         let t = ElemG2PointAcc { t, dbl_le, add_le };
 
         let (hint_out, point_ops_tapscript, mut hint_script) = chunk_point_add_with_frob(
-            t,
-             q.y.c1, q.y.c0, q.x.c1, q.x.c0, p.y, p.x, ate);
+            t, q.y.c1, q.y.c0, q.x.c1, q.x.c0, p, ate);
 
 
         let hint_out_hash = extern_nibbles_to_limbs(hint_out.hashed_output());
@@ -775,7 +706,7 @@ mod test {
         let t2 = ark_bn254::G2Affine::rand(&mut prng);
         let t3 = ark_bn254::G2Affine::rand(&mut prng);
 
-        let (hint_out, tap_scr, mut hint_script) = chunk_multiply_point_evals_on_tangent_for_fixed_g2(p3.y, p3.x, p2.y, p2.x, t2, t3);
+        let (hint_out, tap_scr, mut hint_script) = chunk_multiply_point_evals_on_tangent_for_fixed_g2(p3, p2, t2, t3);
 
         hint_script.extend_from_slice(&vec![Hint::Fq(p2.x), Hint::Fq(p2.y), Hint::Fq(p3.x), Hint::Fq(p3.y)]);
 
@@ -827,7 +758,7 @@ mod test {
         let q3 = ark_bn254::G2Affine::rand(&mut prng);
 
         let ate = -1;
-        let (hint_out, tap_scr, mut hint_script) = chunk_multiply_point_evals_on_chord_for_fixed_g2(p3.y, p3.x, p2.y, p2.x, t2, t3, q2, q3, ate);
+        let (hint_out, tap_scr, mut hint_script) = chunk_multiply_point_evals_on_chord_for_fixed_g2(p3, p2, t2, t3, q2, q3, ate);
 
         hint_script.extend_from_slice(&vec![Hint::Fq(p2.x), Hint::Fq(p2.y), Hint::Fq(p3.x), Hint::Fq(p3.y)]);
 
@@ -887,7 +818,7 @@ mod test {
         let q3 = ark_bn254::G2Affine::rand(&mut prng);
 
         let ate = 1;
-        let (hint_out, tap_scr, mut hint_script) = chunk_multiply_point_evals_on_chord_for_fixed_g2_with_frob(p3.y, p3.x, p2.y, p2.x, t2, t3, q2, q3, ate);
+        let (hint_out, tap_scr, mut hint_script) = chunk_multiply_point_evals_on_chord_for_fixed_g2_with_frob(p3, p2, t2, t3, q2, q3, ate);
 
         hint_script.extend_from_slice(&vec![Hint::Fq(p2.x), Hint::Fq(p2.y), Hint::Fq(p3.x), Hint::Fq(p3.y)]);
 
@@ -938,15 +869,13 @@ mod test {
             hscr0.extend_from_slice(&Element::Fp12v0(ElemFp12Acc { f: a, hash: hash_in }).get_hash_preimage_as_hints());
             
             let bscr0 = script!{
-                for h in hout0.hash {
+                for h in extern_nibbles_to_limbs(hout0.hashed_output() ) {
                     {h}
                 }
-                {pack_nibbles_to_limbs()}
                 {Fq::toaltstack()}
-                for h in hash_in {
+                for h in extern_nibbles_to_limbs(hash_in) {
                     {h}
                 }
-                {pack_nibbles_to_limbs()}
                 {Fq::toaltstack()}
             };
             let script = script! {
@@ -968,12 +897,12 @@ mod test {
             hscr1.extend_from_slice(&Element::Fp6(hout0).get_hash_preimage_as_hints());
 
             let bscr1 = script!{
-                for h in hout1.hash {
+                for h in hout1.hashed_output() {
                     {h}
                 }
                 {pack_nibbles_to_limbs()}
                 {Fq::toaltstack()}
-                for h in hout0.hash {
+                for h in hout0.hashed_output() {
                     {h}
                 }
                 {pack_nibbles_to_limbs()}
@@ -1007,7 +936,7 @@ mod test {
                 }
                 {pack_nibbles_to_limbs()}
                 {Fq::toaltstack()}
-                for h in hout1.hash {
+                for h in hout1.hashed_output() {
                     {h}
                 }
                 {pack_nibbles_to_limbs()}

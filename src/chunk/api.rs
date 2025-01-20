@@ -149,7 +149,6 @@ pub fn generate_assertions(
     let (c, s) = compute_c_wi(f);
     let eval_ins: EvalIns = EvalIns {
         p2,
-        p3,
         p4,
         q4,
         c,

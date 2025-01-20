@@ -69,6 +69,8 @@ pub(crate) fn groth16(
             }
         }};
     }
+    let vky = pubs.ks_vks;
+    let vky0 = pubs.vky0;
 
     let pub_scalars: Vec<Segment> = eval_ins.ks.iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
@@ -81,7 +83,7 @@ pub(crate) fn groth16(
     all_output_hints.extend_from_slice(&pub_scalars);
 
     let p4vec: Vec<Segment> = vec![
-        eval_ins.p4.y, eval_ins.p4.x, eval_ins.p3.y, eval_ins.p3.x, eval_ins.p2.y, eval_ins.p2.x
+        eval_ins.p4.y, eval_ins.p4.x, eval_ins.p2.y, eval_ins.p2.x
     ].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         
@@ -91,25 +93,21 @@ pub(crate) fn groth16(
         scr_type: ScriptType::NonDeterministic
     }).collect();
     all_output_hints.extend_from_slice(&p4vec);
-    let (gp4y, gp4x, gp3y, gp3x, gp2y, gp2x) = (&p4vec[0], &p4vec[1], &p4vec[2], &p4vec[3], &p4vec[4], &p4vec[5]);
+    let (gp4y, gp4x, gp2y, gp2x) = (&p4vec[0], &p4vec[1], &p4vec[2], &p4vec[3]);
 
-    let p4y = wrap_hints_precompute_py(is_compile_mode, all_output_hints.len(), &gp4y);
-    push_compare_or_return!(p4y);
+    let p4 = wrap_hints_precompute_p(is_compile_mode, all_output_hints.len(), &gp4y, &gp4x);
+    push_compare_or_return!(p4);
 
-    let p4x = wrap_hints_precompute_px(is_compile_mode, all_output_hints.len(), &gp4y, &gp4x, &p4y);
-    push_compare_or_return!(p4x);
+    let p2 = wrap_hints_precompute_p(is_compile_mode, all_output_hints.len(), &gp2y, &gp2x);
+    push_compare_or_return!(p2);
 
-    let p3y = wrap_hints_precompute_py(is_compile_mode, all_output_hints.len(), &gp3y);
-    push_compare_or_return!(p3y);
+    let msms = wrap_hint_msm(is_compile_mode, all_output_hints.len(), pub_scalars.clone(), vky.clone());
+    for msm in &msms {
+        push_compare_or_return!(msm);
+    }
 
-    let p3x = wrap_hints_precompute_px(is_compile_mode, all_output_hints.len(), &gp3y, &gp3x, &p3y);
-    push_compare_or_return!(p3x);
-
-    let p2y = wrap_hints_precompute_py(is_compile_mode, all_output_hints.len(), &gp2y);
-    push_compare_or_return!(p2y);
-
-    let p2x = wrap_hints_precompute_px(is_compile_mode, all_output_hints.len(), &gp2y, &gp2x, &p2y);
-    push_compare_or_return!(p2x);
+    let p3 = wrap_hint_hash_p(is_compile_mode, all_output_hints.len(), &msms[msms.len()-1], vky0);
+    push_compare_or_return!(p3);
 
     let gc: Vec<Segment> = eval_ins.c.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>().iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
@@ -144,16 +142,6 @@ pub(crate) fn groth16(
     all_output_hints.extend_from_slice(&temp_q4);
     let (q4xc0, q4xc1, q4yc0, q4yc1) = (&temp_q4[0], &temp_q4[1], &temp_q4[2], &temp_q4[3]);
 
-    let vky = pubs.ks_vks;
-    let vky0 = pubs.vky0;
-
-    let msms = wrap_hint_msm(is_compile_mode, all_output_hints.len(), pub_scalars.clone(), vky.clone());
-    for msm in &msms {
-        push_compare_or_return!(msm);
-    }
-
-    let hp = wrap_hint_hash_p(is_compile_mode, all_output_hints.len(), &msms[msms.len()-1], &gp3y, &gp3x, vky0);
-    push_compare_or_return!(hp);
 
     let c = wrap_hint_hash_c(is_compile_mode, all_output_hints.len(), gc);
     push_compare_or_return!(c);
@@ -192,11 +180,11 @@ pub(crate) fn groth16(
         f_acc = sq;
 
         if ate == 0 {
-            let dbl = wrap_hint_point_dbl(is_compile_mode, all_output_hints.len(), &t4, &p4y, &p4x);
+            let dbl = wrap_hint_point_dbl(is_compile_mode, all_output_hints.len(), &t4, &p4);
             push_compare_or_return!(dbl);
             t4 = dbl;
         } else {
-            let dbladd = wrap_hint_point_ops(is_compile_mode, all_output_hints.len(), &t4, &q4yc1, &q4yc0, &q4xc1, &q4xc0, &p4y, &p4x, ate);
+            let dbladd = wrap_hint_point_ops(is_compile_mode, all_output_hints.len(), &t4, &q4yc1, &q4yc0, &q4xc1, &q4xc0, &p4, ate);
             push_compare_or_return!(dbladd);
             t4 = dbladd;
         }
@@ -205,7 +193,7 @@ pub(crate) fn groth16(
         push_compare_or_return!(sdmul);
         f_acc = sdmul;
 
-        let leval = wrap_hint_multiply_point_evals_on_tangent_for_fixed_g2(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3);
+        let leval = wrap_hint_multiply_point_evals_on_tangent_for_fixed_g2(is_compile_mode, all_output_hints.len(), &p3, &p2,  t2, t3);
         push_compare_or_return!(leval);
         (t2, t3) = ((t2 + t2).into_affine(), (t3 + t3).into_affine());
 
@@ -234,7 +222,7 @@ pub(crate) fn groth16(
         push_compare_or_return!(sdmul);
         f_acc = sdmul;
 
-        let leval = wrap_hint_multiply_point_evals_on_chord_for_fixed_g2(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, ate);
+        let leval = wrap_hint_multiply_point_evals_on_chord_for_fixed_g2(is_compile_mode, all_output_hints.len(), &p3, &p2,  t2, t3, pubs.q2, pubs.q3, ate);
         push_compare_or_return!(leval);
         if ate == 1 {
             (t2, t3) = ((t2 + pubs.q2).into_affine(), (t3 + pubs.q3).into_affine());
@@ -287,7 +275,7 @@ pub(crate) fn groth16(
     push_compare_or_return!(dmul1);
     f_acc = dmul1;
 
-    let addf = wrap_hint_point_add_with_frob(is_compile_mode, all_output_hints.len(), &t4, &q4yc1, &q4yc0, &q4xc1, &q4xc0, &p4y, &p4x, 1);
+    let addf = wrap_hint_point_add_with_frob(is_compile_mode, all_output_hints.len(), &t4, &q4yc1, &q4yc0, &q4xc1, &q4xc0, &p4, 1);
     push_compare_or_return!(addf);
     t4 = addf;
 
@@ -295,7 +283,7 @@ pub(crate) fn groth16(
     push_compare_or_return!(sdmul);
     f_acc = sdmul;
 
-    let leval = wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, 1);
+    let leval = wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(is_compile_mode, all_output_hints.len(), &p3, &p2,  t2, t3, pubs.q2, pubs.q3, 1);
     push_compare_or_return!(leval);
     // (t2, t3) = (le.t2, le.t3);
     t2 = get_hint_for_add_with_frob(pubs.q2, t2, 1);
@@ -309,7 +297,7 @@ pub(crate) fn groth16(
     push_compare_or_return!(dmul1);
     f_acc = dmul1;
 
-    let addf = wrap_hint_point_add_with_frob(is_compile_mode, all_output_hints.len(), &t4, &q4yc1, &q4yc0, &q4xc1, &q4xc0, &p4y, &p4x, -1);
+    let addf = wrap_hint_point_add_with_frob(is_compile_mode, all_output_hints.len(), &t4, &q4yc1, &q4yc0, &q4xc1, &q4xc0, &p4, -1);
     push_compare_or_return!(addf);
     t4 = addf;
 
@@ -317,7 +305,7 @@ pub(crate) fn groth16(
     push_compare_or_return!(sdmul);
     f_acc = sdmul;
 
-    let leval = wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(is_compile_mode, all_output_hints.len(), &p3y, &p3x, &p2y, &p2x,  t2, t3, pubs.q2, pubs.q3, -1);
+    let leval = wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(is_compile_mode, all_output_hints.len(), &p3, &p2,  t2, t3, pubs.q2, pubs.q3, -1);
     push_compare_or_return!(leval);
     t2 = get_hint_for_add_with_frob(pubs.q2, t2, -1);
     t3 = get_hint_for_add_with_frob(pubs.q3, t3, -1);
@@ -338,9 +326,6 @@ pub(crate) fn groth16(
         return false;
     }
     //assert_eq!(result.f, ark_bn254::Fq12::ONE);
-
-    println!("segments len {}", all_output_hints.len());
-
     true
 }
 
@@ -408,11 +393,9 @@ type Intermediates = (
 pub(crate) fn get_proof(asserts: &TypedAssertions) -> EvalIns { // EvalIns
     let numfqs = asserts.1;
     let p4 = ark_bn254::G1Affine::new_unchecked(numfqs[1], numfqs[0]);
-    let p3 = ark_bn254::G1Affine::new_unchecked(numfqs[3], numfqs[2]);
-    let p2 = ark_bn254::G1Affine::new_unchecked(numfqs[5], numfqs[4]);
-    let skip = 6; // px, pys -- not part of eval ins
-    let next = 6;
-    let step = next + skip;
+    let p2 = ark_bn254::G1Affine::new_unchecked(numfqs[3], numfqs[2]);
+    let next = 4;
+    let step = next;
     let c = ark_bn254::Fq12::new(
         ark_bn254::Fq6::new(
             ark_bn254::Fq2::new(numfqs[step+0], numfqs[step+1]),
@@ -438,12 +421,11 @@ pub(crate) fn get_proof(asserts: &TypedAssertions) -> EvalIns { // EvalIns
             ark_bn254::Fq2::new(numfqs[step+10], numfqs[step+11]),
         ),
     );
-    let cinv = asserts.2[0];
 
     let step = step + 12;
     let q4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(numfqs[step + 0], numfqs[step + 1]), ark_bn254::Fq2::new(numfqs[step + 2], numfqs[step + 3]));
 
-    let eval_ins: EvalIns = EvalIns { p2, p3, p4, q4, c, s, ks: asserts.0.to_vec() };
+    let eval_ins: EvalIns = EvalIns { p2, p4, q4, c, s, ks: asserts.0.to_vec() };
     eval_ins
 }
 

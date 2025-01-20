@@ -22,7 +22,7 @@ use super::element::*;
 pub(crate) fn chunk_hash_c(
     hint_in_c: Vec<ElemFq>,
 ) -> (ElemFp12Acc, Script, Vec<Hint>) {
-    fn chunk_hash_c() -> Script {
+    fn tap_hash_c() -> Script {
         let hash_scr = script! {
             for _ in 0..12 {
                 {Fq::fromaltstack()}
@@ -80,7 +80,7 @@ pub(crate) fn chunk_hash_c(
             f,
             hash: fhash,
         },
-        chunk_hash_c(),
+        tap_hash_c(),
         simulate_stack_input,
     )
 }
@@ -400,7 +400,7 @@ pub(crate) fn chunk_init_t4(
 
 // INVERSE
 pub(crate) fn chunk_inv2(
-    t1: ElemFp12Acc,
+    t1: ElemFp6,
     a: ElemFp12Acc,
 ) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
@@ -444,7 +444,6 @@ pub(crate) fn chunk_inv2(
     }
 
 
-    let t1 = t1.f.c0;
     let a = a.f;
 
     let c0 = a.c0 * t1;
@@ -482,8 +481,8 @@ pub(crate) fn chunk_inv2(
 }
 
 pub(crate) fn chunk_inv1(
-    a: ElemFp12Acc
-) -> (ElemFp12Acc, Script, Vec<Hint>) {
+    a: ElemFp6
+) -> (ElemFp6, Script, Vec<Hint>) {
 
     fn tap_inv1(s_t0inv: Script) -> Script {
         let a = ElemFp12Acc::mock();
@@ -512,7 +511,7 @@ pub(crate) fn chunk_inv1(
     }
 
 
-    let t0 = a.f.c0;
+    let t0 = a;
     let t1 = t0.inverse().unwrap();
 
     let (s_t0inv, h_t0inv) = Fq6::hinted_inv(t0);
@@ -532,7 +531,7 @@ pub(crate) fn chunk_inv1(
     //     simulate_stack_input.push(Hint::Fq(elem));
     // }
 
-    let hout: ElemFp12Acc = ElemFp12Acc { f: ark_bn254::Fq12::new(t1, ark_bn254::Fq6::ZERO), hash: hash_h };
+    let hout: ElemFp6 = t1;
     (
         hout,
         tap_inv1(s_t0inv),
@@ -542,7 +541,7 @@ pub(crate) fn chunk_inv1(
 
 pub(crate) fn chunk_inv0(
     a: ElemFp12Acc
-) -> (ElemFp12Acc, Script, Vec<Hint>) {
+) -> (ElemFp6, Script, Vec<Hint>) {
 
     fn tap_inv0(s_t1: Script, s_t0: Script) -> Script {
 
@@ -623,7 +622,7 @@ pub(crate) fn chunk_inv0(
         true,
     );
 
-    let hout: ElemFp12Acc = ElemFp12Acc { f: ark_bn254::Fq12::new(t0, ark_bn254::Fq6::ZERO), hash: hash_h };
+    let hout: ElemFp6 = t0;
     (
         hout,
         tap_inv0(s_t1, s_t0),

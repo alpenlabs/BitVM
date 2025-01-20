@@ -1,9 +1,8 @@
 
 
-use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fr::Fr, utils::{fq_push_not_montgomery, Hint}}, chunk::taps_msm::{chunk_hash_p, chunk_msm}, execute_script, treepp};
+use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fr::Fr, utils::{Hint}}, chunk::taps_msm::{chunk_msm}, execute_script, treepp};
 
-use super::{element::Element, primitves::extern_nibbles_to_limbs, taps_point_eval::*, taps_premiller::*};
-use crate::treepp::Script;
+use super::{element::Element, taps_msm::chunk_hash_p, taps_point_eval::*, taps_premiller::*};
 
 pub type SegmentID = u32;
 pub type SegmentOutputType = bool;
@@ -129,35 +128,21 @@ pub(crate) fn wrap_hint_hash_p(
     skip: bool,
     segment_id: usize,
     in_t: &Segment,
-    in_ry: &Segment, 
-    in_rx: &Segment,
     pub_vky0: ark_bn254::G1Affine,
 ) -> Segment {
-
     let mut input_segment_info: Vec<SegmentID> = vec![];
-    //let sig = &mut Sig { msk: None, cache: HashMap::new() };
-    
-    input_segment_info.push(in_ry.id);
-    input_segment_info.push(in_rx.id);
     input_segment_info.push(in_t.id);
 
-
     let t = in_t.result.try_into().unwrap();
-    let ry = in_ry.result.try_into().unwrap();
-    let rx = in_rx.result.try_into().unwrap();
-    let (mut h, mut op_hints) = ([0u8;64], vec![]);
+    let (mut p3, mut op_hints) = (ElemG1Point::mock(), vec![]);
     if !skip {
-        (h, _, op_hints) = chunk_hash_p(
+        (p3, _, op_hints) = chunk_hash_p(
             t,
-            ry,
-            rx,
             pub_vky0.clone(),
         );
         op_hints.extend_from_slice(&Element::MSMG1(t).get_hash_preimage_as_hints());
     }
-    
-
-    Segment { id: segment_id as u32, parameter_ids: input_segment_info, result: Element::HashBytes(h), hints: op_hints, scr_type: ScriptType::PreMillerHashP(pub_vky0) }
+    Segment { id: segment_id as u32, parameter_ids: input_segment_info, result: Element::MSMG1(p3), hints: op_hints, scr_type: ScriptType::PreMillerHashP(pub_vky0) }
 }
 
 pub(crate) fn wrap_hint_hash_c(  
@@ -186,49 +171,25 @@ pub(crate) fn wrap_hint_hash_c(
     Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12v1(c), hints: op_hints, scr_type: ScriptType::PreMillerHashC }
 }
 
-
-
-pub(crate) fn wrap_hints_precompute_px(
+pub(crate) fn wrap_hints_precompute_p(
     skip: bool,
     segment_id: usize,
     in_py: &Segment,
-    in_px: &Segment , in_pdy: &Segment,
+    in_px: &Segment,
 ) -> Segment {
     
     let mut input_segment_info: Vec<SegmentID> = vec![];
     input_segment_info.push(in_py.id);
     input_segment_info.push(in_px.id);
-    input_segment_info.push(in_pdy.id);
 
-    let (mut p4x, mut op_hints) = (ElemFq::mock(), vec![]);
+    let (mut p3d, mut op_hints) = (ElemG1Point::mock(), vec![]);
     if !skip {
-        (p4x,_, op_hints) = chunk_precompute_px(
-            in_py.result.try_into().unwrap(),
-            in_px.result.try_into().unwrap(),
-            in_pdy.result.try_into().unwrap());
-        // field elements do not have preimage
+        let in_py = in_py.result.try_into().unwrap();
+        let in_px = in_px.result.try_into().unwrap();
+        (p3d, _, op_hints) = chunk_precompute_p(in_py, in_px);
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::FieldElem(p4x), hints: op_hints, scr_type: ScriptType::PreMillerPrecomputePx }
-}
-
-pub(crate) fn wrap_hints_precompute_py(
-    skip: bool,
-    segment_id: usize,
-    in_p: &Segment,
-) -> Segment {
-    
-    let mut input_segment_info: Vec<SegmentID> = vec![];
-    input_segment_info.push(in_p.id);
-
-    let (mut p3y, mut op_hints) = (ElemFq::mock(), vec![]);
-    if !skip {
-        (p3y, _, op_hints) = chunk_precompute_py(
-            in_p.result.try_into().unwrap());
-        // field elements do not have preimage
-    }
-    
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::FieldElem(p3y), hints: op_hints, scr_type: ScriptType::PreMillerPrecomputePy }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::MSMG1(p3d), hints: op_hints, scr_type: ScriptType::PreMillerPrecomputePy }
 }
 
 pub(crate) fn wrap_hint_hash_c2(
@@ -259,14 +220,14 @@ pub(crate) fn wrap_inv0(
     let mut input_segment_info: Vec<SegmentID> = vec![];
     input_segment_info.push(in_a.id);
 
-    let (mut dmul0, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
+    let (mut dmul0, mut op_hints) = (ElemFp6::mock(), vec![]);
     if !skip {
         let in_a = in_a.result.try_into().unwrap();
         (dmul0,_, op_hints) = chunk_inv0(in_a);
         op_hints.extend_from_slice(&Element::Fp12v0(in_a).get_hash_preimage_as_hints());
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12v0(dmul0), hints: op_hints, scr_type: ScriptType::PreMillerInv0 }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp6(dmul0), hints: op_hints, scr_type: ScriptType::PreMillerInv0 }
 }
 
 pub(crate) fn wrap_inv1(
@@ -278,14 +239,14 @@ pub(crate) fn wrap_inv1(
     let mut input_segment_info: Vec<SegmentID> = vec![];
     input_segment_info.push(in_a.id);
 
-    let (mut dmul0, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
+    let (mut dmul0, mut op_hints) = (ElemFp6::mock(), vec![]);
     if !skip {
         let in_a = in_a.result.try_into().unwrap();
         (dmul0,_, op_hints) = chunk_inv1(in_a);
         op_hints.extend_from_slice(&Element::Fp6(in_a).get_hash_preimage_as_hints());
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12v0(dmul0), hints: op_hints, scr_type: ScriptType::PreMillerInv1 }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp6(dmul0), hints: op_hints, scr_type: ScriptType::PreMillerInv1 }
 }
 
 pub(crate) fn wrap_inv2(
@@ -388,33 +349,23 @@ pub(crate) fn wrap_hint_point_dbl(
     skip: bool,
     segment_id: usize,
     in_t4: &Segment,
-    in_p4y: &Segment,
-    in_p4x: &Segment,
+    in_p4: &Segment,
 ) -> Segment {
     
     let input_segment_info = vec![
+        (in_p4.id),
         (in_t4.id),
-        (in_p4y.id),
-        (in_p4x.id),
     ];
 
     let t4: ElemG2PointAcc = in_t4.result.try_into().unwrap();
-    let p4x: ark_bn254::Fq = in_p4x.result.try_into().unwrap();
-    let p4y: ark_bn254::Fq = in_p4y.result.try_into().unwrap();
+    let p4: ElemG1Point = in_p4.result.try_into().unwrap();
 
     let (mut dbl, mut op_hints) = (ElemG2PointAcc::mock(), vec![]);
     if !skip {
-        (dbl, _, op_hints) = chunk_point_dbl(
-            t4,
-            p4y,
-            p4x,
-        );
+        (dbl, _, op_hints) = chunk_point_dbl(t4, p4);
 
-        let preimage_hints = Element::G2DblEval(t4).get_hash_preimage_as_hints();
-        // let b_preimage_hints = Element::FieldElem(p4y).get_hash_preimage_as_hints();
-        // let c0_preimage_hints = Element::FieldElem(p4x).get_hash_preimage_as_hints();
-        op_hints.extend_from_slice(&preimage_hints);
-
+        op_hints.extend_from_slice(&Element::G2DblEval(t4).get_hash_preimage_as_hints());
+        op_hints.extend_from_slice(&Element::MSMG1(p4).get_hash_preimage_as_hints());
     }
 
     
@@ -437,25 +388,21 @@ pub(crate) fn wrap_hint_point_ops(
     in_q4yc0: &Segment,
     in_q4xc1: &Segment,
     in_q4xc0: &Segment,
-
-    in_p4y: &Segment,
-    in_p4x: &Segment,
+    in_p4: &Segment,
     ate: i8,
 ) -> Segment {
     
     let input_segment_info = vec![
+        (in_p4.id),
         (in_t4.id),
         (in_q4yc1.id),
         (in_q4yc0.id),
         (in_q4xc1.id),
         (in_q4xc0.id),
-        (in_p4y.id),
-        (in_p4x.id),
     ];
 
     let t4: ElemG2PointAcc = in_t4.result.try_into().unwrap();
-    let p4x: ark_bn254::Fq = in_p4x.result.try_into().unwrap();
-    let p4y: ark_bn254::Fq = in_p4y.result.try_into().unwrap();
+    let p4: ElemG1Point = in_p4.result.try_into().unwrap();
     let q4xc0: ark_bn254::Fq = in_q4xc0.result.try_into().unwrap();
     let q4xc1: ark_bn254::Fq = in_q4xc1.result.try_into().unwrap();
     let q4yc0: ark_bn254::Fq = in_q4yc0.result.try_into().unwrap();
@@ -464,19 +411,16 @@ pub(crate) fn wrap_hint_point_ops(
     let (mut dbladd, mut op_hints) = (ElemG2PointAcc::mock(), vec![]);
     if !skip {
         (dbladd,_, op_hints) = chunk_point_ops(
-            // sig),
-            // input_segment_info.clone(),
             t4,
             q4yc1,
             q4yc0,
             q4xc1,
             q4xc0,
-            p4y,
-            p4x,
+            p4,
             ate,
         );
-        let preimage_hints = Element::G2DblAddEval(t4).get_hash_preimage_as_hints();
-        op_hints.extend_from_slice(&preimage_hints);
+        op_hints.extend_from_slice(&Element::G2DblAddEval(t4).get_hash_preimage_as_hints());
+        op_hints.extend_from_slice(&Element::MSMG1(p4).get_hash_preimage_as_hints());
     }
 
     
@@ -526,38 +470,31 @@ pub(crate) fn wrap_hint_sparse_dense_mul(
 pub(crate) fn wrap_hint_multiply_point_evals_on_tangent_for_fixed_g2(
     skip: bool,
     segment_id: usize,
-    in_p3y: &Segment,
-    in_p3x: &Segment,
-    in_p2y: &Segment,
-    in_p2x: &Segment,
+    in_p3: &Segment,
+    in_p2: &Segment,
     in_t2: ark_bn254::G2Affine,
     in_t3: ark_bn254::G2Affine,
 ) -> Segment {
     
     let input_segment_info = vec![
-        (in_p3y.id),
-        (in_p3x.id),
-        (in_p2y.id),
-        (in_p2x.id),
+        (in_p3.id),
+        (in_p2.id),
     ];
 
-    let p2x: ark_bn254::Fq = in_p2x.result.try_into().unwrap();
-    let p2y: ark_bn254::Fq = in_p2y.result.try_into().unwrap();
-    let p3x: ark_bn254::Fq = in_p3x.result.try_into().unwrap();
-    let p3y: ark_bn254::Fq = in_p3y.result.try_into().unwrap();
+    let p2: ElemG1Point = in_p2.result.try_into().unwrap();
+    let p3: ElemG1Point = in_p3.result.try_into().unwrap();
 
     let (mut leval, mut op_hints) = (ElemSparseEval::mock(), vec![]);
     if !skip {
         (leval, _, op_hints) = chunk_multiply_point_evals_on_tangent_for_fixed_g2(
             // sig),
             // input_segment_info.clone(),
-            p3y,
-            p3x,
-            p2y,
-            p2x,
+            p3,
+            p2,
             in_t2,
             in_t3,
         );
+        op_hints.extend_from_slice(&vec![Hint::Fq(p2.x), Hint::Fq(p2.y), Hint::Fq(p3.x), Hint::Fq(p3.y)]);
         // skip because felts
     }
 
@@ -594,10 +531,8 @@ pub(crate) fn wrap_hints_dense_dense_mul0(
             a.clone(),
             b.clone(),
         );
-        let a_preimage_hints = Element::Fp12v0(a).get_hash_preimage_as_hints();
-        let b_preimage_hints = Element::Fp12v1(b).get_hash_preimage_as_hints();
-        op_hints.extend_from_slice(&a_preimage_hints);
-        op_hints.extend_from_slice(&b_preimage_hints);
+        op_hints.extend_from_slice(&Element::Fp12v0(a).get_hash_preimage_as_hints());
+        op_hints.extend_from_slice(&Element::Fp12v1(b).get_hash_preimage_as_hints());
     }
     
     Segment {
@@ -741,15 +676,11 @@ pub(crate) fn wrap_hints_dense_le_mul1(
     }
 }
 
-
-
 pub(crate) fn wrap_hint_multiply_point_evals_on_chord_for_fixed_g2(
     skip: bool,
     segment_id: usize,
-    in_p3y: &Segment,
-    in_p3x: &Segment,
-    in_p2y: &Segment,
-    in_p2x: &Segment,
+    in_p3: &Segment,
+    in_p2: &Segment,
     in_t2: ark_bn254::G2Affine,
     in_t3: ark_bn254::G2Affine,
     pub_q2: ark_bn254::G2Affine,
@@ -758,32 +689,25 @@ pub(crate) fn wrap_hint_multiply_point_evals_on_chord_for_fixed_g2(
 ) -> Segment {
     
     let input_segment_info = vec![
-        (in_p3y.id),
-        (in_p3x.id),
-        (in_p2y.id),
-        (in_p2x.id),
+        (in_p3.id),
+        (in_p2.id),
     ];
 
-    let p2x: ark_bn254::Fq = in_p2x.result.try_into().unwrap();
-    let p2y: ark_bn254::Fq = in_p2y.result.try_into().unwrap();
-    let p3x: ark_bn254::Fq = in_p3x.result.try_into().unwrap();
-    let p3y: ark_bn254::Fq = in_p3y.result.try_into().unwrap();
+    let p2: ElemG1Point = in_p2.result.try_into().unwrap();
+    let p3: ElemG1Point = in_p3.result.try_into().unwrap();
 
     let (mut leval, mut op_hints) = (ElemSparseEval::mock(), vec![]);
     if !skip {
         (leval,_, op_hints) = chunk_multiply_point_evals_on_chord_for_fixed_g2(
-            p3y,
-            p3x,
-            p2y,
-            p2x,
-
+            p3,
+            p2,
             in_t2,
             in_t3,
             pub_q2,
             pub_q3,
             ate,
         );
-        // skip because felts
+        op_hints.extend_from_slice(&vec![Hint::Fq(p2.x), Hint::Fq(p2.y), Hint::Fq(p3.x), Hint::Fq(p3.y)]);
     }
 
     
@@ -805,22 +729,14 @@ pub(crate) fn wrap_hints_frob_fp12(
 ) -> Segment {
 
     let input_segment_info = vec![(in_f.id)];
-
     let f = in_f.result.try_into().unwrap();
-
-    
 
     let (mut cp, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
     if !skip {
-        (cp,_, op_hints) = chunk_frob_fp12(
-            f,
-            power,
-        );
-
+        (cp,_, op_hints) = chunk_frob_fp12(f, power);
         let f_acc_preimage_hints = Element::Fp12v1(f).get_hash_preimage_as_hints();
         op_hints.extend_from_slice(&f_acc_preimage_hints);
     }
-
     
     Segment {
         id: segment_id as u32,
@@ -840,24 +756,21 @@ pub(crate) fn wrap_hint_point_add_with_frob(
     in_q4yc0: &Segment,
     in_q4xc1: &Segment,
     in_q4xc0: &Segment,
-    in_p4y: &Segment,
-    in_p4x: &Segment,
+    in_p4: &Segment,
     power: i8,
 ) -> Segment {
     
     let input_segment_info = vec![
+        (in_p4.id),
         (in_t4.id),
         (in_q4yc1.id),
         (in_q4yc0.id),
         (in_q4xc1.id),
         (in_q4xc0.id),
-        (in_p4y.id),
-        (in_p4x.id),
     ];
 
     let t4: ElemG2PointAcc = in_t4.result.try_into().unwrap();
-    let p4x: ark_bn254::Fq = in_p4x.result.try_into().unwrap();
-    let p4y: ark_bn254::Fq = in_p4y.result.try_into().unwrap();
+    let p4: ElemG1Point = in_p4.result.try_into().unwrap();
     let q4xc0: ark_bn254::Fq = in_q4xc0.result.try_into().unwrap();
     let q4xc1: ark_bn254::Fq = in_q4xc1.result.try_into().unwrap();
     let q4yc0: ark_bn254::Fq = in_q4yc0.result.try_into().unwrap();
@@ -866,21 +779,16 @@ pub(crate) fn wrap_hint_point_add_with_frob(
     let (mut temp, mut op_hints) = (ElemG2PointAcc::mock(), vec![]);
     if !skip {
         (temp, _, op_hints) = chunk_point_add_with_frob(
-            // sig),
-            // input_segment_info.clone(),
             t4,
             q4yc1,
             q4yc0,
             q4xc1,
             q4xc0,
-            p4y,
-            p4x,
+            p4,
             power,
         );
-        let preimage_hints = Element::G2AddEval(t4).get_hash_preimage_as_hints();
-        // let b_preimage_hints = Element::FieldElem(p4y).get_hash_preimage_as_hints();
-        // let c0_preimage_hints = Element::FieldElem(p4x).get_hash_preimage_as_hints();
-        op_hints.extend_from_slice(&preimage_hints);
+        op_hints.extend_from_slice(&Element::G2AddEval(t4).get_hash_preimage_as_hints());
+        op_hints.extend_from_slice(&Element::MSMG1(p4).get_hash_preimage_as_hints());
     }
 
     Segment {
@@ -895,10 +803,8 @@ pub(crate) fn wrap_hint_point_add_with_frob(
 pub(crate) fn wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
     skip: bool,
     segment_id: usize,
-    in_p3y: &Segment,
-    in_p3x: &Segment,
-    in_p2y: &Segment,
-    in_p2x: &Segment,
+    in_p3: &Segment,
+    in_p2: &Segment,
     in_t2: ark_bn254::G2Affine,
     in_t3: ark_bn254::G2Affine,
     pub_q2: ark_bn254::G2Affine,
@@ -907,31 +813,25 @@ pub(crate) fn wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
 ) -> Segment {
     
     let input_segment_info = vec![
-        (in_p3y.id),
-        (in_p3x.id),
-        (in_p2y.id),
-        (in_p2x.id),
+        (in_p3.id),
+        (in_p2.id),
     ];
 
-    let p2x: ark_bn254::Fq = in_p2x.result.try_into().unwrap();
-    let p2y: ark_bn254::Fq = in_p2y.result.try_into().unwrap();
-    let p3x: ark_bn254::Fq = in_p3x.result.try_into().unwrap();
-    let p3y: ark_bn254::Fq = in_p3y.result.try_into().unwrap();
+    let p2: ElemG1Point = in_p2.result.try_into().unwrap();
+    let p3: ElemG1Point = in_p2.result.try_into().unwrap();
 
     let (mut leval, mut op_hints) = (ElemSparseEval::mock(), vec![]);
     if !skip {
         (leval, _, op_hints) = chunk_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
-            p3y,
-            p3x,
-            p2y,
-            p2x,
-
+            p3,
+            p2,
             in_t2,
             in_t3,
             pub_q2,
             pub_q3,
             ate,
         );
+        op_hints.extend_from_slice(&vec![Hint::Fq(p2.x), Hint::Fq(p2.y), Hint::Fq(p3.x), Hint::Fq(p3.y)]);
     }
     
     Segment {
@@ -961,9 +861,6 @@ pub(crate) fn wrap_hints_dense_dense_mul0_by_constant(
             false,
         ),
     };
-
-    
-
 
     let (mut dmul0, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
     if !skip {

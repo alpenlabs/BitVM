@@ -172,8 +172,7 @@ pub(crate) fn chunk_point_add_with_frob(
     hint_q4y0: ElemFq,
     hint_q4x1: ElemFq,
     hint_q4x0: ElemFq,
-    hint_py: ElemFq,
-    hint_px: ElemFq,
+    hint_p: ElemG1Point,
     ate: i8,
 ) -> (ElemG2PointAcc, Script, Vec<Hint>) {
     fn tap_point_add(frob_scr: Script, add_eval_scr: Script) -> Script {
@@ -243,7 +242,7 @@ pub(crate) fn chunk_point_add_with_frob(
     
     assert!(ate == 1 || ate == -1);
     let t = hint_t.t;
-    let p = ark_bn254::G1Affine::new_unchecked(hint_px, hint_py);
+    let p = hint_p;
     let q = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0, hint_q4x1), ark_bn254::Fq2::new(hint_q4y0, hint_q4y1));
     let mut qq = q.clone();
 
@@ -275,8 +274,7 @@ pub(crate) fn chunk_point_add_with_frob(
 
 pub(crate) fn chunk_point_dbl(
     hint_t: ElemG2PointAcc,
-    hint_py: ElemFq,
-    hint_px: ElemFq,
+    hint_p: ElemG1Point,
 ) -> (ElemG2PointAcc, Script, Vec<Hint>) {
     fn tap_point_dbl(dbl_eval_scr: Script) -> Script {
 
@@ -323,10 +321,9 @@ pub(crate) fn chunk_point_dbl(
         sc
     }
     
-    
     // assert_eq!(sec_in.len(), 3);
     let t = hint_t.t;
-    let p = ark_bn254::G1Affine::new_unchecked(hint_px, hint_py);
+    let p = hint_p;
     
     let ((new_t, (dbl_le0, dbl_le1)), scr, hints) = utils_point_double_eval(t, p);
     // affine mode as well
@@ -345,8 +342,7 @@ pub(crate) fn chunk_point_ops(
     hint_q4y0: ElemFq,
     hint_q4x1: ElemFq,
     hint_q4x0: ElemFq,
-    hint_py: ElemFq,
-    hint_px: ElemFq,
+    hint_p: ElemG1Point,
     ate: i8,
 ) -> (ElemG2PointAcc, Script, Vec<Hint>) {
     fn tap_point_dbl_and_add(double_scr: Script, add_eval_scr: Script, ate: i8) -> Script {
@@ -443,7 +439,7 @@ pub(crate) fn chunk_point_ops(
     
     assert!(ate == 1 || ate == -1);
     let t = hint_t.t;
-    let p = ark_bn254::G1Affine::new_unchecked(hint_px, hint_py);
+    let p = hint_p;
     let q = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0, hint_q4x1), ark_bn254::Fq2::new(hint_q4y0, hint_q4y1));
     
     let mut qq = q.clone();

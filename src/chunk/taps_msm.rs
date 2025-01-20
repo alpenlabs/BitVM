@@ -104,92 +104,8 @@ pub(crate) fn chunk_msm(window: usize, ks: Vec<ark_bn254::Fr>, qs: Vec<ark_bn254
 
 // Hash P
 //vk0: G1Affine
+
 pub(crate) fn chunk_hash_p(
-    hint_in_t: ElemG1Point,
-    hint_in_ry: ElemFq,
-    hint_in_rx: ElemFq,
-    hint_in_q: ark_bn254::G1Affine,
-) -> (HashBytes, Script, Vec<Hint>) {
-    // r (gp3) = t(msm) + q(vk0)
-    let (tx, qx, ty, qy) = (hint_in_t.x, hint_in_q.x, hint_in_t.y, hint_in_q.y);
-    
-    let (rx, ry) = (hint_in_rx, hint_in_ry);
-    let thash = extern_hash_fps(vec![hint_in_t.x, hint_in_t.y], false);
-
-    let rdash = (ark_bn254::G1Affine::new_unchecked(tx, ty) + hint_in_q).into_affine();
-    // assert_eq!(rdash, ark_bn254::G1Affine::new_unchecked(rx, ry));
-   
-
-    let alpha_chord = (ty - qy) / (tx - qx);
-    let bias_minus_chord = alpha_chord * tx - ty;
-    assert_eq!(alpha_chord * tx - ty, bias_minus_chord);
-
-    let (hinted_line_t, hints_check_chord_t) = bn254::curves::G1Affine::hinted_check_line_through_point(tx, alpha_chord);
-    let (hinted_line_q, hints_check_chord_q) = bn254::curves::G1Affine::hinted_check_line_through_point(qx, alpha_chord);
-    let (hinted_add_line, hints_add_line) = bn254::curves::G1Affine::hinted_add(tx, qx, alpha_chord);
-
-
-
-    let mut simulate_stack_input = vec![];
-    simulate_stack_input.extend_from_slice(&hints_check_chord_t);
-    simulate_stack_input.extend_from_slice(&hints_check_chord_q);
-    simulate_stack_input.extend_from_slice(&hints_add_line);
-
-    simulate_stack_input.push(Hint::Fq(alpha_chord));
-    simulate_stack_input.push(Hint::Fq(bias_minus_chord));
-    // simulate_stack_input.push(Hint::Fq(tx));
-    // simulate_stack_input.push(Hint::Fq(ty));
-
-    let ops_script = script!{
-        //[hinttqa, alpha, bias, tx, ty]
-        { Fq2::copy(2)}
-        //[hinttqa, alpha, bias, tx, ty, alpha, bias]
-        { Fq2::copy(2)}
-        //[hinttqa, alpha, bias, tx, ty, alpha, bias,tx, ty] 
-        { hinted_line_t.clone() } OP_VERIFY
-        //[hinttqa, alpha, bias, tx, ty
-
-        { Fq2::copy(2)}
-        //[hinttqa, alpha, bias, tx, ty, alpha, bias]
-        {fq_push_not_montgomery(qx)}
-        {fq_push_not_montgomery(qy)}
-        //[hinttqa, alpha, bias, tx, ty, alpha, bias, qx, qy]
-        { hinted_line_q.clone() } OP_VERIFY
-
-        //[hinttqa, alpha, bias, tx, ty
-        {Fq2::copy(0)}
-        {Fq2::toaltstack()}
-        {Fq::drop()} {Fq::toaltstack()}
-        {Fq::fromaltstack()}
-
-        // //[hinttqa, alpha, bias, tx]
-        {fq_push_not_montgomery(qx)}
-        { hinted_add_line.clone() }
-
-        // Altstack:[rx, ry, th]
-        //[ntx, nty, tx, ty]
-
-        {Fq2::fromaltstack()} {Fq::fromaltstack()}
-        {Fq2::roll(3)} {Fq2::toaltstack()} {Fq::toaltstack()}
-        { hash_fp2() }
-        {Fq::fromaltstack()}
-        {Fq::equalverify(1, 0)} {Fq2::fromaltstack()} 
-        {Fq2::fromaltstack()}
-        // // [ntx, nty, rx, ry]
-        {Fq2::equal()}
-        OP_NOT OP_VERIFY
-
-    };
-
-    let sc = script! {
-        {ops_script}
-        OP_TRUE
-    };
-
-    ([0u8;64], sc, simulate_stack_input)
-}
-
-pub(crate) fn chunk_hash_var_p(
     hint_in_t: ElemG1Point,
     hint_in_q: ark_bn254::G1Affine,
 ) -> (ElemG1Point, Script, Vec<Hint>) {
@@ -423,53 +339,6 @@ mod test {
         );
     }
 
-
-    #[test]
-    fn test_tap_hash_p() {
-        let mut prng = ChaCha20Rng::seed_from_u64(1);
-        let q = ark_bn254::G1Affine::rand(&mut prng);
-        let t = ark_bn254::G1Affine::rand(&mut prng);
-        let r = (t + q).into_affine();
-        let thash = extern_hash_fps(vec![t.x, t.y], false);
-
-        let (_,  hash_c_scr, hint_script) = chunk_hash_p( t, r.y, r.x,q);
-
-        let bitcom_scr = script!{
-            {fq_push_not_montgomery(r.y)}
-            {Fq::toaltstack()}   
-            {fq_push_not_montgomery(r.x)}
-            {Fq::toaltstack()}   
-            for i in extern_nibbles_to_limbs(thash) {
-                {i}
-            }
-            {Fq::toaltstack()}
-        };
-
-
-        let tap_len = hash_c_scr.len();
-        let script = script! {
-            for h in hint_script {
-                { h.push() }
-            }
-            for h in Element::MSMG1(t).get_hash_preimage_as_hints() {
-                {h.push()}
-            }
-            {bitcom_scr}
-            {hash_c_scr}
-        };
-
-        let res = execute_script(script);
-        for i in 0..res.final_stack.len() {
-            println!("{i:} {:?}", res.final_stack.get(i));
-        }
-        assert!(!res.success);
-        assert!(res.final_stack.len() == 1);
-
-        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
-    }
-
-
-
     #[test]
     fn test_tap_hash_var_p() {
         let mut prng = ChaCha20Rng::seed_from_u64(1);
@@ -477,10 +346,9 @@ mod test {
         let t = ark_bn254::G1Affine::rand(&mut prng);
         let r = (t + q).into_affine();
 
-        let (hint_out,  hash_c_scr, mut hint_script) = chunk_hash_var_p( t, q);
+        let (hint_out,  hash_c_scr, mut hint_script) = chunk_hash_p( t, q);
         hint_script.extend_from_slice(&Element::MSMG1(t).get_hash_preimage_as_hints());
         
-        println!("hints len {:?}", hint_script.len());
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
                 {i}

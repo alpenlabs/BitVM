@@ -127,10 +127,8 @@ fn utils_multiply_point_evals_on_chord_for_fixed_g2(
 
 
 pub(crate) fn chunk_multiply_point_evals_on_tangent_for_fixed_g2(
-    hint_in_p3y: ElemFq,
-    hint_in_p3x: ElemFq,
-    hint_in_p2y: ElemFq,
-    hint_in_p2x: ElemFq,
+    hint_in_p3: ElemG1Point,
+    hint_in_p2: ElemG1Point,
     
     hint_in_t2: ark_bn254::G2Affine,
     hint_in_t3: ark_bn254::G2Affine,
@@ -154,7 +152,7 @@ pub(crate) fn chunk_multiply_point_evals_on_tangent_for_fixed_g2(
     }
 
     let (t2, t3) = (hint_in_t2, hint_in_t3);
-    let (p2, p3) = (ark_bn254::G1Affine::new_unchecked(hint_in_p2x, hint_in_p2y), ark_bn254::G1Affine::new_unchecked(hint_in_p3x, hint_in_p3y));
+    let (p2, p3) = (hint_in_p2, hint_in_p3);
 
     let (f, scr, hints) = utils_multiply_point_evals_on_tangent_for_fixed_g2(p2, p3, t2, t3);
 
@@ -175,10 +173,8 @@ pub(crate) fn chunk_multiply_point_evals_on_tangent_for_fixed_g2(
 // ADD EVAL
 
 pub(crate) fn chunk_multiply_point_evals_on_chord_for_fixed_g2(
-    hint_in_p3y: ElemFq,
-    hint_in_p3x: ElemFq,
-    hint_in_p2y: ElemFq,
-    hint_in_p2x: ElemFq,
+    hint_in_p3: ElemG1Point,
+    hint_in_p2: ElemG1Point,
     
     hint_in_t2: ark_bn254::G2Affine,
     hint_in_t3: ark_bn254::G2Affine,
@@ -206,7 +202,7 @@ pub(crate) fn chunk_multiply_point_evals_on_chord_for_fixed_g2(
 
     let (t2, t3) = (hint_in_t2, hint_in_t3);
     let (qq2, qq3) = (hint_in_q2, hint_in_q3);
-    let (p2, p3) = (ark_bn254::G1Affine::new_unchecked(hint_in_p2x, hint_in_p2y), ark_bn254::G1Affine::new_unchecked(hint_in_p3x, hint_in_p3y));
+    let (p2, p3) = (hint_in_p2, hint_in_p3);
 
     let mut q2 = qq2.clone();
     if ate == -1 {
@@ -250,10 +246,8 @@ pub(crate) fn get_hint_for_add_with_frob(q: ark_bn254::G2Affine, t: ark_bn254::G
 
 
 pub(crate) fn chunk_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
-    hint_in_p3y: ElemFq,
-    hint_in_p3x: ElemFq,
-    hint_in_p2y: ElemFq,
-    hint_in_p2x: ElemFq,
+    hint_in_p3: ElemG1Point,
+    hint_in_p2: ElemG1Point,
     
     hint_in_t2: ark_bn254::G2Affine,
     hint_in_t3: ark_bn254::G2Affine,
@@ -281,7 +275,7 @@ pub(crate) fn chunk_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
 
     let (t2, t3) = (hint_in_t2, hint_in_t3);
     let (qq2, qq3) = (hint_in_q2, hint_in_q3);
-    let (p2, p3) = (ark_bn254::G1Affine::new_unchecked(hint_in_p2x, hint_in_p2y), ark_bn254::G1Affine::new_unchecked(hint_in_p3x, hint_in_p3y));
+    let (p2, p3) = (hint_in_p2, hint_in_p3);
 
     let mut q2 = qq2.clone();
     if ate == 1 {

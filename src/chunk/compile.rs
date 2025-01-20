@@ -8,15 +8,15 @@ use treepp::Script;
 use crate::{chunk::element::ElemG1Point, treepp};
 use crate::chunk::element::ElemTraitExt;
 
-use super::element::ElemFq;
-use super::taps_msm::chunk_msm;
-use super::{assert::{groth16, Pubs}, element::{ElemFp12Acc, ElemFr, ElemG2PointAcc, EvalIns}, primitves::gen_bitcom, segment::{ScriptType, Segment}, taps_msm::{chunk_hash_p}, taps_mul::*, taps_point_eval::*, taps_point_ops::*, taps_premiller::*, wots::WOTSPubKey};
+use super::element::{ElemFp6, ElemFq};
+use super::taps_msm::{chunk_hash_p, chunk_msm};
+use super::{assert::{groth16, Pubs}, element::{ElemFp12Acc, ElemFr, ElemG2PointAcc, EvalIns}, primitves::gen_bitcom, segment::{ScriptType, Segment}, taps_mul::*, taps_point_eval::*, taps_point_ops::*, taps_premiller::*, wots::WOTSPubKey};
 
 pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 pub const NUM_PUBS: usize = 1;
-pub const NUM_U256: usize = 40;
-pub const NUM_U160: usize = 574-32+19;
-
+pub const NUM_U256: usize = 32;
+pub const NUM_U160: usize = 562;
+pub const NUM_TAPS: usize = 562;
 
 pub(crate) struct Vkey {
     pub(crate) q2: ark_bn254::G2Affine,
@@ -81,7 +81,7 @@ fn segments_from_pubs(vk: Vkey) -> Vec<Segment> {
     let fr = ElemFr::mock();
     let s = ElemFp12Acc::mock();
     let c = ElemFp12Acc::mock();
-    let eval_ins: EvalIns = EvalIns { p2: g1, p3: g1, p4: g1, q4: g2, c: c.f, s: s.f, ks: vec![fr] };
+    let eval_ins: EvalIns = EvalIns { p2: g1, p4: g1, q4: g2, c: c.f, s: s.f, ks: vec![fr] };
 
     let pubs: Pubs = Pubs { q2: vk.q2, q3: vk.q3, fixed_acc: vk.p1q1, ks_vks: vk.p3vk, vky0: vk.vky0 };
     groth16(true, &mut segments, eval_ins, pubs, &mut None);
@@ -90,23 +90,23 @@ fn segments_from_pubs(vk: Vkey) -> Vec<Segment> {
 
 pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::Script> {
 
-    let mut tap_point_ops = cached(|(a,b,c,d,e,f,g,h)| chunk_point_ops(a,b,c,d,e,f,g,h));
+    let mut tap_point_ops = cached(|(a,b,c,d,e,f,g)| chunk_point_ops(a,b,c,d,e,f,g));
     let mut tap_sparse_dense_mul = cached(|(a, b, c)| chunk_sparse_dense_mul(a, b, c ));
     let mut tap_dense_dense_mul0_by_constant = cached(|(a, b)| chunk_final_verify(a, b)); 
     let mut tap_frob_fp12 = cached(|(a, b)| chunk_frob_fp12(a,b));
-    let mut tap_point_add_with_frob = cached(|a| chunk_point_add_with_frob(ElemG2PointAcc::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), a));
-    let mut chunk_hash_p = cached(|(a, b, c, d)| chunk_hash_p(a, b, c, d ));
+    let mut tap_point_add_with_frob = cached(|a| chunk_point_add_with_frob(ElemG2PointAcc::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemG1Point::mock(), a));
+    let mut chunk_hash_p = cached(|(a, b)| chunk_hash_p(a, b ));
     let mut tap_msm = cached(|(a, b, c)| chunk_msm(a, b, c ));
-    let mut tap_multiply_point_evals_on_tangent_for_fixed_g2 = cached(|(a, b)| chunk_multiply_point_evals_on_tangent_for_fixed_g2(ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), a, b));
-    let mut tap_multiply_point_evals_on_chord_for_fixed_g2 = cached(|(a, b, c, d, e)| chunk_multiply_point_evals_on_chord_for_fixed_g2(ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), a, b, c, d, e));
-    let mut tap_multiply_point_evals_on_chord_for_fixed_g2_with_frob = cached(|(a, b, c, d, e)| chunk_multiply_point_evals_on_chord_for_fixed_g2_with_frob(ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), a, b, c, d, e));
+    let mut tap_multiply_point_evals_on_tangent_for_fixed_g2 = cached(|(a, b)| chunk_multiply_point_evals_on_tangent_for_fixed_g2(ElemG1Point::mock(), ElemG1Point::mock(), a, b));
+    let mut tap_multiply_point_evals_on_chord_for_fixed_g2 = cached(|(a, b, c, d, e)| chunk_multiply_point_evals_on_chord_for_fixed_g2(ElemG1Point::mock(), ElemG1Point::mock(), a, b, c, d, e));
+    let mut tap_multiply_point_evals_on_chord_for_fixed_g2_with_frob = cached(|(a, b, c, d, e)| chunk_multiply_point_evals_on_chord_for_fixed_g2_with_frob(ElemG1Point::mock(), ElemG1Point::mock(), a, b, c, d, e));
     let tap_init_t4 = chunk_init_t4(ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock());
     // let tap_precompute_py = chunk_precompute_py();
     // let tap_precompute_px = chunk_precompute_px();
     // let tap_hash_c = chunk_hash_c();
     // let tap_hash_c2 = chunk_hash_c2();
     let mut tap_squaring = cached(chunk_squaring);
-    let mut tap_point_dbl = cached(|(a, b, c)| chunk_point_dbl(a, b, c));
+    let mut tap_point_dbl = cached(|(a, b)| chunk_point_dbl(a, b));
     let mut tap_dense_dense_mul0 = cached(|(a, b)| chunk_dense_dense_mul0(a, b));
     let mut tap_dense_dense_mul1 = cached(|(a, b, c)| chunk_dense_dense_mul1(a, b, c));
 
@@ -137,19 +137,19 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
                 op_scripts.push(chunk_inv0(ElemFp12Acc::mock()).1);
             },
             ScriptType::PreMillerInv1 => {
-                op_scripts.push(chunk_inv1(ElemFp12Acc::mock()).1);
+                op_scripts.push(chunk_inv1(ElemFp6::mock()).1);
             },
             ScriptType::PreMillerInv2 => {
-                op_scripts.push(chunk_inv2(ElemFp12Acc::mock(), ElemFp12Acc::mock()).1);
+                op_scripts.push(chunk_inv2(ElemFp6::mock(), ElemFp12Acc::mock()).1);
             },
             ScriptType::MillerSquaring => {
                 op_scripts.push(tap_squaring( ElemFp12Acc::mock()).1);
             },
             ScriptType::MillerDoubleAdd(a) => {
-                op_scripts.push(tap_point_ops((ElemG2PointAcc::mock(), ElemFq::mock(), ElemFq::mock(),ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), a)).1);
+                op_scripts.push(tap_point_ops((ElemG2PointAcc::mock(), ElemFq::mock(), ElemFq::mock(),ElemFq::mock(), ElemFq::mock(), ElemG1Point::mock(), a)).1);
             },
             ScriptType::MillerDouble => {
-                op_scripts.push(tap_point_dbl( (ElemG2PointAcc::mock(), ElemFq::mock(), ElemFq::mock()) ).1);
+                op_scripts.push(tap_point_dbl( (ElemG2PointAcc::mock(), ElemG1Point::mock()) ).1);
             },
             ScriptType::SparseDenseMul(dbl_blk) => {
                 op_scripts.push(tap_sparse_dense_mul((ElemFp12Acc::mock(), ElemG2PointAcc::mock(), dbl_blk)).1);
@@ -177,7 +177,7 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
                 op_scripts.push(tap_point_add_with_frob(ate).1);
             },
             ScriptType::PreMillerHashP(inp) => {
-                let chp = chunk_hash_p((ElemG1Point::mock(), ElemFq::mock(), ElemFq::mock(), inp));
+                let chp = chunk_hash_p((ElemG1Point::mock(), inp));
                 op_scripts.push(chp.1);
             },
             ScriptType::MillerSparseSparseDbl(inp) => {

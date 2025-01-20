@@ -1,13 +1,13 @@
 use ark_bn254::{Bn254, Fr};
 
+use crate::chunk::compile::{NUM_PUBS, NUM_TAPS, NUM_U160, NUM_U256};
 use crate::signatures::wots::{wots160, wots256};
 use crate::{chunk, treepp::*};
 
-pub const N_VERIFIER_PUBLIC_INPUTS: usize = 1;
-pub const N_VERIFIER_FQS: usize = 40;
-pub const N_VERIFIER_HASHES: usize = 574-32+19;
-
-pub const N_TAPLEAVES: usize = 580-32+19;
+pub const N_VERIFIER_PUBLIC_INPUTS: usize = NUM_PUBS;
+pub const N_VERIFIER_FQS: usize = NUM_U256;
+pub const N_VERIFIER_HASHES: usize = NUM_U160;
+pub const N_TAPLEAVES: usize = NUM_TAPS;
 
 pub type Proof = ark_groth16::Proof<Bn254>;
 pub type VerifyingKey = ark_groth16::VerifyingKey<Bn254>;
@@ -555,7 +555,6 @@ mod test {
         let (c, s) = compute_c_wi(f);
         let eval_ins: EvalIns = EvalIns {
             p2,
-            p3,
             p4,
             q4,
             c,

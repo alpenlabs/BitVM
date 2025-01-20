@@ -8,7 +8,7 @@ pub(crate) enum Element {
     Fp12v0(ElemFp12Acc), // 2,4, 2, 4
     Fp12v1(ElemFp12Acc),  // 6, 6
     Fp12v2(ElemFp12Acc), // 6, 1
-    Fp6(ElemFp12Acc), // 6
+    Fp6(ElemFp6), // 6
     G2T(ElemG2PointAcc), // 4
     G2DblEval(ElemG2PointAcc), // 4, 4
     G2DblAddEval(ElemG2PointAcc), // 4,4,4
@@ -105,7 +105,7 @@ impl Element {
             Element::Fp12v2(r) => r.hashed_output(),
             Element::Fp6(r) => {
                 extern_hash_fps(
-                    r.f.c0.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
+                    r.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
                     true,
                 )
             },
@@ -128,7 +128,7 @@ impl Element {
             Element::Fp12v0(r) => r.f.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect(),
             Element::Fp12v1(r) => r.f.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect(),
             Element::Fp12v2(r) => vec![Hint::Hash(extern_nibbles_to_limbs(r.hash))],
-            Element::Fp6(r) => r.f.c0.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect(),
+            Element::Fp6(r) => r.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect(),
             Element::G2T(_) => vec![],
             Element::G2DblEval(g) => {
                 vec![
@@ -167,7 +167,6 @@ impl Element {
 #[derive(Debug)]
 pub(crate) struct EvalIns {
     pub(crate) p2: G1Affine,
-    pub(crate) p3: G1Affine,
     pub(crate) p4: G1Affine,
     pub(crate) q4: G2Affine,
     pub(crate) c: ark_bn254::Fq12,
@@ -208,6 +207,7 @@ macro_rules! impl_try_from_element {
 }
 
 impl_try_from_element!(ElemFp12Acc, { Fp12v0, Fp12v1, Fp12v2 });
+impl_try_from_element!(ElemFp6, { Fp6 });
 impl_try_from_element!(ElemG2PointAcc, { G2T, G2DblEval, G2DblAddEval, G2AddEval });
 impl_try_from_element!(ElemSparseEval, { SparseEval });
 impl_try_from_element!(ElemFq, { FieldElem });
@@ -218,6 +218,8 @@ impl_try_from_element!(ElemG1Point, { MSMG1 });
 pub type ElemFq = ark_bn254::Fq;
 pub type ElemFr = ark_bn254::Fr;
 pub type ElemHashBytes = HashBytes;
+
+pub(crate) type ElemFp6 = ark_bn254::Fq6;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct ElemFp12Acc {
@@ -397,5 +399,20 @@ impl ElemTraitExt for HashBytes {
     }
     fn hashed_output(&self) -> HashBytes {
         *self
+    }
+}
+
+impl ElemTraitExt for ElemFp6 {
+    fn hashed_output(&self) -> HashBytes {
+        let hash = extern_hash_fps(
+            self.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
+            true,
+        );
+        hash
+    }
+
+    fn mock() -> Self {
+        let f = ark_bn254::Fq6::ONE;
+        f
     }
 }
