@@ -424,22 +424,21 @@ mod test {
         );
         let hint_f = ElemFp12Acc { f, hash: fhash };
 
-        let f = f.inverse().unwrap();
-        let fhash = extern_hash_fps(
-            f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-            false,
+        let g = f.inverse().unwrap();
+        let ghash = extern_hash_fps(
+            g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
+            true,
         );
-        let hint_g = ElemFp12Acc { f, hash: fhash };
+        let hint_g = ElemFp12Acc { f: g, hash: ghash };
 
+        let (_, tap_scr, mut hint_script) = chunk_final_verify(hint_f, hint_g);
 
-
-        let (hint_out, tap_scr, hint_script) = chunk_final_verify(hint_f, hint_g);
+        let fvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
+        for f in &fvec {
+            hint_script.push(Hint::Fq(*f));
+        } 
 
         let bitcom_scr = script!{
-            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
-                {i}
-            }
-            {Fq::toaltstack()}
             for i in extern_nibbles_to_limbs(hint_f.hashed_output()) {
                 {i}
             }

@@ -373,28 +373,26 @@ pub(crate) fn chunk_final_verify(
     hint_in_b: ElemFp12Acc,
 ) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
-    fn tap_final_verify(g: ark_bn254::Fq12, hinted_mul: Script) -> Script {
-        let ghash = extern_hash_fps(g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), false);
-        let const_hash_limb = extern_nibbles_to_limbs(ghash);
+    fn tap_final_verify(g: ark_bn254::Fq12) -> Script {
+        let ginv = g.inverse().unwrap();
+        let ginv_hash = extern_hash_fps(ginv.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), true);
+        let const_hash_limb = extern_nibbles_to_limbs(ginv_hash);
 
         let ops_scr = script! {
+            // [f] [fhash]
+            {hash_fp12()}
+            {Fq::copy(0)}
+            {Fq::fromaltstack()}
+            {Fq::equalverify(1, 0)}
             for l in const_hash_limb {
                 {l}
             }
-            {Fq::toaltstack()}
-            { hinted_mul }
-
-
-            {Fq6::copy(0)}
-            {fq_push_not_montgomery(ark_bn254::Fq::one())}
-            for _ in 0..5 {
-                {fq_push_not_montgomery(ark_bn254::Fq::zero())}
-            }
-            {Fq6::equalverify()}
+            // [hashf, ginv]
+            {Fq::equal(1, 0)}
+            OP_NOT OP_VERIFY
         };
         let scr = script! {
             {ops_scr}
-            {hash_mul(true)}
             OP_TRUE
         };
         scr
@@ -402,28 +400,14 @@ pub(crate) fn chunk_final_verify(
 
     let (f, g) = (hint_in_a.f, hint_in_b.f);
     let h = f * g;
-
-    let (hint_mul_scr, mul_hints) = Fq12::hinted_mul_first(12, f, 0, g);
-
-    let fvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
-    let hash_h = extern_hash_fps(
-            h.c0.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-        true,
-    );
-
-    let mut simulate_stack_input = vec![];
-    simulate_stack_input.extend_from_slice(&mul_hints);
-    for f in &fvec {
-        simulate_stack_input.push(Hint::Fq(*f));
-    } 
-
+    let hash_h = extern_hash_fps(h.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), true);
     (
         ElemFp12Acc {
             f: h,
             hash: hash_h,
         },
-        tap_final_verify(g, hint_mul_scr),
-        simulate_stack_input,
+        tap_final_verify(g),
+        vec![],
     )
 }
 

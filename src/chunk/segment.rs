@@ -857,7 +857,7 @@ pub(crate) fn wrap_hints_final_verify(
         f: constant,
         hash: extern_hash_fps(
             constant.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-            false,
+            true,
         ),
     };
 
@@ -867,6 +867,8 @@ pub(crate) fn wrap_hints_final_verify(
             a.clone(),
             fixedacc,
         );
+
+        op_hints.extend_from_slice(&Element::Fp12v0(a).get_hash_preimage_as_hints());
     }
 
     

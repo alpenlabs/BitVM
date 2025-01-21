@@ -8,7 +8,6 @@ use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use ark_ec::{bn::BnConfig, AffineRepr};
 use ark_ff::Field;
 use ark_ff::{AdditiveGroup, BigInt};
-use bitcoin::opcodes::all::OP_DEPTH;
 use num_bigint::BigUint;
 
 use crate::{
