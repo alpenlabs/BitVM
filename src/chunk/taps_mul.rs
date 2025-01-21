@@ -12,21 +12,11 @@ use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
 };
-use ark_ff::{AdditiveGroup, Field, Zero};
+use ark_ff::{AdditiveGroup, Field};
 use num_traits::One;
 
-use super::primitves::{extern_hash_fps, hash_fp12_192};
+use super::primitves::{extern_hash_fps};
 use super::element::*;
-
-pub(crate) fn hash_g2acc_with_hashed_t(is_dbl: bool) -> Script {
-    script!{
-        //Stack: [Ht, cur_le, Hother_le, hash_result]
-        {Fq::toaltstack()} 
-        {new_hash_g2acc_with_hashed_t(is_dbl)}
-        {Fq::fromaltstack()}
-        {Fq::equal(1, 0)}
-    }
-}
 
 // SPARSE DENSE
 pub(crate) fn chunk_sparse_dense_mul(
@@ -40,42 +30,25 @@ pub(crate) fn chunk_sparse_dense_mul(
         let ops_script = script! {
             // Stack: [...,hash_out, hash_in1, hash_in2]
             // Move aux hashes to alt stack
-            {Fq::toaltstack()}
-            {Fq::toaltstack()}
-    
-            // Stack [f, dbl_le0, dbl_le1]
-            {Fq12::copy(4)}
-            {Fq2::copy(14)}
-            {Fq2::copy(14)}
-    
-            // Stack [f, dbl_le0, dbl_le1, f, dbl_le0, dbl_le]
+            // [T, f] [Hg, Hf, Ht], T=[le, Hauxt, Hauxle]
+            {Fq12::copy(0)}
+            // [[le0, le1, Hauxt, Hauxle], f, f]
+            {Fq2::copy(28)}
+            {Fq2::copy(28)}
+            // [[le0, le1, Hauxt, Hauxle], f, f, le0, le1]
             { hinted_script }
-            // Stack [f, dbl_le0, dbl_le1, f1]
-            // Fq_equal verify
+            // Stack [T, f, g]
         };
     
         let hash_script = script! {
-            // Altstack: [Hout, Hin_f, Hin_g, HT, Hauxle]
-            // Stack [f, cur_le0, cur_le1, f1]
-            
-            {Fq::fromaltstack()} {Fq::fromaltstack()}  {Fq::fromaltstack()}
-            // M: [f, cur_le0, cur_le1, f1, Hauxle, HT, Hin_g]  
-            {Fq12::roll(3)} {Fq12::toaltstack()}      
-            {Fq12::roll(7)} {Fq12::toaltstack()}      
-    
-            // A: [Hout, Hin_f, f1, f]
-            // M: [cur_le0, cur_le1, Hauxle, HT, Hin_g]  
-            {Fq::roll(1)}
-            {Fq2::roll(5)} {Fq2::roll(5)}
-            // M: [Hauxle, Hin_g, HT, cur_le0, cur_le1 ]  
-            {Fq2::roll(5)}
-            // M: [HT, cur_le0, cur_le1, Hauxle, Hin_g ]  
-            {hash_g2acc_with_hashed_t(dbl_blk)}
-            OP_VERIFY
-    
-            {Fq12::fromaltstack()}
-            {Fq12::fromaltstack()}
-            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v0])}
+            // Altstack: [Hg, Hf, HT]
+            // Stack [T, f, g]
+            if dbl_blk {
+                {hash_messages(vec![ElementType::G2DblEvalMul, ElementType::Fp12v0, ElementType::Fp12v0])}
+            } else {
+                {hash_messages(vec![ElementType::G2AddEvalMul, ElementType::Fp12v0, ElementType::Fp12v0])}
+            }
+
         };
         let scr = script! {
             {ops_script}
@@ -85,61 +58,23 @@ pub(crate) fn chunk_sparse_dense_mul(
         scr
     }
     
-    //assert_eq!(sec_in.len(), 2);
-    if dbl_blk {
-        assert!(hint_in_g.dbl_le.is_some());
+    let cur_le = if dbl_blk {
+        hint_in_g.dbl_le.unwrap()
     } else {
-        assert!(hint_in_g.add_le.is_some());
-    }
-
-    let mut cur_le = (ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO);
-    if dbl_blk {
-        cur_le = hint_in_g.dbl_le.unwrap();
-    } else {
-        cur_le = hint_in_g.add_le.unwrap();
-    }
+        hint_in_g.add_le.unwrap()
+    };
     
     let (f, cur_le0, cur_le1) = (hint_in_a.f, cur_le.0, cur_le.1);
     let (hinted_script, hints) = Fq12::hinted_mul_by_34(f, cur_le0, cur_le1);
     let mut f1 = f;
     f1.mul_by_034(&ark_bn254::Fq2::ONE, &cur_le0, &cur_le1);
 
-    // assumes sparse-dense after doubling block, hashing arrangement changes otherwise
-    let hash_new_t = extern_hash_fps(vec![hint_in_g.t.x.c0, hint_in_g.t.x.c1, hint_in_g.t.y.c0, hint_in_g.t.y.c1], true);
-    let hash_cur_le =
-        extern_hash_fps(vec![cur_le0.c0, cur_le0.c1, cur_le1.c0, cur_le1.c1], true);
-    let hash_other_le = hint_in_g.hash_other_le(dbl_blk);
-    let mut hash_le = extern_hash_nibbles(vec![hash_cur_le, hash_other_le], true);
-    if !dbl_blk {
-        hash_le = extern_hash_nibbles(vec![hash_other_le, hash_cur_le], true);
-    }
-    let hash_sparse_input = extern_hash_nibbles(vec![hash_new_t, hash_le], true);
-
-    let fvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
-    let hash_dense_input = extern_hash_fps(
-        fvec.clone(),
-        true,
-    );
     let hash_dense_output = extern_hash_fps(
         f1.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
         true,
     );
-    let hash_other_le_limbs = extern_nibbles_to_limbs(hash_other_le);
-    let hash_t_limbs = extern_nibbles_to_limbs(hash_new_t);
-
-    // data passed to stack in runtime
-
     let mut simulate_stack_input = vec![];
     simulate_stack_input.extend_from_slice(&hints);
-    for f in &fvec {
-        simulate_stack_input.push(Hint::Fq(*f));
-    }
-    simulate_stack_input.push(Hint::Fq(cur_le0.c0));
-    simulate_stack_input.push(Hint::Fq(cur_le0.c1));
-    simulate_stack_input.push(Hint::Fq(cur_le1.c0));
-    simulate_stack_input.push(Hint::Fq(cur_le1.c1));
-    simulate_stack_input.push(Hint::Hash(hash_other_le_limbs));
-    simulate_stack_input.push(Hint::Hash(hash_t_limbs));
 
     (
         ElemFp12Acc {

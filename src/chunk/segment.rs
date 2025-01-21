@@ -456,6 +456,12 @@ pub(crate) fn wrap_hint_sparse_dense_mul(
             t4,
             is_dbl_blk,
         );
+        op_hints.extend_from_slice(&Element::Fp12v0(f_acc).get_hash_preimage_as_hints());
+        if is_dbl_blk {
+            op_hints.extend_from_slice(&Element::G2DblEvalMul(t4).get_hash_preimage_as_hints())
+        } else {
+            op_hints.extend_from_slice(&Element::G2AddEvalMul(t4).get_hash_preimage_as_hints())
+        }
     }
     Segment {
         id: segment_id as u32,

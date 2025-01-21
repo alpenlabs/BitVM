@@ -241,9 +241,16 @@ mod test {
         let add_le = Some((ark_bn254::Fq2::rand(&mut prng), ark_bn254::Fq2::rand(&mut prng)));
         let hint_t = ElemG2PointAcc { t, dbl_le, add_le };
 
-        let dbl_blk = true;
+        let dbl_blk = false;
 
-        let (hint_out, tap_scr, hint_script) = chunk_sparse_dense_mul(hint_f, hint_t, dbl_blk);
+        let (hint_out, tap_scr, mut hint_script) = chunk_sparse_dense_mul(hint_f, hint_t, dbl_blk);
+
+        if dbl_blk {
+            hint_script.extend_from_slice(&Element::G2DblEvalMul(hint_t).get_hash_preimage_as_hints())
+        } else {
+            hint_script.extend_from_slice(&Element::G2AddEvalMul(hint_t).get_hash_preimage_as_hints())
+        }
+        hint_script.extend_from_slice(&Element::Fp12v0(hint_f).get_hash_preimage_as_hints());
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
@@ -1073,35 +1080,5 @@ mod test {
         assert!(res.success);
     }
 
-    #[test]
-    fn test_hash_t_with_aux_t() {
-        let mut prng = ChaCha20Rng::seed_from_u64(1);
-        let t = ark_bn254::G2Affine::rand(&mut prng);
-
-        let dbl_le = Some((ark_bn254::Fq2::rand(&mut prng), ark_bn254::Fq2::rand(&mut prng)));;
-        let add_le = Some((ark_bn254::Fq2::rand(&mut prng), ark_bn254::Fq2::rand(&mut prng)));
-        let t = ElemG2PointAcc { t, dbl_le, add_le };
-
-        //Stack: [Ht, cur_le, Hother_le, hash_result]
-        let scr = script!{
-            for i in extern_nibbles_to_limbs(t.hash_t()) {
-                {i}
-            }
-            {fq2_push_not_montgomery(t.dbl_le.unwrap().0)}
-            {fq2_push_not_montgomery(t.dbl_le.unwrap().1)}
-            for i in extern_nibbles_to_limbs(t.hash_other_le(true)) {
-                {i}
-            }
-            for i in extern_nibbles_to_limbs(t.hashed_output()) {
-                {i}
-            }
-            {hash_g2acc_with_hashed_t(true)}
-        };
-        let res = execute_script(scr);
-        for i in 0..res.final_stack.len() {
-            println!("{i:3}: {:?}", res.final_stack.get(i));
-        }
-        assert!(res.success);
-    }
 }
 

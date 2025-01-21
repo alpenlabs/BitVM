@@ -596,14 +596,14 @@ pub(crate) fn new_hash_g2acc_with_both_raw_le() -> Script {
 
 pub(crate) fn new_hash_g2acc_with_hashed_t(is_dbl: bool) -> Script {
     script!(
-        {Fq::roll(5)} {Fq::toaltstack()} 
-        {Fq::toaltstack()}
-        // A:[hash_result, Ht, Hother_le]
-        // M:[cur_le]
+
+        //Stack: [cur_le, H_ale, H_at]
+        {Fq2::toaltstack()}
+        // [cur_le] [.., H_at, H_ale]
         {hash_fp4()} 
     
         {Fq::fromaltstack()}
-        // [HC_le, HO_le]
+        // [H_le, H_le]
         if !is_dbl {
             {Fq::roll(1)}
         }

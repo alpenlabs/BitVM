@@ -13,6 +13,8 @@ pub(crate) enum Element {
     G2DblEval(ElemG2PointAcc), // 4, 4
     G2DblAddEval(ElemG2PointAcc), // 4,4,4
     G2AddEval(ElemG2PointAcc), // 4,4
+    G2DblEvalMul(ElemG2PointAcc),
+    G2AddEvalMul(ElemG2PointAcc),
     SparseEval(ElemSparseEval), // 6, 6
     FieldElem(ElemFq), // 1
     ScalarElem(ElemFr), // 1
@@ -26,10 +28,13 @@ pub(crate) enum ElementType {
     Fp12v1,  // 6, 6
     Fp12v2, // 6, 1
     Fp6,
+    Fp6Hash,
     G2T, // 4
     G2DblEval, // 4, 4
     G2DblAddEval, // 4,4,4
     G2AddEval, // 4,4
+    G2DblEvalMul,
+    G2AddEvalMul,
     SparseEval, // 6, 6
     FieldElem, // 1
     ScalarElem, // 1
@@ -45,11 +50,14 @@ impl ElementType {
             ElementType::G2AddEval => 4 + 4 + 1,
             ElementType::G2DblAddEval => 4 + 4 + 4,
             ElementType::G2T => 4 + 1,
+            ElementType::G2DblEvalMul => 4 + 1 + 1,
+            ElementType::G2AddEvalMul => 4 + 1 + 1,
             ElementType::G2DblEval => 4 + 4 + 1,
             ElementType::Fp12v0 => 12,
             ElementType::Fp12v1 => 12,
             ElementType::Fp12v2 => 6 + 1,
             ElementType::Fp6 => 6,
+            ElementType::Fp6Hash => 1,
             ElementType::FieldElem => 1,
             ElementType::MSMG1 => 2,
             ElementType::MSMG2 => 4,
@@ -77,6 +85,8 @@ impl Element {
             Element::G2DblAddEval(_) => ElementType::G2DblAddEval,
             Element::G2T(_) => ElementType::G2T,
             Element::G2DblEval(_) => ElementType::G2DblEval,
+            Element::G2DblEvalMul(_) => ElementType::G2DblEvalMul,
+            Element::G2AddEvalMul(_) => ElementType::G2AddEvalMul,
             Element::Fp12v0(_) => ElementType::Fp12v0, // 2, 4
             Element::Fp12v1(_) => ElementType::Fp12v1, // 6
             Element::Fp12v2(_) => ElementType::Fp12v2, // 6,1
@@ -96,6 +106,8 @@ impl Element {
             Element::G2DblAddEval(r) => r.hashed_output(),
             Element::G2T(r) => r.hashed_output(),
             Element::G2DblEval(r) => r.hashed_output(),
+            Element::G2DblEvalMul(r) => r.hashed_output(),
+            Element::G2AddEvalMul(r) => r.hashed_output(),
             Element::Fp12v0(r) => r.hashed_output(),
             Element::Fp12v1(r) => r.hashed_output(),
             Element::Fp12v2(r) => r.hashed_output(),
@@ -121,7 +133,7 @@ impl Element {
             Element::HashBytes(h) => vec![Hint::Hash(extern_nibbles_to_limbs(*h))],
             Element::Fp12v0(r) => r.f.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect(),
             Element::Fp12v1(r) => r.f.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect(),
-            Element::Fp12v2(r) => vec![Hint::Hash(extern_nibbles_to_limbs(r.hash))],
+            Element::Fp12v2(r) => vec![Hint::Hash(extern_nibbles_to_limbs(r.hashed_output()))],
             Element::Fp6(r) => r.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect(),
             Element::G2T(_) => vec![],
             Element::G2DblEval(g) => {
@@ -149,6 +161,28 @@ impl Element {
                     Hint::Fq(g.t.y.c0),
                     Hint::Fq(g.t.y.c1),
                     Hint::Hash(extern_nibbles_to_limbs(g.hash_le())),
+                ]
+            },
+            Element::G2DblEvalMul(g) => {
+                let (dbl_le_0, dbl_le_1) = g.dbl_le.unwrap();
+                vec![
+                    Hint::Fq(dbl_le_0.c0),
+                    Hint::Fq(dbl_le_0.c1),
+                    Hint::Fq(dbl_le_1.c0),
+                    Hint::Fq(dbl_le_1.c1),
+                    Hint::Hash(extern_nibbles_to_limbs(g.hash_other_le(true))),
+                    Hint::Hash(extern_nibbles_to_limbs(g.hash_t())),
+                ]
+            },
+            Element::G2AddEvalMul(g) => {
+                let (add_le_0, add_le_1) = g.add_le.unwrap();
+                vec![
+                    Hint::Fq(add_le_0.c0),
+                    Hint::Fq(add_le_0.c1),
+                    Hint::Fq(add_le_1.c0),
+                    Hint::Fq(add_le_1.c1),
+                    Hint::Hash(extern_nibbles_to_limbs(g.hash_other_le(false))),
+                    Hint::Hash(extern_nibbles_to_limbs(g.hash_t())),
                 ]
             },
             Element::G1(r) => vec![Hint::Fq(r.x), Hint::Fq(r.y)],
