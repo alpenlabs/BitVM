@@ -195,7 +195,7 @@ pub(crate) fn bitcom_scripts_from_segments(segments: &Vec<Segment>, pubkeys_map:
     let mut bitcom_scripts: Vec<treepp::Script> = vec![];
     for seg in segments {
         let sec_out = (seg.id as u32, segments[seg.id as usize].result.output_is_field_element());
-        let sec_in: Vec<(u32, bool)> = seg.parameter_ids.iter().map(|f| {
+        let sec_in: Vec<(u32, bool)> = seg.parameter_ids.iter().map(|(f, _)| {
             let elem = &segments[*(f) as usize];
             let elem_type = elem.result.output_is_field_element();
             (*f, elem_type)

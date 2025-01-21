@@ -84,8 +84,8 @@ mod test {
                 {i}
             }
             {Fq::toaltstack()}
-            for f in fqvec {
-                {fq_push_not_montgomery(f)}
+            for f in fqvec.iter().rev() {
+                {fq_push_not_montgomery(*f)}
                 {Fq::toaltstack()}                
             }
         };

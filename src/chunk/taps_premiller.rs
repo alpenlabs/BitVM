@@ -30,8 +30,7 @@ pub(crate) fn chunk_hash_c(
             // Stack:[f11 ..,f0]
             // Altstack: [f_hash_claim]
             for i in 0..12 {
-                {Fq::roll(i)} // reverses order [f0..f11]
-                {Fq::copy(0)}
+                {Fq::copy(i)} // reverses order [f0..f11]
                 { Fq::push_hex_not_montgomery(Fq::MODULUS) }
                 { U254::lessthan(1, 0) } // a < p
                 OP_TOALTSTACK

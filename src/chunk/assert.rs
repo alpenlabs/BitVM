@@ -517,7 +517,7 @@ pub(crate) fn script_exec(
     for i in 0..segments.len() {
         let seg = &segments[i];
         let sec_out = ((seg.id, segments[seg.id as usize].result.output_is_field_element()), assertions[seg.id as usize]);
-        let sec_in: Vec<((u32, bool), [u8; 64])> = seg.parameter_ids.iter().rev().map(|k| {
+        let sec_in: Vec<((u32, bool), [u8; 64])> = seg.parameter_ids.iter().rev().map(|(k, _)| {
             let v = &segments[*(k) as usize];
             let v = v.result.output_is_field_element();
             ((*k, v), assertions[*k as usize])
