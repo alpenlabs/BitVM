@@ -150,7 +150,7 @@ pub(crate) fn chunk_precompute_p(
                 OP_IF
                     {eval_xy} 
                     // [pdx, pdy]    
-                    {hash_messages(vec![ElementType::MSMG1])}
+                    {hash_messages(vec![ElementType::G1])}
                 OP_ELSE
                     {Fq::fromaltstack()} {Fq::drop()}
                     {curves::G1Affine::drop()}

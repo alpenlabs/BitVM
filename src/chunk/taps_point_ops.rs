@@ -212,7 +212,7 @@ pub(crate) fn chunk_point_add_with_frob(
         let hash_script = script! {
             //Altstack: [hash_out, hash_in]
             //Stack: [tx, ty, hash_inaux, Rx, Ry, 0, 0, le0, le1, le1]
-            {hash_messages(vec![ElementType::G2AddEval, ElementType::MSMG1, ElementType::G2DblAddEval])}
+            {hash_messages(vec![ElementType::G2AddEval, ElementType::G1, ElementType::G2DblAddEval])}
             // [Rx, Ry, le0, le1, 0, 0]
         };
         
@@ -309,7 +309,7 @@ pub(crate) fn chunk_point_dbl(
         let hash_script = script! {
             //Altstack: [hash_out, hash_in]
             //Stack: [tx, ty, hash_inaux, p, Rx, Ry, le0, le1, 0, 0]
-            {hash_messages(vec![ElementType::G2DblEval, ElementType::MSMG1, ElementType::G2DblAddEval])}
+            {hash_messages(vec![ElementType::G2DblEval, ElementType::G1, ElementType::G2DblAddEval])}
         };
     
         let sc = script! {
@@ -405,7 +405,7 @@ pub(crate) fn chunk_point_ops(
         let hash_script = script! {
             //Altstack: [hash_out, hash_in]
             //Stack: [tx, ty, hash_inaux, p, Rx, Ry, 0, 0, le0, le1, le1]
-            {hash_messages(vec![ElementType::G2AddEval, ElementType::MSMG1, ElementType::G2DblAddEval])}
+            {hash_messages(vec![ElementType::G2AddEval, ElementType::G1, ElementType::G2DblAddEval])}
             // [Rx, Ry, le0, le1, 0, 0]
         };
         

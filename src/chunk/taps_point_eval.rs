@@ -132,7 +132,7 @@ pub(crate) fn chunk_multiply_point_evals_on_tangent_for_fixed_g2(
     
     hint_in_t2: ark_bn254::G2Affine,
     hint_in_t3: ark_bn254::G2Affine,
-) -> (ElemSparseEval, Script, Vec<Hint>) {
+) -> (ElemFp12Acc, Script, Vec<Hint>) {
     fn tap_multiply_point_evals_on_tangent_for_fixed_g2(mul_scr: Script) -> Script {
 
         let ops_scr = script!(
@@ -141,7 +141,7 @@ pub(crate) fn chunk_multiply_point_evals_on_tangent_for_fixed_g2(
             // [p2, p3, g]
         );
         let hash_scr = script! {
-            {hash_messages(vec![ElementType::MSMG1, ElementType::MSMG1, ElementType::Fp12v1])}
+            {hash_messages(vec![ElementType::G1, ElementType::G1, ElementType::Fp12v1])}
         };
         let sc = script! {
             {ops_scr}
@@ -162,11 +162,7 @@ pub(crate) fn chunk_multiply_point_evals_on_tangent_for_fixed_g2(
     );
     let scr = tap_multiply_point_evals_on_tangent_for_fixed_g2(scr);
 
-    let hint_out = ElemSparseEval {
-        t2: (t2 + t2).into_affine(),
-        t3: (t3 + t3).into_affine(),
-        f: ElemFp12Acc { f, hash }
-    };
+    let hint_out =  ElemFp12Acc { f, hash };
     (hint_out, scr, hints)
 }
 
@@ -181,7 +177,7 @@ pub(crate) fn chunk_multiply_point_evals_on_chord_for_fixed_g2(
     hint_in_q2: ark_bn254::G2Affine,
     hint_in_q3: ark_bn254::G2Affine,
     ate: i8,
-) -> (ElemSparseEval, Script, Vec<Hint>) {
+) -> (ElemFp12Acc, Script, Vec<Hint>) {
     fn tap_multiply_point_evals_on_chord_for_fixed_g2(mul_scr: Script) -> Script {
 
         let ops_scr = script!(
@@ -190,7 +186,7 @@ pub(crate) fn chunk_multiply_point_evals_on_chord_for_fixed_g2(
             // [p2, p3, g]
         );
         let hash_scr = script! {
-            {hash_messages(vec![ElementType::MSMG1, ElementType::MSMG1, ElementType::Fp12v1])}
+            {hash_messages(vec![ElementType::G1, ElementType::G1, ElementType::Fp12v1])}
         };
         let sc = script! {
             {ops_scr}
@@ -221,11 +217,7 @@ pub(crate) fn chunk_multiply_point_evals_on_chord_for_fixed_g2(
     );
     let scr = tap_multiply_point_evals_on_chord_for_fixed_g2(scr);
 
-    let hint_out = ElemSparseEval {
-        t2: (t2 + q2).into_affine(),
-        t3: (t3 + q3).into_affine(),
-        f: ElemFp12Acc { f, hash }
-    };
+    let hint_out = ElemFp12Acc { f, hash };
     (hint_out, scr, hints)
 }
 
@@ -254,7 +246,7 @@ pub(crate) fn chunk_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
     hint_in_q2: ark_bn254::G2Affine,
     hint_in_q3: ark_bn254::G2Affine,
     ate: i8,
-) -> (ElemSparseEval, Script, Vec<Hint>) {
+) -> (ElemFp12Acc, Script, Vec<Hint>) {
     fn tap_multiply_point_evals_on_chord_for_fixed_g2(mul_scr: Script) -> Script {
 
         let ops_scr = script!(
@@ -263,7 +255,7 @@ pub(crate) fn chunk_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
             // [p2, p3, g]
         );
         let hash_scr = script! {
-            {hash_messages(vec![ElementType::MSMG1, ElementType::MSMG1, ElementType::Fp12v1])}
+            {hash_messages(vec![ElementType::G1, ElementType::G1, ElementType::Fp12v1])}
         };
         let sc = script! {
             {ops_scr}
@@ -300,11 +292,7 @@ pub(crate) fn chunk_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
     );
     let scr = tap_multiply_point_evals_on_chord_for_fixed_g2(scr);
 
-    let hint_out = ElemSparseEval {
-        t2: (t2 + q2).into_affine(),
-        t3: (t3 + q3).into_affine(),
-        f: ElemFp12Acc { f, hash }
-    };
+    let hint_out = ElemFp12Acc { f, hash };
     (hint_out, scr, hints)
 }
 

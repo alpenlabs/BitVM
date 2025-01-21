@@ -150,7 +150,7 @@ pub(crate) fn chunk_hash_p(
             OP_IF
                 {eval_xy} 
                 // [t, rd]    
-                {hash_messages(vec![ElementType::MSMG1, ElementType::MSMG1])}
+                {hash_messages(vec![ElementType::G1, ElementType::G1])}
             OP_ELSE
                 {Fq2::fromaltstack()} {Fq2::drop()}
                 {G1Affine::drop()} {G1Affine::drop()}

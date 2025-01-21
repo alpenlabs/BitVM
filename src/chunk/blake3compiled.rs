@@ -75,7 +75,7 @@ pub fn hash_messages(elem_types: Vec<ElementType>) -> Script {
                 {new_hash_g2acc_with_both_raw_le()}
             } else if elem_type == ElementType::G2DblEval || elem_type == ElementType::G2AddEval ||  elem_type == ElementType::G2T {
                 {new_hash_g2acc_with_hashed_le()}
-            } else if elem_type == ElementType::MSMG1 {
+            } else if elem_type == ElementType::G1 {
                 {hash_fp2()}
             } else if elem_type == ElementType::G2DblEvalMul {
                 {new_hash_g2acc_with_hashed_t(true)}
