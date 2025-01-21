@@ -17,9 +17,7 @@ pub(crate) enum Element {
     FieldElem(ElemFq), // 1
     ScalarElem(ElemFr), // 1
     HashBytes(ElemHashBytes), // 1
-    MSMG1(ElemG1Point), // 2
-    MSMG2(ElemG2Point), // 4
-    NONE(),
+    G1(ElemG1Point), // 2
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -84,12 +82,10 @@ impl Element {
             Element::Fp12v2(_) => ElementType::Fp12v2, // 6,1
             Element::Fp6(_) => ElementType::Fp6,
             Element::FieldElem(_) => ElementType::FieldElem,
-            Element::MSMG1(_) => ElementType::MSMG1,
-            Element::MSMG2(_) => ElementType::MSMG2,
+            Element::G1(_) => ElementType::MSMG1,
             Element::ScalarElem(_) => ElementType::ScalarElem,
             Element::SparseEval(_) => ElementType::SparseEval,
             Element::HashBytes(_) => ElementType::HashBytes,
-            Element::NONE() => ElementType::NONE,
 
         }
     }
@@ -110,12 +106,10 @@ impl Element {
                 )
             },
             Element::FieldElem(f) => f.hashed_output(),
-            Element::MSMG1(r) => r.hashed_output(),
-            Element::MSMG2(r) => r.hashed_output(),
+            Element::G1(r) => r.hashed_output(),
             Element::ScalarElem(r) => r.hashed_output(),
             Element::SparseEval(r) => r.hashed_output(),
             Element::HashBytes(r) => r.hashed_output(),
-            Element::NONE() => [0u8; 64],
         }
     }
 
@@ -157,9 +151,7 @@ impl Element {
                     Hint::Hash(extern_nibbles_to_limbs(g.hash_le())),
                 ]
             },
-            Element::MSMG1(r) => vec![Hint::Fq(r.x), Hint::Fq(r.y)],
-            Element::MSMG2(_) => vec![],
-            Element::NONE() => vec![],
+            Element::G1(r) => vec![Hint::Fq(r.x), Hint::Fq(r.y)],
         }
     }
 }
@@ -213,7 +205,7 @@ impl_try_from_element!(ElemSparseEval, { SparseEval });
 impl_try_from_element!(ElemFq, { FieldElem });
 impl_try_from_element!(ElemFr, { ScalarElem });
 impl_try_from_element!(ElemHashBytes, { HashBytes });
-impl_try_from_element!(ElemG1Point, { MSMG1 });
+impl_try_from_element!(ElemG1Point, { G1 });
 
 pub type ElemFq = ark_bn254::Fq;
 pub type ElemFr = ark_bn254::Fr;

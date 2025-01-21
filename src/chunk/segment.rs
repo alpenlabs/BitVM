@@ -90,14 +90,14 @@ pub(crate) fn wrap_hint_msm(
             input_segment_info.extend_from_slice(&scalar_input_segment_info);
 
             if msm_chunk_index > 0 {
-                op_hints.extend_from_slice(&Element::MSMG1(prev_input).get_hash_preimage_as_hints());
+                op_hints.extend_from_slice(&Element::G1(prev_input).get_hash_preimage_as_hints());
             }
             prev_input = hout_msm.clone();
 
             segments.push(Segment { 
                 id: (segment_id + msm_chunk_index) as u32, 
                 parameter_ids: input_segment_info, 
-                result: Element::MSMG1(hout_msm), 
+                result: Element::G1(hout_msm), 
                 hints: op_hints, scr_type: ScriptType::MSM((msm_chunk_index, pub_vky.clone())),
             });
         }
@@ -114,7 +114,7 @@ pub(crate) fn wrap_hint_msm(
             segments.push(Segment { 
                 id: (segment_id as u32 + msm_chunk_index), 
                 parameter_ids: input_segment_info, 
-                result: Element::MSMG1(hout_msm), 
+                result: Element::G1(hout_msm), 
                 hints: vec![], scr_type: ScriptType::MSM((msm_chunk_index as usize, pub_vky.clone())),
             });
         }
@@ -139,9 +139,9 @@ pub(crate) fn wrap_hint_hash_p(
             t,
             pub_vky0.clone(),
         );
-        op_hints.extend_from_slice(&Element::MSMG1(t).get_hash_preimage_as_hints());
+        op_hints.extend_from_slice(&Element::G1(t).get_hash_preimage_as_hints());
     }
-    Segment { id: segment_id as u32, parameter_ids: input_segment_info, result: Element::MSMG1(p3), hints: op_hints, scr_type: ScriptType::PreMillerHashP(pub_vky0) }
+    Segment { id: segment_id as u32, parameter_ids: input_segment_info, result: Element::G1(p3), hints: op_hints, scr_type: ScriptType::PreMillerHashP(pub_vky0) }
 }
 
 pub(crate) fn wrap_hint_hash_c(  
@@ -188,7 +188,7 @@ pub(crate) fn wrap_hints_precompute_p(
         (p3d, _, op_hints) = chunk_precompute_p(in_py, in_px);
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::MSMG1(p3d), hints: op_hints, scr_type: ScriptType::PreMillerPrecomputeP }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::G1(p3d), hints: op_hints, scr_type: ScriptType::PreMillerPrecomputeP }
 }
 
 pub(crate) fn wrap_hint_hash_c2(
@@ -364,7 +364,7 @@ pub(crate) fn wrap_hint_point_dbl(
         (dbl, _, op_hints) = chunk_point_dbl(t4, p4);
 
         op_hints.extend_from_slice(&Element::G2DblEval(t4).get_hash_preimage_as_hints());
-        op_hints.extend_from_slice(&Element::MSMG1(p4).get_hash_preimage_as_hints());
+        op_hints.extend_from_slice(&Element::G1(p4).get_hash_preimage_as_hints());
     }
 
     
@@ -419,7 +419,7 @@ pub(crate) fn wrap_hint_point_ops(
             ate,
         );
         op_hints.extend_from_slice(&Element::G2DblAddEval(t4).get_hash_preimage_as_hints());
-        op_hints.extend_from_slice(&Element::MSMG1(p4).get_hash_preimage_as_hints());
+        op_hints.extend_from_slice(&Element::G1(p4).get_hash_preimage_as_hints());
     }
 
     
@@ -524,7 +524,7 @@ pub(crate) fn wrap_hints_dense_dense_mul0(
     let b: ElemFp12Acc = in_b.result.try_into().unwrap();
 
     
-    let (mut dmul0, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
+    let (mut dmul0, mut op_hints) = (ElemFp6::mock(), vec![]);
     if !skip {
         (dmul0,_, op_hints) = chunk_dense_dense_mul0(
             a.clone(),
@@ -537,7 +537,7 @@ pub(crate) fn wrap_hints_dense_dense_mul0(
     Segment {
         id: segment_id as u32,
         parameter_ids: input_segment_info,
-        result: Element::Fp12v0(dmul0),
+        result: Element::Fp6(dmul0),
         hints: op_hints,
         scr_type: ScriptType::DenseDenseMul0(),
     }
@@ -559,7 +559,7 @@ pub(crate) fn wrap_hints_dense_dense_mul1(
 
     let a: ElemFp12Acc = in_a.result.try_into().unwrap();
     let b: ElemFp12Acc = in_b.result.try_into().unwrap();
-    let c: ElemFp12Acc = in_c.result.try_into().unwrap();
+    let c: ElemFp6 = in_c.result.try_into().unwrap();
 
     
 
@@ -573,11 +573,11 @@ pub(crate) fn wrap_hints_dense_dense_mul1(
 
         let a_preimage_hints = Element::Fp12v0(a).get_hash_preimage_as_hints();
         let b_preimage_hints = Element::Fp12v1(b).get_hash_preimage_as_hints();
-        let c0_preimage_hints = Element::HashBytes(c.hash).get_hash_preimage_as_hints();
+        let c0_preimage_hints = Element::HashBytes(c.hashed_output()).get_hash_preimage_as_hints();
         op_hints.extend_from_slice(&a_preimage_hints);
         op_hints.extend_from_slice(&b_preimage_hints);
         op_hints.extend_from_slice(&c0_preimage_hints);
-        op_hints.extend_from_slice(&c0_preimage_hints);
+        // op_hints.extend_from_slice(&c0_preimage_hints);
     }
 
     
@@ -609,7 +609,7 @@ pub(crate) fn wrap_hints_dense_le_mul0(
 
     
 
-    let (mut dmul0, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
+    let (mut dmul0, mut op_hints) = (ElemFp6::mock(), vec![]);
     if !skip {
         (dmul0,_, op_hints) = chunk_dense_dense_mul0(
             a.clone(),
@@ -625,7 +625,7 @@ pub(crate) fn wrap_hints_dense_le_mul0(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12v0(dmul0), // todo: fp12->fp6
+        result: Element::Fp6(dmul0), // todo: fp12->fp6
         hints: op_hints,
         scr_type: ScriptType::DenseDenseMul0(),
     }
@@ -647,7 +647,7 @@ pub(crate) fn wrap_hints_dense_le_mul1(
 
     let a: ElemFp12Acc = in_a.result.try_into().unwrap();
     let b: ElemSparseEval = in_b.result.try_into().unwrap();
-    let c: ElemFp12Acc = in_c.result.try_into().unwrap();
+    let c: ElemFp6 = in_c.result.try_into().unwrap();
 
     
 
@@ -660,8 +660,8 @@ pub(crate) fn wrap_hints_dense_le_mul1(
         );
         op_hints.extend_from_slice(&Element::Fp12v0(a).get_hash_preimage_as_hints());
         op_hints.extend_from_slice(&Element::Fp12v1(b.f).get_hash_preimage_as_hints());
-        op_hints.extend_from_slice(&Element::HashBytes(c.hash).get_hash_preimage_as_hints());
-        op_hints.extend_from_slice(&Element::HashBytes(c.hash).get_hash_preimage_as_hints());
+        op_hints.extend_from_slice(&Element::HashBytes(c.hashed_output()).get_hash_preimage_as_hints());
+        // op_hints.extend_from_slice(&Element::HashBytes(c.hashed_output()).get_hash_preimage_as_hints());
     }
 
     
@@ -787,7 +787,7 @@ pub(crate) fn wrap_hint_point_add_with_frob(
             power,
         );
         op_hints.extend_from_slice(&Element::G2AddEval(t4).get_hash_preimage_as_hints());
-        op_hints.extend_from_slice(&Element::MSMG1(p4).get_hash_preimage_as_hints());
+        op_hints.extend_from_slice(&Element::G1(p4).get_hash_preimage_as_hints());
     }
 
     Segment {

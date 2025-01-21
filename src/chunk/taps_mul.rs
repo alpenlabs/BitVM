@@ -152,43 +152,10 @@ pub(crate) fn chunk_sparse_dense_mul(
 }
 
 // DENSE DENSE MUL ZERO
-
-// Altstack: [Hc, Hb, Ha]
-// Stack: [a, b, c]
-fn hash_mul(is_zero: bool) -> Script {
-    script!{
-        {Fq6::toaltstack()}
-        {Fq12::toaltstack()}
-        {hash_fp12()}
-
-        {Fq12::fromaltstack()}
-        {Fq::roll(12)} {Fq::toaltstack()}
-        {hash_fp12_192()} { Fq::fromaltstack() }
-
-        if is_zero {
-            {Fq6::fromaltstack()}
-            {Fq2::roll(6)} {Fq2::toaltstack()}
-            {hash_fp6()} {Fq2::fromaltstack()}
-        } else {
-            {Fq6::fromaltstack()} 
-            {Fq::fromaltstack()} // Hc0
-            {Fq2::roll(7)} {Fq2::toaltstack()}
-            {hash_fp12_with_hints()} {Fq2::fromaltstack()}
-        }
-
-        // [Hc0, Hg, Hf]
-        {Fq::fromaltstack()} {Fq::fromaltstack()} {Fq::fromaltstack()}
-        // [Hc0, Hg, Hf, Hkg, Hkf, Hkc0]
-        {Fq::equalverify(1, 3)}
-        {Fq::equalverify(1, 2)}
-        {Fq::equal(1, 0)} OP_NOT OP_VERIFY
-    }
-}
-
 pub(crate) fn chunk_dense_dense_mul0(
     hint_in_a: ElemFp12Acc,
     hint_in_b: ElemFp12Acc,
-) -> (ElemFp12Acc, Script, Vec<Hint>) {
+) -> (ElemFp6, Script, Vec<Hint>) {
 
     fn tap_dense_dense_mul0(hinted_mul: Script) -> Script {
         let ops_scr = script! {
@@ -219,19 +186,12 @@ pub(crate) fn chunk_dense_dense_mul0(
         gvec.clone(),
         false,
     ); // sparse
-    let hash_h = extern_hash_fps(
-        h.c0.to_base_prime_field_elements().collect(),
-        true,
-    );
 
     let mut simulate_stack_input = vec![];
     simulate_stack_input.extend_from_slice(&mul_hints);
 
     (
-        ElemFp12Acc {
-            f: h,
-            hash: hash_h,
-        },
+        h.c0,
         tap_dense_dense_mul0(hinted_mul_scr),
         simulate_stack_input,
     )
@@ -243,13 +203,14 @@ pub(crate) fn chunk_dense_dense_mul0(
 pub(crate) fn chunk_dense_dense_mul1(
     hint_in_a: ElemFp12Acc,
     hint_in_b: ElemFp12Acc,
-    hint_in_c0: ElemFp12Acc,
+    hint_in_c0: ElemFp6,
 ) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
 
     fn tap_dense_dense_mul1(hinted_mul: Script) -> Script {
 
         let ops_scr = script! {
+            {Fq::copy(0)}
             // [f, g, hc0, hc1_aux]
             { Fq2::toaltstack() }
             { hinted_mul }
@@ -297,14 +258,6 @@ pub(crate) fn chunk_dense_dense_mul1(
 
     let mut simulate_stack_input = vec![];
     simulate_stack_input.extend_from_slice(&mul_hints);
-    // for f in &fvec {
-    //     simulate_stack_input.push(Hint::Fq(*f));
-    // }
-    // for f in &gvec {
-    //     simulate_stack_input.push(Hint::Fq(*f));
-    // }
-    // simulate_stack_input.push(Hint::Hash(extern_nibbles_to_limbs(hash_c0)));
-    // simulate_stack_input.push(Hint::Hash(extern_nibbles_to_limbs(hash_c0)));
 
     (
         ElemFp12Acc {

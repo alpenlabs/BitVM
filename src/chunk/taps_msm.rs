@@ -347,7 +347,7 @@ mod test {
         let r = (t + q).into_affine();
 
         let (hint_out,  hash_c_scr, mut hint_script) = chunk_hash_p( t, q);
-        hint_script.extend_from_slice(&Element::MSMG1(t).get_hash_preimage_as_hints());
+        hint_script.extend_from_slice(&Element::G1(t).get_hash_preimage_as_hints());
         
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
@@ -412,7 +412,7 @@ mod test {
     
             let mut op_hints = vec![];
             if msm_chunk_index > 0 {
-                op_hints.extend_from_slice(&Element::MSMG1(hints_msm[msm_chunk_index-1].0).get_hash_preimage_as_hints());
+                op_hints.extend_from_slice(&Element::G1(hints_msm[msm_chunk_index-1].0).get_hash_preimage_as_hints());
             }
             let tap_len = hints_msm[msm_chunk_index].1.len();
             let script = script! {

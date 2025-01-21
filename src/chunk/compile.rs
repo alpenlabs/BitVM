@@ -155,7 +155,7 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
                 op_scripts.push(tap_dense_dense_mul0((ElemFp12Acc::mock(), ElemFp12Acc::mock())).1);
             },
             ScriptType::DenseDenseMul1() => {
-                op_scripts.push(tap_dense_dense_mul1( (ElemFp12Acc::mock(), ElemFp12Acc::mock(), ElemFp12Acc::mock())  ).1);
+                op_scripts.push(tap_dense_dense_mul1( (ElemFp12Acc::mock(), ElemFp12Acc::mock(), ElemFp6::mock())  ).1);
             },
             ScriptType::PostMillerDenseDenseMulByConst0(inp) => {
                 op_scripts.push(tap_final_verify( (ElemFp12Acc::mock(), ElemFp12Acc {f: inp, hash: [0u8;64]}) ).1);

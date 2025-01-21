@@ -358,7 +358,7 @@ mod test {
         let hash_c0 = extern_hash_fps(
             c.c0.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), true);
 
-        let hint_c0 = ElemFp12Acc {f: ark_bn254::Fq12::new(c.c0, ark_bn254::Fq6::ZERO), hash: hash_c0};
+        let hint_c0 = c.c0;
 
 
         let (hint_out, tap_scr, mut hint_script) = chunk_dense_dense_mul1(hint_f, hint_g, hint_c0);
@@ -370,7 +370,7 @@ mod test {
             hint_script.push(Hint::Fq(*f));
         }
         hint_script.push(Hint::Hash(extern_nibbles_to_limbs(hash_c0)));
-        hint_script.push(Hint::Hash(extern_nibbles_to_limbs(hash_c0)));
+        // hint_script.push(Hint::Hash(extern_nibbles_to_limbs(hash_c0)));
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
@@ -531,7 +531,7 @@ mod test {
         let hint_in_p_hash = extern_nibbles_to_limbs(p.hashed_output());
 
         let t4_hash_hints = Element::G2DblAddEval(t).get_hash_preimage_as_hints();
-        let p_hash_hints = Element::MSMG1(p).get_hash_preimage_as_hints();
+        let p_hash_hints = Element::G1(p).get_hash_preimage_as_hints();
         hint_script.extend_from_slice(&t4_hash_hints);
         hint_script.extend_from_slice(&p_hash_hints);
 
@@ -590,7 +590,7 @@ mod test {
         let hint_in_p_hash = extern_nibbles_to_limbs(p.hashed_output());
 
         let t4_hash_hints = Element::G2DblEval(t4acc).get_hash_preimage_as_hints();
-        let p_hash_hints = Element::MSMG1(p).get_hash_preimage_as_hints();
+        let p_hash_hints = Element::G1(p).get_hash_preimage_as_hints();
         hint_script.extend_from_slice(&t4_hash_hints);
         hint_script.extend_from_slice(&p_hash_hints);
         
@@ -651,7 +651,7 @@ mod test {
 
 
         let t4_hash_hints = Element::G2DblEval(t).get_hash_preimage_as_hints();
-        let p_hash_hints = Element::MSMG1(p).get_hash_preimage_as_hints();
+        let p_hash_hints = Element::G1(p).get_hash_preimage_as_hints();
         hint_script.extend_from_slice(&t4_hash_hints);
         hint_script.extend_from_slice(&p_hash_hints);
 
