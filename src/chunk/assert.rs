@@ -512,7 +512,22 @@ pub(crate) fn script_exec(
 
     let assertions = assertions_to_nibbles(get_assertions(signed_asserts));
 
-    // FIXME: 
+
+    let aux_hints: Vec<Vec<Hint>> = segments.iter().map(|seg| {
+        let mut hints = seg.hints.clone();
+        //println!("segment_id {:?}", seg.id);
+        //println!("script type {:?}", seg.scr_type);
+        seg.parameter_ids.iter().rev().for_each(|(param_seg_id, param_seg_type)| {
+            let param_seg = &segments[*(param_seg_id) as usize];
+            let preimage_hints = param_seg_type.get_hash_preimage_as_hints(param_seg.result);
+            //println!("pre_image_hints_two seg id {:?}", param_seg.id);
+            //println!("pre_image_hints_two script type {:?}", param_seg.scr_type);
+            //println!("pre_image_hints_two {:?}", preimage_hints);
+            hints.extend_from_slice(&preimage_hints);
+        });
+        hints
+    }).collect();
+
     let mut bc_hints = vec![];
     for i in 0..segments.len() {
         let seg = &segments[i];
@@ -522,6 +537,7 @@ pub(crate) fn script_exec(
             let v = v.result.output_is_field_element();
             ((*k, v), assertions[*k as usize])
         }).collect();
+
         let mut tot: Vec<((u32, bool), [u8;64])> = vec![];
         tot.extend_from_slice(&sec_in);
         tot.push(sec_out);
@@ -532,7 +548,6 @@ pub(crate) fn script_exec(
         bc_hints.push(bcelems);
     }
 
-    let aux_hints: Vec<Vec<Hint>> = segments.iter().map(|f| f.hints.clone()).collect();
 
     let mut tap_script_index = 0;
     for i in 0..aux_hints.len() {

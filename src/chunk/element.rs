@@ -74,6 +74,7 @@ impl ElementType {
                         Hint::Hash(extern_nibbles_to_limbs(g.hash_le())),
                     ]
                 } else {
+                    panic!();
                     vec![]
                 }
             },
@@ -87,6 +88,7 @@ impl ElementType {
                         Hint::Hash(extern_nibbles_to_limbs(g.hash_le())),
                     ]
                 } else {
+                    panic!();
                     vec![]
                 }
             },
@@ -100,6 +102,7 @@ impl ElementType {
                         Hint::Hash(extern_nibbles_to_limbs(g.hash_le())),
                     ]
                 } else {
+                    panic!();
                     vec![]
                 }
             },
@@ -115,6 +118,7 @@ impl ElementType {
                         Hint::Hash(extern_nibbles_to_limbs(g.hash_t())),
                     ]
                 } else {
+                    panic!();
                     vec![]
                 }
             },
@@ -130,6 +134,7 @@ impl ElementType {
                         Hint::Hash(extern_nibbles_to_limbs(g.hash_t())),
                     ]
                 } else {
+                    panic!();
                     vec![]
                 }
             },
@@ -137,6 +142,7 @@ impl ElementType {
                 if let Element::Fp12v0(r) = elem {
                     r.f.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect()
                 } else {
+                    panic!();
                     vec![]
                 }
             },
@@ -144,6 +150,7 @@ impl ElementType {
                 if let Element::Fp12v1(r) = elem {
                     r.f.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect()
                 } else {
+                    panic!();
                     vec![]
                 }
             },
@@ -152,6 +159,7 @@ impl ElementType {
                 if let Element::Fp6(r) = elem {
                     r.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect()
                 } else {
+                    panic!();
                     vec![]
                 }
             },
@@ -163,6 +171,7 @@ impl ElementType {
                     );
                     vec![Hint::Hash(extern_nibbles_to_limbs(rhash))]
                 } else {
+                    panic!();
                     vec![]
                 }
             },
@@ -170,6 +179,7 @@ impl ElementType {
                 if let Element::HashBytes(h) = elem {
                     vec![Hint::Hash(extern_nibbles_to_limbs(h))]
                 } else {
+                    panic!();
                     vec![]
                 }
             },
@@ -177,6 +187,7 @@ impl ElementType {
                 if let Element::G1(r) = elem {
                     vec![Hint::Fq(r.x), Hint::Fq(r.y)]
                 } else {
+                    panic!();
                     vec![]
                 }
             }

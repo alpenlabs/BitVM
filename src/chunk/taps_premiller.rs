@@ -58,6 +58,48 @@ pub(crate) fn chunk_hash_c(
         sc
     }
 
+
+    fn _tap_hash_c_new() -> Script {
+        let ops_scr = script! {
+            for _ in 0..12 {
+                {Fq::fromaltstack()}
+            }
+            // Stack:[f11 ..,f0]
+            // Altstack: [f_hash_claim]
+            for i in 0..12 {
+                {Fq::copy(i)} // reverses order [f0..f11]
+                { Fq::push_hex_not_montgomery(Fq::MODULUS) }
+                { U254::lessthan(1, 0) } // a < p
+                OP_TOALTSTACK
+            }
+            for _ in 0..12 {
+                OP_FROMALTSTACK
+            }
+            for _ in 0..11 {
+                OP_BOOLAND
+            }
+            OP_NOTIF
+                for _ in 0..12 {
+                    {Fq::drop()}
+                }
+                {Fq::fromaltstack()}
+                {Fq::drop()}
+                OP_TRUE
+                OP_RETURN
+            OP_ENDIF
+            // all less than p
+        };
+        let hash_scr = script!(
+            {hash_messages(vec![ElementType::Fp12v1])}
+        );
+        let sc = script! {
+            {ops_scr}
+            {hash_scr}
+            OP_TRUE
+        };
+        sc
+    }
+
     let fvec = hint_in_c;
     let fhash = extern_hash_fps(fvec.clone(), false);
 

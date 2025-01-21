@@ -271,7 +271,7 @@ pub(crate) fn wrap_inv2(
         // op_hints.extend_from_slice(&Element::Fp6(in_t1).get_hash_preimage_as_hints());
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12v0(dmul0), hints: op_hints, scr_type: ScriptType::PreMillerInv2 }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12v1(dmul0), hints: op_hints, scr_type: ScriptType::PreMillerInv2 }
 }
 
 
@@ -419,14 +419,16 @@ pub(crate) fn wrap_hint_point_ops(
             p4,
             ate,
         );
-        // op_hints.extend_from_slice(&Element::G2DblAddEval(t4).get_hash_preimage_as_hints());
-        // op_hints.extend_from_slice(&Element::G1(p4).get_hash_preimage_as_hints());
+        let mut preimage_hints = vec![];
+        preimage_hints.extend_from_slice(&Element::G2DblAddEval(t4).get_hash_preimage_as_hints());
+        preimage_hints.extend_from_slice(&Element::G1(p4).get_hash_preimage_as_hints());
+        //println!("segment id {}", segment_id);
+        //println!("pre_image_hints {:?}", preimage_hints);
     }
 
     
     Segment {
         id: segment_id as u32,
-        
         parameter_ids: input_segment_info,
         result: Element::G2DblAddEval(dbladd),
         hints: op_hints,
