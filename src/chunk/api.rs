@@ -167,6 +167,7 @@ pub fn generate_assertions(
     let mut segments: Vec<Segment> = vec![];
     println!("generating assertions as prover");
     let success = groth16(false, &mut segments, eval_ins, pubs, &mut None);
+    println!("segments len {}", segments.len());
     assert!(success);
     let proof_asserts = hint_to_data(segments.clone());
     proof_asserts

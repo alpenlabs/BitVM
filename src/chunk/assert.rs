@@ -26,30 +26,16 @@ fn compare(hint_out: &Element, claimed_assertions: &mut Option<Intermediates>) -
     if claimed_assertions.is_none() {
         return None;
     }
-    fn get_fq(claimed_assertions: &mut Option<Intermediates>) -> ark_bn254::Fq {
-        if let Some(claimed_assertions) = claimed_assertions {
-            claimed_assertions.0.pop().unwrap()
-        } else {
-            panic!()
-        }
-    }
     
     fn get_hash(claimed_assertions: &mut Option<Intermediates>) -> HashBytes {
         if let Some(claimed_assertions) = claimed_assertions {
-            claimed_assertions.1.pop().unwrap()
+            claimed_assertions.pop().unwrap()
         } else {
             panic!()
         }
     }
-    let (x, is_field) = (hint_out.hashed_output(), hint_out.output_is_field_element());
-
-    let matches = if is_field {
-        let r = get_fq(claimed_assertions);
-        extern_fq_to_nibbles(r) == x
-    }  else {
-        let r = get_hash(claimed_assertions);
-        r == x
-    };
+    assert!(!hint_out.output_is_field_element());
+    let matches = get_hash(claimed_assertions) == hint_out.hashed_output();
     return Some(matches) 
 }
 
@@ -74,7 +60,6 @@ pub(crate) fn groth16(
 
     let pub_scalars: Vec<Segment> = eval_ins.ks.iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
-        
         parameter_ids: vec![],
         result: Element::ScalarElem(*f),
         hints: vec![],
@@ -86,7 +71,6 @@ pub(crate) fn groth16(
         eval_ins.p4.y, eval_ins.p4.x, eval_ins.p2.y, eval_ins.p2.x
     ].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
-        
         parameter_ids: vec![],
         result: Element::FieldElem(*f),
         hints: vec![],
@@ -94,6 +78,37 @@ pub(crate) fn groth16(
     }).collect();
     all_output_hints.extend_from_slice(&p4vec);
     let (gp4y, gp4x, gp2y, gp2x) = (&p4vec[0], &p4vec[1], &p4vec[2], &p4vec[3]);
+
+    let gc: Vec<Segment> = eval_ins.c.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>().iter().enumerate().map(|(idx, f)| Segment {
+        id: (all_output_hints.len() + idx) as u32,
+        parameter_ids: vec![],
+        result: Element::FieldElem(*f),
+        hints: vec![],
+        scr_type: ScriptType::NonDeterministic
+    }).collect();
+    all_output_hints.extend_from_slice(&gc);
+
+    let gs: Vec<Segment> = eval_ins.s.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>().iter().enumerate().map(|(idx, f)| Segment {
+        id: (all_output_hints.len() + idx) as u32,
+        parameter_ids: vec![],
+        result: Element::FieldElem(*f),
+        hints: vec![],
+        scr_type: ScriptType::NonDeterministic
+    }).collect();
+    all_output_hints.extend_from_slice(&gs);
+
+    let temp_q4: Vec<Segment> = vec![
+        eval_ins.q4.x.c0, eval_ins.q4.x.c1, eval_ins.q4.y.c0, eval_ins.q4.y.c1
+    ].iter().enumerate().map(|(idx, f)| Segment {
+        id: (all_output_hints.len() + idx) as u32,
+        parameter_ids: vec![],
+        result: Element::FieldElem(*f),
+        hints: vec![],
+        scr_type: ScriptType::NonDeterministic
+    }).collect();
+    all_output_hints.extend_from_slice(&temp_q4);
+
+    let (q4xc0, q4xc1, q4yc0, q4yc1) = (&temp_q4[0], &temp_q4[1], &temp_q4[2], &temp_q4[3]);
 
     let p4 = wrap_hints_precompute_p(is_compile_mode, all_output_hints.len(), &gp4y, &gp4x);
     push_compare_or_return!(p4);
@@ -108,40 +123,6 @@ pub(crate) fn groth16(
 
     let p3 = wrap_hint_hash_p(is_compile_mode, all_output_hints.len(), &msms[msms.len()-1], vky0);
     push_compare_or_return!(p3);
-
-    let gc: Vec<Segment> = eval_ins.c.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>().iter().enumerate().map(|(idx, f)| Segment {
-        id: (all_output_hints.len() + idx) as u32,
-        
-        parameter_ids: vec![],
-        result: Element::FieldElem(*f),
-        hints: vec![],
-        scr_type: ScriptType::NonDeterministic
-    }).collect();
-    all_output_hints.extend_from_slice(&gc);
-
-    let gs: Vec<Segment> = eval_ins.s.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>().iter().enumerate().map(|(idx, f)| Segment {
-        id: (all_output_hints.len() + idx) as u32,
-        
-        parameter_ids: vec![],
-        result: Element::FieldElem(*f),
-        hints: vec![],
-        scr_type: ScriptType::NonDeterministic
-    }).collect();
-    all_output_hints.extend_from_slice(&gs);
-
-    let temp_q4: Vec<Segment> = vec![
-        eval_ins.q4.x.c0, eval_ins.q4.x.c1, eval_ins.q4.y.c0, eval_ins.q4.y.c1
-    ].iter().enumerate().map(|(idx, f)| Segment {
-        id: (all_output_hints.len() + idx) as u32,
-        
-        parameter_ids: vec![],
-        result: Element::FieldElem(*f),
-        hints: vec![],
-        scr_type: ScriptType::NonDeterministic
-    }).collect();
-    all_output_hints.extend_from_slice(&temp_q4);
-    let (q4xc0, q4xc1, q4yc0, q4yc1) = (&temp_q4[0], &temp_q4[1], &temp_q4[2], &temp_q4[3]);
-
 
     let c = wrap_hint_hash_c(is_compile_mode, all_output_hints.len(), gc);
     push_compare_or_return!(c);
@@ -385,17 +366,12 @@ fn assertions_to_nibbles(tass: TypedAssertions) -> Vec<[u8;64]> {
     nibvec
 }
 
-type Intermediates = (
-    Vec<ark_bn254::Fq>,
-    Vec<HashBytes>,
-);
-
+type Intermediates = Vec<HashBytes>;
 pub(crate) fn get_proof(asserts: &TypedAssertions) -> EvalIns { // EvalIns
     let numfqs = asserts.1;
     let p4 = ark_bn254::G1Affine::new_unchecked(numfqs[1], numfqs[0]);
     let p2 = ark_bn254::G1Affine::new_unchecked(numfqs[3], numfqs[2]);
-    let next = 4;
-    let step = next;
+    let step = 4;
     let c = ark_bn254::Fq12::new(
         ark_bn254::Fq6::new(
             ark_bn254::Fq2::new(numfqs[step+0], numfqs[step+1]),
@@ -430,11 +406,9 @@ pub(crate) fn get_proof(asserts: &TypedAssertions) -> EvalIns { // EvalIns
 }
 
 pub(crate) fn get_intermediates(asserts: &TypedAssertions) -> Intermediates { // Intermediates
-    let mut fqs = asserts.1[6..12].to_vec();
-    fqs.reverse();
     let mut hashes= asserts.2.to_vec();
     hashes.reverse();
-    (fqs, hashes)
+    hashes
 }
 
 pub(crate) fn get_assertions(signed_asserts: Signatures) -> TypedAssertions {
