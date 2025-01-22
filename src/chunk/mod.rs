@@ -18,3 +18,4 @@ mod taps_premiller;
 #[allow(unused_variables)]
 mod taps_point_eval;
 mod taps_subgroup_check;
+mod assigner;

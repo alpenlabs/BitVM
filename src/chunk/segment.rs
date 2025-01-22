@@ -427,7 +427,7 @@ pub(crate) fn wrap_hint_point_ops(
     
     let input_segment_info: Vec<(SegmentID, ElementType)> = vec![
         (in_p4.id, ElementType::G1),
-        (in_t4.id, ElementType::G2DblAddEval),
+        (in_t4.id, ElementType::G2AddEval),
         (in_q4yc1.id, ElementType::FieldElem),
         (in_q4yc0.id, ElementType::FieldElem),
         (in_q4xc1.id, ElementType::FieldElem),
@@ -756,7 +756,7 @@ pub(crate) fn wrap_hints_frob_fp12(
     power: usize,
 ) -> Segment {
 
-    let input_segment_info: Vec<(SegmentID, ElementType)> = vec![(in_f.id, ElementType::Fp12v0)];
+    let input_segment_info: Vec<(SegmentID, ElementType)> = vec![(in_f.id, ElementType::Fp12v1)];
     let f = in_f.result.0.try_into().unwrap();
 
     let (mut cp, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
