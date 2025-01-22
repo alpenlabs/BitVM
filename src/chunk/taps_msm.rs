@@ -61,33 +61,20 @@ pub(crate) fn chunk_msm(window: usize, ks: Vec<ark_bn254::Fr>, qs: Vec<ark_bn254
                 {chunk.1.clone()}
                 //M: [G1AccDash]
                 //A: [G1AccDashHash, G1AccHash, G1Acc]
+                {Fq2::fromaltstack()}
+                // [G1AccDash, G1Acc] [G1AccDashHash, G1AccHash]
+                {Fq2::roll(2)}
+                // [G1Acc, G1AccDash] [G1AccDashHash, G1AccHash]
             )
         };
 
         let hash_script = if msm_tap_index == 0 {
             //M: [G1AccDash]
             //A: [G1AccDashHash]
-            script!(
-                {hash_fp2()} // [nt]
-                {Fq::fromaltstack()}
-                {Fq::equal(1,0)} OP_NOT OP_VERIFY
-            )
+            hash_messages(vec![ElementType::G1])
         } else {
-            //M: [G1AccDash]
-            //A: [G1AccDashHash, G1AccHash, G1Acc]
-            script!(
-                {hash_fp2()}
-                {Fq2::fromaltstack()}
-                {Fq::roll(2)} {Fq::toaltstack()}
-                {hash_fp2()} 
-                {Fq::fromaltstack()}
-                {Fq2::fromaltstack()}
-                // [nth, th, th, nth]
- 
-                {Fq::equalverify(1, 3)}
-                {Fq::equal(1, 0)}
-                OP_NOT OP_VERIFY
-            )
+            // [G1Acc, G1AccDash] [G1AccDashHash, G1AccHash]
+            hash_messages(vec![ElementType::G1, ElementType::G1])
         };
 
         let sc = script! {
@@ -143,27 +130,27 @@ pub(crate) fn chunk_hash_p(
             for i in 0..eval_hints.len()+on_curve_hint.len() {
                 {Fq::drop()}
             }
-        OP_ELSE
-            // [hints, r]
-            {Fq2::copy(0)}
-            {on_curve_scr}
-            OP_IF
-                {eval_xy} 
-                // [t, rd]    
-                {hash_messages(vec![ElementType::G1, ElementType::G1])}
-            OP_ELSE
-                {Fq2::fromaltstack()} {Fq2::drop()}
-                {G1Affine::drop()} {G1Affine::drop()}
-                for i in 0..eval_hints.len() {
-                    {Fq::drop()}
-                }
-            OP_ENDIF
+            OP_TRUE OP_RETURN
         OP_ENDIF
+        // [hints, r]
+        {Fq2::copy(0)}
+        {on_curve_scr}
+        OP_NOTIF
+            {Fq2::fromaltstack()} {Fq2::drop()}
+            {G1Affine::drop()} {G1Affine::drop()}
+            for i in 0..eval_hints.len() {
+                {Fq::drop()}
+            }
+            OP_TRUE OP_RETURN
+        OP_ENDIF
+        {eval_xy} 
+        // [t, rd]    
 
     };
 
     let sc = script! {
         {ops_script}
+        {hash_messages(vec![ElementType::G1, ElementType::G1])}
         OP_TRUE
     };
 

@@ -11,6 +11,7 @@ use crate::{
 };
 use ark_bn254::{G1Affine};
 use ark_ff::{AdditiveGroup, Field, MontFp};
+use bitcoin::opcodes::all::OP_ENDIF;
 
 
 use super::primitves::{extern_hash_fps, hash_fp12_192};
@@ -23,43 +24,6 @@ pub(crate) fn chunk_hash_c(
     hint_in_c: Vec<ElemFq>,
 ) -> (ElemFp12Acc, Script, Vec<Hint>) {
     fn tap_hash_c() -> Script {
-        let hash_scr = script! {
-            for _ in 0..12 {
-                {Fq::fromaltstack()}
-            }
-            // Stack:[f11 ..,f0]
-            // Altstack: [f_hash_claim]
-            for i in 0..12 {
-                {Fq::copy(i)} // reverses order [f0..f11]
-                { Fq::push_hex_not_montgomery(Fq::MODULUS) }
-                { U254::lessthan(1, 0) } // a < p
-                OP_TOALTSTACK
-            }
-            for _ in 0..12 {
-                OP_FROMALTSTACK
-            }
-            for _ in 0..11 {
-                OP_BOOLAND
-            }
-            OP_IF // all less than p
-                {hash_messages(vec![ElementType::Fp12v1])}
-            OP_ELSE
-                for _ in 0..12 {
-                    {Fq::drop()}
-                }
-                {Fq::fromaltstack()}
-                {Fq::drop()}
-            OP_ENDIF
-        };
-        let sc = script! {
-            {hash_scr}
-            OP_TRUE
-        };
-        sc
-    }
-
-
-    fn _tap_hash_c_new() -> Script {
         let ops_scr = script! {
             for _ in 0..12 {
                 {Fq::fromaltstack()}
@@ -185,27 +149,28 @@ pub(crate) fn chunk_precompute_p(
                 for i in 0..hints.len()+on_curve_hint.len() {
                     {Fq::drop()}
                 }
-            OP_ELSE
-                // [hints, px, py]
-                {Fq2::copy(0)}
-                {on_curve_scr}
-                OP_IF
-                    {eval_xy} 
-                    // [pdx, pdy]    
-                    {hash_messages(vec![ElementType::G1])}
-                OP_ELSE
-                    {Fq::fromaltstack()} {Fq::drop()}
-                    {curves::G1Affine::drop()}
-                    for i in 0..hints.len() {
-                        {Fq::drop()}
-                    }
-                OP_ENDIF
+                OP_TRUE
+                OP_RETURN
             OP_ENDIF
+            // [hints, px, py]
+            {Fq2::copy(0)}
+            {on_curve_scr}
+            OP_NOTIF
+                {Fq::fromaltstack()} {Fq::drop()}
+                {curves::G1Affine::drop()}
+                for i in 0..hints.len() {
+                    {Fq::drop()}
+                }
+                OP_TRUE
+                OP_RETURN
+            OP_ENDIF
+            {eval_xy} 
         };
-
     
         script! {
             {ops_scr}
+            // [pdx, pdy]    
+            {hash_messages(vec![ElementType::G1])}
             OP_TRUE             
         }
     }
@@ -230,146 +195,6 @@ pub(crate) fn chunk_precompute_p(
     (pd, tap_precompute_p(), simulate_stack_input)
 }
 
-
-
-
-pub(crate) fn chunk_precompute_px(
-    hint_in_py: ark_bn254::Fq,
-    hint_in_px: ark_bn254::Fq,
-    hint_in_pdy: ark_bn254::Fq,
-) -> (ark_bn254::Fq, Script, Vec<Hint>) {
-    fn tap_precompute_px(on_curve_scr: Script) -> Script {
-        let (eval_x, _) = hinted_x_from_eval_point(
-            G1Affine::new_unchecked(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE),
-            ark_bn254::Fq::ONE,
-        );
-    
-        let ops_scr = script! {
-            {Fq::fromaltstack()} // pyd
-            {Fq::fromaltstack()} // px
-            {Fq::fromaltstack()} // py
-            // {Fq::fromaltstack()} // pxd
-    
-            // Stack: [hints, pxd, pyd, px, py]
-            // UpdatedStack: [hints, pyd, px, py]
-            // Altstack: [pxd]
-            {Fq::copy(0)}
-            {fq_push_not_montgomery(ark_bn254::Fq::ZERO)}
-            {Fq::equal(1, 0)}
-            OP_IF
-                for _ in 0..8 {
-                    {Fq::drop()}
-                }
-                {Fq::fromaltstack()} {Fq::drop()}
-            OP_ELSE
-                // Stack: [hints, pyd, px, py]
-                {Fq2::copy(0)}
-                // Stack: [hints, pyd, px, py, px, py]
-                {on_curve_scr}
-                OP_IF
-                    {eval_x}
-                    {Fq::fromaltstack()} // pxd
-                    {Fq::equal(1, 0)} OP_NOT OP_VERIFY
-                OP_ELSE
-                    {Fq2::drop()}
-                    {Fq2::drop()}
-                    {Fq::drop()}
-                    {Fq::fromaltstack()} {Fq::drop()}
-                OP_ENDIF
-            OP_ENDIF
-        };
-    
-        script! {
-            {ops_scr}
-            OP_TRUE
-        }
-    }
-
-
-    // assert_eq!(sec_in.len(), 3);
-    let p =  ark_bn254::G1Affine::new_unchecked(hint_in_px, hint_in_py);
-    let pdy = hint_in_pdy;
-    // if p.y.inverse().is_some() {
-    //     pdy = p.y.inverse().unwrap();
-    // }
-    let pdx = -p.x * pdy;
-    let (_, hints) = { hinted_x_from_eval_point(p, pdy) };
-
-    let pdash_x = extern_fq_to_nibbles(pdx);
-    let pdash_y = extern_fq_to_nibbles(pdy);
-    let p_x = extern_fq_to_nibbles(p.x);
-    let p_y = extern_fq_to_nibbles(p.y);
-
-    let (on_curve_scr, on_curve_hint) = crate::bn254::curves::G1Affine::hinted_is_on_curve(p.x, p.y);
-
-    let mut simulate_stack_input = vec![];
-    simulate_stack_input.extend_from_slice(&on_curve_hint);
-    simulate_stack_input.extend_from_slice(&hints);
-
-    (pdx, tap_precompute_px(on_curve_scr), simulate_stack_input)
-}
-
-
-
-// precompute P
-pub(crate) fn chunk_precompute_py(
-    hint_in_p: ark_bn254::Fq,
-) -> (ark_bn254::Fq, Script, Vec<Hint>) {
-    // assert_eq!(sec_in.len(), 1);
-    fn tap_precompute_py(y_eval_scr: Script) -> Script {
-    
-        let ops_scr = script! {
-            // [hints, pyd_calc] A:[pyd_claim, py]
-            {Fq::copy(0)}
-            {Fq::fromaltstack()}
-            // [hints, pyd_calc, pyd_calc, py] A:[pyd_claim]
-            {Fq::copy(0)}
-            {fq_push_not_montgomery(ark_bn254::Fq::ZERO)}
-            {Fq::equal(1, 0)}
-            OP_IF
-                {Fq2::drop()}
-                {Fq2::drop()}
-                {Fq::fromaltstack()} 
-                {Fq::drop()}
-            OP_ELSE
-                // Stack: [hints, pyd_calc, pyd_calc, py]
-                {y_eval_scr}
-                // [hints, pyd_calc]
-                {Fq::fromaltstack()}
-                {Fq::equal(1, 0)} OP_NOT OP_VERIFY
-            OP_ENDIF
-        };
-    
-        script! {
-            {ops_scr}
-            OP_TRUE
-        }
-    }
-    
-    
-    
-    let p = hint_in_p.clone();
-
-    let mut pdy = ark_bn254::Fq::ONE;
-    if p.inverse().is_some() {
-        pdy = p.inverse().unwrap();
-    } else {
-        println!("non-invertible input point");
-    }
-    let pdash_y = extern_fq_to_nibbles(pdy);
-
-    let (y_eval_scr, hints) = hinted_y_from_eval_point(p, pdy);
-
-    let p_y = extern_fq_to_nibbles(p);
-
-
-    let mut simulate_stack_input = vec![];
-    simulate_stack_input.extend_from_slice(&hints);
-    simulate_stack_input.push(Hint::Fq(pdy));
-
-    (pdy, tap_precompute_py(y_eval_scr), simulate_stack_input)
-}
-
 // hash T4
 
 pub(crate) fn chunk_init_t4(
@@ -386,7 +211,7 @@ pub(crate) fn chunk_init_t4(
         let le_hash = extern_hash_nibbles(vec![dle_hash, ale_hash], true);
         let le_nibs = extern_nibbles_to_limbs(le_hash);
         
-        let hash_scr = script! {
+        let ops_scr = script! {
             for _ in 0..4 {
                 {Fq::fromaltstack()}
             }
@@ -395,20 +220,21 @@ pub(crate) fn chunk_init_t4(
             {Fq2::copy(2)}
             {Fq2::copy(2)}
             {on_curve_scr}
-            OP_IF
-                for le in le_nibs {
-                    {le}
-                }
-                {hash_messages(vec![ElementType::G2T])}
-            OP_ELSE
+            OP_NOTIF
                 {Fq2::drop()}
                 {Fq2::drop()}
                 {Fq::fromaltstack()} {Fq::drop()}
+                OP_TRUE 
+                OP_RETURN
             OP_ENDIF
+            for le in le_nibs {
+                {le}
+            }
             // if the point is not on curve
         };
         let sc = script! {
-            {hash_scr}
+            {ops_scr}
+            {hash_messages(vec![ElementType::G2T])}
             OP_TRUE
         };
 
