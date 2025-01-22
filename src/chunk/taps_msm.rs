@@ -68,19 +68,21 @@ pub(crate) fn chunk_msm(window: usize, ks: Vec<ark_bn254::Fr>, qs: Vec<ark_bn254
             )
         };
 
-        let hash_script = if msm_tap_index == 0 {
-            //M: [G1AccDash]
-            //A: [G1AccDashHash]
-            hash_messages(vec![ElementType::G1])
-        } else {
-            // [G1Acc, G1AccDash] [G1AccDashHash, G1AccHash]
-            hash_messages(vec![ElementType::G1, ElementType::G1])
-        };
+        let hash_script = script!(
+            if msm_tap_index == 0 {
+                //M: [G1AccDash]
+                //A: [G1AccDashHash]
+                {hash_messages(vec![ElementType::G1])}
+            } else {
+                // [G1Acc, G1AccDash] [G1AccDashHash, G1AccHash]
+                {hash_messages(vec![ElementType::G1, ElementType::G1])}
+            }
+            OP_TRUE
+        );
 
         let sc = script! {
             {ops_script}
-            {hash_script}
-            OP_TRUE
+            // {hash_script}
         };
 
 
@@ -148,10 +150,14 @@ pub(crate) fn chunk_hash_p(
 
     };
 
-    let sc = script! {
-        {ops_script}
+    let hash_script = script!(
         {hash_messages(vec![ElementType::G1, ElementType::G1])}
         OP_TRUE
+    );
+
+    let sc = script! {
+        {ops_script}
+        // {hash_script}
     };
 
     let mut all_hints = vec![];
@@ -333,7 +339,7 @@ mod test {
         let t = ark_bn254::G1Affine::rand(&mut prng);
         let r = (t + q).into_affine();
 
-        let (hint_out,  hash_c_scr, mut hint_script) = chunk_hash_p( t, q);
+        let (hint_out,  op_scr, mut hint_script) = chunk_hash_p( t, q);
         hint_script.extend_from_slice(&Element::G1(t).get_hash_preimage_as_hints(ElementType::G1));
         
         let bitcom_scr = script!{
@@ -346,14 +352,19 @@ mod test {
             }
             {Fq::toaltstack()}
         };
+        let hash_script = script!(
+            {hash_messages(vec![ElementType::G1, ElementType::G1])}
+            OP_TRUE
+        );
 
-        let tap_len = hash_c_scr.len();
+        let tap_len = op_scr.len();
         let script = script! {
             for h in hint_script {
                 { h.push() }
             }
             {bitcom_scr}
-            {hash_c_scr}
+            {op_scr}
+            {hash_script}
         };
 
         let res = execute_script(script);
@@ -402,6 +413,17 @@ mod test {
                 op_hints.extend_from_slice(&Element::G1(hints_msm[msm_chunk_index-1].0).get_hash_preimage_as_hints(ElementType::G1));
             }
             let tap_len = hints_msm[msm_chunk_index].1.len();
+            let hash_script = script!(
+                if msm_chunk_index == 0 {
+                    //M: [G1AccDash]
+                    //A: [G1AccDashHash]
+                    {hash_messages(vec![ElementType::G1])}
+                } else {
+                    // [G1Acc, G1AccDash] [G1AccDashHash, G1AccHash]
+                    {hash_messages(vec![ElementType::G1, ElementType::G1])}
+                }
+                OP_TRUE
+            );
             let script = script! {
                 for h in &hints_msm[msm_chunk_index].2 {
                     {h.push()}
@@ -411,6 +433,7 @@ mod test {
                 }
                 {bitcom_scr}
                 {hints_msm[msm_chunk_index].1.clone()}
+                {hash_script}
             };
     
             let res = execute_script_without_stack_limit(script);

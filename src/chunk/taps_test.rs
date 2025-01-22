@@ -7,6 +7,7 @@ mod test {
     use crate::bn254::fq::Fq;
     use crate::bn254::fq2::Fq2;
     use crate::bn254::utils::{fq2_push_not_montgomery, fq_push_not_montgomery, Hint};
+    use crate::chunk::blake3compiled::hash_messages;
     use crate::chunk::element::*;
     use crate::chunk::primitves::{new_hash_g2acc_with_both_raw_le, new_hash_g2acc_with_hashed_le, pack_nibbles_to_limbs};
     use crate::chunk::taps_point_ops::*;
@@ -50,6 +51,10 @@ mod test {
             }
             {Fq::toaltstack()}
         };
+        let hash_scr = script! {
+            {hash_messages(vec![ElementType::Fp12v1, ElementType::Fp12v1])}
+            OP_TRUE
+        };
 
         let tap_len = tap_frob.len();
         let script = script! {
@@ -58,6 +63,7 @@ mod test {
             }
             {bitcom_scr}
             {tap_frob}
+            {hash_scr}
         };
         let res = execute_script(script);
         for i in 0..res.final_stack.len() {
@@ -88,6 +94,10 @@ mod test {
                 {Fq::toaltstack()}                
             }
         };
+        let hash_scr = script!(
+            {hash_messages(vec![ElementType::Fp12v1])}
+            OP_TRUE
+        );
 
         let tap_len = tap_hash_c.len();
         let script = script! {
@@ -96,6 +106,7 @@ mod test {
             }
             {bitcom_scr}
             {tap_hash_c}
+            {hash_scr}
         };
         let res = execute_script(script);
         for i in 0..res.final_stack.len() {
@@ -129,6 +140,10 @@ mod test {
             }
             {Fq::toaltstack()}
         };
+        let hash_scr = script!(
+            {hash_messages(vec![ElementType::Fp12v1, ElementType::Fp12v0])}
+            OP_TRUE
+        );
 
         let tap_len = tap_hash_c2.len();
         let script = script! {
@@ -137,6 +152,7 @@ mod test {
             }
             {bitcom_scr}
             {tap_hash_c2}
+            {hash_scr}
         };
         let res = execute_script(script);
         for i in 0..res.final_stack.len() {
@@ -170,7 +186,10 @@ mod test {
             {fq_push_not_montgomery(q.x.c0)}
             {Fq::toaltstack()}
         };
-
+        let hash_scr = script!(
+            {hash_messages(vec![ElementType::G2T])}
+            OP_TRUE
+        );
 
         let tap_len = init_t4_tap.len();
         let script = script! {
@@ -179,6 +198,7 @@ mod test {
             }
             {bitcom_script}
             {init_t4_tap}
+            {hash_scr}
         };
 
         let res = execute_script(script);
@@ -205,6 +225,10 @@ mod test {
             {G1Affine::push_not_montgomery(p)}
             {Fq2::toaltstack()}     
         };
+        let hash_scr = script!(
+            {hash_messages(vec![ElementType::G1])}
+            OP_TRUE     
+        );
 
         let tap_len = tap_prex.len();
         let script = script! {
@@ -213,6 +237,7 @@ mod test {
             }
             {bitcom_scr}
             {tap_prex}
+            {hash_scr}
         };
         let res = execute_script(script);
         for i in 0..res.final_stack.len() {
@@ -266,6 +291,17 @@ mod test {
             {Fq::toaltstack()}
         };
 
+        let hash_script = script! {
+            // Altstack: [Hg, Hf, HT]
+            // Stack [T, f, g]
+            if dbl_blk {
+                {hash_messages(vec![ElementType::G2DblEvalMul, ElementType::Fp12v0, ElementType::Fp12v0])}
+            } else {
+                {hash_messages(vec![ElementType::G2AddEvalMul, ElementType::Fp12v0, ElementType::Fp12v0])}
+            }
+            OP_TRUE
+        };
+
         let tap_len = tap_scr.len();
         let script = script! {
             for h in hint_script {
@@ -273,6 +309,7 @@ mod test {
             }
             {bitcom_scr}
             {tap_scr}
+            {hash_script}
         };
         let res = execute_script(script);
         for i in 0..res.final_stack.len() {
@@ -324,6 +361,11 @@ mod test {
 
         };
 
+        let hash_scr = script!(
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v1, ElementType::Fp6])} //{hash_mul(true)}
+            OP_TRUE
+        );
+
         let tap_len = tap_scr.len();
         let script = script! {
             for h in hint_script {
@@ -331,6 +373,7 @@ mod test {
             }
             {bitcom_scr}
             {tap_scr}
+            {hash_scr}
         };
         let res = execute_script(script);
         for i in 0..res.final_stack.len() {
@@ -398,6 +441,10 @@ mod test {
             }
             {Fq::toaltstack()}
         };
+        let hash_scr = script!(
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v1, ElementType::Fp6Hash, ElementType::Fp12v2])} 
+            OP_TRUE
+        );
 
 
         let tap_len = tap_scr.len();
@@ -407,6 +454,7 @@ mod test {
             }
             {bitcom_scr}
             {tap_scr}
+            {hash_scr}
         };
         let res = execute_script(script);
         for i in 0..res.final_stack.len() {
@@ -491,6 +539,10 @@ mod test {
             {Fq::toaltstack()}
         };
 
+        let hash_sc = script! {
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v0])} 
+            OP_TRUE
+        };
 
         let f_acc_preimage_hints = Element::Fp12(hint_f).get_hash_preimage_as_hints(ElementType::Fp12v0);
         hint_script.extend_from_slice(&f_acc_preimage_hints);
@@ -502,6 +554,7 @@ mod test {
             }
             {bitcom_scr}
             {tap_scr}
+            {hash_sc}
         };
         let res = execute_script(script);
         for i in 0..res.final_stack.len() {
@@ -564,6 +617,14 @@ mod test {
             {Fq::toaltstack()}
         };
 
+        let hash_script = script! {
+            //Altstack: [hash_out, hash_in]
+            //Stack: [tx, ty, hash_inaux, p, Rx, Ry, 0, 0, le0, le1, le1]
+            {hash_messages(vec![ElementType::G2AddEval, ElementType::G1, ElementType::G2DblAddEval])}
+            // [Rx, Ry, le0, le1, 0, 0]
+            OP_TRUE
+        };
+
         let tap_len = point_ops_tapscript.len();
         let script = script! {
             for h in hint_script {
@@ -571,6 +632,7 @@ mod test {
             }
             {bitcom_script}
             {point_ops_tapscript}
+            {hash_script}
         };
 
         let res = execute_script(script);
@@ -616,6 +678,14 @@ mod test {
             {Fq::toaltstack()}
         };
 
+        let hash_script = script! {
+            //Altstack: [hash_out, hash_in]
+            //Stack: [tx, ty, hash_inaux, p, Rx, Ry, le0, le1, 0, 0]
+            {hash_messages(vec![ElementType::G2DblEval, ElementType::G1, ElementType::G2DblAddEval])}
+            OP_TRUE
+
+        };
+
         let tap_len = point_ops_tapscript.len();
         let script = script! {
             for h in hint_script {
@@ -623,6 +693,7 @@ mod test {
             }
             {bitcom_values}
             {point_ops_tapscript}
+            {hash_script}
         };
 
         let res = execute_script(script);
@@ -683,6 +754,13 @@ mod test {
             {fq_push_not_montgomery(q.x.c0)}
             {Fq::toaltstack()}
         };
+        let hash_script = script! {
+            //Altstack: [hash_out, hash_in]
+            //Stack: [tx, ty, hash_inaux, Rx, Ry, 0, 0, le0, le1, le1]
+            {hash_messages(vec![ElementType::G2AddEval, ElementType::G1, ElementType::G2DblAddEval])}
+            // [Rx, Ry, le0, le1, 0, 0]
+            OP_TRUE
+        };
 
         let tap_len = point_ops_tapscript.len();
         let script = script! {
@@ -691,6 +769,7 @@ mod test {
             }
             {bitcom_script}
             {point_ops_tapscript}
+            {hash_script}
         };
 
         let res = execute_script(script);
@@ -729,7 +808,10 @@ mod test {
             }
             {Fq::toaltstack()}                 
         };
-
+        let hash_scr = script! {
+            {hash_messages(vec![ElementType::G1, ElementType::G1, ElementType::Fp12v1])}
+            OP_TRUE
+        };
         // let (nt2, nt3) = (hint_out.t2, hint_out.t3);
         // assert_eq!(nt2, (t2 + t2).into_affine());
         // assert_eq!(nt3, (t3 + t3).into_affine());
@@ -741,6 +823,7 @@ mod test {
             }
             {bitcom_scr}
             {tap_scr}
+            {hash_scr}
         };
         let res = execute_script(script);
         for i in 0..res.final_stack.len() {
@@ -781,6 +864,10 @@ mod test {
             }
             {Fq::toaltstack()}                 
         };
+        let hash_scr = script! {
+            {hash_messages(vec![ElementType::G1, ElementType::G1, ElementType::Fp12v1])}
+            OP_TRUE
+        };
 
         // let (nt2, nt3) = (hint_out.t2, hint_out.t3);
         // if ate == 1 {
@@ -799,6 +886,7 @@ mod test {
             }
             {bitcom_scr}
             {tap_scr}
+            {hash_scr}
         };
         let res = execute_script(script);
         for i in 0..res.final_stack.len() {
@@ -846,6 +934,10 @@ mod test {
         // assert_eq!( nt3, get_hint_for_add_with_frob(q3, t3, ate));
         // assert_eq!( nt2, get_hint_for_add_with_frob(q2, t2, ate));
 
+        let hash_scr = script! {
+            {hash_messages(vec![ElementType::G1, ElementType::G1, ElementType::Fp12v1])}
+            OP_TRUE
+        };
 
         let tap_len = tap_scr.len();
         let script = script! {
@@ -854,6 +946,7 @@ mod test {
             }
             {bitcom_scr}
             {tap_scr}
+            {hash_scr}
         };
         let res = execute_script(script);
         for i in 0..res.final_stack.len() {
@@ -883,12 +976,17 @@ mod test {
                 }
                 {Fq::toaltstack()}
             };
+            let hash_scr = script!{
+                {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp6])}
+                OP_TRUE
+            };
             let script = script! {
                 for h in hscr0 {
                     { h.push() }
                 }
                 { bscr0 }
                 { tscr0 }
+                {hash_scr}
             };
             let len = script.len();
             let res = execute_script(script);
@@ -913,6 +1011,10 @@ mod test {
                 {pack_nibbles_to_limbs()}
                 {Fq::toaltstack()}
             };
+            let hash_scr = script!{
+                {hash_messages(vec![ElementType::Fp6, ElementType::Fp6])}
+                OP_TRUE
+            };
 
             let script = script! {
                 for h in hscr1 {
@@ -920,6 +1022,7 @@ mod test {
                 }
                 { bscr1 }
                 { tscr1 }
+                {hash_scr}
             };
             let len = script.len();
             let res = execute_script(script);
@@ -952,13 +1055,17 @@ mod test {
                 {pack_nibbles_to_limbs()}
                 {Fq::toaltstack()}
             };
-
+            let hash_scr = script!{
+                {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp6, ElementType::Fp12v1])}
+                OP_TRUE
+            };
             let script = script! {
                 { bscr2 }
                 for h in hscr2 {
                     { h.push() }
                 }
                 { tscr2 }
+                {hash_scr}
             };
             let len = script.len();
             let res = execute_script_without_stack_limit(script);

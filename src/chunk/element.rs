@@ -10,7 +10,6 @@ pub(crate) enum Element {
     G2Acc(ElemG2PointAcc),
     FieldElem(ElemFq), // 1
     ScalarElem(ElemFr), // 1
-    HashBytes(ElemHashBytes), // 1
     G1(ElemG1Point), // 2
 }
 
@@ -29,7 +28,6 @@ pub(crate) enum ElementType {
     G2AddEvalMul,
     FieldElem, // 1
     ScalarElem, // 1
-    HashBytes, // 1
     G1, // 2
 }
 
@@ -50,7 +48,6 @@ impl ElementType {
             ElementType::FieldElem => 1,
             ElementType::G1 => 2,
             ElementType::ScalarElem => 1,
-            ElementType::HashBytes => 1,
         }
     }
 }
@@ -77,7 +74,6 @@ impl Element {
             Element::FieldElem(f) => f.hashed_output(),
             Element::G1(r) => r.hashed_output(),
             Element::ScalarElem(r) => r.hashed_output(),
-            Element::HashBytes(r) => r.hashed_output(),
         }
     }
 
@@ -194,14 +190,6 @@ impl Element {
                     vec![]
                 }
             },
-            ElementType::HashBytes => {
-                if let Element::HashBytes(h) = self {
-                    vec![Hint::Hash(extern_nibbles_to_limbs(*h))]
-                } else {
-                    panic!();
-                    vec![]
-                }
-            },
             ElementType::G1 => {
                 if let Element::G1(r) = self {
                     vec![Hint::Fq(r.x), Hint::Fq(r.y)]
@@ -267,12 +255,10 @@ impl_try_from_element!(ElemFp6, { Fp6 });
 impl_try_from_element!(ElemG2PointAcc, { G2Acc, G2Acc, G2Acc, G2Acc });
 impl_try_from_element!(ElemFq, { FieldElem });
 impl_try_from_element!(ElemFr, { ScalarElem });
-impl_try_from_element!(ElemHashBytes, { HashBytes });
 impl_try_from_element!(ElemG1Point, { G1 });
 
 pub type ElemFq = ark_bn254::Fq;
 pub type ElemFr = ark_bn254::Fr;
-pub type ElemHashBytes = HashBytes;
 
 pub(crate) type ElemFp6 = ark_bn254::Fq6;
 
@@ -429,15 +415,6 @@ impl ElemTraitExt for ElemFr {
     }
 }
 
-
-impl ElemTraitExt for HashBytes {
-    fn mock() -> Self {
-        [0u8; 64]
-    }
-    fn hashed_output(&self) -> HashBytes {
-        *self
-    }
-}
 
 impl ElemTraitExt for ElemFp6 {
     fn hashed_output(&self) -> HashBytes {

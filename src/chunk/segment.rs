@@ -11,7 +11,7 @@ pub type SegmentOutputType = bool;
 pub(crate) struct Segment {
     pub id: SegmentID,
     pub parameter_ids: Vec<(SegmentID, ElementType)>,   
-    pub result: Element,
+    pub result: (Element, ElementType),
     pub hints: Vec<Hint>,
     pub scr_type: ScriptType,
 }
@@ -46,7 +46,7 @@ pub enum ScriptType {
     PostMillerFrobFp12(u8),
     PostMillerAddWithFrob(i8),
     PostMillerSparseAddWithFrob(([ark_bn254::G2Affine;4], i8)),
-    PostMillerDenseDenseMulByConst0(ark_bn254::Fq12),
+    PostMillerFinalVerify(ark_bn254::Fq12),
 }
 
 
@@ -66,7 +66,7 @@ pub(crate) fn wrap_hint_msm(
     .iter()
     .map(|f| {
         scalar_input_segment_info.push((f.id, ElementType::ScalarElem));
-        f.result.try_into().unwrap() 
+        f.result.0.try_into().unwrap() 
     })
     .collect();
 
@@ -97,7 +97,7 @@ pub(crate) fn wrap_hint_msm(
             segments.push(Segment { 
                 id: (segment_id + msm_chunk_index) as u32, 
                 parameter_ids: input_segment_info, 
-                result: Element::G1(hout_msm), 
+                result: (Element::G1(hout_msm), ElementType::G1), 
                 hints: op_hints, scr_type: ScriptType::MSM((msm_chunk_index, pub_vky.clone())),
             });
         }
@@ -114,7 +114,7 @@ pub(crate) fn wrap_hint_msm(
             segments.push(Segment { 
                 id: (segment_id as u32 + msm_chunk_index), 
                 parameter_ids: input_segment_info, 
-                result: Element::G1(hout_msm), 
+                result: (Element::G1(hout_msm), ElementType::G1), 
                 hints: vec![], scr_type: ScriptType::MSM((msm_chunk_index as usize, pub_vky.clone())),
             });
         }
@@ -132,7 +132,7 @@ pub(crate) fn wrap_hint_hash_p(
     let mut input_segment_info: Vec<(SegmentID, ElementType)> = vec![];
     input_segment_info.push((in_t.id, ElementType::G1));
 
-    let t = in_t.result.try_into().unwrap();
+    let t = in_t.result.0.try_into().unwrap();
     let (mut p3, mut op_hints) = (ElemG1Point::mock(), vec![]);
     if !skip {
         (p3, _, op_hints) = chunk_hash_p(
@@ -141,7 +141,7 @@ pub(crate) fn wrap_hint_hash_p(
         );
         // op_hints.extend_from_slice(&Element::G1(t).get_hash_preimage_as_hints());
     }
-    Segment { id: segment_id as u32, parameter_ids: input_segment_info, result: Element::G1(p3), hints: op_hints, scr_type: ScriptType::PreMillerHashP(pub_vky0) }
+    Segment { id: segment_id as u32, parameter_ids: input_segment_info, result: (Element::G1(p3), ElementType::G1), hints: op_hints, scr_type: ScriptType::PreMillerHashP(pub_vky0) }
 }
 
 pub(crate) fn wrap_hint_hash_c(  
@@ -154,7 +154,7 @@ pub(crate) fn wrap_hint_hash_c(
     let fqvec: Vec<ElemFq> = in_c
     .iter()
     .map(|f| {
-        f.result.try_into().unwrap()
+        f.result.0.try_into().unwrap()
     })
     .collect();
 
@@ -170,7 +170,7 @@ pub(crate) fn wrap_hint_hash_c(
         (c,_, op_hints) = chunk_hash_c(fqvec);
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12(c), hints: op_hints, scr_type: ScriptType::PreMillerHashC }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: (Element::Fp12(c), ElementType::Fp12v1), hints: op_hints, scr_type: ScriptType::PreMillerHashC }
 }
 
 pub(crate) fn wrap_hints_precompute_p(
@@ -186,12 +186,12 @@ pub(crate) fn wrap_hints_precompute_p(
 
     let (mut p3d, mut op_hints) = (ElemG1Point::mock(), vec![]);
     if !skip {
-        let in_py = in_py.result.try_into().unwrap();
-        let in_px = in_px.result.try_into().unwrap();
+        let in_py = in_py.result.0.try_into().unwrap();
+        let in_px = in_px.result.0.try_into().unwrap();
         (p3d, _, op_hints) = chunk_precompute_p(in_py, in_px);
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::G1(p3d), hints: op_hints, scr_type: ScriptType::PreMillerPrecomputeP }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: (Element::G1(p3d), ElementType::G1), hints: op_hints, scr_type: ScriptType::PreMillerPrecomputeP }
 }
 
 pub(crate) fn wrap_hint_hash_c2(
@@ -205,12 +205,12 @@ pub(crate) fn wrap_hint_hash_c2(
 
     let (mut c2, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
     if !skip {
-        let in_c = in_c.result.try_into().unwrap();
+        let in_c = in_c.result.0.try_into().unwrap();
         (c2, _, op_hints) = chunk_hash_c2(in_c);
         // op_hints.extend_from_slice(&Element::Fp12v1(in_c).get_hash_preimage_as_hints());
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12(c2), hints: op_hints, scr_type: ScriptType::PreMillerHashC2 }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: (Element::Fp12(c2), ElementType::Fp12v0), hints: op_hints, scr_type: ScriptType::PreMillerHashC2 }
 }
 
 pub(crate) fn wrap_inv0(
@@ -224,12 +224,12 @@ pub(crate) fn wrap_inv0(
 
     let (mut dmul0, mut op_hints) = (ElemFp6::mock(), vec![]);
     if !skip {
-        let in_a = in_a.result.try_into().unwrap();
+        let in_a = in_a.result.0.try_into().unwrap();
         (dmul0,_, op_hints) = chunk_inv0(in_a);
         // op_hints.extend_from_slice(&Element::Fp12v0(in_a).get_hash_preimage_as_hints());
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp6(dmul0), hints: op_hints, scr_type: ScriptType::PreMillerInv0 }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: (Element::Fp6(dmul0), ElementType::Fp6), hints: op_hints, scr_type: ScriptType::PreMillerInv0 }
 }
 
 pub(crate) fn wrap_inv1(
@@ -243,12 +243,12 @@ pub(crate) fn wrap_inv1(
 
     let (mut dmul0, mut op_hints) = (ElemFp6::mock(), vec![]);
     if !skip {
-        let in_a = in_a.result.try_into().unwrap();
+        let in_a = in_a.result.0.try_into().unwrap();
         (dmul0,_, op_hints) = chunk_inv1(in_a);
         // op_hints.extend_from_slice(&Element::Fp6(in_a).get_hash_preimage_as_hints());
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp6(dmul0), hints: op_hints, scr_type: ScriptType::PreMillerInv1 }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: (Element::Fp6(dmul0), ElementType::Fp6), hints: op_hints, scr_type: ScriptType::PreMillerInv1 }
 }
 
 pub(crate) fn wrap_inv2(
@@ -264,14 +264,14 @@ pub(crate) fn wrap_inv2(
 
     let (mut dmul0, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
     if !skip {
-        let in_a = in_a.result.try_into().unwrap();
-        let in_t1 = in_t1.result.try_into().unwrap();
+        let in_a = in_a.result.0.try_into().unwrap();
+        let in_t1 = in_t1.result.0.try_into().unwrap();
         (dmul0,_, op_hints) = chunk_inv2(in_t1, in_a);
         // op_hints.extend_from_slice(&Element::Fp12v0(in_a).get_hash_preimage_as_hints());
         // op_hints.extend_from_slice(&Element::Fp6(in_t1).get_hash_preimage_as_hints());
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12(dmul0), hints: op_hints, scr_type: ScriptType::PreMillerInv2 }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: (Element::Fp12(dmul0), ElementType::Fp12v1), hints: op_hints, scr_type: ScriptType::PreMillerInv2 }
 }
 
 
@@ -291,10 +291,10 @@ pub(crate) fn wrap_hint_init_t4(
         (in_q4xc0.id, ElementType::FieldElem),
     ];
 
-    let q4xc0: ark_bn254::Fq = in_q4xc0.result.try_into().unwrap();
-    let q4xc1: ark_bn254::Fq = in_q4xc1.result.try_into().unwrap();
-    let q4yc0: ark_bn254::Fq = in_q4yc0.result.try_into().unwrap();
-    let q4yc1: ark_bn254::Fq = in_q4yc1.result.try_into().unwrap();
+    let q4xc0: ark_bn254::Fq = in_q4xc0.result.0.try_into().unwrap();
+    let q4xc1: ark_bn254::Fq = in_q4xc1.result.0.try_into().unwrap();
+    let q4yc0: ark_bn254::Fq = in_q4yc0.result.0.try_into().unwrap();
+    let q4yc1: ark_bn254::Fq = in_q4yc1.result.0.try_into().unwrap();
 
     let (mut tmpt4, mut op_hints) = (ElemG2PointAcc::mock(), vec![]);
     if !skip {
@@ -309,7 +309,7 @@ pub(crate) fn wrap_hint_init_t4(
     Segment {
         id: segment_id as u32,
         parameter_ids: input_segment_info,
-        result: Element::G2Acc(tmpt4),
+        result: (Element::G2Acc(tmpt4), ElementType::G2T),
         hints: op_hints,
         scr_type: ScriptType::PreMillerInitT4,
     }
@@ -323,7 +323,7 @@ pub(crate) fn wrap_hint_squaring(
     
     let input_segment_info: Vec<(SegmentID, ElementType)> = vec![(in_a.id, ElementType::Fp12v0)];
 
-    let f_acc: ElemFp12Acc = in_a.result.try_into().unwrap();
+    let f_acc: ElemFp12Acc = in_a.result.0.try_into().unwrap();
 
     let (mut sq, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
     if !skip {
@@ -339,7 +339,7 @@ pub(crate) fn wrap_hint_squaring(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12(sq),
+        result: (Element::Fp12(sq), ElementType::Fp12v0),
         hints: op_hints,
         scr_type: ScriptType::MillerSquaring,
     }
@@ -357,8 +357,8 @@ pub(crate) fn wrap_hint_point_dbl(
         (in_t4.id, ElementType::G2DblEval),
     ];
 
-    let t4: ElemG2PointAcc = in_t4.result.try_into().unwrap();
-    let p4: ElemG1Point = in_p4.result.try_into().unwrap();
+    let t4: ElemG2PointAcc = in_t4.result.0.try_into().unwrap();
+    let p4: ElemG1Point = in_p4.result.0.try_into().unwrap();
 
     let (mut dbl, mut op_hints) = (ElemG2PointAcc::mock(), vec![]);
     if !skip {
@@ -372,7 +372,7 @@ pub(crate) fn wrap_hint_point_dbl(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::G2Acc(dbl),
+        result: (Element::G2Acc(dbl), ElementType::G2DblAddEval),
         hints: op_hints,
         scr_type: ScriptType::MillerDouble,
     }
@@ -400,12 +400,12 @@ pub(crate) fn wrap_hint_point_ops(
         (in_q4xc0.id, ElementType::FieldElem),
     ];
 
-    let t4: ElemG2PointAcc = in_t4.result.try_into().unwrap();
-    let p4: ElemG1Point = in_p4.result.try_into().unwrap();
-    let q4xc0: ark_bn254::Fq = in_q4xc0.result.try_into().unwrap();
-    let q4xc1: ark_bn254::Fq = in_q4xc1.result.try_into().unwrap();
-    let q4yc0: ark_bn254::Fq = in_q4yc0.result.try_into().unwrap();
-    let q4yc1: ark_bn254::Fq = in_q4yc1.result.try_into().unwrap();
+    let t4: ElemG2PointAcc = in_t4.result.0.try_into().unwrap();
+    let p4: ElemG1Point = in_p4.result.0.try_into().unwrap();
+    let q4xc0: ark_bn254::Fq = in_q4xc0.result.0.try_into().unwrap();
+    let q4xc1: ark_bn254::Fq = in_q4xc1.result.0.try_into().unwrap();
+    let q4yc0: ark_bn254::Fq = in_q4yc0.result.0.try_into().unwrap();
+    let q4yc1: ark_bn254::Fq = in_q4yc1.result.0.try_into().unwrap();
 
     let (mut dbladd, mut op_hints) = (ElemG2PointAcc::mock(), vec![]);
     if !skip {
@@ -424,7 +424,7 @@ pub(crate) fn wrap_hint_point_ops(
     Segment {
         id: segment_id as u32,
         parameter_ids: input_segment_info,
-        result: Element::G2Acc(dbladd),
+        result: (Element::G2Acc(dbladd), ElementType::G2DblAddEval),
         hints: op_hints,
         scr_type: ScriptType::MillerDoubleAdd(ate),
     }
@@ -444,8 +444,8 @@ pub(crate) fn wrap_hint_sparse_dense_mul(
         vec![(in_a.id, ElementType::Fp12v0), (in_g.id, ElementType::G2AddEvalMul)]
     };
 
-    let f_acc: ElemFp12Acc = in_a.result.try_into().unwrap();
-    let t4: ElemG2PointAcc = in_g.result.try_into().unwrap();
+    let f_acc: ElemFp12Acc = in_a.result.0.try_into().unwrap();
+    let t4: ElemG2PointAcc = in_g.result.0.try_into().unwrap();
 
     let (mut temp, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
     if !skip {
@@ -465,7 +465,7 @@ pub(crate) fn wrap_hint_sparse_dense_mul(
     Segment {
         id: segment_id as u32,
         parameter_ids: input_segment_info,
-        result: Element::Fp12(temp),
+        result: (Element::Fp12(temp), ElementType::Fp12v0),
         hints: op_hints,
         scr_type: ScriptType::SparseDenseMul(is_dbl_blk),
     }
@@ -485,8 +485,8 @@ pub(crate) fn wrap_hint_multiply_point_evals_on_tangent_for_fixed_g2(
         (in_p2.id, ElementType::G1),
     ];
 
-    let p2: ElemG1Point = in_p2.result.try_into().unwrap();
-    let p3: ElemG1Point = in_p3.result.try_into().unwrap();
+    let p2: ElemG1Point = in_p2.result.0.try_into().unwrap();
+    let p3: ElemG1Point = in_p3.result.0.try_into().unwrap();
 
     let (mut leval, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
     if !skip {
@@ -504,7 +504,7 @@ pub(crate) fn wrap_hint_multiply_point_evals_on_tangent_for_fixed_g2(
     Segment {
         id: segment_id as u32,
         parameter_ids: input_segment_info,
-        result: Element::Fp12(leval),
+        result: (Element::Fp12(leval), ElementType::Fp12v1),
         hints: op_hints,
         scr_type: ScriptType::MillerSparseSparseDbl((in_t2, in_t3)),
     }
@@ -522,8 +522,8 @@ pub(crate) fn wrap_hints_dense_dense_mul0(
         (in_a.id, ElementType::Fp12v0),
     ];
 
-    let a: ElemFp12Acc = in_a.result.try_into().unwrap();
-    let b: ElemFp12Acc = in_b.result.try_into().unwrap();
+    let a: ElemFp12Acc = in_a.result.0.try_into().unwrap();
+    let b: ElemFp12Acc = in_b.result.0.try_into().unwrap();
 
     
     let (mut dmul0, mut op_hints) = (ElemFp6::mock(), vec![]);
@@ -539,7 +539,7 @@ pub(crate) fn wrap_hints_dense_dense_mul0(
     Segment {
         id: segment_id as u32,
         parameter_ids: input_segment_info,
-        result: Element::Fp6(dmul0),
+        result: (Element::Fp6(dmul0), ElementType::Fp6),
         hints: op_hints,
         scr_type: ScriptType::DenseDenseMul0(),
     }
@@ -559,9 +559,9 @@ pub(crate) fn wrap_hints_dense_dense_mul1(
         (in_a.id, ElementType::Fp12v0),
     ];
 
-    let a: ElemFp12Acc = in_a.result.try_into().unwrap();
-    let b: ElemFp12Acc = in_b.result.try_into().unwrap();
-    let c: ElemFp6 = in_c.result.try_into().unwrap();
+    let a: ElemFp12Acc = in_a.result.0.try_into().unwrap();
+    let b: ElemFp12Acc = in_b.result.0.try_into().unwrap();
+    let c: ElemFp6 = in_c.result.0.try_into().unwrap();
 
     
 
@@ -583,7 +583,7 @@ pub(crate) fn wrap_hints_dense_dense_mul1(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12(dmul1),
+        result: (Element::Fp12(dmul1), ElementType::Fp12v2),
         hints: op_hints,
         scr_type: ScriptType::DenseDenseMul1(),
     }
@@ -602,8 +602,8 @@ pub(crate) fn wrap_hints_dense_le_mul0(
         (in_a.id, ElementType::Fp12v0),
     ];
 
-    let a: ElemFp12Acc = in_a.result.try_into().unwrap();
-    let b: ElemFp12Acc = in_b.result.try_into().unwrap();
+    let a: ElemFp12Acc = in_a.result.0.try_into().unwrap();
+    let b: ElemFp12Acc = in_b.result.0.try_into().unwrap();
 
     
 
@@ -620,7 +620,7 @@ pub(crate) fn wrap_hints_dense_le_mul0(
     Segment {
         id: segment_id as u32,
         parameter_ids: input_segment_info,
-        result: Element::Fp6(dmul0), // todo: fp12->fp6
+        result: (Element::Fp6(dmul0), ElementType::Fp6), // todo: fp12->fp6
         hints: op_hints,
         scr_type: ScriptType::DenseDenseMul0(),
     }
@@ -640,9 +640,9 @@ pub(crate) fn wrap_hints_dense_le_mul1(
         (in_a.id, ElementType::Fp12v0),
     ];
 
-    let a: ElemFp12Acc = in_a.result.try_into().unwrap();
-    let b: ElemFp12Acc = in_b.result.try_into().unwrap();
-    let c: ElemFp6 = in_c.result.try_into().unwrap();
+    let a: ElemFp12Acc = in_a.result.0.try_into().unwrap();
+    let b: ElemFp12Acc = in_b.result.0.try_into().unwrap();
+    let c: ElemFp6 = in_c.result.0.try_into().unwrap();
 
     
 
@@ -663,7 +663,7 @@ pub(crate) fn wrap_hints_dense_le_mul1(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12(dmul1),
+        result: (Element::Fp12(dmul1), ElementType::Fp12v2),
         hints: op_hints,
         scr_type: ScriptType::DenseDenseMul1(),
     }
@@ -686,8 +686,8 @@ pub(crate) fn wrap_hint_multiply_point_evals_on_chord_for_fixed_g2(
         (in_p2.id, ElementType::G1),
     ];
 
-    let p2: ElemG1Point = in_p2.result.try_into().unwrap();
-    let p3: ElemG1Point = in_p3.result.try_into().unwrap();
+    let p2: ElemG1Point = in_p2.result.0.try_into().unwrap();
+    let p3: ElemG1Point = in_p3.result.0.try_into().unwrap();
 
     let (mut leval, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
     if !skip {
@@ -709,7 +709,7 @@ pub(crate) fn wrap_hint_multiply_point_evals_on_chord_for_fixed_g2(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12(leval),
+        result: (Element::Fp12(leval), ElementType::Fp12v1),
         hints: op_hints,
         scr_type: ScriptType::MillerSparseSparseAdd(([in_t2, in_t3, pub_q2, pub_q3], ate)),
     }
@@ -723,7 +723,7 @@ pub(crate) fn wrap_hints_frob_fp12(
 ) -> Segment {
 
     let input_segment_info: Vec<(SegmentID, ElementType)> = vec![(in_f.id, ElementType::Fp12v0)];
-    let f = in_f.result.try_into().unwrap();
+    let f = in_f.result.0.try_into().unwrap();
 
     let (mut cp, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
     if !skip {
@@ -735,7 +735,7 @@ pub(crate) fn wrap_hints_frob_fp12(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12(cp),
+        result: (Element::Fp12(cp), ElementType::Fp12v1),
         hints: op_hints,
         scr_type: ScriptType::PostMillerFrobFp12(power as u8),
     }
@@ -762,12 +762,12 @@ pub(crate) fn wrap_hint_point_add_with_frob(
         (in_q4xc0.id, ElementType::FieldElem),
     ];
 
-    let t4: ElemG2PointAcc = in_t4.result.try_into().unwrap();
-    let p4: ElemG1Point = in_p4.result.try_into().unwrap();
-    let q4xc0: ark_bn254::Fq = in_q4xc0.result.try_into().unwrap();
-    let q4xc1: ark_bn254::Fq = in_q4xc1.result.try_into().unwrap();
-    let q4yc0: ark_bn254::Fq = in_q4yc0.result.try_into().unwrap();
-    let q4yc1: ark_bn254::Fq = in_q4yc1.result.try_into().unwrap();
+    let t4: ElemG2PointAcc = in_t4.result.0.try_into().unwrap();
+    let p4: ElemG1Point = in_p4.result.0.try_into().unwrap();
+    let q4xc0: ark_bn254::Fq = in_q4xc0.result.0.try_into().unwrap();
+    let q4xc1: ark_bn254::Fq = in_q4xc1.result.0.try_into().unwrap();
+    let q4yc0: ark_bn254::Fq = in_q4yc0.result.0.try_into().unwrap();
+    let q4yc1: ark_bn254::Fq = in_q4yc1.result.0.try_into().unwrap();
 
     let (mut temp, mut op_hints) = (ElemG2PointAcc::mock(), vec![]);
     if !skip {
@@ -787,7 +787,7 @@ pub(crate) fn wrap_hint_point_add_with_frob(
     Segment {
         id: segment_id as u32,
         parameter_ids: input_segment_info,
-        result: Element::G2Acc(temp),
+        result: (Element::G2Acc(temp), ElementType::G2DblAddEval),
         hints: op_hints,
         scr_type: ScriptType::PostMillerAddWithFrob(power),
     }
@@ -810,8 +810,8 @@ pub(crate) fn wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
         (in_p2.id, ElementType::G1),
     ];
 
-    let p2: ElemG1Point = in_p2.result.try_into().unwrap();
-    let p3: ElemG1Point = in_p3.result.try_into().unwrap();
+    let p2: ElemG1Point = in_p2.result.0.try_into().unwrap();
+    let p3: ElemG1Point = in_p3.result.0.try_into().unwrap();
 
     let (mut leval, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
     if !skip {
@@ -831,7 +831,7 @@ pub(crate) fn wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
     Segment {
         id: segment_id as u32,
         parameter_ids: input_segment_info,
-        result: Element::Fp12(leval),
+        result: (Element::Fp12(leval), ElementType::Fp12v1),
         hints: op_hints,
         scr_type: ScriptType::PostMillerSparseAddWithFrob(([in_t2, in_t3, pub_q2, pub_q3], ate)),
     }
@@ -847,7 +847,7 @@ pub(crate) fn wrap_hints_final_verify(
 
     let input_segment_info: Vec<(SegmentID, ElementType)> = vec![(in_a.id, ElementType::Fp12v0)];
 
-    let a: ElemFp12Acc = in_a.result.try_into().unwrap();
+    let a: ElemFp12Acc = in_a.result.0.try_into().unwrap();
     let fixedacc = ElemFp12Acc {
         f: constant,
         hash: extern_hash_fps(
@@ -871,39 +871,8 @@ pub(crate) fn wrap_hints_final_verify(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12(dmul0),
+        result: (Element::Fp12(dmul0), ElementType::Fp12v0),
         hints: op_hints,
-        scr_type: ScriptType::PostMillerDenseDenseMulByConst0(constant),
-    }
-}
-
-#[cfg(test)]
-mod test {
-
-    use super::*;
-    use ark_ff::{Field};
-
-
-    #[test]
-    fn test_wrap_cinv() {
-        let f = ark_bn254::Fq12::ONE + ark_bn254::Fq12::ONE +  ark_bn254::Fq12::ONE;
-        let hash = extern_hash_fps(f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), true);
-        let c = ElemFp12Acc {f, hash};
-        
-        let seg = Segment {
-            id: 0,
-            
-            parameter_ids: vec![],
-            result: Element::Fp12(c),
-            hints: vec![],
-            scr_type: ScriptType::NonDeterministic,
-        };
-
-        let inv0 = wrap_inv0(false, 1, &seg);
-        let inv1 = wrap_inv1(false, 1, &inv0);
-        let inv2 = wrap_inv2(false, 1, &inv1, &seg);
-
-        let out: ElemFp12Acc = inv2.result.try_into().unwrap();
-        println!("match {}", out.f == f.inverse().unwrap());
+        scr_type: ScriptType::PostMillerFinalVerify(constant),
     }
 }

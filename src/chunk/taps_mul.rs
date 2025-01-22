@@ -13,6 +13,7 @@ use crate::{
     treepp::*,
 };
 use ark_ff::{AdditiveGroup, Field};
+use bitcoin::script;
 use num_traits::One;
 
 use super::primitves::{extern_hash_fps};
@@ -48,12 +49,11 @@ pub(crate) fn chunk_sparse_dense_mul(
             } else {
                 {hash_messages(vec![ElementType::G2AddEvalMul, ElementType::Fp12v0, ElementType::Fp12v0])}
             }
-
+            OP_TRUE
         };
         let scr = script! {
             {ops_script}
-            {hash_script}
-            OP_TRUE
+            // {hash_script}
         };
         scr
     }
@@ -96,10 +96,13 @@ pub(crate) fn chunk_dense_dense_mul0(
         let ops_scr = script! {
             { hinted_mul }
         };
-        let scr = script! {
-            {ops_scr}
+        let hash_scr = script!(
             {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v1, ElementType::Fp6])} //{hash_mul(true)}
             OP_TRUE
+        );
+        let scr = script! {
+            {ops_scr}
+            // {hash_scr}
         };
         scr
     }
@@ -156,10 +159,13 @@ pub(crate) fn chunk_dense_dense_mul1(
             // [f, g, hc0, c1, hc1_aux]
             // [Fp12v0, Fp12v1, HashBytes, Fp12v2]
         };
+        let hash_scr = script!(
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v1, ElementType::Fp6Hash, ElementType::Fp12v2])} 
+            OP_TRUE
+        );
         let scr = script! {
             {ops_scr}
-            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v1, ElementType::HashBytes, ElementType::Fp12v2])} 
-            OP_TRUE
+            // {hash_scr}
         };
         scr
     }
@@ -214,12 +220,12 @@ pub(crate) fn chunk_squaring(
     fn tap_squaring(sq_script: Script) -> Script {
         let hash_sc = script! {
             {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v0])} 
+            OP_TRUE
         };
         let sc = script! {
             {Fq12::copy(0)}
             {sq_script}
-            {hash_sc}
-            OP_TRUE
+            // {hash_sc}
         };
         sc
     }
@@ -316,11 +322,11 @@ pub(crate) fn chunk_frob_fp12(
         };
         let hash_scr = script! {
             {hash_messages(vec![ElementType::Fp12v1, ElementType::Fp12v1])}
+            OP_TRUE
         };
         let sc = script! {
             {ops_scr}
-        {hash_scr}
-            OP_TRUE
+            // {hash_scr}
         };
         sc
     }

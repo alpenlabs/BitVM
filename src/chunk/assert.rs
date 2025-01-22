@@ -49,7 +49,7 @@ pub(crate) fn groth16(
     macro_rules! push_compare_or_return {
         ($seg:ident) => {{
             all_output_hints.push($seg.clone());
-            let matches = compare(&$seg.result, claimed_assertions);
+            let matches = compare(&$seg.result.0, claimed_assertions);
             if matches.is_some() && matches.unwrap() == false {
                 return false;
             }
@@ -61,7 +61,7 @@ pub(crate) fn groth16(
     let pub_scalars: Vec<Segment> = eval_ins.ks.iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         parameter_ids: vec![],
-        result: Element::ScalarElem(*f),
+        result: (Element::ScalarElem(*f), ElementType::ScalarElem),
         hints: vec![],
         scr_type: ScriptType::NonDeterministic,
     }).collect();
@@ -72,7 +72,7 @@ pub(crate) fn groth16(
     ].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         parameter_ids: vec![],
-        result: Element::FieldElem(*f),
+        result: (Element::FieldElem(*f), ElementType::FieldElem),
         hints: vec![],
         scr_type: ScriptType::NonDeterministic
     }).collect();
@@ -82,7 +82,7 @@ pub(crate) fn groth16(
     let gc: Vec<Segment> = eval_ins.c.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>().iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         parameter_ids: vec![],
-        result: Element::FieldElem(*f),
+        result: (Element::FieldElem(*f), ElementType::FieldElem),
         hints: vec![],
         scr_type: ScriptType::NonDeterministic
     }).collect();
@@ -91,7 +91,7 @@ pub(crate) fn groth16(
     let gs: Vec<Segment> = eval_ins.s.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>().iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         parameter_ids: vec![],
-        result: Element::FieldElem(*f),
+        result: (Element::FieldElem(*f), ElementType::FieldElem),
         hints: vec![],
         scr_type: ScriptType::NonDeterministic
     }).collect();
@@ -102,7 +102,7 @@ pub(crate) fn groth16(
     ].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         parameter_ids: vec![],
-        result: Element::FieldElem(*f),
+        result: (Element::FieldElem(*f), ElementType::FieldElem),
         hints: vec![],
         scr_type: ScriptType::NonDeterministic
     }).collect();
@@ -302,7 +302,7 @@ pub(crate) fn groth16(
     push_compare_or_return!(dmul0);
     f_acc = dmul0;
 
-    let result: ElemFp12Acc = f_acc.result.try_into().unwrap();
+    let result: ElemFp12Acc = f_acc.result.0.try_into().unwrap();
     if result.f != ark_bn254::Fq12::ONE {
         return false;
     }
@@ -313,7 +313,7 @@ pub(crate) fn groth16(
 pub(crate) fn hint_to_data(segments: Vec<Segment>) -> Assertions {
     let mut vs: Vec<[u8; 64]> = vec![];
     for v in segments {
-        let x = v.result.hashed_output();
+        let x = v.result.0.hashed_output();
         vs.push(x);
     }
     let mut batch1 = vec![];
@@ -517,7 +517,7 @@ pub(crate) fn script_exec(
         let mut hints = seg.hints.clone();
         seg.parameter_ids.iter().rev().for_each(|(param_seg_id, param_seg_type)| {
             let param_seg = &segments[*(param_seg_id) as usize];
-            let preimage_hints = param_seg.result.get_hash_preimage_as_hints(*param_seg_type);
+            let preimage_hints = param_seg.result.0.get_hash_preimage_as_hints(*param_seg_type);
             hints.extend_from_slice(&preimage_hints);
         });
         hints
@@ -526,10 +526,10 @@ pub(crate) fn script_exec(
     let mut bc_hints = vec![];
     for i in 0..segments.len() {
         let seg = &segments[i];
-        let sec_out = ((seg.id, segments[seg.id as usize].result.output_is_field_element()), assertions[seg.id as usize]);
+        let sec_out = ((seg.id, segments[seg.id as usize].result.0.output_is_field_element()), assertions[seg.id as usize]);
         let sec_in: Vec<((u32, bool), [u8; 64])> = seg.parameter_ids.iter().rev().map(|(k, _)| {
             let v = &segments[*(k) as usize];
-            let v = v.result.output_is_field_element();
+            let v = v.result.0.output_is_field_element();
             ((*k, v), assertions[*k as usize])
         }).collect();
 

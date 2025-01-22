@@ -111,7 +111,7 @@ mod test {
 
     use ark_ff::Field;
 
-    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, utils::{fq12_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery}}, chunk::primitves::{extern_hash_fps, extern_nibbles_to_limbs}};
+    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, utils::{fq12_push_not_montgomery, fq6_push_not_montgomery}}, chunk::primitves::{extern_hash_fps, extern_nibbles_to_limbs}};
 
     use super::*;
 

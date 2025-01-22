@@ -4,11 +4,14 @@ use std::collections::HashMap;
 use ark_ec::bn::BnConfig;
 use bitcoin_script::script;
 use treepp::Script;
+use std::hash::{DefaultHasher, Hash, Hasher};
 
+use crate::groth16::g16::N_TAPLEAVES;
 use crate::{chunk::element::ElemG1Point, treepp};
 use crate::chunk::element::ElemTraitExt;
 
-use super::element::{ElemFp6, ElemFq};
+use super::blake3compiled::hash_messages;
+use super::element::{ElemFp6, ElemFq, ElementType};
 use super::taps_msm::{chunk_hash_p, chunk_msm};
 use super::{assert::{groth16, Pubs}, element::{ElemFp12Acc, ElemFr, ElemG2PointAcc, EvalIns}, primitves::gen_bitcom, segment::{ScriptType, Segment}, taps_mul::*, taps_point_eval::*, taps_point_ops::*, taps_premiller::*, wots::WOTSPubKey};
 
@@ -52,7 +55,8 @@ pub(crate) fn compile_ops(
     println!("Preparing segments");
     let mock_segments = segments_from_pubs(vk);
     println!("Generating op scripts");
-    let op_scripts = op_scripts_from_segments(&mock_segments).into_iter().filter(|f| f.len() > 0).collect();
+    let op_scripts: Vec<Script> = op_scripts_from_segments(&mock_segments).into_iter().collect();
+    assert_eq!(op_scripts.len(), N_TAPLEAVES);
     op_scripts
 }
 
@@ -89,6 +93,22 @@ fn segments_from_pubs(vk: Vkey) -> Vec<Segment> {
 }
 
 pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::Script> {
+   fn serialize_element_types(elems: &[ElementType]) -> String {
+        // 1. Convert each variant to its string representation.
+        let joined = elems
+            .iter()
+            .map(|elem| format!("{:?}", elem)) // uses #[derive(Debug)]
+            .collect::<Vec<String>>()
+            .join("-");
+    
+        // 2. Compute a simple 64-bit hash of that string
+        let mut hasher = DefaultHasher::new();
+        joined.hash(&mut hasher);
+        let unique_hash = hasher.finish();
+    
+        // 3. Concatenate final result as "ENUM1-ENUM2-ENUM3|hash"
+        format!("{}|{}", joined, unique_hash)
+    }
 
     let mut tap_point_ops = cached(|(a,b,c,d,e,f,g)| chunk_point_ops(a,b,c,d,e,f,g));
     let mut tap_sparse_dense_mul = cached(|(a, b, c)| chunk_sparse_dense_mul(a, b, c ));
@@ -111,81 +131,108 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
     let mut tap_dense_dense_mul1 = cached(|(a, b, c)| chunk_dense_dense_mul1(a, b, c));
 
     let mut op_scripts: Vec<treepp::Script> = vec![];
-    for seg in segments {
-        let scr_type = seg.scr_type.clone();
 
-        match scr_type {
+    let mut hashing_script_cache: HashMap<String, Script> = HashMap::new();
+    segments.iter().for_each(|s| {
+        let mut elem_types_to_hash: Vec<ElementType> = s.parameter_ids.iter().rev().map(|f| f.1).collect();
+        elem_types_to_hash.push(s.result.1);
+        let elem_types_str = serialize_element_types(&elem_types_to_hash);
+        if !hashing_script_cache.contains_key(&elem_types_str) {
+            let hash_scr = {hash_messages(elem_types_to_hash)};
+            hashing_script_cache.insert(elem_types_str, hash_scr);
+        }
+    });
+
+    for i in 0..segments.len() {
+        let seg= &segments[i];
+        let scr_type = seg.scr_type.clone();
+        if scr_type == ScriptType::NonDeterministic {
+            continue;
+        }
+
+        let op_scr  = match scr_type {
             ScriptType::NonDeterministic => {
-                op_scripts.push(script!());
+                script!()
             },
             ScriptType::PreMillerInitT4 => {
-                op_scripts.push(tap_init_t4.1.clone());
+                tap_init_t4.1.clone()
             }
             ScriptType::PreMillerPrecomputeP => {
-                op_scripts.push(chunk_precompute_p(ElemFq::mock(), ElemFq::mock()).1);
+                chunk_precompute_p(ElemFq::mock(), ElemFq::mock()).1
             },
             ScriptType::PreMillerHashC => {
-                op_scripts.push(chunk_hash_c([ElemFq::mock(); 12].to_vec()).1);
+                chunk_hash_c([ElemFq::mock(); 12].to_vec()).1
             },
             ScriptType::PreMillerHashC2 => {
-                op_scripts.push(chunk_hash_c2(ElemFp12Acc::mock()).1);
+                chunk_hash_c2(ElemFp12Acc::mock()).1
             },
             ScriptType::PreMillerInv0 => {
-                op_scripts.push(chunk_inv0(ElemFp12Acc::mock()).1);
+                chunk_inv0(ElemFp12Acc::mock()).1
             },
             ScriptType::PreMillerInv1 => {
-                op_scripts.push(chunk_inv1(ElemFp6::mock()).1);
+                chunk_inv1(ElemFp6::mock()).1
             },
             ScriptType::PreMillerInv2 => {
-                op_scripts.push(chunk_inv2(ElemFp6::mock(), ElemFp12Acc::mock()).1);
+                chunk_inv2(ElemFp6::mock(), ElemFp12Acc::mock()).1
             },
             ScriptType::MillerSquaring => {
-                op_scripts.push(tap_squaring( ElemFp12Acc::mock()).1);
+                tap_squaring( ElemFp12Acc::mock()).1
             },
             ScriptType::MillerDoubleAdd(a) => {
-                op_scripts.push(tap_point_ops((ElemG2PointAcc::mock(), ElemFq::mock(), ElemFq::mock(),ElemFq::mock(), ElemFq::mock(), ElemG1Point::mock(), a)).1);
+                tap_point_ops((ElemG2PointAcc::mock(), ElemFq::mock(), ElemFq::mock(),ElemFq::mock(), ElemFq::mock(), ElemG1Point::mock(), a)).1
             },
             ScriptType::MillerDouble => {
-                op_scripts.push(tap_point_dbl( (ElemG2PointAcc::mock(), ElemG1Point::mock()) ).1);
+                tap_point_dbl( (ElemG2PointAcc::mock(), ElemG1Point::mock()) ).1
             },
             ScriptType::SparseDenseMul(dbl_blk) => {
-                op_scripts.push(tap_sparse_dense_mul((ElemFp12Acc::mock(), ElemG2PointAcc::mock(), dbl_blk)).1);
+                tap_sparse_dense_mul((ElemFp12Acc::mock(), ElemG2PointAcc::mock(), dbl_blk)).1
             },
             ScriptType::DenseDenseMul0() => {
-                op_scripts.push(tap_dense_dense_mul0((ElemFp12Acc::mock(), ElemFp12Acc::mock())).1);
+                tap_dense_dense_mul0((ElemFp12Acc::mock(), ElemFp12Acc::mock())).1
             },
             ScriptType::DenseDenseMul1() => {
-                op_scripts.push(tap_dense_dense_mul1( (ElemFp12Acc::mock(), ElemFp12Acc::mock(), ElemFp6::mock())  ).1);
+                tap_dense_dense_mul1( (ElemFp12Acc::mock(), ElemFp12Acc::mock(), ElemFp6::mock())  ).1
             },
-            ScriptType::PostMillerDenseDenseMulByConst0(inp) => {
-                op_scripts.push(tap_final_verify( (ElemFp12Acc::mock(), ElemFp12Acc {f: inp, hash: [0u8;64]}) ).1);
+            ScriptType::PostMillerFinalVerify(inp) => {
+                tap_final_verify( (ElemFp12Acc::mock(), ElemFp12Acc {f: inp, hash: [0u8;64]}) ).1
             },
-
             ScriptType::MSM(inp) => {
                 let msm_window = 7;
                 let g16_scalars = (0..inp.1.len()).into_iter().map(|_| ElemFr::mock()).collect();
                 let msm_scr: Vec<Script> = tap_msm((msm_window, g16_scalars, inp.1)).iter().map(|f| f.1.clone()).collect();
-                op_scripts.push(msm_scr[inp.0].clone());
+                msm_scr[inp.0].clone()
             },
             ScriptType::PostMillerFrobFp12(power) => {
-                op_scripts.push(tap_frob_fp12( (ElemFp12Acc::mock(), power as usize) ).1);
+                tap_frob_fp12( (ElemFp12Acc::mock(), power as usize) ).1
             },
             ScriptType::PostMillerAddWithFrob(ate) => {
-                op_scripts.push(tap_point_add_with_frob(ate).1);
+                tap_point_add_with_frob(ate).1
             },
             ScriptType::PreMillerHashP(inp) => {
-                let chp = chunk_hash_p((ElemG1Point::mock(), inp));
-                op_scripts.push(chp.1);
+                chunk_hash_p((ElemG1Point::mock(), inp)).1
             },
             ScriptType::MillerSparseSparseDbl(inp) => {
-                op_scripts.push(tap_multiply_point_evals_on_tangent_for_fixed_g2((inp.0, inp.1)).1);
+                tap_multiply_point_evals_on_tangent_for_fixed_g2((inp.0, inp.1)).1
             },
             ScriptType::MillerSparseSparseAdd(inp) => {
-                op_scripts.push(tap_multiply_point_evals_on_chord_for_fixed_g2((inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1)).1);
+                tap_multiply_point_evals_on_chord_for_fixed_g2((inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1)).1
             },
             ScriptType::PostMillerSparseAddWithFrob(inp) => {
-                op_scripts.push(tap_multiply_point_evals_on_chord_for_fixed_g2_with_frob((inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1)).1);
+                tap_multiply_point_evals_on_chord_for_fixed_g2_with_frob((inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1)).1
             },
+        };
+        if i == segments.len() - 1 { // except final segment
+            op_scripts.push(op_scr);
+        } else {
+            let mut elem_types_to_hash: Vec<ElementType> = seg.parameter_ids.iter().rev().map(|(_, param_seg_type)| *param_seg_type).collect();
+            elem_types_to_hash.push(seg.result.1);
+            let elem_types_str = serialize_element_types(&elem_types_to_hash);
+            let hash_scr = hashing_script_cache.get(&elem_types_str).unwrap();
+            assert!(hash_scr.len() > 0);
+            op_scripts.push(script!(
+                {op_scr}
+                {hash_scr.clone()}
+            ));
         }
     }
     op_scripts
@@ -194,10 +241,10 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
 pub(crate) fn bitcom_scripts_from_segments(segments: &Vec<Segment>, pubkeys_map: HashMap<u32, WOTSPubKey>) -> Vec<treepp::Script> {
     let mut bitcom_scripts: Vec<treepp::Script> = vec![];
     for seg in segments {
-        let sec_out = (seg.id as u32, segments[seg.id as usize].result.output_is_field_element());
+        let sec_out = (seg.id as u32, segments[seg.id as usize].result.0.output_is_field_element());
         let sec_in: Vec<(u32, bool)> = seg.parameter_ids.iter().map(|(f, _)| {
             let elem = &segments[*(f) as usize];
-            let elem_type = elem.result.output_is_field_element();
+            let elem_type = elem.result.0.output_is_field_element();
             (*f, elem_type)
         }).collect();
         match seg.scr_type {

@@ -55,11 +55,11 @@ pub(crate) fn chunk_hash_c(
         };
         let hash_scr = script!(
             {hash_messages(vec![ElementType::Fp12v1])}
+            OP_TRUE
         );
         let sc = script! {
             {ops_scr}
-            {hash_scr}
-            OP_TRUE
+            // {hash_scr}
         };
         sc
     }
@@ -96,14 +96,18 @@ pub(crate) fn chunk_hash_c2(
 ) -> (ElemFp12Acc, Script, Vec<Hint>) {
 
     fn tap_hash_c2() -> Script {
-        let hash_scr = script! {
+        let ops_scr = script! {
             {Fq12::copy(0)}
-            {hash_messages(vec![ElementType::Fp12v1, ElementType::Fp12v0])}
         };
 
-        let sc = script! {
-            {hash_scr}
+        let hash_scr = script!(
+            {hash_messages(vec![ElementType::Fp12v1, ElementType::Fp12v0])}
             OP_TRUE
+        );
+
+        let sc = script! {
+            {ops_scr}
+            // {hash_scr}
         };
         sc
     }
@@ -113,18 +117,13 @@ pub(crate) fn chunk_hash_c2(
     let inhash = extern_hash_fps(fvec.clone(), false);
     let outhash = extern_hash_fps(fvec.clone(), true);
 
-    let simulate_stack_input = vec![];
-    // for f in &fvec {
-    //     simulate_stack_input.push(Hint::Fq(*f));
-    // }
-
     (
         ElemFp12Acc {
             f: hint_in_c.f,
             hash: outhash,
         },
         tap_hash_c2(),
-        simulate_stack_input,
+        vec![],
     )
 }
 
@@ -167,11 +166,14 @@ pub(crate) fn chunk_precompute_p(
             {eval_xy} 
         };
     
+        let hash_scr = script!(
+            {hash_messages(vec![ElementType::G1])}
+            OP_TRUE     
+        );
         script! {
             {ops_scr}
             // [pdx, pdy]    
-            {hash_messages(vec![ElementType::G1])}
-            OP_TRUE             
+            // {hash_scr}
         }
     }
 
@@ -232,10 +234,13 @@ pub(crate) fn chunk_init_t4(
             }
             // if the point is not on curve
         };
-        let sc = script! {
-            {ops_scr}
+        let hash_scr = script!(
             {hash_messages(vec![ElementType::G2T])}
             OP_TRUE
+        );
+        let sc = script! {
+            {ops_scr}
+            // {hash_scr}
         };
 
         sc
@@ -301,11 +306,11 @@ pub(crate) fn chunk_inv2(
         };
         let hash_scr = script!{
             {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp6, ElementType::Fp12v1])}
+            OP_TRUE
         };
         let scr = script!{
             {ops_scr}
-            {hash_scr}
-            OP_TRUE
+            // {hash_scr}
         };
         scr
     }
@@ -368,11 +373,11 @@ pub(crate) fn chunk_inv1(
         }; // [t0, t1]
         let hash_scr = script!{
             {hash_messages(vec![ElementType::Fp6, ElementType::Fp6])}
+            OP_TRUE
         };
         let scr = script!{
             {ops_scr}
-            {hash_scr}
-            OP_TRUE
+            // {hash_scr}
         };
         scr
     }
@@ -440,12 +445,12 @@ pub(crate) fn chunk_inv0(
 
         let hash_scr = script!{
             {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp6])}
+            OP_TRUE
         };
 
         let scr = script!{
             {ops_scr}
-            {hash_scr}
-            OP_TRUE
+            // {hash_scr}
         };
         scr
     }
