@@ -121,10 +121,6 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
     let mut tap_multiply_point_evals_on_chord_for_fixed_g2 = cached(|(a, b, c, d, e)| chunk_multiply_point_evals_on_chord_for_fixed_g2(ElemG1Point::mock(), ElemG1Point::mock(), a, b, c, d, e));
     let mut tap_multiply_point_evals_on_chord_for_fixed_g2_with_frob = cached(|(a, b, c, d, e)| chunk_multiply_point_evals_on_chord_for_fixed_g2_with_frob(ElemG1Point::mock(), ElemG1Point::mock(), a, b, c, d, e));
     let tap_init_t4 = chunk_init_t4(ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock());
-    // let tap_precompute_py = chunk_precompute_py();
-    // let tap_precompute_px = chunk_precompute_px();
-    // let tap_hash_c = chunk_hash_c();
-    // let tap_hash_c2 = chunk_hash_c2();
     let mut tap_squaring = cached(chunk_squaring);
     let mut tap_point_dbl = cached(|(a, b)| chunk_point_dbl(a, b));
     let mut tap_dense_dense_mul0 = cached(|(a, b)| chunk_dense_dense_mul0(a, b));
@@ -138,7 +134,10 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
         elem_types_to_hash.push(s.result.1);
         let elem_types_str = serialize_element_types(&elem_types_to_hash);
         if !hashing_script_cache.contains_key(&elem_types_str) {
-            let hash_scr = {hash_messages(elem_types_to_hash)};
+            let hash_scr = script!(
+                {hash_messages(elem_types_to_hash)}
+                OP_TRUE
+            );
             hashing_script_cache.insert(elem_types_str, hash_scr);
         }
     });

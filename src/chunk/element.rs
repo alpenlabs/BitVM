@@ -45,9 +45,9 @@ impl ElementType {
             ElementType::Fp12v2 => 6 + 1,
             ElementType::Fp6 => 6,
             ElementType::Fp6Hash => 1,
-            ElementType::FieldElem => 1,
+            ElementType::FieldElem => 0,
             ElementType::G1 => 2,
-            ElementType::ScalarElem => 1,
+            ElementType::ScalarElem => 0,
         }
     }
 }

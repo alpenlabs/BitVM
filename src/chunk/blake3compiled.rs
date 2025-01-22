@@ -35,6 +35,7 @@ pub fn hash_192b() -> Script {
 pub fn hash_messages(elem_types: Vec<ElementType>) -> Script {
     // Altstack: [Hc, Hb, Ha]
     // Stack: [a, b, c]
+    let elem_types: Vec<ElementType> = elem_types.into_iter().filter(|et| et.num_limbs() > 0).collect();
     let mut loop_script = script!();
     for msg_index in 0..elem_types.len() {
 

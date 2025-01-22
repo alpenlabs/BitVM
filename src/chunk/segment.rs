@@ -1,8 +1,8 @@
 
 
-use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fr::Fr, utils::{Hint}}, chunk::taps_msm::{chunk_msm}, execute_script, treepp};
+use crate::{bn254::{curves::G1Affine, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fr::Fr, utils::Hint}, chunk::taps_msm::chunk_msm, execute_script, treepp};
 
-use super::{element::Element, taps_msm::chunk_hash_p, taps_point_eval::*, taps_premiller::*};
+use super::{blake3compiled::hash_messages, element::Element, primitves::extern_nibbles_to_limbs, taps_msm::chunk_hash_p, taps_point_eval::*, taps_premiller::*};
 
 pub type SegmentID = u32;
 pub type SegmentOutputType = bool;
@@ -52,6 +52,7 @@ pub enum ScriptType {
 
 
 use ark_ff::{AdditiveGroup, Field};
+use bitcoin_script::script;
 
 use super::{element::*, primitves::extern_hash_fps,  taps_point_ops::*, taps_mul::*};
 
@@ -185,10 +186,42 @@ pub(crate) fn wrap_hints_precompute_p(
     input_segment_info.push((in_px.id, ElementType::FieldElem));
 
     let (mut p3d, mut op_hints) = (ElemG1Point::mock(), vec![]);
+    // let mut tap_prex = script!();
     if !skip {
         let in_py = in_py.result.0.try_into().unwrap();
         let in_px = in_px.result.0.try_into().unwrap();
         (p3d, _, op_hints) = chunk_precompute_p(in_py, in_px);
+        // println!("PreMillerPrecomputeP {:?}", segment_id);
+        // let bitcom_scr = script!{
+        //     for i in extern_nibbles_to_limbs(p3d.hashed_output()) {
+        //         {i}
+        //     }
+        //     {Fq::toaltstack()}    
+        //     {G1Affine::push_not_montgomery(ark_bn254::G1Affine::new_unchecked(in_px, in_py))}
+        //     {Fq2::toaltstack()}     
+        // };
+        // let mut elem_types_to_hash: Vec<ElementType> = input_segment_info.iter().rev().map(|f| f.1).collect();
+        // elem_types_to_hash.push(ElementType::G1);
+        // let hash_scr = script!(
+        //     {hash_messages(elem_types_to_hash)}
+        //     OP_TRUE
+        // );
+
+        // let script = script! {
+        //     for h in &op_hints {
+        //         { h.push() }
+        //     }
+        //     {bitcom_scr}
+        //     {tap_prex}
+        //     {hash_scr}
+        // };
+        // let res = execute_script(script);
+        // for i in 0..res.final_stack.len() {
+        //     println!("{i:} {:?}", res.final_stack.get(i));
+        // }
+        // println!("final stack len {:?}", res.final_stack.len());
+        // assert!(!res.success);
+        // assert!(res.final_stack.len() == 1);
     }
     
     Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: (Element::G1(p3d), ElementType::G1), hints: op_hints, scr_type: ScriptType::PreMillerPrecomputeP }
@@ -208,6 +241,7 @@ pub(crate) fn wrap_hint_hash_c2(
         let in_c = in_c.result.0.try_into().unwrap();
         (c2, _, op_hints) = chunk_hash_c2(in_c);
         // op_hints.extend_from_slice(&Element::Fp12v1(in_c).get_hash_preimage_as_hints());
+
     }
     
     Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: (Element::Fp12(c2), ElementType::Fp12v0), hints: op_hints, scr_type: ScriptType::PreMillerHashC2 }
