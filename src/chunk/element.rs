@@ -5,17 +5,9 @@ use super::primitves::{extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_f
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Element {
-    Fp12v0(ElemFp12Acc), // 2,4, 2, 4
-    Fp12v1(ElemFp12Acc),  // 6, 6
-    Fp12v2(ElemFp12Acc), // 6, 1
+    Fp12(ElemFp12Acc), // 2,4, 2, 4
     Fp6(ElemFp6), // 6
-    Fp6Hash(ElemFp6), // 1
-    G2T(ElemG2PointAcc), // 4
-    G2DblEval(ElemG2PointAcc), // 4, 4
-    G2DblAddEval(ElemG2PointAcc), // 4,4,4
-    G2AddEval(ElemG2PointAcc), // 4,4
-    G2DblEvalMul(ElemG2PointAcc),
-    G2AddEvalMul(ElemG2PointAcc),
+    G2Acc(ElemG2PointAcc),
     FieldElem(ElemFq), // 1
     ScalarElem(ElemFr), // 1
     HashBytes(ElemHashBytes), // 1
@@ -61,11 +53,38 @@ impl ElementType {
             ElementType::HashBytes => 1,
         }
     }
+}
 
-    pub fn get_hash_preimage_as_hints(&self, elem: Element) -> Vec<Hint> {
+impl Element {
+    pub fn output_is_field_element(&self) -> bool {
+        match *self {
+            Element::FieldElem(_) => true, 
+            Element::ScalarElem(_) => true, 
+            _ => false,
+        }
+    }
+
+    pub fn hashed_output(&self) -> HashBytes {
         match self {
+            Element::G2Acc(r) => r.hashed_output(),
+            Element::Fp12(r) => r.hashed_output(),
+            Element::Fp6(r) => {
+                extern_hash_fps(
+                    r.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
+                    true,
+                )
+            },
+            Element::FieldElem(f) => f.hashed_output(),
+            Element::G1(r) => r.hashed_output(),
+            Element::ScalarElem(r) => r.hashed_output(),
+            Element::HashBytes(r) => r.hashed_output(),
+        }
+    }
+
+    pub fn get_hash_preimage_as_hints(&self, elem_type: ElementType) -> Vec<Hint> {
+        match elem_type {
             ElementType::G2AddEval => {
-                if let Element::G2AddEval(g) = elem {
+                if let Element::G2Acc(g) = self {
                     vec![
                         Hint::Fq(g.t.x.c0),
                         Hint::Fq(g.t.x.c1),
@@ -79,7 +98,7 @@ impl ElementType {
                 }
             },
             ElementType::G2DblAddEval => {
-                if let Element::G2DblAddEval(g) = elem {
+                if let Element::G2Acc(g) = self {
                     vec![
                         Hint::Fq(g.t.x.c0),
                         Hint::Fq(g.t.x.c1),
@@ -93,7 +112,7 @@ impl ElementType {
                 }
             },
             ElementType::G2DblEval => {
-                if let Element::G2DblEval(g) = elem {
+                if let Element::G2Acc(g) = self {
                     vec![
                         Hint::Fq(g.t.x.c0),
                         Hint::Fq(g.t.x.c1),
@@ -107,7 +126,7 @@ impl ElementType {
                 }
             },
             ElementType::G2DblEvalMul => {
-                if let Element::G2DblEvalMul(g) = elem {
+                if let Element::G2Acc(g) = self {
                     let (dbl_le_0, dbl_le_1) = g.dbl_le.unwrap();
                     vec![
                         Hint::Fq(dbl_le_0.c0),
@@ -123,7 +142,7 @@ impl ElementType {
                 }
             },
             ElementType::G2AddEvalMul => {
-                if let Element::G2AddEvalMul(g) = elem {
+                if let Element::G2Acc(g) = self {
                     let (add_le_0, add_le_1) = g.add_le.unwrap();
                     vec![
                         Hint::Fq(add_le_0.c0),
@@ -139,7 +158,7 @@ impl ElementType {
                 }
             },
             ElementType::Fp12v0 => {
-                if let Element::Fp12v0(r) = elem {
+                if let Element::Fp12(r) = self {
                     r.f.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect()
                 } else {
                     panic!();
@@ -147,7 +166,7 @@ impl ElementType {
                 }
             },
             ElementType::Fp12v1=> {
-                if let Element::Fp12v1(r) = elem {
+                if let Element::Fp12(r) = self {
                     r.f.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect()
                 } else {
                     panic!();
@@ -156,7 +175,7 @@ impl ElementType {
             },
             ElementType::Fp12v2 => vec![],
             ElementType::Fp6 => {
-                if let Element::Fp6(r) = elem {
+                if let Element::Fp6(r) = self {
                     r.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect()
                 } else {
                     panic!();
@@ -164,7 +183,7 @@ impl ElementType {
                 }
             },
             ElementType::Fp6Hash => {
-                if let Element::Fp6(r) = elem {
+                if let Element::Fp6(r) = self {
                     let rhash = extern_hash_fps(
                         r.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
                         true,
@@ -176,15 +195,15 @@ impl ElementType {
                 }
             },
             ElementType::HashBytes => {
-                if let Element::HashBytes(h) = elem {
-                    vec![Hint::Hash(extern_nibbles_to_limbs(h))]
+                if let Element::HashBytes(h) = self {
+                    vec![Hint::Hash(extern_nibbles_to_limbs(*h))]
                 } else {
                     panic!();
                     vec![]
                 }
             },
             ElementType::G1 => {
-                if let Element::G1(r) = elem {
+                if let Element::G1(r) = self {
                     vec![Hint::Fq(r.x), Hint::Fq(r.y)]
                 } else {
                     panic!();
@@ -197,137 +216,8 @@ impl ElementType {
         }
     }
 
-}
+    
 
-impl Element {
-    pub fn output_is_field_element(&self) -> bool {
-        match *self {
-            Element::FieldElem(_) => true, 
-            Element::ScalarElem(_) => true, 
-            _ => false,
-        }
-    }
-
-    pub fn element_type(&self) -> ElementType {
-        match self {
-            Element::G2AddEval(_) => ElementType::G2AddEval, 
-            Element::G2DblAddEval(_) => ElementType::G2DblAddEval,
-            Element::G2T(_) => ElementType::G2T,
-            Element::G2DblEval(_) => ElementType::G2DblEval,
-            Element::G2DblEvalMul(_) => ElementType::G2DblEvalMul,
-            Element::G2AddEvalMul(_) => ElementType::G2AddEvalMul,
-            Element::Fp12v0(_) => ElementType::Fp12v0, // 2, 4
-            Element::Fp12v1(_) => ElementType::Fp12v1, // 6
-            Element::Fp12v2(_) => ElementType::Fp12v2, // 6,1
-            Element::Fp6(_) => ElementType::Fp6,
-            Element::Fp6Hash(_) => ElementType::Fp6Hash,
-            Element::FieldElem(_) => ElementType::FieldElem,
-            Element::G1(_) => ElementType::G1,
-            Element::ScalarElem(_) => ElementType::ScalarElem,
-            Element::HashBytes(_) => ElementType::HashBytes,
-
-        }
-    }
-
-    pub fn hashed_output(&self) -> HashBytes {
-        match self {
-            Element::G2AddEval(r) => r.hashed_output(),
-            Element::G2DblAddEval(r) => r.hashed_output(),
-            Element::G2T(r) => r.hashed_output(),
-            Element::G2DblEval(r) => r.hashed_output(),
-            Element::G2DblEvalMul(r) => r.hashed_output(),
-            Element::G2AddEvalMul(r) => r.hashed_output(),
-            Element::Fp12v0(r) => r.hashed_output(),
-            Element::Fp12v1(r) => r.hashed_output(),
-            Element::Fp12v2(r) => r.hashed_output(),
-            Element::Fp6(r) => {
-                extern_hash_fps(
-                    r.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-                    true,
-                )
-            },
-            Element::Fp6Hash(r) => {
-                extern_hash_fps(
-                    r.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-                    true,
-                )   
-            },
-            Element::FieldElem(f) => f.hashed_output(),
-            Element::G1(r) => r.hashed_output(),
-            Element::ScalarElem(r) => r.hashed_output(),
-            Element::HashBytes(r) => r.hashed_output(),
-        }
-    }
-
-    pub fn get_hash_preimage_as_hints(&self) -> Vec<Hint> {
-        match self {
-            Element::FieldElem(_) => vec![],
-            Element::ScalarElem(_) => vec![],
-            Element::HashBytes(h) => vec![Hint::Hash(extern_nibbles_to_limbs(*h))],
-            Element::Fp12v0(r) => r.f.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect(),
-            Element::Fp12v1(r) => r.f.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect(),
-            Element::Fp12v2(r) => vec![Hint::Hash(extern_nibbles_to_limbs(r.hashed_output()))],
-            Element::Fp6(r) => r.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect(),
-            Element::Fp6Hash(r) => {
-                let rhash = extern_hash_fps(
-                    r.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-                    true,
-                );
-                vec![Hint::Hash(extern_nibbles_to_limbs(rhash))]
-            },
-            Element::G2T(_) => vec![],
-            Element::G2DblEval(g) => {
-                vec![
-                    Hint::Fq(g.t.x.c0),
-                    Hint::Fq(g.t.x.c1),
-                    Hint::Fq(g.t.y.c0),
-                    Hint::Fq(g.t.y.c1),
-                    Hint::Hash(extern_nibbles_to_limbs(g.hash_le())),
-                ]
-            },
-            Element::G2AddEval(g) => {
-                vec![
-                    Hint::Fq(g.t.x.c0),
-                    Hint::Fq(g.t.x.c1),
-                    Hint::Fq(g.t.y.c0),
-                    Hint::Fq(g.t.y.c1),
-                    Hint::Hash(extern_nibbles_to_limbs(g.hash_le())),
-                ]
-            },
-            Element::G2DblAddEval(g) => {
-                vec![
-                    Hint::Fq(g.t.x.c0),
-                    Hint::Fq(g.t.x.c1),
-                    Hint::Fq(g.t.y.c0),
-                    Hint::Fq(g.t.y.c1),
-                    Hint::Hash(extern_nibbles_to_limbs(g.hash_le())),
-                ]
-            },
-            Element::G2DblEvalMul(g) => {
-                let (dbl_le_0, dbl_le_1) = g.dbl_le.unwrap();
-                vec![
-                    Hint::Fq(dbl_le_0.c0),
-                    Hint::Fq(dbl_le_0.c1),
-                    Hint::Fq(dbl_le_1.c0),
-                    Hint::Fq(dbl_le_1.c1),
-                    Hint::Hash(extern_nibbles_to_limbs(g.hash_other_le(true))),
-                    Hint::Hash(extern_nibbles_to_limbs(g.hash_t())),
-                ]
-            },
-            Element::G2AddEvalMul(g) => {
-                let (add_le_0, add_le_1) = g.add_le.unwrap();
-                vec![
-                    Hint::Fq(add_le_0.c0),
-                    Hint::Fq(add_le_0.c1),
-                    Hint::Fq(add_le_1.c0),
-                    Hint::Fq(add_le_1.c1),
-                    Hint::Hash(extern_nibbles_to_limbs(g.hash_other_le(false))),
-                    Hint::Hash(extern_nibbles_to_limbs(g.hash_t())),
-                ]
-            },
-            Element::G1(r) => vec![Hint::Fq(r.x), Hint::Fq(r.y)],
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -372,9 +262,9 @@ macro_rules! impl_try_from_element {
     };
 }
 
-impl_try_from_element!(ElemFp12Acc, { Fp12v0, Fp12v1, Fp12v2 });
+impl_try_from_element!(ElemFp12Acc, { Fp12, Fp12, Fp12 });
 impl_try_from_element!(ElemFp6, { Fp6 });
-impl_try_from_element!(ElemG2PointAcc, { G2T, G2DblEval, G2DblAddEval, G2AddEval });
+impl_try_from_element!(ElemG2PointAcc, { G2Acc, G2Acc, G2Acc, G2Acc });
 impl_try_from_element!(ElemFq, { FieldElem });
 impl_try_from_element!(ElemFr, { ScalarElem });
 impl_try_from_element!(ElemHashBytes, { HashBytes });

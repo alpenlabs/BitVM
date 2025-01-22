@@ -515,14 +515,9 @@ pub(crate) fn script_exec(
 
     let aux_hints: Vec<Vec<Hint>> = segments.iter().map(|seg| {
         let mut hints = seg.hints.clone();
-        //println!("segment_id {:?}", seg.id);
-        //println!("script type {:?}", seg.scr_type);
         seg.parameter_ids.iter().rev().for_each(|(param_seg_id, param_seg_type)| {
             let param_seg = &segments[*(param_seg_id) as usize];
-            let preimage_hints = param_seg_type.get_hash_preimage_as_hints(param_seg.result);
-            //println!("pre_image_hints_two seg id {:?}", param_seg.id);
-            //println!("pre_image_hints_two script type {:?}", param_seg.scr_type);
-            //println!("pre_image_hints_two {:?}", preimage_hints);
+            let preimage_hints = param_seg.result.get_hash_preimage_as_hints(*param_seg_type);
             hints.extend_from_slice(&preimage_hints);
         });
         hints

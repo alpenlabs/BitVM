@@ -15,7 +15,6 @@ mod test {
     use crate::chunk::taps_premiller::*;
     use crate::chunk::taps_point_eval::*;
     use crate::execute_script_without_stack_limit;
-    use ark_ec::CurveGroup;
     use ark_ff::AdditiveGroup;
     use ark_ff::Field;
     use ark_std::UniformRand;
@@ -38,7 +37,7 @@ mod test {
         let hint_in = ElemFp12Acc { f, hash: fhash };
         let (hint_out, tap_frob, mut hint_script) = chunk_frob_fp12(hint_in, power);
 
-        let f_acc_preimage_hints = Element::Fp12v1(hint_in).get_hash_preimage_as_hints();
+        let f_acc_preimage_hints = Element::Fp12(hint_in).get_hash_preimage_as_hints(ElementType::Fp12v0);
         hint_script.extend_from_slice(&f_acc_preimage_hints);
 
         let bitcom_scr = script!{
@@ -118,7 +117,7 @@ mod test {
         );
         let hint_in = ElemFp12Acc { f, hash: fhash };
         let (hint_out, tap_hash_c2, mut hint_script) = chunk_hash_c2(hint_in);
-        hint_script.extend_from_slice(&Element::Fp12v1(hint_in).get_hash_preimage_as_hints());
+        hint_script.extend_from_slice(&Element::Fp12(hint_in).get_hash_preimage_as_hints(ElementType::Fp12v1));
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
@@ -246,11 +245,11 @@ mod test {
         let (hint_out, tap_scr, mut hint_script) = chunk_sparse_dense_mul(hint_f, hint_t, dbl_blk);
 
         if dbl_blk {
-            hint_script.extend_from_slice(&Element::G2DblEvalMul(hint_t).get_hash_preimage_as_hints())
+            hint_script.extend_from_slice(&Element::G2Acc(hint_t).get_hash_preimage_as_hints(ElementType::G2DblEvalMul))
         } else {
-            hint_script.extend_from_slice(&Element::G2AddEvalMul(hint_t).get_hash_preimage_as_hints())
+            hint_script.extend_from_slice(&Element::G2Acc(hint_t).get_hash_preimage_as_hints(ElementType::G2AddEvalMul))
         }
-        hint_script.extend_from_slice(&Element::Fp12v0(hint_f).get_hash_preimage_as_hints());
+        hint_script.extend_from_slice(&Element::Fp12(hint_f).get_hash_preimage_as_hints(ElementType::Fp12v0));
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
@@ -304,8 +303,8 @@ mod test {
 
 
         let (hint_out, tap_scr, mut hint_script) = chunk_dense_dense_mul0(hint_f, hint_g);
-        let a_preimage_hints = Element::Fp12v0(hint_f).get_hash_preimage_as_hints();
-        let b_preimage_hints = Element::Fp12v0(hint_g).get_hash_preimage_as_hints();
+        let a_preimage_hints = Element::Fp12(hint_f).get_hash_preimage_as_hints(ElementType::Fp12v0);
+        let b_preimage_hints = Element::Fp12(hint_g).get_hash_preimage_as_hints(ElementType::Fp12v1);
         hint_script.extend_from_slice(&a_preimage_hints);
         hint_script.extend_from_slice(&b_preimage_hints);
 
@@ -493,7 +492,7 @@ mod test {
         };
 
 
-        let f_acc_preimage_hints = Element::Fp12v1(hint_f).get_hash_preimage_as_hints();
+        let f_acc_preimage_hints = Element::Fp12(hint_f).get_hash_preimage_as_hints(ElementType::Fp12v0);
         hint_script.extend_from_slice(&f_acc_preimage_hints);
 
         let tap_len = tap_scr.len();
@@ -537,8 +536,8 @@ mod test {
         let hint_in_t4_hash = extern_nibbles_to_limbs(t.hashed_output());
         let hint_in_p_hash = extern_nibbles_to_limbs(p.hashed_output());
 
-        let t4_hash_hints = Element::G2DblAddEval(t).get_hash_preimage_as_hints();
-        let p_hash_hints = Element::G1(p).get_hash_preimage_as_hints();
+        let t4_hash_hints = Element::G2Acc(t).get_hash_preimage_as_hints(ElementType::G2DblAddEval);
+        let p_hash_hints = Element::G1(p).get_hash_preimage_as_hints(ElementType::G1);
         hint_script.extend_from_slice(&t4_hash_hints);
         hint_script.extend_from_slice(&p_hash_hints);
 
@@ -596,8 +595,8 @@ mod test {
         let hint_in_t4_hash = extern_nibbles_to_limbs(t4acc.hashed_output());
         let hint_in_p_hash = extern_nibbles_to_limbs(p.hashed_output());
 
-        let t4_hash_hints = Element::G2DblEval(t4acc).get_hash_preimage_as_hints();
-        let p_hash_hints = Element::G1(p).get_hash_preimage_as_hints();
+        let t4_hash_hints = Element::G2Acc(t4acc).get_hash_preimage_as_hints(ElementType::G2DblEval);
+        let p_hash_hints = Element::G1(p).get_hash_preimage_as_hints(ElementType::G1);
         hint_script.extend_from_slice(&t4_hash_hints);
         hint_script.extend_from_slice(&p_hash_hints);
         
@@ -657,8 +656,8 @@ mod test {
         let hint_in_p_hash = extern_nibbles_to_limbs(p.hashed_output());
 
 
-        let t4_hash_hints = Element::G2DblEval(t).get_hash_preimage_as_hints();
-        let p_hash_hints = Element::G1(p).get_hash_preimage_as_hints();
+        let t4_hash_hints = Element::G2Acc(t).get_hash_preimage_as_hints(ElementType::G2AddEval);
+        let p_hash_hints = Element::G1(p).get_hash_preimage_as_hints(ElementType::G1);
         hint_script.extend_from_slice(&t4_hash_hints);
         hint_script.extend_from_slice(&p_hash_hints);
 
@@ -872,7 +871,7 @@ mod test {
 
             let hash_in = extern_hash_fps(a.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), true);
             let (hout0,tscr0,  mut hscr0) = chunk_inv0(ElemFp12Acc { f: a, hash: hash_in });
-            hscr0.extend_from_slice(&Element::Fp12v0(ElemFp12Acc { f: a, hash: hash_in }).get_hash_preimage_as_hints());
+            hscr0.extend_from_slice(&Element::Fp12(ElemFp12Acc { f: a, hash: hash_in }).get_hash_preimage_as_hints(ElementType::Fp12v0));
             
             let bscr0 = script!{
                 for h in extern_nibbles_to_limbs(hout0.hashed_output() ) {
@@ -900,7 +899,7 @@ mod test {
 
 
             let (hout1,tscr1, mut hscr1) = chunk_inv1(hout0);
-            hscr1.extend_from_slice(&Element::Fp6(hout0).get_hash_preimage_as_hints());
+            hscr1.extend_from_slice(&Element::Fp6(hout0).get_hash_preimage_as_hints(ElementType::Fp6));
 
             let bscr1 = script!{
                 for h in hout1.hashed_output() {
@@ -932,8 +931,8 @@ mod test {
 
             let a = ElemFp12Acc { f: a, hash: hash_in };
             let (hout2,tscr2, mut hscr2) = chunk_inv2(hout1, a);
-            hscr2.extend_from_slice(&Element::Fp12v0(a).get_hash_preimage_as_hints());
-            hscr2.extend_from_slice(&Element::Fp6(hout1).get_hash_preimage_as_hints());
+            hscr2.extend_from_slice(&Element::Fp12(a).get_hash_preimage_as_hints(ElementType::Fp12v0));
+            hscr2.extend_from_slice(&Element::Fp6(hout1).get_hash_preimage_as_hints(ElementType::Fp6));
             
             assert_eq!(hout2.f, a.f.inverse().unwrap());
             let bscr2 = script!{

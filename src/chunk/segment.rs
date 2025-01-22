@@ -170,7 +170,7 @@ pub(crate) fn wrap_hint_hash_c(
         (c,_, op_hints) = chunk_hash_c(fqvec);
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12v1(c), hints: op_hints, scr_type: ScriptType::PreMillerHashC }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12(c), hints: op_hints, scr_type: ScriptType::PreMillerHashC }
 }
 
 pub(crate) fn wrap_hints_precompute_p(
@@ -210,7 +210,7 @@ pub(crate) fn wrap_hint_hash_c2(
         // op_hints.extend_from_slice(&Element::Fp12v1(in_c).get_hash_preimage_as_hints());
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12v0(c2), hints: op_hints, scr_type: ScriptType::PreMillerHashC2 }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12(c2), hints: op_hints, scr_type: ScriptType::PreMillerHashC2 }
 }
 
 pub(crate) fn wrap_inv0(
@@ -271,7 +271,7 @@ pub(crate) fn wrap_inv2(
         // op_hints.extend_from_slice(&Element::Fp6(in_t1).get_hash_preimage_as_hints());
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12v1(dmul0), hints: op_hints, scr_type: ScriptType::PreMillerInv2 }
+    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: Element::Fp12(dmul0), hints: op_hints, scr_type: ScriptType::PreMillerInv2 }
 }
 
 
@@ -308,9 +308,8 @@ pub(crate) fn wrap_hint_init_t4(
     
     Segment {
         id: segment_id as u32,
-        
         parameter_ids: input_segment_info,
-        result: Element::G2T(tmpt4),
+        result: Element::G2Acc(tmpt4),
         hints: op_hints,
         scr_type: ScriptType::PreMillerInitT4,
     }
@@ -340,7 +339,7 @@ pub(crate) fn wrap_hint_squaring(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12v0(sq),
+        result: Element::Fp12(sq),
         hints: op_hints,
         scr_type: ScriptType::MillerSquaring,
     }
@@ -373,7 +372,7 @@ pub(crate) fn wrap_hint_point_dbl(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::G2DblEval(dbl),
+        result: Element::G2Acc(dbl),
         hints: op_hints,
         scr_type: ScriptType::MillerDouble,
     }
@@ -419,18 +418,13 @@ pub(crate) fn wrap_hint_point_ops(
             p4,
             ate,
         );
-        let mut preimage_hints = vec![];
-        preimage_hints.extend_from_slice(&Element::G2DblAddEval(t4).get_hash_preimage_as_hints());
-        preimage_hints.extend_from_slice(&Element::G1(p4).get_hash_preimage_as_hints());
-        //println!("segment id {}", segment_id);
-        //println!("pre_image_hints {:?}", preimage_hints);
     }
 
     
     Segment {
         id: segment_id as u32,
         parameter_ids: input_segment_info,
-        result: Element::G2DblAddEval(dbladd),
+        result: Element::G2Acc(dbladd),
         hints: op_hints,
         scr_type: ScriptType::MillerDoubleAdd(ate),
     }
@@ -471,7 +465,7 @@ pub(crate) fn wrap_hint_sparse_dense_mul(
     Segment {
         id: segment_id as u32,
         parameter_ids: input_segment_info,
-        result: Element::Fp12v0(temp),
+        result: Element::Fp12(temp),
         hints: op_hints,
         scr_type: ScriptType::SparseDenseMul(is_dbl_blk),
     }
@@ -510,7 +504,7 @@ pub(crate) fn wrap_hint_multiply_point_evals_on_tangent_for_fixed_g2(
     Segment {
         id: segment_id as u32,
         parameter_ids: input_segment_info,
-        result: Element::Fp12v1(leval),
+        result: Element::Fp12(leval),
         hints: op_hints,
         scr_type: ScriptType::MillerSparseSparseDbl((in_t2, in_t3)),
     }
@@ -589,7 +583,7 @@ pub(crate) fn wrap_hints_dense_dense_mul1(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12v0(dmul1),
+        result: Element::Fp12(dmul1),
         hints: op_hints,
         scr_type: ScriptType::DenseDenseMul1(),
     }
@@ -669,7 +663,7 @@ pub(crate) fn wrap_hints_dense_le_mul1(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12v1(dmul1),
+        result: Element::Fp12(dmul1),
         hints: op_hints,
         scr_type: ScriptType::DenseDenseMul1(),
     }
@@ -715,7 +709,7 @@ pub(crate) fn wrap_hint_multiply_point_evals_on_chord_for_fixed_g2(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12v1(leval),
+        result: Element::Fp12(leval),
         hints: op_hints,
         scr_type: ScriptType::MillerSparseSparseAdd(([in_t2, in_t3, pub_q2, pub_q3], ate)),
     }
@@ -741,7 +735,7 @@ pub(crate) fn wrap_hints_frob_fp12(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12v0(cp),
+        result: Element::Fp12(cp),
         hints: op_hints,
         scr_type: ScriptType::PostMillerFrobFp12(power as u8),
     }
@@ -793,7 +787,7 @@ pub(crate) fn wrap_hint_point_add_with_frob(
     Segment {
         id: segment_id as u32,
         parameter_ids: input_segment_info,
-        result: Element::G2AddEval(temp),
+        result: Element::G2Acc(temp),
         hints: op_hints,
         scr_type: ScriptType::PostMillerAddWithFrob(power),
     }
@@ -837,7 +831,7 @@ pub(crate) fn wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
     Segment {
         id: segment_id as u32,
         parameter_ids: input_segment_info,
-        result: Element::Fp12v1(leval),
+        result: Element::Fp12(leval),
         hints: op_hints,
         scr_type: ScriptType::PostMillerSparseAddWithFrob(([in_t2, in_t3, pub_q2, pub_q3], ate)),
     }
@@ -877,7 +871,7 @@ pub(crate) fn wrap_hints_final_verify(
         id: segment_id as u32,
         
         parameter_ids: input_segment_info,
-        result: Element::Fp12v0(dmul0),
+        result: Element::Fp12(dmul0),
         hints: op_hints,
         scr_type: ScriptType::PostMillerDenseDenseMulByConst0(constant),
     }
@@ -900,7 +894,7 @@ mod test {
             id: 0,
             
             parameter_ids: vec![],
-            result: Element::Fp12v0(c),
+            result: Element::Fp12(c),
             hints: vec![],
             scr_type: ScriptType::NonDeterministic,
         };
