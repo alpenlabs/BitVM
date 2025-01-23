@@ -103,51 +103,16 @@ pub(crate) fn chunk_hash_p(
     let t = ark_bn254::G1Affine::new_unchecked(tx, ty);
     let q = ark_bn254::G1Affine::new_unchecked(qx, qy);
     let (add_scr, add_hints) = bn254::curves::G1Affine::hinted_check_add(t, q);
-    let mut r = (t + q).into_affine();
-    if r.y.inverse().is_none() {
-        r = ElemG1Point::mock();
-    }
-
-    let rdy = r.y.inverse().unwrap();
-    let rdx = -r.x * rdy;
-    let rd = ark_bn254::G1Affine::new_unchecked(rdx, rdy);
-
-    let (on_curve_scr, on_curve_hint) = crate::bn254::curves::G1Affine::hinted_is_on_curve(r.x, r.y);
-    let (eval_xy, eval_hints) = hinted_from_eval_point(ark_bn254::G1Affine::new_unchecked(r.x, r.y));    
-
+    let r = (t + q).into_affine();
+    
     let ops_script = script!{
-        // [t] [hash_rd, hash_t]
+        // [t] [hash_r, hash_t]
         { Fq2::copy(0)} 
         // [t, t]
         {G1Affine::push_not_montgomery(q)}
         // [t, t, q]
         {add_scr}
         // [t, r]
-        {Fq::is_zero_keep_element(0)}
-        OP_IF 
-            // drop altstack
-            {Fq2::fromaltstack()} {Fq2::drop()}
-            // drop stack
-            {G1Affine::drop()} {G1Affine::drop()}
-            for i in 0..eval_hints.len()+on_curve_hint.len() {
-                {Fq::drop()}
-            }
-            OP_TRUE OP_RETURN
-        OP_ENDIF
-        // [hints, r]
-        {Fq2::copy(0)}
-        {on_curve_scr}
-        OP_NOTIF
-            {Fq2::fromaltstack()} {Fq2::drop()}
-            {G1Affine::drop()} {G1Affine::drop()}
-            for i in 0..eval_hints.len() {
-                {Fq::drop()}
-            }
-            OP_TRUE OP_RETURN
-        OP_ENDIF
-        {eval_xy} 
-        // [t, rd]    
-
     };
 
     let hash_script = script!(
@@ -162,10 +127,8 @@ pub(crate) fn chunk_hash_p(
 
     let mut all_hints = vec![];
     all_hints.extend_from_slice(&add_hints);
-    all_hints.extend_from_slice(&on_curve_hint);
-    all_hints.extend_from_slice(&eval_hints);
 
-    (rd, sc, all_hints)
+    (r, sc, all_hints)
 }
 
 

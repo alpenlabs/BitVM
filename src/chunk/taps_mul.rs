@@ -261,46 +261,37 @@ pub(crate) fn chunk_squaring(
 
 
 // DENSE DENSE MUL BY CONSTANT
-
-pub(crate) fn chunk_final_verify(
+pub(crate) fn chunk_verify_fp12_is_unity(
     hint_in_a: ElemFp12Acc, // 
     hint_in_b: ElemFp12Acc,
-) -> (ElemFp12Acc, Script, Vec<Hint>) {
+) -> (bool, Script, Vec<Hint>) {
 
-    fn tap_final_verify(g: ark_bn254::Fq12) -> Script {
+    fn tap_verify_fp12_is_unity(g: ark_bn254::Fq12) -> Script {
         let ginv = g.inverse().unwrap();
         let ginv_hash = extern_hash_fps(ginv.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), true);
-        let const_hash_limb = extern_nibbles_to_limbs(ginv_hash);
+        let ginv_hash_limb = extern_nibbles_to_limbs(ginv_hash);
 
-        let ops_scr = script! {
+        let scr = script! {
             // [f] [fhash]
             {hash_fp12()}
             {Fq::copy(0)}
             {Fq::fromaltstack()}
             {Fq::equalverify(1, 0)}
-            for l in const_hash_limb {
+            for l in ginv_hash_limb {
                 {l}
             }
             // [hashf, ginv]
             {Fq::equal(1, 0)}
-            OP_NOT OP_VERIFY
-        };
-        let scr = script! {
-            {ops_scr}
-            OP_TRUE
+            OP_NOT 
         };
         scr
     }
 
     let (f, g) = (hint_in_a.f, hint_in_b.f);
-    let h = f * g;
-    let hash_h = extern_hash_fps(h.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), true);
+    let is_valid = f * g == ark_bn254::Fq12::ONE;
     (
-        ElemFp12Acc {
-            f: h,
-            hash: hash_h,
-        },
-        tap_final_verify(g),
+        is_valid,
+        tap_verify_fp12_is_unity(g),
         vec![],
     )
 }

@@ -112,7 +112,7 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
 
     let mut tap_point_ops = cached(|(a,b,c,d,e,f,g)| chunk_point_ops(a,b,c,d,e,f,g));
     let mut tap_sparse_dense_mul = cached(|(a, b, c)| chunk_sparse_dense_mul(a, b, c ));
-    let mut tap_final_verify = cached(|(a, b)| chunk_final_verify(a, b)); 
+    let mut tap_final_verify = cached(|(a, b)| chunk_verify_fp12_is_unity(a, b)); 
     let mut tap_frob_fp12 = cached(|(a, b)| chunk_frob_fp12(a,b));
     let mut tap_point_add_with_frob = cached(|a| chunk_point_add_with_frob(ElemG2PointAcc::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemG1Point::mock(), a));
     let mut chunk_hash_p = cached(|(a, b)| chunk_hash_p(a, b ));
@@ -158,6 +158,9 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
             }
             ScriptType::PreMillerPrecomputeP => {
                 chunk_precompute_p(ElemFq::mock(), ElemFq::mock()).1
+            },
+            ScriptType::PreMillerPrecomputePFromHash => {
+                chunk_precompute_p_from_hash(ElemG1Point::mock()).1
             },
             ScriptType::PreMillerHashC => {
                 chunk_hash_c([ElemFq::mock(); 12].to_vec()).1

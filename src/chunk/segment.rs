@@ -10,6 +10,7 @@ pub type SegmentOutputType = bool;
 #[derive(Debug, Clone)]
 pub(crate) struct Segment {
     pub id: SegmentID,
+    pub is_validation: bool,
     pub parameter_ids: Vec<(SegmentID, ElementType)>,   
     pub result: (Element, ElementType),
     pub hints: Vec<Hint>,
@@ -27,6 +28,7 @@ pub enum ScriptType {
 
     PreMillerInitT4,
     PreMillerPrecomputeP,
+    PreMillerPrecomputePFromHash,
     PreMillerHashC,
     PreMillerHashC2,
     PreMillerInv0,
@@ -52,7 +54,6 @@ pub enum ScriptType {
 
 
 use ark_ff::{AdditiveGroup, Field};
-use bitcoin_script::script;
 
 use super::{element::*, primitves::extern_hash_fps,  taps_point_ops::*, taps_mul::*};
 
@@ -97,6 +98,7 @@ pub(crate) fn wrap_hint_msm(
 
             segments.push(Segment { 
                 id: (segment_id + msm_chunk_index) as u32, 
+                is_validation: false,
                 parameter_ids: input_segment_info, 
                 result: (Element::G1(hout_msm), ElementType::G1), 
                 hints: op_hints, scr_type: ScriptType::MSM((msm_chunk_index, pub_vky.clone())),
@@ -114,6 +116,7 @@ pub(crate) fn wrap_hint_msm(
 
             segments.push(Segment { 
                 id: (segment_id as u32 + msm_chunk_index), 
+                is_validation: false,
                 parameter_ids: input_segment_info, 
                 result: (Element::G1(hout_msm), ElementType::G1), 
                 hints: vec![], scr_type: ScriptType::MSM((msm_chunk_index as usize, pub_vky.clone())),
@@ -142,7 +145,7 @@ pub(crate) fn wrap_hint_hash_p(
         );
         // op_hints.extend_from_slice(&Element::G1(t).get_hash_preimage_as_hints());
     }
-    Segment { id: segment_id as u32, parameter_ids: input_segment_info, result: (Element::G1(p3), ElementType::G1), hints: op_hints, scr_type: ScriptType::PreMillerHashP(pub_vky0) }
+    Segment { id: segment_id as u32, is_validation: false, parameter_ids: input_segment_info, result: (Element::G1(p3), ElementType::G1), hints: op_hints, scr_type: ScriptType::PreMillerHashP(pub_vky0) }
 }
 
 pub(crate) fn wrap_hint_hash_c(  
@@ -171,7 +174,7 @@ pub(crate) fn wrap_hint_hash_c(
         (c,_, op_hints) = chunk_hash_c(fqvec);
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: (Element::Fp12(c), ElementType::Fp12v1), hints: op_hints, scr_type: ScriptType::PreMillerHashC }
+    Segment { id:  segment_id as u32, is_validation: false, parameter_ids: input_segment_info, result: (Element::Fp12(c), ElementType::Fp12v1), hints: op_hints, scr_type: ScriptType::PreMillerHashC }
 }
 
 pub(crate) fn wrap_hints_precompute_p(
@@ -191,40 +194,27 @@ pub(crate) fn wrap_hints_precompute_p(
         let in_py = in_py.result.0.try_into().unwrap();
         let in_px = in_px.result.0.try_into().unwrap();
         (p3d, _, op_hints) = chunk_precompute_p(in_py, in_px);
-        // println!("PreMillerPrecomputeP {:?}", segment_id);
-        // let bitcom_scr = script!{
-        //     for i in extern_nibbles_to_limbs(p3d.hashed_output()) {
-        //         {i}
-        //     }
-        //     {Fq::toaltstack()}    
-        //     {G1Affine::push_not_montgomery(ark_bn254::G1Affine::new_unchecked(in_px, in_py))}
-        //     {Fq2::toaltstack()}     
-        // };
-        // let mut elem_types_to_hash: Vec<ElementType> = input_segment_info.iter().rev().map(|f| f.1).collect();
-        // elem_types_to_hash.push(ElementType::G1);
-        // let hash_scr = script!(
-        //     {hash_messages(elem_types_to_hash)}
-        //     OP_TRUE
-        // );
-
-        // let script = script! {
-        //     for h in &op_hints {
-        //         { h.push() }
-        //     }
-        //     {bitcom_scr}
-        //     {tap_prex}
-        //     {hash_scr}
-        // };
-        // let res = execute_script(script);
-        // for i in 0..res.final_stack.len() {
-        //     println!("{i:} {:?}", res.final_stack.get(i));
-        // }
-        // println!("final stack len {:?}", res.final_stack.len());
-        // assert!(!res.success);
-        // assert!(res.final_stack.len() == 1);
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: (Element::G1(p3d), ElementType::G1), hints: op_hints, scr_type: ScriptType::PreMillerPrecomputeP }
+    Segment { id:  segment_id as u32, is_validation: false, parameter_ids: input_segment_info, result: (Element::G1(p3d), ElementType::G1), hints: op_hints, scr_type: ScriptType::PreMillerPrecomputeP }
+}
+
+pub(crate) fn wrap_hints_precompute_p_from_hash(
+    skip: bool,
+    segment_id: usize,
+    in_p: &Segment,
+) -> Segment {
+    
+    let mut input_segment_info: Vec<(SegmentID, ElementType)> = vec![];
+    input_segment_info.push((in_p.id, ElementType::G1));
+
+    let (mut p3d, mut op_hints) = (ElemG1Point::mock(), vec![]);
+    if !skip {
+        let in_p = in_p.result.0.try_into().unwrap();
+        (p3d, _, op_hints) = chunk_precompute_p_from_hash(in_p);
+    }
+    
+    Segment { id:  segment_id as u32, is_validation: false, parameter_ids: input_segment_info, result: (Element::G1(p3d), ElementType::G1), hints: op_hints, scr_type: ScriptType::PreMillerPrecomputePFromHash }
 }
 
 pub(crate) fn wrap_hint_hash_c2(
@@ -244,7 +234,7 @@ pub(crate) fn wrap_hint_hash_c2(
 
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: (Element::Fp12(c2), ElementType::Fp12v0), hints: op_hints, scr_type: ScriptType::PreMillerHashC2 }
+    Segment { id:  segment_id as u32, is_validation: false, parameter_ids: input_segment_info, result: (Element::Fp12(c2), ElementType::Fp12v0), hints: op_hints, scr_type: ScriptType::PreMillerHashC2 }
 }
 
 pub(crate) fn wrap_inv0(
@@ -263,7 +253,7 @@ pub(crate) fn wrap_inv0(
         // op_hints.extend_from_slice(&Element::Fp12v0(in_a).get_hash_preimage_as_hints());
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: (Element::Fp6(dmul0), ElementType::Fp6), hints: op_hints, scr_type: ScriptType::PreMillerInv0 }
+    Segment { id:  segment_id as u32, is_validation: false, parameter_ids: input_segment_info, result: (Element::Fp6(dmul0), ElementType::Fp6), hints: op_hints, scr_type: ScriptType::PreMillerInv0 }
 }
 
 pub(crate) fn wrap_inv1(
@@ -282,7 +272,7 @@ pub(crate) fn wrap_inv1(
         // op_hints.extend_from_slice(&Element::Fp6(in_a).get_hash_preimage_as_hints());
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: (Element::Fp6(dmul0), ElementType::Fp6), hints: op_hints, scr_type: ScriptType::PreMillerInv1 }
+    Segment { id:  segment_id as u32, is_validation: false, parameter_ids: input_segment_info, result: (Element::Fp6(dmul0), ElementType::Fp6), hints: op_hints, scr_type: ScriptType::PreMillerInv1 }
 }
 
 pub(crate) fn wrap_inv2(
@@ -305,7 +295,7 @@ pub(crate) fn wrap_inv2(
         // op_hints.extend_from_slice(&Element::Fp6(in_t1).get_hash_preimage_as_hints());
     }
     
-    Segment { id:  segment_id as u32, parameter_ids: input_segment_info, result: (Element::Fp12(dmul0), ElementType::Fp12v1), hints: op_hints, scr_type: ScriptType::PreMillerInv2 }
+    Segment { id:  segment_id as u32, is_validation: false, parameter_ids: input_segment_info, result: (Element::Fp12(dmul0), ElementType::Fp12v1), hints: op_hints, scr_type: ScriptType::PreMillerInv2 }
 }
 
 
@@ -342,6 +332,7 @@ pub(crate) fn wrap_hint_init_t4(
     
     Segment {
         id: segment_id as u32,
+        is_validation: false,
         parameter_ids: input_segment_info,
         result: (Element::G2Acc(tmpt4), ElementType::G2T),
         hints: op_hints,
@@ -371,7 +362,7 @@ pub(crate) fn wrap_hint_squaring(
     
     Segment {
         id: segment_id as u32,
-        
+        is_validation: false,
         parameter_ids: input_segment_info,
         result: (Element::Fp12(sq), ElementType::Fp12v0),
         hints: op_hints,
@@ -404,7 +395,7 @@ pub(crate) fn wrap_hint_point_dbl(
     
     Segment {
         id: segment_id as u32,
-        
+        is_validation: false,
         parameter_ids: input_segment_info,
         result: (Element::G2Acc(dbl), ElementType::G2DblAddEval),
         hints: op_hints,
@@ -457,6 +448,7 @@ pub(crate) fn wrap_hint_point_ops(
     
     Segment {
         id: segment_id as u32,
+        is_validation: false,
         parameter_ids: input_segment_info,
         result: (Element::G2Acc(dbladd), ElementType::G2DblAddEval),
         hints: op_hints,
@@ -498,6 +490,7 @@ pub(crate) fn wrap_hint_sparse_dense_mul(
     }
     Segment {
         id: segment_id as u32,
+        is_validation: false,
         parameter_ids: input_segment_info,
         result: (Element::Fp12(temp), ElementType::Fp12v0),
         hints: op_hints,
@@ -537,6 +530,7 @@ pub(crate) fn wrap_hint_multiply_point_evals_on_tangent_for_fixed_g2(
     
     Segment {
         id: segment_id as u32,
+        is_validation: false,
         parameter_ids: input_segment_info,
         result: (Element::Fp12(leval), ElementType::Fp12v1),
         hints: op_hints,
@@ -572,6 +566,7 @@ pub(crate) fn wrap_hints_dense_dense_mul0(
     
     Segment {
         id: segment_id as u32,
+        is_validation: false,
         parameter_ids: input_segment_info,
         result: (Element::Fp6(dmul0), ElementType::Fp6),
         hints: op_hints,
@@ -615,7 +610,7 @@ pub(crate) fn wrap_hints_dense_dense_mul1(
     
     Segment {
         id: segment_id as u32,
-        
+        is_validation: false,
         parameter_ids: input_segment_info,
         result: (Element::Fp12(dmul1), ElementType::Fp12v2),
         hints: op_hints,
@@ -653,6 +648,7 @@ pub(crate) fn wrap_hints_dense_le_mul0(
     
     Segment {
         id: segment_id as u32,
+        is_validation: false,
         parameter_ids: input_segment_info,
         result: (Element::Fp6(dmul0), ElementType::Fp6), // todo: fp12->fp6
         hints: op_hints,
@@ -695,7 +691,7 @@ pub(crate) fn wrap_hints_dense_le_mul1(
     
     Segment {
         id: segment_id as u32,
-        
+        is_validation: false,
         parameter_ids: input_segment_info,
         result: (Element::Fp12(dmul1), ElementType::Fp12v2),
         hints: op_hints,
@@ -741,7 +737,7 @@ pub(crate) fn wrap_hint_multiply_point_evals_on_chord_for_fixed_g2(
     
     Segment {
         id: segment_id as u32,
-        
+        is_validation: false,
         parameter_ids: input_segment_info,
         result: (Element::Fp12(leval), ElementType::Fp12v1),
         hints: op_hints,
@@ -767,7 +763,7 @@ pub(crate) fn wrap_hints_frob_fp12(
     
     Segment {
         id: segment_id as u32,
-        
+        is_validation: false,
         parameter_ids: input_segment_info,
         result: (Element::Fp12(cp), ElementType::Fp12v1),
         hints: op_hints,
@@ -820,6 +816,7 @@ pub(crate) fn wrap_hint_point_add_with_frob(
 
     Segment {
         id: segment_id as u32,
+        is_validation: false,
         parameter_ids: input_segment_info,
         result: (Element::G2Acc(temp), ElementType::G2DblAddEval),
         hints: op_hints,
@@ -864,6 +861,7 @@ pub(crate) fn wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
     
     Segment {
         id: segment_id as u32,
+        is_validation: false,
         parameter_ids: input_segment_info,
         result: (Element::Fp12(leval), ElementType::Fp12v1),
         hints: op_hints,
@@ -872,7 +870,7 @@ pub(crate) fn wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
 }
 
 
-pub(crate) fn wrap_hints_final_verify(
+pub(crate) fn wrap_verify_fp12_is_unity(
     skip: bool,
     segment_id: usize,
     in_a: &Segment,
@@ -890,23 +888,33 @@ pub(crate) fn wrap_hints_final_verify(
         ),
     };
 
-    let (mut dmul0, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
+    let (mut is_valid, mut op_hints) = (true, vec![]);
     if !skip {
-        (dmul0,_, op_hints) = chunk_final_verify(
+        (is_valid,_, op_hints) = chunk_verify_fp12_is_unity(
             a.clone(),
             fixedacc,
         );
 
         // op_hints.extend_from_slice(&Element::Fp12v0(a).get_hash_preimage_as_hints());
     }
+    let is_valid_fq = if is_valid {
+        ark_bn254::Fq::ONE
+    } else {
+        ark_bn254::Fq::ZERO
+    };
 
     
     Segment {
         id: segment_id as u32,
-        
+        is_validation: true,
         parameter_ids: input_segment_info,
-        result: (Element::Fp12(dmul0), ElementType::Fp12v0),
+        result: (Element::FieldElem(is_valid_fq), ElementType::FieldElem),
         hints: op_hints,
         scr_type: ScriptType::PostMillerFinalVerify(constant),
     }
 }
+
+// verify g1 is on curve - 2 (p2, p4)
+// verify g1 hash is on curve - 1 (p3)
+// verify g2 is on curve - 1 (q4)
+// verify fq12 is on field - 2 (c, s)

@@ -16,6 +16,7 @@ mod test {
     use crate::chunk::taps_premiller::*;
     use crate::chunk::taps_point_eval::*;
     use crate::execute_script_without_stack_limit;
+    use ark_ec::AffineRepr;
     use ark_ff::AdditiveGroup;
     use ark_ff::Field;
     use ark_std::UniformRand;
@@ -99,7 +100,7 @@ mod test {
             OP_TRUE
         );
 
-        let tap_len = tap_hash_c.len();
+        let tap_len = tap_hash_c.len() + hash_scr.len();
         let script = script! {
             for h in hint_script {
                 { h.push() }
@@ -116,6 +117,39 @@ mod test {
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
 
+    #[test]
+    fn test_tap_verify_fq12() {
+        // runtime
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let f = ark_bn254::Fq12::rand(&mut prng);
+        let fqvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
+
+        let (is_valid, tap_hash_c, hint_script) = chunk_verify_fq12_is_on_field(fqvec.clone());
+        assert!(is_valid);
+        let bitcom_scr = script!{
+            for f in fqvec.iter().rev() {
+                {fq_push_not_montgomery(*f)}
+                {Fq::toaltstack()}                
+            }
+        };
+
+        let tap_len = tap_hash_c.len();
+        let script = script! {
+            for h in hint_script {
+                { h.push() }
+            }
+            {bitcom_scr}
+            {tap_hash_c}
+        };
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        assert!(!res.success && res.final_stack.len() == 1);
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+    }
+
+    
     #[test]
     fn test_tap_hash_c2() {
 
@@ -210,6 +244,39 @@ mod test {
     }
 
     #[test]
+    fn test_chunk_verify_g2_on_curve() {
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let q = ark_bn254::G2Affine::rand(&mut prng);
+        let (hint_out, init_t4_tap, hint_script) = chunk_verify_g2_on_curve(q.y.c1, q.y.c0, q.x.c1, q.x.c0);
+        assert_eq!(hint_out, q.is_on_curve());
+        let bitcom_script = script!{
+            {fq_push_not_montgomery(q.y.c1)}
+            {Fq::toaltstack()}
+            {fq_push_not_montgomery(q.y.c0)}
+            {Fq::toaltstack()}
+            {fq_push_not_montgomery(q.x.c1)}
+            {Fq::toaltstack()}
+            {fq_push_not_montgomery(q.x.c0)}
+            {Fq::toaltstack()}
+        };
+        let tap_len = init_t4_tap.len();
+        let script = script! {
+            for h in hint_script {
+                { h.push() }
+            }
+            {bitcom_script}
+            {init_t4_tap}
+        };
+
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        assert!(!res.success && res.final_stack.len() == 1);
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+    }
+
+    #[test]
     fn test_tap_precompute_p() {
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
@@ -248,6 +315,115 @@ mod test {
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
 
+    #[test]
+    fn test_tap_precompute_p_from_hash() {
+        // runtime
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let p = ark_bn254::G1Affine::rand(&mut prng);
+
+        let (hint_out, tap_prex, hint_script) = chunk_precompute_p_from_hash(p);
+
+        let bitcom_scr = script!{
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}    
+            for i in extern_nibbles_to_limbs(p.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}
+        };
+        let preim_hints = Element::G1(p).get_hash_preimage_as_hints(ElementType::G1);
+        let hash_scr = script!(
+            {hash_messages(vec![ElementType::G1, ElementType::G1])}
+            OP_TRUE     
+        );
+
+        let tap_len = tap_prex.len();
+        let script = script! {
+            for h in hint_script {
+                { h.push() }
+            }
+            for h in preim_hints {
+                {h.push()}
+            }
+            {bitcom_scr}
+            {tap_prex}
+            {hash_scr}
+        };
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        assert!(!res.success);
+        assert!(res.final_stack.len() == 1);
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+    }
+
+
+    #[test]
+    fn test_tap_verify_p_is_on_curve() {
+        // runtime
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let p = ark_bn254::G1Affine::rand(&mut prng);
+        let (is_valid_point, tap_prex, hint_script) = chunk_verify_g1_is_on_curve(p.y, p.x);
+        assert_eq!(p.is_on_curve(), is_valid_point);
+        let bitcom_scr = script!{
+            {G1Affine::push_not_montgomery(p)}
+            {Fq2::toaltstack()}     
+        };
+
+        let tap_len = tap_prex.len();
+        let script = script! {
+            for h in hint_script {
+                { h.push() }
+            }
+            {bitcom_scr}
+            {tap_prex}
+        };
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        assert!(!res.success);
+        assert!(res.final_stack.len() == 1);
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+    }
+
+    #[test]
+    fn test_tap_verify_phash_is_on_curve() {
+        // runtime
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let mut p = ark_bn254::G1Affine::rand(&mut prng);
+        let (is_valid_point, tap_prex, hint_script) = chunk_verify_g1_hash_is_on_curve(p);
+        assert_eq!(p.is_on_curve(), is_valid_point);
+        let bitcom_scr = script!{
+            for i in extern_nibbles_to_limbs(p.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}     
+        };
+        let preim_hints = Element::G1(p).get_hash_preimage_as_hints(ElementType::G1);
+
+        let tap_len = tap_prex.len();
+        let script = script! {
+            for h in hint_script {
+                { h.push() }
+            }
+            for h in preim_hints {
+                {h.push()}
+            }
+            {bitcom_scr}
+            {tap_prex}
+        };
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        assert!(!res.success);
+        assert!(res.final_stack.len() == 1);
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+    }
 
     #[test]
     fn test_tap_sparse_dense_mul() {
@@ -468,7 +644,7 @@ mod test {
 
 
     #[test]
-    fn test_tap_final_verify() {
+    fn test_tap_verify_fp12_is_unity() {
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let f = ark_bn254::Fq12::rand(&mut prng);
@@ -485,7 +661,7 @@ mod test {
         );
         let hint_g = ElemFp12Acc { f: g, hash: ghash };
 
-        let (_, tap_scr, mut hint_script) = chunk_final_verify(hint_f, hint_g);
+        let (_, tap_scr, mut hint_script) = chunk_verify_fp12_is_unity(hint_f, hint_g);
 
         let fvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
         for f in &fvec {

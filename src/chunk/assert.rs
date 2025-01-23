@@ -59,6 +59,7 @@ pub(crate) fn groth16(
     let vky0 = pubs.vky0;
 
     let pub_scalars: Vec<Segment> = eval_ins.ks.iter().enumerate().map(|(idx, f)| Segment {
+        is_validation: false,
         id: (all_output_hints.len() + idx) as u32,
         parameter_ids: vec![],
         result: (Element::ScalarElem(*f), ElementType::ScalarElem),
@@ -71,6 +72,7 @@ pub(crate) fn groth16(
         eval_ins.p4.y, eval_ins.p4.x, eval_ins.p2.y, eval_ins.p2.x
     ].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
+        is_validation: false,
         parameter_ids: vec![],
         result: (Element::FieldElem(*f), ElementType::FieldElem),
         hints: vec![],
@@ -81,6 +83,7 @@ pub(crate) fn groth16(
 
     let gc: Vec<Segment> = eval_ins.c.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>().iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
+        is_validation: false,
         parameter_ids: vec![],
         result: (Element::FieldElem(*f), ElementType::FieldElem),
         hints: vec![],
@@ -90,6 +93,7 @@ pub(crate) fn groth16(
 
     let gs: Vec<Segment> = eval_ins.s.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>().iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
+        is_validation: false,
         parameter_ids: vec![],
         result: (Element::FieldElem(*f), ElementType::FieldElem),
         hints: vec![],
@@ -101,6 +105,7 @@ pub(crate) fn groth16(
         eval_ins.q4.x.c0, eval_ins.q4.x.c1, eval_ins.q4.y.c0, eval_ins.q4.y.c1
     ].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
+        is_validation: false,
         parameter_ids: vec![],
         result: (Element::FieldElem(*f), ElementType::FieldElem),
         hints: vec![],
@@ -298,7 +303,7 @@ pub(crate) fn groth16(
     push_compare_or_return!(dmul1);
     f_acc = dmul1;
 
-    let dmul0 = wrap_hints_final_verify(is_compile_mode, all_output_hints.len(), &f_acc, pubs.fixed_acc);
+    let dmul0 = wrap_verify_fp12_is_unity(is_compile_mode, all_output_hints.len(), &f_acc, pubs.fixed_acc);
     push_compare_or_return!(dmul0);
     f_acc = dmul0;
 
