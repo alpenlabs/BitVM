@@ -394,7 +394,7 @@ mod test {
     fn test_tap_verify_phash_is_on_curve() {
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
-        let mut p = ark_bn254::G1Affine::rand(&mut prng);
+        let p = ark_bn254::G1Affine::rand(&mut prng);
         let (is_valid_point, tap_prex, hint_script) = chunk_verify_g1_hash_is_on_curve(p);
         assert_eq!(p.is_on_curve(), is_valid_point);
         let bitcom_scr = script!{

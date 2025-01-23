@@ -1,6 +1,6 @@
 
 
-use crate::{bn254::{curves::G1Affine, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fr::Fr, utils::Hint}, chunk::taps_msm::chunk_msm, execute_script, treepp};
+use crate::{bn254::{curves::G1Affine, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fr::Fr, utils::{fq_push_not_montgomery, Hint}}, chunk::taps_msm::chunk_msm, execute_script, treepp};
 
 use super::{blake3compiled::hash_messages, element::Element, primitves::extern_nibbles_to_limbs, taps_msm::chunk_hash_p, taps_point_eval::*, taps_premiller::*};
 
@@ -58,6 +58,7 @@ pub enum ScriptType {
 
 
 use ark_ff::{AdditiveGroup, Field};
+use bitcoin_script::script;
 
 use super::{element::*, primitves::extern_hash_fps,  taps_point_ops::*, taps_mul::*};
 
@@ -931,7 +932,31 @@ pub(crate) fn wrap_verify_g1_is_on_curve(
     if !skip {
         let in_py = in_py.result.0.try_into().unwrap();
         let in_px = in_px.result.0.try_into().unwrap();
-        (is_valid,_, op_hints) = chunk_verify_g1_is_on_curve(in_py, in_px);
+        // let mut tap_prex = script!();
+
+        (is_valid, _, op_hints) = chunk_verify_g1_is_on_curve(in_py, in_px);
+        // let bitcom_scr = script!{
+        //     {fq_push_not_montgomery(in_py)}
+        //     {Fq::toaltstack()}     
+        //     {fq_push_not_montgomery(in_py)}
+        //     {Fq::toaltstack()}     
+        // };
+        // println!("seg id {} is valid {}", segment_id, is_valid);
+
+        // let script = script! {
+        //     for h in &op_hints {
+        //         { h.push() }
+        //     }
+        //     {bitcom_scr}
+        //     {tap_prex}
+        // };
+        // let res = execute_script(script);
+        // for i in 0..res.final_stack.len() {
+        //     println!("{i:} {:?}", res.final_stack.get(i));
+        // }
+        // assert!(!res.success);
+        // assert!(res.final_stack.len() == 1);
+
     }
     let is_valid_fq = if is_valid {
         ark_bn254::Fq::ONE
@@ -961,7 +986,7 @@ pub(crate) fn wrap_verify_g1_hash_is_on_curve(
     let (mut is_valid, mut op_hints) = (true, vec![]);
     if !skip {
         let in_p = in_p.result.0.try_into().unwrap();
-        (is_valid,_, op_hints) = chunk_verify_g1_hash_is_on_curve(in_p);
+        (is_valid, _, op_hints) = chunk_verify_g1_hash_is_on_curve(in_p);
     }
     let is_valid_fq = if is_valid {
         ark_bn254::Fq::ONE
@@ -974,7 +999,7 @@ pub(crate) fn wrap_verify_g1_hash_is_on_curve(
         parameter_ids: input_segment_info,
         result: (Element::FieldElem(is_valid_fq), ElementType::FieldElem),
         hints: op_hints,
-        scr_type: ScriptType::ValidateG1IsOnCurve,
+        scr_type: ScriptType::ValidateG1HashIsOnCurve,
     }
 }
 

@@ -44,7 +44,7 @@ pub(crate) fn groth16(
     all_output_hints: &mut Vec<Segment>,
     eval_ins: EvalIns,
     pubs: Pubs,
-    claimed_assertions: &mut Option<Intermediates>
+    claimed_assertions: &mut Option<Intermediates>,
 ) -> bool {
     macro_rules! push_compare_or_return {
         ($seg:ident) => {{
@@ -500,45 +500,34 @@ pub(crate) fn get_pubs(vk: &ark_groth16::VerifyingKey<Bn254>) -> Pubs {
 pub(crate) fn script_exec(
     segments: Vec<Segment>, 
     signed_asserts: Signatures,
-    inpubkeys: PublicKeys,
     disprove_scripts: &[treepp::Script; N_TAPLEAVES],
 ) -> Option<(usize, treepp::Script)> {
+    let mut scalar_sigs = signed_asserts.0.to_vec();
+    scalar_sigs.reverse();
+    let mut felts_sigs = signed_asserts.1.to_vec();
+    felts_sigs.reverse();
+    let mut hash_sigs = signed_asserts.2.to_vec();
+    hash_sigs.reverse();
+    let mock_felt_sig = signed_asserts.0[0].clone();
+
     let mut sigcache: HashMap<u32, SigData> = HashMap::new();
-
-    assert_eq!(signed_asserts.0.len(), NUM_PUBS);
-
-    for i in 0..NUM_PUBS {
-        sigcache.insert(i as u32, SigData::Sig256(signed_asserts.0[i]));
+    for si  in 0..segments.len() {
+        let s = &segments[si];
+        if s.is_validation {
+            let mock_fld_pub_key = SigData::Sig256(mock_felt_sig);
+            sigcache.insert(si as u32, mock_fld_pub_key);
+        } else {
+            if s.result.1 == ElementType::FieldElem {
+                sigcache.insert(si as u32, SigData::Sig256(felts_sigs.pop().unwrap()));
+            } else if s.result.1 == ElementType::ScalarElem {
+                sigcache.insert(si as u32, SigData::Sig256(scalar_sigs.pop().unwrap()));
+            } else {
+                sigcache.insert(si as u32, SigData::Sig160(hash_sigs.pop().unwrap()));
+            }
+        }
     }
-
-    for i in 0..N_VERIFIER_FQS {
-        sigcache.insert((NUM_PUBS + i) as u32, SigData::Sig256(signed_asserts.1[i]));
-    }
-
-    for i in 0..N_VERIFIER_HASHES {
-        sigcache.insert((NUM_PUBS + N_VERIFIER_FQS + i) as u32, SigData::Sig160(signed_asserts.2[i]));
-    }
-
-
-    let mut pubkeys: HashMap<u32, WOTSPubKey> = HashMap::new();
-    for i in 0..NUM_PUBS {
-        pubkeys.insert(i as u32, WOTSPubKey::P256(inpubkeys.0[i]));
-    }
-    let len = pubkeys.len();
-    for i in 0..inpubkeys.1.len() {
-        pubkeys.insert((len + i) as u32, WOTSPubKey::P256(inpubkeys.1[i]));
-    }
-    let len = pubkeys.len();
-    for i in 0..inpubkeys.2.len() {
-        pubkeys.insert((len + i) as u32, WOTSPubKey::P160(inpubkeys.2[i]));
-    }
-
-    let mut sig = Sig {
-        cache: sigcache,
-    };
-
-    let assertions = assertions_to_nibbles(get_assertions(signed_asserts));
-
+    
+    let mut sig = Sig { cache: sigcache };
 
     let aux_hints: Vec<Vec<Hint>> = segments.iter().map(|seg| {
         let mut hints = seg.hints.clone();
@@ -552,25 +541,22 @@ pub(crate) fn script_exec(
 
     let mut bc_hints = vec![];
     for i in 0..segments.len() {
-        let mut tot: Vec<((u32, bool), [u8;64])> = vec![];
+        let mut tot: Vec<(u32, bool)> = vec![];
 
         let seg = &segments[i];
-        let sec_in: Vec<((u32, bool), [u8; 64])> = seg.parameter_ids.iter().rev().map(|(k, _)| {
+        let sec_in: Vec<(u32, bool)> = seg.parameter_ids.iter().rev().map(|(k, _)| {
             let v = &segments[*(k) as usize];
             let v = v.result.0.output_is_field_element();
-            ((*k, v), assertions[*k as usize])
+            (*k, v)
         }).collect();
         tot.extend_from_slice(&sec_in);
 
         if !seg.is_validation {
-            let sec_out = ((seg.id, segments[seg.id as usize].result.0.output_is_field_element()), assertions[seg.id as usize]);
+            let sec_out = (seg.id, segments[seg.id as usize].result.0.output_is_field_element());
             tot.push(sec_out);
         }
 
-        let (bcelems, should_validate) = tup_to_scr(&mut sig, tot);
-        if should_validate == true {
-            println!("index {:?} bcelems len {:?}  should_validate {}", i, bcelems.len(), should_validate);
-        }
+        let bcelems = tup_to_scr(&mut sig, tot);
         bc_hints.push(bcelems);
     }
 

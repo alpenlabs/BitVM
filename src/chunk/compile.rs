@@ -6,7 +6,7 @@ use bitcoin_script::script;
 use treepp::Script;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-use crate::groth16::g16::N_TAPLEAVES;
+use crate::groth16::g16::{PublicKeys, N_TAPLEAVES};
 use crate::{chunk::element::ElemG1Point, treepp};
 use crate::chunk::element::ElemTraitExt;
 
@@ -64,10 +64,36 @@ pub(crate) fn compile_ops(
 
 pub(crate) fn compile_taps(
     vk: Vkey,
-    pubkeys: HashMap<u32, WOTSPubKey>,
+    inpubkeys: PublicKeys,
     ops_scripts: Vec<bitcoin_script::Script>,
 ) ->  Vec<bitcoin_script::Script> {
     let mock_segments = segments_from_pubs(vk);
+
+    let mut scalar_pubkeys = inpubkeys.0.to_vec();
+    scalar_pubkeys.reverse();
+    let mut felts_pubkeys = inpubkeys.1.to_vec();
+    felts_pubkeys.reverse();
+    let mut hash_pubkeys = inpubkeys.2.to_vec();
+    hash_pubkeys.reverse();
+    let mock_felt_pub = inpubkeys.0[0];
+
+    let mut pubkeys: HashMap<u32, WOTSPubKey> = HashMap::new();
+    for si  in 0..mock_segments.len() {
+        let s = &mock_segments[si];
+        if s.is_validation {
+            let mock_fld_pub_key = WOTSPubKey::P256(mock_felt_pub);
+            pubkeys.insert(si as u32, mock_fld_pub_key);
+        } else {
+            if s.result.1 == ElementType::FieldElem {
+                pubkeys.insert(si as u32, WOTSPubKey::P256(felts_pubkeys.pop().unwrap()));
+            } else if s.result.1 == ElementType::ScalarElem {
+                pubkeys.insert(si as u32, WOTSPubKey::P256(scalar_pubkeys.pop().unwrap()));
+            } else {
+                pubkeys.insert(si as u32, WOTSPubKey::P160(hash_pubkeys.pop().unwrap()));
+            }
+        }
+    }
+
     let bitcom_scripts: Vec<treepp::Script> = bitcom_scripts_from_segments(&mock_segments, pubkeys).into_iter().filter(|f| f.len() > 0).collect();
     assert_eq!(ops_scripts.len(), bitcom_scripts.len());
     let res: Vec<treepp::Script>  = ops_scripts.into_iter().zip(bitcom_scripts).map(|(op_scr, bit_scr)| 
@@ -260,22 +286,22 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
 pub(crate) fn bitcom_scripts_from_segments(segments: &Vec<Segment>, pubkeys_map: HashMap<u32, WOTSPubKey>) -> Vec<treepp::Script> {
     let mut bitcom_scripts: Vec<treepp::Script> = vec![];
     for seg in segments {
-        let sec_out = if seg.is_validation {
-            Some((seg.id as u32, segments[seg.id as usize].result.0.output_is_field_element()))
-        } else {
-            None
+        let mut sec = vec![];
+        if !seg.is_validation {
+            sec.push((seg.id as u32, segments[seg.id as usize].result.0.output_is_field_element()));
         };
         let sec_in: Vec<(u32, bool)> = seg.parameter_ids.iter().map(|(f, _)| {
             let elem = &segments[*(f) as usize];
             let elem_type = elem.result.0.output_is_field_element();
             (*f, elem_type)
         }).collect();
+        sec.extend_from_slice(&sec_in);
         match seg.scr_type {
             ScriptType::NonDeterministic => {
                 bitcom_scripts.push(script!());
             },
             _ => {
-                bitcom_scripts.push(gen_bitcom(&pubkeys_map, sec_out, sec_in));
+                bitcom_scripts.push(gen_bitcom(&pubkeys_map, sec));
             }
         }
     }

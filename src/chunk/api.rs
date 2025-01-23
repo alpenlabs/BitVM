@@ -55,18 +55,6 @@ pub fn generate_tapscripts(
     inpubkeys: PublicKeys,
     ops_scripts_per_link: &[Script],
 ) -> Vec<Script> {
-    let mut pubkeys: HashMap<u32, WOTSPubKey> = HashMap::new();
-    for i in 0..NUM_PUBS {
-        pubkeys.insert(i as u32, WOTSPubKey::P256(inpubkeys.0[i]));
-    }
-    let len = pubkeys.len();
-    for i in 0..inpubkeys.1.len() {
-        pubkeys.insert((len + i) as u32, WOTSPubKey::P256(inpubkeys.1[i]));
-    }
-    let len = pubkeys.len();
-    for i in 0..inpubkeys.2.len() {
-        pubkeys.insert((len + i) as u32, WOTSPubKey::P160(inpubkeys.2[i]));
-    }
 
     let taps_per_link = compile_taps(
         Vkey {
@@ -76,7 +64,7 @@ pub fn generate_tapscripts(
             p1q1: ark_bn254::Fq12::ONE,
             vky0: ark_bn254::G1Affine::identity(),
         },
-        pubkeys,
+        inpubkeys,
         ops_scripts_per_link.to_vec(),
     );
     assert_eq!(ops_scripts_per_link.len(), taps_per_link.len());
@@ -176,7 +164,7 @@ pub fn generate_assertions(
 pub fn validate_assertions(
     vk: &ark_groth16::VerifyingKey<Bn254>,
     signed_asserts: Signatures,
-    inpubkeys: PublicKeys,
+    _inpubkeys: PublicKeys,
     disprove_scripts: &[Script; N_TAPLEAVES],
 ) -> Option<(usize, Script)> {
     let asserts = get_assertions(signed_asserts);
@@ -189,12 +177,12 @@ pub fn validate_assertions(
     let passed = groth16(false, &mut segments, eval_ins, get_pubs(vk), &mut Some(intermediates));
     if passed {
         println!("assertion passed, running full script execution now");
-        let exec_result = script_exec(segments, signed_asserts, inpubkeys, disprove_scripts);
+        let exec_result = script_exec(segments, signed_asserts, disprove_scripts);
         //assert!(exec_result.is_none());
         return exec_result;
     }
     println!("assertion failed, return faulty script segments acc {:?} at {:?}", segments.len(), segments[segments.len()-1].scr_type);
-    let exec_result = script_exec(segments, signed_asserts, inpubkeys, disprove_scripts);
+    let exec_result = script_exec(segments, signed_asserts, disprove_scripts);
     assert!(exec_result.is_some());
     return exec_result;
 }
