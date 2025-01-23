@@ -25,6 +25,10 @@ pub(crate) struct Segment {
 pub enum ScriptType {
     NonDeterministic,
     MSM((usize, Vec<ark_bn254::G1Affine>)),
+    ValidateG1IsOnCurve,
+    ValidateG1HashIsOnCurve,
+    ValidateG2IsOnCurve,
+    ValidateFq12OnField,
 
     PreMillerInitT4,
     PreMillerPrecomputeP,
@@ -915,6 +919,140 @@ pub(crate) fn wrap_verify_fp12_is_unity(
 }
 
 // verify g1 is on curve - 2 (p2, p4)
+pub(crate) fn wrap_verify_g1_is_on_curve(
+    skip: bool,
+    segment_id: usize,
+    in_py: &Segment,
+    in_px: &Segment,
+) -> Segment {
+
+    let input_segment_info: Vec<(SegmentID, ElementType)> = vec![(in_py.id, ElementType::FieldElem), (in_px.id, ElementType::FieldElem)];
+    let (mut is_valid, mut op_hints) = (true, vec![]);
+    if !skip {
+        let in_py = in_py.result.0.try_into().unwrap();
+        let in_px = in_px.result.0.try_into().unwrap();
+        (is_valid,_, op_hints) = chunk_verify_g1_is_on_curve(in_py, in_px);
+    }
+    let is_valid_fq = if is_valid {
+        ark_bn254::Fq::ONE
+    } else {
+        ark_bn254::Fq::ZERO
+    };
+
+    
+    Segment {
+        id: segment_id as u32,
+        is_validation: true,
+        parameter_ids: input_segment_info,
+        result: (Element::FieldElem(is_valid_fq), ElementType::FieldElem),
+        hints: op_hints,
+        scr_type: ScriptType::ValidateG1IsOnCurve,
+    }
+}
+
 // verify g1 hash is on curve - 1 (p3)
+pub(crate) fn wrap_verify_g1_hash_is_on_curve(
+    skip: bool,
+    segment_id: usize,
+    in_p: &Segment,
+) -> Segment {
+
+    let input_segment_info: Vec<(SegmentID, ElementType)> = vec![(in_p.id, ElementType::G1)];
+    let (mut is_valid, mut op_hints) = (true, vec![]);
+    if !skip {
+        let in_p = in_p.result.0.try_into().unwrap();
+        (is_valid,_, op_hints) = chunk_verify_g1_hash_is_on_curve(in_p);
+    }
+    let is_valid_fq = if is_valid {
+        ark_bn254::Fq::ONE
+    } else {
+        ark_bn254::Fq::ZERO
+    };
+    Segment {
+        id: segment_id as u32,
+        is_validation: true,
+        parameter_ids: input_segment_info,
+        result: (Element::FieldElem(is_valid_fq), ElementType::FieldElem),
+        hints: op_hints,
+        scr_type: ScriptType::ValidateG1IsOnCurve,
+    }
+}
+
 // verify g2 is on curve - 1 (q4)
+pub(crate) fn wrap_verify_g2_is_on_curve(
+    skip: bool,
+    segment_id: usize,
+    in_q4yc1: &Segment,
+    in_q4yc0: &Segment,
+    in_q4xc1: &Segment,
+    in_q4xc0: &Segment,
+) -> Segment {
+
+    let input_segment_info: Vec<(SegmentID, ElementType)> = vec![
+        (in_q4yc1.id, ElementType::FieldElem),
+        (in_q4yc0.id, ElementType::FieldElem),
+        (in_q4xc1.id, ElementType::FieldElem),
+        (in_q4xc0.id, ElementType::FieldElem),
+    ];
+    let (mut is_valid, mut op_hints) = (true, vec![]);
+    if !skip {
+        let q4xc0: ark_bn254::Fq = in_q4xc0.result.0.try_into().unwrap();
+        let q4xc1: ark_bn254::Fq = in_q4xc1.result.0.try_into().unwrap();
+        let q4yc0: ark_bn254::Fq = in_q4yc0.result.0.try_into().unwrap();
+        let q4yc1: ark_bn254::Fq = in_q4yc1.result.0.try_into().unwrap();
+        (is_valid,_, op_hints) = chunk_verify_g2_on_curve(
+            q4yc1,
+            q4yc0,
+            q4xc1,
+            q4xc0,
+        );
+    }
+    let is_valid_fq = if is_valid {
+        ark_bn254::Fq::ONE
+    } else {
+        ark_bn254::Fq::ZERO
+    };
+    Segment {
+        id: segment_id as u32,
+        is_validation: true,
+        parameter_ids: input_segment_info,
+        result: (Element::FieldElem(is_valid_fq), ElementType::FieldElem),
+        hints: op_hints,
+        scr_type: ScriptType::ValidateG2IsOnCurve,
+    }
+}
+
 // verify fq12 is on field - 2 (c, s)
+pub(crate) fn wrap_verify_fq12_is_on_field(
+    skip: bool,
+    segment_id: usize,
+    in_c: Vec<Segment>,
+) -> Segment {
+
+    let mut input_segment_info: Vec<(SegmentID, ElementType)> = vec![];
+    in_c
+    .iter()
+    .rev()
+    .for_each(|f| {
+        input_segment_info.push((f.id, ElementType::FieldElem));
+    });
+
+    let (mut is_valid, mut op_hints) = (true, vec![]);
+    if !skip {
+        let fqvec: Vec<ElemFq> = in_c.iter().map(|f| {f.result.0.try_into().unwrap()}).collect();
+        (is_valid,_, op_hints) = chunk_verify_fq12_is_on_field(fqvec);
+    }
+    let is_valid_fq = if is_valid {
+        ark_bn254::Fq::ONE
+    } else {
+        ark_bn254::Fq::ZERO
+    };
+    Segment {
+        id: segment_id as u32,
+        is_validation: true,
+        parameter_ids: input_segment_info,
+        result: (Element::FieldElem(is_valid_fq), ElementType::FieldElem),
+        hints: op_hints,
+        scr_type: ScriptType::ValidateFq12OnField,
+    }
+}

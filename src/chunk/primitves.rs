@@ -79,12 +79,14 @@ pub(crate) fn wots_locking_script(link: Link, link_ids: &HashMap<u32, WOTSPubKey
 
 pub(crate) fn gen_bitcom(
     link_ids: &HashMap<u32, WOTSPubKey>,
-    sec_out: Link,
+    sec_out: Option<Link>,
     sec_ins: Vec<Link>,
 ) -> Script {
     let mut tot_script = script!();
-    tot_script = tot_script.push_script(wots_locking_script(sec_out, link_ids).compile());  // hash_in
-    tot_script = tot_script.push_script({Fq::toaltstack()}.compile());
+    if sec_out.is_some() {
+        tot_script = tot_script.push_script(wots_locking_script(sec_out.unwrap(), link_ids).compile());  // hash_in
+        tot_script = tot_script.push_script({Fq::toaltstack()}.compile());
+    }
     // [px, py, qx0, qx1, qy0, qy1, in, out]
     for sec_in in sec_ins {
         tot_script = tot_script.push_script(wots_locking_script(sec_in, link_ids).compile());  // hash_in

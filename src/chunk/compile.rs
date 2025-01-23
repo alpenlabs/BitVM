@@ -19,7 +19,9 @@ pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 pub const NUM_PUBS: usize = 1;
 pub const NUM_U256: usize = 32;
 pub const NUM_U160: usize = 562;
-pub const NUM_TAPS: usize = 562;
+const VALIDATING_TAPS: usize = 7;
+const HASHING_TAPS: usize = NUM_U160;
+pub const NUM_TAPS: usize = HASHING_TAPS + VALIDATING_TAPS; 
 
 pub(crate) struct Vkey {
     pub(crate) q2: ark_bn254::G2Affine,
@@ -129,7 +131,10 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
     let mut op_scripts: Vec<treepp::Script> = vec![];
 
     let mut hashing_script_cache: HashMap<String, Script> = HashMap::new();
-    segments.iter().for_each(|s| {
+    for s in segments {
+        if s.is_validation || s.scr_type == ScriptType::NonDeterministic {
+            continue;
+        }
         let mut elem_types_to_hash: Vec<ElementType> = s.parameter_ids.iter().rev().map(|f| f.1).collect();
         elem_types_to_hash.push(s.result.1);
         let elem_types_str = serialize_element_types(&elem_types_to_hash);
@@ -140,7 +145,7 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
             );
             hashing_script_cache.insert(elem_types_str, hash_scr);
         }
-    });
+    };
 
     for i in 0..segments.len() {
         let seg= &segments[i];
@@ -153,6 +158,18 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
             ScriptType::NonDeterministic => {
                 script!()
             },
+            ScriptType::ValidateG1IsOnCurve => {
+                chunk_verify_g1_is_on_curve(ElemFq::mock(), ElemFq::mock()).1
+            }
+            ScriptType::ValidateG1HashIsOnCurve => {
+                chunk_verify_g1_hash_is_on_curve(ElemG1Point::mock()).1
+            }
+            ScriptType::ValidateG2IsOnCurve => {
+                chunk_verify_g2_on_curve(ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock()).1
+            },
+            ScriptType::ValidateFq12OnField => {
+                chunk_verify_fq12_is_on_field([ElemFq::mock(); 12].to_vec()).1
+            }
             ScriptType::PreMillerInitT4 => {
                 tap_init_t4.1.clone()
             }
@@ -223,7 +240,7 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
                 tap_multiply_point_evals_on_chord_for_fixed_g2_with_frob((inp.0[0], inp.0[1], inp.0[2], inp.0[3], inp.1)).1
             },
         };
-        if i == segments.len() - 1 { // except final segment
+        if seg.is_validation { // validating segments do not have output hash, so don't add hashing layer; they are self sufficient
             op_scripts.push(op_scr);
         } else {
             let mut elem_types_to_hash: Vec<ElementType> = seg.parameter_ids.iter().rev().map(|(_, param_seg_type)| *param_seg_type).collect();
@@ -243,7 +260,11 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
 pub(crate) fn bitcom_scripts_from_segments(segments: &Vec<Segment>, pubkeys_map: HashMap<u32, WOTSPubKey>) -> Vec<treepp::Script> {
     let mut bitcom_scripts: Vec<treepp::Script> = vec![];
     for seg in segments {
-        let sec_out = (seg.id as u32, segments[seg.id as usize].result.0.output_is_field_element());
+        let sec_out = if seg.is_validation {
+            Some((seg.id as u32, segments[seg.id as usize].result.0.output_is_field_element()))
+        } else {
+            None
+        };
         let sec_in: Vec<(u32, bool)> = seg.parameter_ids.iter().map(|(f, _)| {
             let elem = &segments[*(f) as usize];
             let elem_type = elem.result.0.output_is_field_element();

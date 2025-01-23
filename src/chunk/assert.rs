@@ -49,9 +49,19 @@ pub(crate) fn groth16(
     macro_rules! push_compare_or_return {
         ($seg:ident) => {{
             all_output_hints.push($seg.clone());
-            let matches = compare(&$seg.result.0, claimed_assertions);
-            if matches.is_some() && matches.unwrap() == false {
-                return false;
+            if $seg.is_validation {
+                if let Element::FieldElem(felem) = $seg.result.0 {
+                    if felem != ark_bn254::Fq::ONE {
+                        return false;
+                    }
+                } else {
+                    panic!();
+                }
+            } else {
+                let matches = compare(&$seg.result.0, claimed_assertions);
+                if matches.is_some() && matches.unwrap() == false {
+                    return false;
+                }
             }
         }};
     }
@@ -115,9 +125,13 @@ pub(crate) fn groth16(
 
     let (q4xc0, q4xc1, q4yc0, q4yc1) = (&temp_q4[0], &temp_q4[1], &temp_q4[2], &temp_q4[3]);
 
+    let verify_gp4 = wrap_verify_g1_is_on_curve(is_compile_mode, all_output_hints.len(), &gp4y, &gp4x);
+    push_compare_or_return!(verify_gp4);
     let p4 = wrap_hints_precompute_p(is_compile_mode, all_output_hints.len(), &gp4y, &gp4x);
     push_compare_or_return!(p4);
 
+    let verify_gp2 = wrap_verify_g1_is_on_curve(is_compile_mode, all_output_hints.len(), &gp2y, &gp2x);
+    push_compare_or_return!(verify_gp2);
     let p2 = wrap_hints_precompute_p(is_compile_mode, all_output_hints.len(), &gp2y, &gp2x);
     push_compare_or_return!(p2);
 
@@ -126,12 +140,21 @@ pub(crate) fn groth16(
         push_compare_or_return!(msm);
     }
 
-    let p3 = wrap_hint_hash_p(is_compile_mode, all_output_hints.len(), &msms[msms.len()-1], vky0);
+    let p_vk0 = wrap_hint_hash_p(is_compile_mode, all_output_hints.len(), &msms[msms.len()-1], vky0);
+    push_compare_or_return!(p_vk0);
+
+    let valid_p_vky0 = wrap_verify_g1_hash_is_on_curve(is_compile_mode, all_output_hints.len(), &p_vk0);
+    push_compare_or_return!(valid_p_vky0);
+    let p3 = wrap_hints_precompute_p_from_hash(is_compile_mode, all_output_hints.len(), &p_vk0);
     push_compare_or_return!(p3);
 
+    let valid_gc = wrap_verify_fq12_is_on_field(is_compile_mode, all_output_hints.len(), gc.clone());
+    push_compare_or_return!(valid_gc);
     let c = wrap_hint_hash_c(is_compile_mode, all_output_hints.len(), gc);
     push_compare_or_return!(c);
 
+    let valid_gs = wrap_verify_fq12_is_on_field(is_compile_mode, all_output_hints.len(), gs.clone());
+    push_compare_or_return!(valid_gs);
     let s = wrap_hint_hash_c(is_compile_mode, all_output_hints.len(), gs);
     push_compare_or_return!(s);
 
@@ -150,6 +173,8 @@ pub(crate) fn groth16(
     let cinv2 = wrap_hint_hash_c2(is_compile_mode, all_output_hints.len(), &gcinv);
     push_compare_or_return!(cinv2);
 
+    let valid_t4 = wrap_verify_g2_is_on_curve(is_compile_mode, all_output_hints.len(), &q4yc1, &q4yc0, &q4xc1, &q4xc0);
+    push_compare_or_return!(valid_t4);
     let mut t4 = wrap_hint_init_t4(is_compile_mode, all_output_hints.len(), &q4yc1, &q4yc0, &q4xc1, &q4xc0);
     push_compare_or_return!(t4);
 
@@ -303,21 +328,18 @@ pub(crate) fn groth16(
     push_compare_or_return!(dmul1);
     f_acc = dmul1;
 
-    let dmul0 = wrap_verify_fp12_is_unity(is_compile_mode, all_output_hints.len(), &f_acc, pubs.fixed_acc);
-    push_compare_or_return!(dmul0);
-    f_acc = dmul0;
+    let valid_facc = wrap_verify_fp12_is_unity(is_compile_mode, all_output_hints.len(), &f_acc, pubs.fixed_acc);
+    push_compare_or_return!(valid_facc);
 
-    let result: ElemFp12Acc = f_acc.result.0.try_into().unwrap();
-    if result.f != ark_bn254::Fq12::ONE {
-        return false;
-    }
-    //assert_eq!(result.f, ark_bn254::Fq12::ONE);
     true
 }
 
 pub(crate) fn hint_to_data(segments: Vec<Segment>) -> Assertions {
     let mut vs: Vec<[u8; 64]> = vec![];
     for v in segments {
+        if v.is_validation {
+            continue;
+        }
         let x = v.result.0.hashed_output();
         vs.push(x);
     }
@@ -530,20 +552,24 @@ pub(crate) fn script_exec(
 
     let mut bc_hints = vec![];
     for i in 0..segments.len() {
+        let mut tot: Vec<((u32, bool), [u8;64])> = vec![];
+
         let seg = &segments[i];
-        let sec_out = ((seg.id, segments[seg.id as usize].result.0.output_is_field_element()), assertions[seg.id as usize]);
         let sec_in: Vec<((u32, bool), [u8; 64])> = seg.parameter_ids.iter().rev().map(|(k, _)| {
             let v = &segments[*(k) as usize];
             let v = v.result.0.output_is_field_element();
             ((*k, v), assertions[*k as usize])
         }).collect();
-
-        let mut tot: Vec<((u32, bool), [u8;64])> = vec![];
         tot.extend_from_slice(&sec_in);
-        tot.push(sec_out);
+
+        if !seg.is_validation {
+            let sec_out = ((seg.id, segments[seg.id as usize].result.0.output_is_field_element()), assertions[seg.id as usize]);
+            tot.push(sec_out);
+        }
+
         let (bcelems, should_validate) = tup_to_scr(&mut sig, tot);
         if should_validate == true {
-            println!("index {:?} bcelems len {:?}  should_validate {}",i, bcelems.len(), should_validate);
+            println!("index {:?} bcelems len {:?}  should_validate {}", i, bcelems.len(), should_validate);
         }
         bc_hints.push(bcelems);
     }
