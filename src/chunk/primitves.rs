@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
+use ark_bn254::fq;
 use ark_ff::{AdditiveGroup, BigInt, BigInteger, Field};
 
-use crate::bigint::U254;
+use crate::bigint::{BigIntImpl, U254, U256};
+use crate::bn254;
 use crate::bn254::fq2::Fq2;
 use crate::chunk::blake3compiled::{hash_128b, hash_192b, hash_64b};
 use crate::pseudo::NMUL;
@@ -103,159 +105,11 @@ fn split_digit(window: u32, index: u32) -> Script {
 }
 
 pub fn unpack_limbs_to_nibbles() -> Script {
-    script! {
-        {8}
-        OP_ROLL
-        {split_digit(24, 4)}
-        {split_digit(20, 4)}
-        {split_digit(16, 4)}
-        {split_digit(12, 4)}
-        {split_digit(8, 4)}
-
-        {8-1 + 6}
-        OP_ROLL
-        {split_digit(29, 4)}
-        {split_digit(25, 4)}
-        {split_digit(21, 4)}
-        {split_digit(17, 4)}
-        {split_digit(13, 4)}
-        {split_digit(9, 4)}
-        {split_digit(5, 4)}
-
-        {NMUL(8)}
-        {8-2 + 6+8} //
-        OP_ROLL
-        {split_digit(29, 3)}
-        OP_TOALTSTACK OP_ADD OP_FROMALTSTACK
-        {split_digit(26, 4)}
-        {split_digit(22, 4)}
-        {split_digit(18, 4)}
-        {split_digit(14, 4)}
-        {split_digit(10, 4)}
-        {split_digit(6, 4)}
-
-        {NMUL(4)}
-        {8-3 + 6+8+7} //
-        OP_ROLL
-        {split_digit(29, 2)}
-        OP_TOALTSTACK OP_ADD OP_FROMALTSTACK
-        {split_digit(27, 4)}
-        {split_digit(23, 4)}
-        {split_digit(19, 4)}
-        {split_digit(15, 4)}
-        {split_digit(11, 4)}
-        {split_digit(7, 4)}
-
-        {NMUL(2)}
-        {8-4 + 6+8+7+7} //
-        OP_ROLL
-        {split_digit(29, 1)}
-        OP_TOALTSTACK OP_ADD OP_FROMALTSTACK
-        {split_digit(28, 4)}
-        {split_digit(24, 4)}
-        {split_digit(20, 4)}
-        {split_digit(16, 4)}
-        {split_digit(12, 4)}
-        {split_digit(8, 4)}
-
-        {8-5 + 6+8+7+7+7} //
-        OP_ROLL
-        {split_digit(29, 4)}
-        {split_digit(25, 4)}
-        {split_digit(21, 4)}
-        {split_digit(17, 4)}
-        {split_digit(13, 4)}
-        {split_digit(9, 4)}
-        {split_digit(5, 4)}
-
-        {NMUL(8)}
-        {8-6 + 6+8+7+7+7+8} //
-        OP_ROLL
-        {split_digit(29, 3)}
-        OP_TOALTSTACK OP_ADD OP_FROMALTSTACK
-        {split_digit(26, 4)}
-        {split_digit(22, 4)}
-        {split_digit(18, 4)}
-        {split_digit(14, 4)}
-        {split_digit(10, 4)}
-        {split_digit(6, 4)}
-
-        {NMUL(4)}
-        {8-7 + 6+8+7+7+7+8+7} //
-        OP_ROLL
-        {split_digit(29, 2)}
-        OP_TOALTSTACK OP_ADD OP_FROMALTSTACK
-        {split_digit(27, 4)}
-        {split_digit(23, 4)}
-        {split_digit(19, 4)}
-        {split_digit(15, 4)}
-        {split_digit(11, 4)}
-        {split_digit(7, 4)}
-
-        {NMUL(2)}
-        {8-8 + 6+8+7+7+7+8+7+7} //
-        OP_ROLL
-        {split_digit(29, 1)}
-        OP_TOALTSTACK OP_ADD OP_FROMALTSTACK
-        {split_digit(28, 4)}
-        {split_digit(24, 4)}
-        {split_digit(20, 4)}
-        {split_digit(16, 4)}
-        {split_digit(12, 4)}
-        {split_digit(8, 4)}
-
-    }
+    U256::transform_limbsize(29,4)
 }
 
 pub fn pack_nibbles_to_limbs() -> Script {
-    fn split_digit(window: u32, index: u32) -> Script {
-        script! {
-            // {v}
-            0                           // {v} {A}
-            OP_SWAP
-            for i in 0..index {
-                OP_TUCK                 // {v} {A} {v}
-                { 1 << (window - i - 1) }   // {v} {A} {v} {1000}
-                OP_GREATERTHANOREQUAL   // {v} {A} {1/0}
-                OP_TUCK                 // {v} {1/0} {A} {1/0}
-                OP_ADD                  // {v} {1/0} {A+1/0}
-                if i < index - 1 { { NMUL(2) } }
-                OP_ROT OP_ROT
-                OP_IF
-                    { 1 << (window - i - 1) }
-                    OP_SUB
-                OP_ENDIF
-            }
-            OP_SWAP
-        }
-    }
-
-    const WINDOW: u32 = 4;
-    const LIMB_SIZE: u32 = 29;
-    const N_BITS: u32 = U254::N_BITS;
-    const N_DIGITS: u32 = (N_BITS + WINDOW - 1) / WINDOW;
-
-    script! {
-        for i in 1..64 { { i } OP_ROLL }
-        for i in (1..=N_DIGITS).rev() {
-            if (i * WINDOW) % LIMB_SIZE == 0 {
-                OP_TOALTSTACK
-            } else if (i * WINDOW) % LIMB_SIZE > 0 &&
-                        (i * WINDOW) % LIMB_SIZE < WINDOW {
-                OP_SWAP
-                { split_digit(WINDOW, (i * WINDOW) % LIMB_SIZE) }
-                OP_ROT
-                { NMUL(1 << ((i * WINDOW) % LIMB_SIZE)) }
-                OP_ADD
-                OP_TOALTSTACK
-            } else if i != N_DIGITS {
-                { NMUL(1 << WINDOW) }
-                OP_ADD
-            }
-        }
-        for _ in 1..U254::N_LIMBS { OP_FROMALTSTACK }
-        for i in 1..U254::N_LIMBS { { i } OP_ROLL }
-    }
+    U256::transform_limbsize(4,29)
 }
 
 // [a0, a1, a2, a3, a4, a5]

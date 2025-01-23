@@ -1,4 +1,4 @@
-use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fq12::Fq12, fq6::Fq6}, hash::blake3_u4, treepp::*};
+use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fq12::Fq12, fq6::Fq6}, hash::{blake3_u4, blake3_u4_compact::blake3_u4_compact}, treepp::*};
 use bitcoin_script_stack::stack::StackTracker;
 
 use super::{element::ElementType, primitves::{hash_fp12, hash_fp12_192, hash_fp12_with_hints, hash_fp2, hash_fp6, new_hash_g2acc_with_both_raw_le, new_hash_g2acc_with_hashed_le, new_hash_g2acc_with_hashed_t}};
@@ -27,6 +27,24 @@ pub fn hash_128b() -> Script {
 }
 
 pub fn hash_192b() -> Script {
+    let mut stack = StackTracker::new();
+    blake3_u4::blake3(&mut stack, 192, 8, Some(false));
+    wrap_scr(stack.get_script())
+}
+
+pub fn hash_64b_compact() -> Script {
+    let mut stack = StackTracker::new();
+    blake3_u4::blake3(&mut stack, 64, 8, Some(true));
+    wrap_scr(stack.get_script())
+}
+
+pub fn hash_128b_compact() -> Script {
+    let mut stack = StackTracker::new();
+    blake3_u4::blake3(&mut stack, 128, 8, Some(false));
+    wrap_scr(stack.get_script())
+}
+
+pub fn hash_192b_compact() -> Script {
     let mut stack = StackTracker::new();
     blake3_u4::blake3(&mut stack, 192, 8, Some(false));
     wrap_scr(stack.get_script())
