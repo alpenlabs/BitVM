@@ -179,7 +179,7 @@ pub(crate) fn wrap_hint_hash_c(
         (c,_, op_hints) = chunk_hash_c(fqvec);
     }
     
-    Segment { id:  segment_id as u32, is_validation: false, parameter_ids: input_segment_info, result: (Element::Fp12(c), ElementType::Fp12v1), hints: op_hints, scr_type: ScriptType::PreMillerHashC }
+    Segment { id:  segment_id as u32, is_validation: false, parameter_ids: input_segment_info, result: (Element::Fp12(c), ElementType::Fp12v0), hints: op_hints, scr_type: ScriptType::PreMillerHashC }
 }
 
 pub(crate) fn wrap_hints_precompute_p(
@@ -229,7 +229,7 @@ pub(crate) fn wrap_hint_hash_c2(
 ) -> Segment {
     
     let mut input_segment_info: Vec<(SegmentID, ElementType)> = vec![];
-    input_segment_info.push((in_c.id, ElementType::Fp12v1));
+    input_segment_info.push((in_c.id, ElementType::Fp12v0));
 
     let (mut c2, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
     if !skip {
@@ -300,7 +300,7 @@ pub(crate) fn wrap_inv2(
         // op_hints.extend_from_slice(&Element::Fp6(in_t1).get_hash_preimage_as_hints());
     }
     
-    Segment { id:  segment_id as u32, is_validation: false, parameter_ids: input_segment_info, result: (Element::Fp12(dmul0), ElementType::Fp12v1), hints: op_hints, scr_type: ScriptType::PreMillerInv2 }
+    Segment { id:  segment_id as u32, is_validation: false, parameter_ids: input_segment_info, result: (Element::Fp12(dmul0), ElementType::Fp12v0), hints: op_hints, scr_type: ScriptType::PreMillerInv2 }
 }
 
 
@@ -537,7 +537,7 @@ pub(crate) fn wrap_hint_multiply_point_evals_on_tangent_for_fixed_g2(
         id: segment_id as u32,
         is_validation: false,
         parameter_ids: input_segment_info,
-        result: (Element::Fp12(leval), ElementType::Fp12v1),
+        result: (Element::Fp12(leval), ElementType::Fp12v0),
         hints: op_hints,
         scr_type: ScriptType::MillerSparseSparseDbl((in_t2, in_t3)),
     }
@@ -551,7 +551,7 @@ pub(crate) fn wrap_hints_dense_dense_mul0(
 ) -> Segment {
 
     let input_segment_info: Vec<(SegmentID, ElementType)> = vec![
-        (in_b.id, ElementType::Fp12v1),
+        (in_b.id, ElementType::Fp12v0),
         (in_a.id, ElementType::Fp12v0),
     ];
 
@@ -589,7 +589,7 @@ pub(crate) fn wrap_hints_dense_dense_mul1(
 
     let input_segment_info: Vec<(SegmentID, ElementType)> = vec![
         (in_c.id, ElementType::Fp6Hash),
-        (in_b.id, ElementType::Fp12v1),
+        (in_b.id, ElementType::Fp12v0),
         (in_a.id, ElementType::Fp12v0),
     ];
 
@@ -632,7 +632,7 @@ pub(crate) fn wrap_hints_dense_le_mul0(
 ) -> Segment {
 
     let input_segment_info: Vec<(SegmentID, ElementType)> = vec![
-        (in_b.id, ElementType::Fp12v1),
+        (in_b.id, ElementType::Fp12v0),
         (in_a.id, ElementType::Fp12v0),
     ];
 
@@ -671,7 +671,7 @@ pub(crate) fn wrap_hints_dense_le_mul1(
 
     let input_segment_info: Vec<(SegmentID, ElementType)> = vec![
         (in_c.id, ElementType::Fp6Hash),
-        (in_b.id, ElementType::Fp12v1),
+        (in_b.id, ElementType::Fp12v0),
         (in_a.id, ElementType::Fp12v0),
     ];
 
@@ -744,7 +744,7 @@ pub(crate) fn wrap_hint_multiply_point_evals_on_chord_for_fixed_g2(
         id: segment_id as u32,
         is_validation: false,
         parameter_ids: input_segment_info,
-        result: (Element::Fp12(leval), ElementType::Fp12v1),
+        result: (Element::Fp12(leval), ElementType::Fp12v0),
         hints: op_hints,
         scr_type: ScriptType::MillerSparseSparseAdd(([in_t2, in_t3, pub_q2, pub_q3], ate)),
     }
@@ -757,7 +757,7 @@ pub(crate) fn wrap_hints_frob_fp12(
     power: usize,
 ) -> Segment {
 
-    let input_segment_info: Vec<(SegmentID, ElementType)> = vec![(in_f.id, ElementType::Fp12v1)];
+    let input_segment_info: Vec<(SegmentID, ElementType)> = vec![(in_f.id, ElementType::Fp12v0)];
     let f = in_f.result.0.try_into().unwrap();
 
     let (mut cp, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
@@ -770,7 +770,7 @@ pub(crate) fn wrap_hints_frob_fp12(
         id: segment_id as u32,
         is_validation: false,
         parameter_ids: input_segment_info,
-        result: (Element::Fp12(cp), ElementType::Fp12v1),
+        result: (Element::Fp12(cp), ElementType::Fp12v0),
         hints: op_hints,
         scr_type: ScriptType::PostMillerFrobFp12(power as u8),
     }
@@ -868,7 +868,7 @@ pub(crate) fn wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
         id: segment_id as u32,
         is_validation: false,
         parameter_ids: input_segment_info,
-        result: (Element::Fp12(leval), ElementType::Fp12v1),
+        result: (Element::Fp12(leval), ElementType::Fp12v0),
         hints: op_hints,
         scr_type: ScriptType::PostMillerSparseAddWithFrob(([in_t2, in_t3, pub_q2, pub_q3], ate)),
     }

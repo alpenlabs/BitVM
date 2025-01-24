@@ -32,7 +32,7 @@ pub(crate) fn chunk_hash_c(
             // Altstack: [f_hash_claim]
         };
         let hash_scr = script!(
-            {hash_messages(vec![ElementType::Fp12v1])}
+            {hash_messages(vec![ElementType::Fp12v0])}
             OP_TRUE
         );
         let sc = script! {
@@ -117,7 +117,7 @@ pub(crate) fn chunk_hash_c2(
         };
 
         let hash_scr = script!(
-            {hash_messages(vec![ElementType::Fp12v1, ElementType::Fp12v0])}
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v0])}
             OP_TRUE
         );
 
@@ -428,7 +428,7 @@ pub(crate) fn chunk_inv2(
             // [c0, c1, t1, d0, d1]
         };
         let hash_scr = script!{
-            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp6, ElementType::Fp12v1])}
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp6, ElementType::Fp12v0])}
             OP_TRUE
         };
         let scr = script!{

@@ -141,7 +141,7 @@ pub(crate) fn chunk_multiply_point_evals_on_tangent_for_fixed_g2(
             // [p2, p3, g]
         );
         let hash_scr = script! {
-            {hash_messages(vec![ElementType::G1, ElementType::G1, ElementType::Fp12v1])}
+            {hash_messages(vec![ElementType::G1, ElementType::G1, ElementType::Fp12v0])}
             OP_TRUE
 
         };
@@ -187,7 +187,7 @@ pub(crate) fn chunk_multiply_point_evals_on_chord_for_fixed_g2(
             // [p2, p3, g]
         );
         let hash_scr = script! {
-            {hash_messages(vec![ElementType::G1, ElementType::G1, ElementType::Fp12v1])}
+            {hash_messages(vec![ElementType::G1, ElementType::G1, ElementType::Fp12v0])}
             OP_TRUE
         };
         let sc = script! {
@@ -256,7 +256,7 @@ pub(crate) fn chunk_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
             // [p2, p3, g]
         );
         let hash_scr = script! {
-            {hash_messages(vec![ElementType::G1, ElementType::G1, ElementType::Fp12v1])}
+            {hash_messages(vec![ElementType::G1, ElementType::G1, ElementType::Fp12v0])}
             OP_TRUE
         };
         let sc = script! {

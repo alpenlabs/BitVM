@@ -6,7 +6,7 @@ use ark_ff::{AdditiveGroup, BigInt, BigInteger, Field};
 use crate::bigint::{BigIntImpl, U254, U256};
 use crate::bn254;
 use crate::bn254::fq2::Fq2;
-use crate::chunk::blake3compiled::{hash_128b, hash_128b_compact, hash_192b, hash_192b_compact, hash_64b, hash_64b_compact};
+use crate::chunk::blake3compiled::{hash_128b, hash_192b, hash_64b};
 use crate::pseudo::NMUL;
 use crate::signatures::wots::{wots160, wots256};
 use crate::{
@@ -100,7 +100,7 @@ pub fn pack_nibbles_to_limbs() -> Script {
 
 pub(crate) fn hash_fp2() -> Script {
     script! {
-        { hash_64b_compact() }
+        { hash_64b() }
         { pack_nibbles_to_limbs() }
     }
 }
@@ -109,7 +109,7 @@ pub(crate) fn hash_fp4() -> Script {
     script! {
         // [a0b0, a0b1, a1b0, a1b1]
         {Fq2::roll(2)}
-        { hash_128b_compact() }
+        { hash_128b() }
         { pack_nibbles_to_limbs() }
     }
 }
@@ -143,28 +143,6 @@ pub(crate) fn extern_fr_to_nibbles(msg: ark_bn254::Fr) -> [u8; 64] {
     let vu8: Vec<u8> = v.iter().map(|x| (*x) as u8).collect();
     vu8.try_into().unwrap()
 }
-
-pub(crate) fn hash_fp12() -> Script {
-    script! {
-        for _ in 0..6 {
-            {Fq::toaltstack()}
-        }
-        {hash_fp6()}
-
-        // second part: Stack: [hash_first], Alt: [6 fps]
-        for _ in 0..6 {
-            {Fq::fromaltstack()}
-        }
-        {Fq::roll(6)} {Fq::toaltstack()}
-        {hash_fp6()}
-
-        // wrap up
-        {Fq::fromaltstack()}
-        {hash_64b_compact()}
-        {pack_nibbles_to_limbs()}
-    }
-}
-
 
 pub(crate) fn extern_nibbles_to_limbs(nibble_array: [u8; 64]) -> [u32; 9] {
     let bit_array: Vec<bool> = nibble_array
@@ -262,18 +240,6 @@ pub(crate) fn extern_hash_nibbles(msgs: Vec<[u8; 64]>, mode: bool) -> [u8; 64] {
     }
 
 
-
-    fn extern_hash_fp12(fqs: Vec<[u8; 64]>) -> [u8;64] {
-        let hash_out_first = extern_hash_fp6(fqs[0..6].to_vec());
-        let mut hash_out_second = extern_hash_fp6(fqs[6..12].to_vec()).to_vec();
-        hash_out_second.extend_from_slice(&hash_out_first);
-        let p_bytes:Vec<u8> = nib_to_byte_array(&hash_out_second);
-        let hash_out = blake3::hash(&p_bytes).to_string();
-        let hash_out = replace_first_n_with_zero(&hash_out.to_string(), (32-20)*2);
-        let hash_out = hex_string_to_nibble_array(&hash_out);
-        hash_out.try_into().unwrap()
-    }
-
     fn extern_hash_fp12_v2(fqs: Vec<[u8; 64]>) -> [u8;64] {
         let hash_out_first = extern_hash_fp_var(fqs[0..6].to_vec());
         let mut hash_out_second = extern_hash_fp_var(fqs[6..12].to_vec()).to_vec();
@@ -285,30 +251,14 @@ pub(crate) fn extern_hash_nibbles(msgs: Vec<[u8; 64]>, mode: bool) -> [u8; 64] {
         hash_out.try_into().unwrap()
     }
 
-    fn extern_hash_fp6(fqs: Vec<[u8; 64]>) -> [u8;64] {
-        let hash_out_first = extern_hash_fp_var(fqs[0..2].to_vec());
-        let mut hash_out_second = extern_hash_fp_var(fqs[2..6].to_vec()).to_vec();
-        hash_out_second.extend_from_slice(&hash_out_first);
-        let p_bytes:Vec<u8> = nib_to_byte_array(&hash_out_second);
-        let hash_out = blake3::hash(&p_bytes).to_string();
-        let hash_out = replace_first_n_with_zero(&hash_out.to_string(), (32-20)*2);
-        let hash_out = hex_string_to_nibble_array(&hash_out);
-        hash_out.try_into().unwrap()
-    }
-
-
-    if msgs.len() == 4 {
+    if msgs.len() == 4 || msgs.len() == 2 || msgs.len() == 6 {
         extern_hash_fp_var(msgs)
     } else if msgs.len() == 12 {
         if mode {
-            extern_hash_fp12(msgs)
+            extern_hash_fp12_v2(msgs)
         } else {
             extern_hash_fp12_v2(msgs)
         }
-    } else if msgs.len() == 2 {
-        extern_hash_fp_var(msgs)
-    } else if msgs.len() == 6 {
-        extern_hash_fp6(msgs)
     } else {
         panic!()
     }
@@ -372,28 +322,8 @@ pub(crate) fn new_hash_g2acc_with_hashed_t(is_dbl: bool) -> Script {
 
 pub(crate) fn hash_fp6() -> Script {
     script! {
-        // [a, b, c]
-        for _ in 0..4 {
-            {Fq::toaltstack()}
-        }
-
-        // first part
-        {hash_64b_compact()}
-        { pack_nibbles_to_limbs() }
-
-        { Fq::fromaltstack() }
-        { Fq::fromaltstack() }
-        { Fq::fromaltstack() }
-        { Fq::fromaltstack() }
-        { Fq2::roll(2) }
-
-        {Fq::roll(4)}
-        {Fq::toaltstack()}
-        { hash_128b_compact() }
-        {pack_nibbles_to_limbs()}
-
-        {Fq::fromaltstack()}
-        {hash_64b_compact()}
+        {Fq2::roll(2)} {Fq2::roll(4)}
+        {hash_192b()}
         {pack_nibbles_to_limbs()}
 
     }
@@ -406,7 +336,7 @@ pub(crate) fn hash_fp12_192() -> Script {
             {Fq::toaltstack()}
         }
         {Fq2::roll(2)} {Fq2::roll(4)}
-        {hash_192b_compact()}
+        {hash_192b()}
         {pack_nibbles_to_limbs()}
 
         for _ in 0..6 {
@@ -416,11 +346,11 @@ pub(crate) fn hash_fp12_192() -> Script {
         {Fq::toaltstack()}
 
         {Fq2::roll(2)} {Fq2::roll(4)}
-        {hash_192b_compact()}
+        {hash_192b()}
         {pack_nibbles_to_limbs()}
 
         {Fq::fromaltstack()}
-        {hash_64b_compact()}
+        {hash_64b()}
         {pack_nibbles_to_limbs()}
     }
 }
@@ -432,11 +362,13 @@ pub(crate) fn hash_fp12_192() -> Script {
 pub fn hash_fp12_with_hints() -> Script {
     script! {
         {Fq::toaltstack()} //Hc0
-        {hash_fp6()}
+        {Fq2::roll(2)} {Fq2::roll(4)}
+        {hash_192b()}
+        {pack_nibbles_to_limbs()}
 
         // wrap up
         {Fq::fromaltstack()}
-        {hash_64b_compact()}
+        {hash_64b()}
         {pack_nibbles_to_limbs()}
     }
 }
@@ -514,6 +446,7 @@ mod test {
             for i in hex_in {
                 {i}
             }
+            { pack_nibbles_to_limbs() }
             { hash_64b() }
             { pack_nibbles_to_limbs() }
             { u4_hex_to_nibbles(&expected_hex_out)}
@@ -560,6 +493,7 @@ mod test {
             for i in p_nibs {
                 {i}
             }
+            { pack_nibbles_to_limbs() }
             { hash_64b() }
             { pack_nibbles_to_limbs() }
             { u4_hex_to_nibbles(&expected_hex_out)}
@@ -613,7 +547,7 @@ mod test {
                     {hash_fp4()}
                 } else if msgs.len() == 12 {
                     if mode {
-                        {hash_fp12()}
+                        {hash_fp12_192()}
                     } else {
                         {hash_fp12_192()}
                     }
@@ -622,18 +556,19 @@ mod test {
                 } else if msgs.len() == 6 {
                     {hash_fp6()}
                 }
-                {unpack_limbs_to_nibbles()}
+                // {unpack_limbs_to_nibbles()}
             };
             let exec_result = execute_script(scr);
             let mut arr = [0u8; 64];
-            for i in 0..exec_result.final_stack.len() {
-                let v = exec_result.final_stack.get(i);
-                if v.is_empty() {
-                    arr[i] = 0;
-                } else {
-                    arr[i] = v[0];
-                }
-            }
+            // for i in 0..exec_result.final_stack.len() {
+            //     let v = exec_result.final_stack.get(i);
+            //     if v.is_empty() {
+            //         arr[i] = 0;
+            //     } else {
+            //         arr[i] = v[0];
+            //     }
+            // }
+            println!("exec result {:?}", exec_result.stats.max_nb_stack_items);
             arr
         }
     
@@ -642,8 +577,8 @@ mod test {
         let g = ark_bn254::Fq12::rand(&mut prng);
 
         let ps = g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
-        let res = emulate_extern_hash_fps_scripted(ps.clone(), false);
-        let res2 = extern_hash_fps(ps, false);
+        let res = emulate_extern_hash_fps_scripted(ps.clone(), true);
+        let res2 = extern_hash_fps(ps, true);
         assert_eq!(res, res2);
     }
 

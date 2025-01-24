@@ -5,8 +5,7 @@ use crate::bn254::utils::{
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::blake3compiled::hash_messages;
 use crate::chunk::primitves::{
-    extern_hash_nibbles,  extern_nibbles_to_limbs, hash_fp12,
-    hash_fp12_with_hints, hash_fp6, new_hash_g2acc_with_hashed_t, 
+    extern_hash_nibbles, extern_nibbles_to_limbs, hash_fp12_192, hash_fp12_with_hints, hash_fp6, new_hash_g2acc_with_hashed_t 
 };
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
@@ -97,7 +96,7 @@ pub(crate) fn chunk_dense_dense_mul0(
             { hinted_mul }
         };
         let hash_scr = script!(
-            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v1, ElementType::Fp6])} //{hash_mul(true)}
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v0, ElementType::Fp6])} //{hash_mul(true)}
             OP_TRUE
         );
         let scr = script! {
@@ -160,7 +159,7 @@ pub(crate) fn chunk_dense_dense_mul1(
             // [Fp12v0, Fp12v1, HashBytes, Fp12v2]
         };
         let hash_scr = script!(
-            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v1, ElementType::Fp6Hash, ElementType::Fp12v2])} 
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v0, ElementType::Fp6Hash, ElementType::Fp12v2])} 
             OP_TRUE
         );
         let scr = script! {
@@ -273,7 +272,7 @@ pub(crate) fn chunk_verify_fp12_is_unity(
 
         let scr = script! {
             // [f] [fhash]
-            {hash_fp12()}
+            {hash_fp12_192()}
             {Fq::copy(0)}
             {Fq::fromaltstack()}
             {Fq::equalverify(1, 0)}
@@ -312,7 +311,7 @@ pub(crate) fn chunk_frob_fp12(
             // [f, g]
         };
         let hash_scr = script! {
-            {hash_messages(vec![ElementType::Fp12v1, ElementType::Fp12v1])}
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v0])}
             OP_TRUE
         };
         let sc = script! {

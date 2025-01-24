@@ -53,7 +53,7 @@ mod test {
             {Fq::toaltstack()}
         };
         let hash_scr = script! {
-            {hash_messages(vec![ElementType::Fp12v1, ElementType::Fp12v1])}
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v0])}
             OP_TRUE
         };
 
@@ -96,7 +96,7 @@ mod test {
             }
         };
         let hash_scr = script!(
-            {hash_messages(vec![ElementType::Fp12v1])}
+            {hash_messages(vec![ElementType::Fp12v0])}
             OP_TRUE
         );
 
@@ -162,7 +162,7 @@ mod test {
         );
         let hint_in = ElemFp12Acc { f, hash: fhash };
         let (hint_out, tap_hash_c2, mut hint_script) = chunk_hash_c2(hint_in);
-        hint_script.extend_from_slice(&Element::Fp12(hint_in).get_hash_preimage_as_hints(ElementType::Fp12v1));
+        hint_script.extend_from_slice(&Element::Fp12(hint_in).get_hash_preimage_as_hints(ElementType::Fp12v0));
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
@@ -175,7 +175,7 @@ mod test {
             {Fq::toaltstack()}
         };
         let hash_scr = script!(
-            {hash_messages(vec![ElementType::Fp12v1, ElementType::Fp12v0])}
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v0])}
             OP_TRUE
         );
 
@@ -517,7 +517,7 @@ mod test {
 
         let (hint_out, tap_scr, mut hint_script) = chunk_dense_dense_mul0(hint_f, hint_g);
         let a_preimage_hints = Element::Fp12(hint_f).get_hash_preimage_as_hints(ElementType::Fp12v0);
-        let b_preimage_hints = Element::Fp12(hint_g).get_hash_preimage_as_hints(ElementType::Fp12v1);
+        let b_preimage_hints = Element::Fp12(hint_g).get_hash_preimage_as_hints(ElementType::Fp12v0);
         hint_script.extend_from_slice(&a_preimage_hints);
         hint_script.extend_from_slice(&b_preimage_hints);
 
@@ -538,11 +538,11 @@ mod test {
         };
 
         let hash_scr = script!(
-            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v1, ElementType::Fp6])} //{hash_mul(true)}
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v0, ElementType::Fp6])} //{hash_mul(true)}
             OP_TRUE
         );
 
-        let tap_len = tap_scr.len();
+        let tap_len = tap_scr.len() + hash_scr.len();
         let script = script! {
             for h in hint_script {
             { h.push() }
@@ -618,12 +618,12 @@ mod test {
             {Fq::toaltstack()}
         };
         let hash_scr = script!(
-            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v1, ElementType::Fp6Hash, ElementType::Fp12v2])} 
+            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v0, ElementType::Fp6Hash, ElementType::Fp12v2])} 
             OP_TRUE
         );
 
 
-        let tap_len = tap_scr.len();
+        let tap_len = tap_scr.len() + hash_scr.len();
         let script = script! {
             for h in hint_script {
                 { h.push() }
@@ -985,7 +985,7 @@ mod test {
             {Fq::toaltstack()}                 
         };
         let hash_scr = script! {
-            {hash_messages(vec![ElementType::G1, ElementType::G1, ElementType::Fp12v1])}
+            {hash_messages(vec![ElementType::G1, ElementType::G1, ElementType::Fp12v0])}
             OP_TRUE
         };
         // let (nt2, nt3) = (hint_out.t2, hint_out.t3);
@@ -1041,7 +1041,7 @@ mod test {
             {Fq::toaltstack()}                 
         };
         let hash_scr = script! {
-            {hash_messages(vec![ElementType::G1, ElementType::G1, ElementType::Fp12v1])}
+            {hash_messages(vec![ElementType::G1, ElementType::G1, ElementType::Fp12v0])}
             OP_TRUE
         };
 
@@ -1111,7 +1111,7 @@ mod test {
         // assert_eq!( nt2, get_hint_for_add_with_frob(q2, t2, ate));
 
         let hash_scr = script! {
-            {hash_messages(vec![ElementType::G1, ElementType::G1, ElementType::Fp12v1])}
+            {hash_messages(vec![ElementType::G1, ElementType::G1, ElementType::Fp12v0])}
             OP_TRUE
         };
 
@@ -1232,7 +1232,7 @@ mod test {
                 {Fq::toaltstack()}
             };
             let hash_scr = script!{
-                {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp6, ElementType::Fp12v1])}
+                {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp6, ElementType::Fp12v0])}
                 OP_TRUE
             };
             let script = script! {

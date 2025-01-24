@@ -15,8 +15,7 @@ pub(crate) enum Element {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum ElementType {
-    Fp12v0, // 2,4, 2, 4
-    Fp12v1,  // 6, 6
+    Fp12v0, // 6, 6
     Fp12v2, // 6, 1
     Fp6,
     Fp6Hash,
@@ -41,7 +40,6 @@ impl ElementType {
             ElementType::G2AddEvalMul => 4 + 1 + 1,
             ElementType::G2DblEval => 4 + 4 + 1,
             ElementType::Fp12v0 => 12,
-            ElementType::Fp12v1 => 12,
             ElementType::Fp12v2 => 6 + 1,
             ElementType::Fp6 => 6,
             ElementType::Fp6Hash => 1,
@@ -161,7 +159,7 @@ impl Element {
                     vec![]
                 }
             },
-            ElementType::Fp12v1=> {
+            ElementType::Fp12v0=> {
                 if let Element::Fp12(r) = self {
                     r.f.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect()
                 } else {
