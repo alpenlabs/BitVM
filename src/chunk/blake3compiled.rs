@@ -34,19 +34,19 @@ pub fn hash_192b() -> Script {
 
 pub fn hash_64b_compact() -> Script {
     let mut stack = StackTracker::new();
-    blake3_u4::blake3(&mut stack, 64, 8, Some(true));
+    blake3_u4_compact(&mut stack, 64, true, true);
     wrap_scr(stack.get_script())
 }
 
 pub fn hash_128b_compact() -> Script {
     let mut stack = StackTracker::new();
-    blake3_u4::blake3(&mut stack, 128, 8, Some(false));
+    blake3_u4_compact(&mut stack, 128, true, false);
     wrap_scr(stack.get_script())
 }
 
 pub fn hash_192b_compact() -> Script {
     let mut stack = StackTracker::new();
-    blake3_u4::blake3(&mut stack, 192, 8, Some(false));
+    blake3_u4_compact(&mut stack, 192, true, false);
     wrap_scr(stack.get_script())
 }
 

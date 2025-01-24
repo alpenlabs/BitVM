@@ -6,7 +6,7 @@ use ark_ff::{AdditiveGroup, BigInt, BigInteger, Field};
 use crate::bigint::{BigIntImpl, U254, U256};
 use crate::bn254;
 use crate::bn254::fq2::Fq2;
-use crate::chunk::blake3compiled::{hash_128b, hash_192b, hash_64b};
+use crate::chunk::blake3compiled::{hash_128b, hash_128b_compact, hash_192b, hash_192b_compact, hash_64b, hash_64b_compact};
 use crate::pseudo::NMUL;
 use crate::signatures::wots::{wots160, wots256};
 use crate::{
@@ -82,28 +82,6 @@ pub(crate) fn gen_bitcom(
     tot_script
 }
 
-fn split_digit(window: u32, index: u32) -> Script {
-    script! {
-        // {v}
-        0                           // {v} {A}
-        OP_SWAP
-        for i in 0..index {
-            OP_TUCK                 // {v} {A} {v}
-            { 1 << (window - i - 1) }   // {v} {A} {v} {1000}
-            OP_GREATERTHANOREQUAL   // {v} {A} {1/0}
-            OP_TUCK                 // {v} {1/0} {A} {1/0}
-            OP_ADD                  // {v} {1/0} {A+1/0}
-            if i < index - 1 { { NMUL(2) } }
-            OP_ROT OP_ROT
-            OP_IF
-                { 1 << (window - i - 1) }
-                OP_SUB
-            OP_ENDIF
-        }
-        // OP_SWAP
-    }
-}
-
 pub fn unpack_limbs_to_nibbles() -> Script {
     U256::transform_limbsize(29,4)
 }
@@ -119,31 +97,19 @@ pub fn pack_nibbles_to_limbs() -> Script {
 // Hash(Hb1, Hb0)
 // Hb
 
+
 pub(crate) fn hash_fp2() -> Script {
     script! {
-        { Fq::toaltstack() }
-        { unpack_limbs_to_nibbles() }
-        { Fq::fromaltstack()}
-        { unpack_limbs_to_nibbles() }
-        { hash_64b() }
+        { hash_64b_compact() }
         { pack_nibbles_to_limbs() }
     }
 }
 
 pub(crate) fn hash_fp4() -> Script {
     script! {
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-        { Fq::toaltstack() }
-
-        { unpack_limbs_to_nibbles() }
-        { Fq::fromaltstack()}
-        { unpack_limbs_to_nibbles() }
-        { Fq::fromaltstack()}
-        { unpack_limbs_to_nibbles() }
-        { Fq::fromaltstack()}
-        { unpack_limbs_to_nibbles() }
-        { hash_128b() }
+        // [a0b0, a0b1, a1b0, a1b1]
+        {Fq2::roll(2)}
+        { hash_128b_compact() }
         { pack_nibbles_to_limbs() }
     }
 }
@@ -180,78 +146,24 @@ pub(crate) fn extern_fr_to_nibbles(msg: ark_bn254::Fr) -> [u8; 64] {
 
 pub(crate) fn hash_fp12() -> Script {
     script! {
-        for _ in 0..=10 {
+        for _ in 0..6 {
             {Fq::toaltstack()}
         }
-
-        // first part
-        { unpack_limbs_to_nibbles() }
-        { Fq::fromaltstack() }
-        { unpack_limbs_to_nibbles() }
-        {hash_64b()}
-        { pack_nibbles_to_limbs() }
-
-        { Fq::fromaltstack() }
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack() }
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack() }
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack() }
-        {unpack_limbs_to_nibbles()}
-            for _ in 0..9 {
-                {64*4 + (9-1)} OP_ROLL
-            }
-            {Fq::toaltstack()}
-        { hash_128b() }
-
-
-        {Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_64b()}
-        {pack_nibbles_to_limbs()}
+        {hash_fp6()}
 
         // second part: Stack: [hash_first], Alt: [6 fps]
-
-        { Fq::fromaltstack() }
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack() }
-        {unpack_limbs_to_nibbles()}
-            for _ in 0..9 {
-                {64*2 + (9-1)} OP_ROLL
-            }
-            {Fq::toaltstack()} //send Hfirst
-        {hash_64b()}
-        { pack_nibbles_to_limbs() }
-        {Fq::fromaltstack()} // bring Hfirst: [H0, HU]
-
-
-        { Fq::fromaltstack() }
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack() }
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack() }
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack() }
-        {unpack_limbs_to_nibbles()}
-            for _ in 0..18 {
-                {64*4 + 9 + (9-1)} OP_ROLL
-            }
-            {Fq2::toaltstack()}
-        { hash_128b() }
-
-        {Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_64b()}
+        for _ in 0..6 {
+            {Fq::fromaltstack()}
+        }
+        {Fq::roll(6)} {Fq::toaltstack()}
+        {hash_fp6()}
 
         // wrap up
         {Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_64b()}
+        {hash_64b_compact()}
         {pack_nibbles_to_limbs()}
     }
 }
-
 
 
 pub(crate) fn extern_nibbles_to_limbs(nibble_array: [u8; 64]) -> [u32; 9] {
@@ -460,69 +372,55 @@ pub(crate) fn new_hash_g2acc_with_hashed_t(is_dbl: bool) -> Script {
 
 pub(crate) fn hash_fp6() -> Script {
     script! {
-        for _ in 0..5 {
+        // [a, b, c]
+        for _ in 0..4 {
             {Fq::toaltstack()}
         }
 
         // first part
-        { unpack_limbs_to_nibbles() }
-        { Fq::fromaltstack() }
-        { unpack_limbs_to_nibbles() }
-        {hash_64b()}
+        {hash_64b_compact()}
         { pack_nibbles_to_limbs() }
 
         { Fq::fromaltstack() }
-        {unpack_limbs_to_nibbles()}
         { Fq::fromaltstack() }
-        {unpack_limbs_to_nibbles()}
         { Fq::fromaltstack() }
-        {unpack_limbs_to_nibbles()}
         { Fq::fromaltstack() }
-        {unpack_limbs_to_nibbles()}
+        { Fq2::roll(2) }
 
-            for _ in 0..9 {
-                {64*4 + (9-1)} OP_ROLL
-            }
-            {Fq::toaltstack()}
-        { hash_128b() }
-
+        {Fq::roll(4)}
+        {Fq::toaltstack()}
+        { hash_128b_compact() }
+        {pack_nibbles_to_limbs()}
 
         {Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_64b()}
+        {hash_64b_compact()}
         {pack_nibbles_to_limbs()}
 
     }
 }
 
-
 pub(crate) fn hash_fp12_192() -> Script {
 
     script! {
-        for _ in 0..=10 {
+        for _ in 0..6 {
             {Fq::toaltstack()}
         }
-        {unpack_limbs_to_nibbles() }
-        for _ in 0..5 {
-            { Fq::fromaltstack()}
-            {unpack_limbs_to_nibbles()}
-        }
-        {hash_192b()}
+        {Fq2::roll(2)} {Fq2::roll(4)}
+        {hash_192b_compact()}
         {pack_nibbles_to_limbs()}
 
         for _ in 0..6 {
             { Fq::fromaltstack()}
-            {unpack_limbs_to_nibbles()}
         }
-        for _ in 0..9 {
-            {64*6 + 8} OP_ROLL
-        }
+        {Fq::roll(6)}
         {Fq::toaltstack()}
-        {hash_192b()}
+
+        {Fq2::roll(2)} {Fq2::roll(4)}
+        {hash_192b_compact()}
+        {pack_nibbles_to_limbs()}
 
         {Fq::fromaltstack()}
-        { unpack_limbs_to_nibbles() }
-        {hash_64b()}
+        {hash_64b_compact()}
         {pack_nibbles_to_limbs()}
     }
 }
@@ -531,44 +429,15 @@ pub(crate) fn hash_fp12_192() -> Script {
 
 // 6Fp_hash
 // fp6
-
 pub fn hash_fp12_with_hints() -> Script {
     script! {
         {Fq::toaltstack()} //Hc0
-        for _ in 0..=4 {
-            {Fq::toaltstack()}
-        }
-
-        { unpack_limbs_to_nibbles() }
-        { Fq::fromaltstack() }
-        { unpack_limbs_to_nibbles() }
-        { hash_64b() }
-        { pack_nibbles_to_limbs() }
-
-        { Fq::fromaltstack() }
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack() }
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack() }
-        {unpack_limbs_to_nibbles()}
-        { Fq::fromaltstack() }
-        {unpack_limbs_to_nibbles()}
-            for _ in 0..9 {
-                {64*4 + (9-1)} OP_ROLL
-            }
-            {Fq::toaltstack()}
-        { hash_128b() }
-
-        {Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_64b()}
+        {hash_fp6()}
 
         // wrap up
         {Fq::fromaltstack()}
-        {unpack_limbs_to_nibbles()}
-        {hash_64b()}
+        {hash_64b_compact()}
         {pack_nibbles_to_limbs()}
-
     }
 }
 
@@ -773,11 +642,9 @@ mod test {
         let g = ark_bn254::Fq12::rand(&mut prng);
 
         let ps = g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
-
-
-        let res = emulate_extern_hash_fps_scripted(ps.clone(), true);
-        let res2 = extern_hash_fps(ps, true);
-       assert_eq!(res, res2);
+        let res = emulate_extern_hash_fps_scripted(ps.clone(), false);
+        let res2 = extern_hash_fps(ps, false);
+        assert_eq!(res, res2);
     }
 
 }

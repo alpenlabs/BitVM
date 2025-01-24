@@ -101,7 +101,7 @@ pub fn blake3_u4_compact(
         }
     }
 
-    stack.debug();
+    // stack.debug();
 
     // Push msg to alt stack to get the table on top
     for _ in 0..num_blocks {
@@ -343,15 +343,6 @@ mod tests {
         assert!(execute_script(stack.get_script()).success);
 
         println!("Blake3 expected Hash :: {}", expected_hash.to_string());
-
-
-
-
-
-
-
-
-
     }
 
     // verfires that the hash of the input hex matches with the official implementation.
