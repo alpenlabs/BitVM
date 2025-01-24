@@ -34,7 +34,6 @@ pub enum ScriptType {
     PreMillerPrecomputeP,
     PreMillerPrecomputePFromHash,
     PreMillerHashC,
-    PreMillerHashC2,
     PreMillerInv0,
     PreMillerInv1,
     PreMillerInv2,
@@ -220,26 +219,6 @@ pub(crate) fn wrap_hints_precompute_p_from_hash(
     }
     
     Segment { id:  segment_id as u32, is_validation: false, parameter_ids: input_segment_info, result: (Element::G1(p3d), ElementType::G1), hints: op_hints, scr_type: ScriptType::PreMillerPrecomputePFromHash }
-}
-
-pub(crate) fn wrap_hint_hash_c2(
-    skip: bool,
-    segment_id: usize,
-    in_c: &Segment
-) -> Segment {
-    
-    let mut input_segment_info: Vec<(SegmentID, ElementType)> = vec![];
-    input_segment_info.push((in_c.id, ElementType::Fp12v0));
-
-    let (mut c2, mut op_hints) = (ElemFp12Acc::mock(), vec![]);
-    if !skip {
-        let in_c = in_c.result.0.try_into().unwrap();
-        (c2, _, op_hints) = chunk_hash_c2(in_c);
-        // op_hints.extend_from_slice(&Element::Fp12v1(in_c).get_hash_preimage_as_hints());
-
-    }
-    
-    Segment { id:  segment_id as u32, is_validation: false, parameter_ids: input_segment_info, result: (Element::Fp12(c2), ElementType::Fp12v0), hints: op_hints, scr_type: ScriptType::PreMillerHashC2 }
 }
 
 pub(crate) fn wrap_inv0(

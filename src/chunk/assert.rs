@@ -158,20 +158,14 @@ pub(crate) fn groth16(
     let s = wrap_hint_hash_c(is_compile_mode, all_output_hints.len(), gs);
     push_compare_or_return!(s);
 
-    let c2 = wrap_hint_hash_c2(is_compile_mode, all_output_hints.len(), &c);
-    push_compare_or_return!(c2);
-
-    let dmul0 = wrap_inv0(is_compile_mode, all_output_hints.len(), &c2);
+    let dmul0 = wrap_inv0(is_compile_mode, all_output_hints.len(), &c);
     push_compare_or_return!(dmul0);
 
     let dmul1 = wrap_inv1(is_compile_mode, all_output_hints.len(), &dmul0);
     push_compare_or_return!(dmul1);
 
-    let gcinv = wrap_inv2(is_compile_mode, all_output_hints.len(), &dmul1, &c2);
+    let gcinv = wrap_inv2(is_compile_mode, all_output_hints.len(), &dmul1, &c);
     push_compare_or_return!(gcinv);
-
-    let cinv2 = wrap_hint_hash_c2(is_compile_mode, all_output_hints.len(), &gcinv);
-    push_compare_or_return!(cinv2);
 
     let valid_t4 = wrap_verify_g2_is_on_curve(is_compile_mode, all_output_hints.len(), &q4yc1, &q4yc0, &q4xc1, &q4xc0);
     push_compare_or_return!(valid_t4);
@@ -179,7 +173,7 @@ pub(crate) fn groth16(
     push_compare_or_return!(t4);
 
     let (mut t2, mut t3) = (pubs.q2, pubs.q3);
-    let mut f_acc = cinv2.clone();
+    let mut f_acc = gcinv.clone();
 
     for j in (1..ATE_LOOP_COUNT.len()).rev() {
         if !is_compile_mode {

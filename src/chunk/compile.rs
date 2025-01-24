@@ -18,7 +18,7 @@ use super::{assert::{groth16, Pubs}, element::{ElemFp12Acc, ElemFr, ElemG2PointA
 pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 pub const NUM_PUBS: usize = 1;
 pub const NUM_U256: usize = 32;
-pub const NUM_U160: usize = 562;
+pub const NUM_U160: usize = 560;
 const VALIDATING_TAPS: usize = 7;
 const HASHING_TAPS: usize = NUM_U160;
 pub const NUM_TAPS: usize = HASHING_TAPS + VALIDATING_TAPS; 
@@ -207,9 +207,6 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
             },
             ScriptType::PreMillerHashC => {
                 chunk_hash_c([ElemFq::mock(); 12].to_vec()).1
-            },
-            ScriptType::PreMillerHashC2 => {
-                chunk_hash_c2(ElemFp12Acc::mock()).1
             },
             ScriptType::PreMillerInv0 => {
                 chunk_inv0(ElemFp12Acc::mock()).1

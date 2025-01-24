@@ -106,42 +106,6 @@ pub(crate) fn chunk_verify_fq12_is_on_field(
 }
 
 
-// HASH_C
-pub(crate) fn chunk_hash_c2(
-    hint_in_c: ElemFp12Acc,
-) -> (ElemFp12Acc, Script, Vec<Hint>) {
-
-    fn tap_hash_c2() -> Script {
-        let ops_scr = script! {
-            {Fq12::copy(0)}
-        };
-
-        let hash_scr = script!(
-            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v0])}
-            OP_TRUE
-        );
-
-        let sc = script! {
-            {ops_scr}
-            // {hash_scr}
-        };
-        sc
-    }
-
-    let f = hint_in_c.f;
-    let fvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
-    let inhash = extern_hash_fps(fvec.clone(), false);
-    let outhash = extern_hash_fps(fvec.clone(), true);
-    (
-        ElemFp12Acc {
-            f: hint_in_c.f,
-            hash: outhash,
-        },
-        tap_hash_c2(),
-        vec![],
-    )
-}
-
 // verify
 pub(crate) fn chunk_verify_g1_is_on_curve(
     hint_in_py: ark_bn254::Fq,

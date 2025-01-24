@@ -149,54 +149,6 @@ mod test {
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
 
-    
-    #[test]
-    fn test_tap_hash_c2() {
-
-        // runtime
-        let mut prng = ChaCha20Rng::seed_from_u64(0);
-        let f = ark_bn254::Fq12::rand(&mut prng);
-        let fhash = extern_hash_fps(
-            f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-            false,
-        );
-        let hint_in = ElemFp12Acc { f, hash: fhash };
-        let (hint_out, tap_hash_c2, mut hint_script) = chunk_hash_c2(hint_in);
-        hint_script.extend_from_slice(&Element::Fp12(hint_in).get_hash_preimage_as_hints(ElementType::Fp12v0));
-
-        let bitcom_scr = script!{
-            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
-                {i}
-            }
-            {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(hint_in.hashed_output()) {
-                {i}
-            }
-            {Fq::toaltstack()}
-        };
-        let hash_scr = script!(
-            {hash_messages(vec![ElementType::Fp12v0, ElementType::Fp12v0])}
-            OP_TRUE
-        );
-
-        let tap_len = tap_hash_c2.len();
-        let script = script! {
-            for h in hint_script {
-                { h.push() }
-            }
-            {bitcom_scr}
-            {tap_hash_c2}
-            {hash_scr}
-        };
-        let res = execute_script(script);
-        for i in 0..res.final_stack.len() {
-            println!("{i:} {:?}", res.final_stack.get(i));
-        }
-        assert!(!res.success && res.final_stack.len() == 1);
-        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
-    }
-
-
     #[test]
     fn test_tap_init_t4() {
 
@@ -478,7 +430,7 @@ mod test {
             OP_TRUE
         };
 
-        let tap_len = tap_scr.len();
+        let tap_len = tap_scr.len() + hash_script.len();
         let script = script! {
             for h in hint_script {
                 { h.push() }
