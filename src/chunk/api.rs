@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 use std::ops::Neg;
 
-use crate::chunk::assert::{groth16, hint_to_data, Pubs};
+use crate::chunk::assert::{groth16,Pubs};
+use crate::chunk::assigner::{get_assertions, get_intermediates, get_proof, get_pubs, hint_to_data};
 use crate::chunk::compile::{compile_ops, compile_taps, Vkey};
 use crate::chunk::compile::{ NUM_PUBS};
 use crate::chunk::element::{ElemG1Point, InputProof};
 use crate::chunk::element::ElemTraitExt;
 use crate::chunk::segment::Segment;
-use crate::chunk::wots::WOTSPubKey;
 use crate::groth16::g16::{
     N_VERIFIER_FQS, Assertions, PublicKeys, Signatures, N_TAPLEAVES, N_VERIFIER_HASHES,
 };
@@ -20,7 +20,7 @@ use ark_ec::pairing::Pairing;
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::Field;
 
-use super::assert::{script_exec, get_assertions, get_intermediates, get_proof, get_pubs};
+use super::assert::{script_exec};
 
 
 pub fn api_compile(vk: &ark_groth16::VerifyingKey<Bn254>) -> Vec<Script> {
