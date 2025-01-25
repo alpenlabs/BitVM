@@ -114,13 +114,6 @@ pub(crate) fn hash_fp4() -> Script {
     }
 }
 
-
-pub(crate) fn extern_fq_to_nibbles(msg: ark_bn254::Fq) -> [u8; 64] {
-    let v = fq_to_chunked_bits(msg.into(), 4);
-    let vu8: Vec<u8> = v.iter().map(|x| (*x) as u8).collect();
-    vu8.try_into().unwrap()
-}
-
 pub(crate) fn extern_bigint_to_nibbles(msg: ark_ff::BigInt<4>) -> [u8; 64] {
     let v = fq_to_chunked_bits(msg, 4);
     let vu8: Vec<u8> = v.iter().map(|x| (*x) as u8).collect();
@@ -141,13 +134,6 @@ fn fq_to_chunked_bits(fq: BigInt<4>, limb_size: usize) -> Vec<u32> {
                 res
         })
         .collect()
-}
-
-
-pub(crate) fn extern_fr_to_nibbles(msg: ark_bn254::Fr) -> [u8; 64] {
-    let v = fq_to_chunked_bits(msg.into(), 4);
-    let vu8: Vec<u8> = v.iter().map(|x| (*x) as u8).collect();
-    vu8.try_into().unwrap()
 }
 
 pub(crate) fn extern_nibbles_to_limbs(nibble_array: [u8; 64]) -> [u32; 9] {
@@ -378,7 +364,7 @@ pub fn hash_fp12_with_hints() -> Script {
 #[cfg(test)]
 mod test {
     use super::*;
-    use ark_ff::{Field, UniformRand};
+    use ark_ff::{Field, PrimeField, UniformRand};
     use ark_std::iterable::Iterable;
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha20Rng;
@@ -532,7 +518,7 @@ mod test {
             }
             arr
         }
-        let pb1 = extern_fq_to_nibbles(p);
+        let pb1 = extern_bigint_to_nibbles(p.into_bigint());
         let pb2 = emulate_fq_to_nibbles_scripted(p);
         assert_eq!(pb1, pb2);
     }

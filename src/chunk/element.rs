@@ -2,7 +2,7 @@ use crate::{bn254::utils::Hint, chunk::primitves::extern_hash_nibbles};
 use ark_bn254::{G1Affine, G2Affine};
 use ark_ff::{AdditiveGroup, Field, MontFp, PrimeField};
 use num_bigint::BigUint;
-use super::{compile::NUM_PUBS, primitves::{extern_bigint_to_nibbles, extern_fq_to_nibbles, extern_fr_to_nibbles, extern_hash_fps, extern_nibbles_to_limbs, HashBytes}, segment::{ScriptType, Segment}};
+use super::{compile::NUM_PUBS, primitves::{extern_bigint_to_nibbles, extern_hash_fps, extern_nibbles_to_limbs, HashBytes}, segment::{ScriptType, Segment}};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Element {
