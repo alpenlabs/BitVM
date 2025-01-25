@@ -9,13 +9,11 @@ use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
 };
-use ark_bn254::{G1Affine};
 use ark_ec::AffineRepr;
 use ark_ff::{AdditiveGroup, Field, MontFp, PrimeField};
-use bitcoin::opcodes::all::OP_ENDIF;
 
 
-use super::primitves::{extern_hash_fps, hash_fp12_192};
+use super::primitves::extern_hash_fps;
 use super::element::*;
 
 

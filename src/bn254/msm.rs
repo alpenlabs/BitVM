@@ -1,8 +1,6 @@
 
 use super::utils::Hint;
 use crate::bn254::fp254impl::Fp254Impl;
-use crate::bn254::fq::Fq;
-use crate::bn254::fq2::Fq2;
 use crate::bn254::utils::{fr_push_not_montgomery};
 use crate::bn254::{curves::G1Affine, curves::G1Projective, utils::fr_push};
 use crate::{treepp::*};

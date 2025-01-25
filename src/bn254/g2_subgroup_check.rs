@@ -2,12 +2,11 @@ use std::{ops::Neg, str::FromStr};
 
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, Field};
-use bitcoin::opcodes::all::{OP_BOOLAND, OP_ENDIF, OP_FROMALTSTACK, OP_TOALTSTACK};
 use bitcoin_script::script;
 use num_bigint::BigUint;
 use crate::treepp::Script;
 
-use super::{curves::{G1Affine, G2Affine}, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, utils::{fq2_push_not_montgomery, hinted_affine_add_line, hinted_affine_double_line, hinted_check_chord_line, hinted_check_tangent_line, Hint}};
+use super::{curves::G2Affine, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, utils::{fq2_push_not_montgomery, hinted_affine_add_line, hinted_affine_double_line, hinted_check_chord_line, hinted_check_tangent_line, Hint}};
 
 fn split_scalar(window: usize, x0: u64) -> Vec<Vec<u8>> {
     fn u64_to_bits(x: u64) -> Vec<u8> {

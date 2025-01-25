@@ -1,19 +1,15 @@
 use crate::bn254::fq6::Fq6;
-use crate::bn254::utils::{
-    fq_push_not_montgomery, Hint,
-};
+use crate::bn254::utils::Hint;
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::blake3compiled::hash_messages;
 use crate::chunk::primitves::{
-    extern_hash_nibbles, extern_nibbles_to_limbs, hash_fp12_192, hash_fp12_with_hints, hash_fp6, new_hash_g2acc_with_hashed_t 
+    extern_nibbles_to_limbs, hash_fp12_192 
 };
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
 };
-use ark_ff::{AdditiveGroup, Field};
-use bitcoin::script;
-use num_traits::One;
+use ark_ff::Field;
 
 use super::primitves::{extern_hash_fps};
 use super::element::*;

@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::ops::Neg;
 
 use crate::chunk::assert::{groth16,Pubs};

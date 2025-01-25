@@ -1,23 +1,17 @@
-use std::ops::Neg;
-use std::str::FromStr;
 
 use crate::bn254::curves::G1Affine;
 use crate::bn254::{self};
 use crate::bn254::fr::Fr;
-use crate::bn254::utils::{fq2_push_not_montgomery, fq_push_not_montgomery, hinted_from_eval_point, Hint};
-use crate::chunk::primitves::extern_hash_fps;
+use crate::bn254::utils::Hint;
 use crate::{
-    bn254::{fp254impl::Fp254Impl, fq::Fq},
+    bn254::fp254impl::Fp254Impl,
     treepp::*,
 };
 use ark_ec::{AffineRepr, CurveGroup};
-use ark_ff::{AdditiveGroup, BigInteger, Field, PrimeField};
-use num_bigint::BigUint;
-use num_traits::One;
+use ark_ff::AdditiveGroup;
 
 use super::blake3compiled::hash_messages;
-use super::element::{ElemU256, ElemG1Point, ElemTraitExt, ElementType};
-use super::primitves::{hash_fp2, HashBytes};
+use super::element::{ElemU256, ElemG1Point, ElementType};
 use crate::bn254::fq2::Fq2;
 
 pub(crate) fn chunk_msm(window: usize, ks: Vec<ElemU256>, qs: Vec<ark_bn254::G1Affine>) -> Vec<(ElemG1Point, Script, Vec<Hint>)> {
@@ -136,7 +130,7 @@ pub(crate) fn chunk_hash_p(
 mod test {
 
     use crate::{
-        bn254::{curves, fq2::Fq2, utils::fr_push_not_montgomery}, chunk::{element::Element, primitves::extern_nibbles_to_limbs}, execute_script_without_stack_limit
+        bn254::{curves, fq::Fq, fq2::Fq2, utils::{fq_push_not_montgomery, fr_push_not_montgomery}}, chunk::{element::Element, primitves::extern_nibbles_to_limbs}, execute_script_without_stack_limit
     };
     use super::*;
     use ark_bn254::{G1Affine};
@@ -196,8 +190,8 @@ mod test {
     fn test_hinted_check_tangent_line() {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let t = ark_bn254::G1Affine::rand(&mut prng);
-        let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
-        let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
+        let two_inv = ark_bn254::Fq::ONE.double().inverse().unwrap();
+        let three_div_two = (ark_bn254::Fq::ONE.double() + ark_bn254::Fq::ONE) * two_inv;
         let mut alpha = t.x.square();
         alpha /= t.y;
         alpha *= three_div_two;

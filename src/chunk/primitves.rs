@@ -1,13 +1,10 @@
 use std::collections::HashMap;
 
-use ark_bn254::fq;
-use ark_ff::{AdditiveGroup, BigInt, BigInteger, Field};
+use ark_ff::{BigInt, BigInteger};
 
-use crate::bigint::{BigIntImpl, U254, U256};
-use crate::bn254;
+use crate::bigint::U256;
 use crate::bn254::fq2::Fq2;
 use crate::chunk::blake3compiled::{hash_128b, hash_192b, hash_64b};
-use crate::pseudo::NMUL;
 use crate::signatures::wots::{wots160, wots256};
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},

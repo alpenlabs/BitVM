@@ -1,8 +1,8 @@
 
 
-use crate::{bn254::{curves::G1Affine, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fr::Fr, utils::{fq_push_not_montgomery, Hint}}, chunk::taps_msm::chunk_msm, execute_script, treepp};
+use crate::{bn254::{fp254impl::Fp254Impl, fr::Fr, utils::Hint}, chunk::taps_msm::chunk_msm};
 
-use super::{blake3compiled::hash_messages, element::Element, primitves::extern_nibbles_to_limbs, taps_msm::chunk_hash_p, taps_point_eval::*, taps_premiller::*};
+use super::{element::Element, taps_msm::chunk_hash_p, taps_point_eval::*, taps_premiller::*};
 
 pub type SegmentID = u32;
 pub type SegmentOutputType = bool;
@@ -57,7 +57,6 @@ pub enum ScriptType {
 
 
 use ark_ff::{AdditiveGroup, Field};
-use bitcoin_script::script;
 
 use super::{element::*, primitves::extern_hash_fps,  taps_point_ops::*, taps_mul::*};
 
@@ -87,7 +86,7 @@ pub(crate) fn wrap_hint_msm(
     if !skip {
         let houts = chunk_msm(window as usize, hint_scalars, pub_vky.clone());
         assert_eq!(houts.len() as u32, num_chunks);
-        for (msm_chunk_index, (hout_msm, _, mut op_hints)) in houts.into_iter().enumerate() {
+        for (msm_chunk_index, (hout_msm, _, op_hints)) in houts.into_iter().enumerate() {
             let mut input_segment_info: Vec<(SegmentID, ElementType)> = vec![];
             if msm_chunk_index > 0 {
                 let prev_msm_id = (segment_id + msm_chunk_index -1) as u32;

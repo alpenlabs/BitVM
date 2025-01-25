@@ -1,18 +1,16 @@
 use crate::bn254::{self, utils::*};
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::blake3compiled::hash_messages;
-use crate::chunk::primitves::*;
 use crate::{
-    bn254::{fp254impl::Fp254Impl, fq::Fq},
+    bn254::fp254impl::Fp254Impl,
     treepp::*,
 };
-use ark_bn254::{G2Affine};
 use ark_ec::CurveGroup;
-use ark_ff::{AdditiveGroup, Field, Zero};
+use ark_ff::{Field, Zero};
 use num_traits::One;
 use std::ops::Neg;
 
-use super::primitves::{extern_hash_fps, hash_fp12_192};
+use super::primitves::extern_hash_fps;
 use super::element::*;
 
 fn utils_multiply_point_evals_for_fixed_g2(

@@ -1,15 +1,12 @@
-use std::{collections::HashMap, ops::Neg};
+use std::collections::HashMap;
 
-use ark_bn254::{Bn254};
-use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
-use ark_ff::{Field, PrimeField};
+use ark_ec::CurveGroup;
 use bitcoin_script::script;
-use num_bigint::BigUint;
 
-use crate::{bn254::utils::Hint, chunk::{primitves::{tup_to_scr, HashBytes, Sig, SigData}, segment::*, taps_point_eval::get_hint_for_add_with_frob}, execute_script, groth16::g16::{Assertions, PublicKeys, Signatures, N_TAPLEAVES, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}, treepp};
+use crate::{bn254::utils::Hint, chunk::{primitves::{tup_to_scr, HashBytes, Sig, SigData}, segment::*, taps_point_eval::get_hint_for_add_with_frob}, execute_script, groth16::g16::{Signatures, N_TAPLEAVES}, treepp};
 
 
-use super::{api::nib_to_byte_array, compile::{ATE_LOOP_COUNT, NUM_PUBS, NUM_U160, NUM_U256}, element::*, assigner::*,  wots::WOTSPubKey};
+use super::{compile::ATE_LOOP_COUNT, element::*, assigner::*};
 
 
 

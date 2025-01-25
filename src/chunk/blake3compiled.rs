@@ -1,4 +1,4 @@
-use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fq12::Fq12, fq6::Fq6}, hash::{blake3_u4, blake3_u4_compact::blake3_u4_compact}, treepp::*};
+use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq}, hash::blake3_u4_compact::blake3_u4_compact, treepp::*};
 use bitcoin_script_stack::stack::StackTracker;
 
 use super::{element::ElementType, primitves::{hash_fp12_192, hash_fp12_with_hints, hash_fp2, hash_fp6, new_hash_g2acc_with_both_raw_le, new_hash_g2acc_with_hashed_le, new_hash_g2acc_with_hashed_t}};
