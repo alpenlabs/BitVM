@@ -10,6 +10,7 @@ mod taps_point_ops;
 #[allow(unused_variables)]
 mod taps_mul;
 mod taps_test;
+mod norm_fp12_test;
 mod wots;
 pub mod assert;
 pub mod segment;
