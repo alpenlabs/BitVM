@@ -161,3 +161,64 @@ pub(crate) fn get_pubs(vk: &ark_groth16::VerifyingKey<Bn254>) -> Pubs {
     let pubs: Pubs = Pubs { q2, q3, fixed_acc, ks_vks: msm_gs.clone(), vky0 };
     pubs
 }
+
+pub(crate) fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hints: &mut Vec<Segment>) -> ([Segment;2], [Segment;2], [Segment;4], [Segment;12], [Segment;12], [Segment;NUM_PUBS]) {
+    let pub_scalars: Vec<Segment> = eval_ins.ks.iter().enumerate().map(|(idx, f)| Segment {
+        is_validation: false,
+        id: (all_output_hints.len() + idx) as u32,
+        parameter_ids: vec![],
+        result: (Element::U256(*f), ElementType::ScalarElem),
+        hints: vec![],
+        scr_type: ScriptType::NonDeterministic,
+    }).collect();
+    all_output_hints.extend_from_slice(&pub_scalars);
+
+    let p4vec: Vec<Segment> = vec![
+        eval_ins.p4[1], eval_ins.p4[0], eval_ins.p2[1], eval_ins.p2[0]
+    ].iter().enumerate().map(|(idx, f)| Segment {
+        id: (all_output_hints.len() + idx) as u32,
+        is_validation: false,
+        parameter_ids: vec![],
+        result: (Element::U256(*f), ElementType::FieldElem),
+        hints: vec![],
+        scr_type: ScriptType::NonDeterministic
+    }).collect();
+    all_output_hints.extend_from_slice(&p4vec);
+    let (gp4y, gp4x, gp2y, gp2x) = (&p4vec[0], &p4vec[1], &p4vec[2], &p4vec[3]);
+
+    let gc: Vec<Segment> = eval_ins.c.iter().enumerate().map(|(idx, f)| Segment {
+        id: (all_output_hints.len() + idx) as u32,
+        is_validation: false,
+        parameter_ids: vec![],
+        result: (Element::U256(*f), ElementType::FieldElem),
+        hints: vec![],
+        scr_type: ScriptType::NonDeterministic
+    }).collect();
+    all_output_hints.extend_from_slice(&gc);
+
+    let gs: Vec<Segment> = eval_ins.s.iter().enumerate().map(|(idx, f)| Segment {
+        id: (all_output_hints.len() + idx) as u32,
+        is_validation: false,
+        parameter_ids: vec![],
+        result: (Element::U256(*f), ElementType::FieldElem),
+        hints: vec![],
+        scr_type: ScriptType::NonDeterministic
+    }).collect();
+    all_output_hints.extend_from_slice(&gs);
+
+    let temp_q4: Vec<Segment> = vec![
+        eval_ins.q4[0], eval_ins.q4[1], eval_ins.q4[2], eval_ins.q4[3]
+    ].iter().enumerate().map(|(idx, f)| Segment {
+        id: (all_output_hints.len() + idx) as u32,
+        is_validation: false,
+        parameter_ids: vec![],
+        result: (Element::U256(*f), ElementType::FieldElem),
+        hints: vec![],
+        scr_type: ScriptType::NonDeterministic
+    }).collect();
+    all_output_hints.extend_from_slice(&temp_q4);
+    // let (q4xc0, q4xc1, q4yc0, q4yc1) = (&temp_q4[0], &temp_q4[1], &temp_q4[2], &temp_q4[3]);
+
+    ([gp2x.clone(), gp2y.clone()], [gp4x.clone(), gp4y.clone()], temp_q4.try_into().unwrap(), gc.try_into().unwrap(), gs.try_into().unwrap(), pub_scalars.try_into().unwrap())
+}
+
