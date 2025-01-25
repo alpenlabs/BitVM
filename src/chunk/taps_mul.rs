@@ -70,7 +70,6 @@ pub(crate) fn chunk_sparse_dense_mul(
 
     let hash_dense_output = extern_hash_fps(
         f1.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-        true,
     );
     let mut simulate_stack_input = vec![];
     simulate_stack_input.extend_from_slice(&hints);
@@ -115,13 +114,11 @@ pub(crate) fn chunk_dense_dense_mul0(
     let fvec: Vec<ark_bn254::Fq> = f.to_base_prime_field_elements().collect();
     let hash_f = extern_hash_fps(
         fvec.clone(),
-        true,
     ); // dense
 
     let gvec: Vec<ark_bn254::Fq> = g.to_base_prime_field_elements().collect();
     let hash_g = extern_hash_fps(
         gvec.clone(),
-        false,
     ); // sparse
 
     let mut simulate_stack_input = vec![];
@@ -178,22 +175,18 @@ pub(crate) fn chunk_dense_dense_mul1(
     let fvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
     let hash_f = extern_hash_fps(
         fvec.clone(),
-        true,
-    );
+            );
     let gvec = g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
     let hash_g = extern_hash_fps(
         gvec.clone(),
-        false,
     );
 
     let hash_c0 = extern_hash_fps(
         h.c0.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-        true,
-    );
+            );
     let hash_c = extern_hash_fps(
         h.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-        true,
-    );
+            );
 
 
     let mut simulate_stack_input = vec![];
@@ -235,12 +228,10 @@ pub(crate) fn chunk_squaring(
     let avec = a.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
     let a_hash = extern_hash_fps(
         avec.clone(),
-        true,
-    );
+            );
     let b_hash = extern_hash_fps(
         b.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-        true,
-    );
+            );
    //assert_eq!(hint_in.ahash, a_hash);
 
     // let tup = vec![(sec_in[0], a_hash), (sec_out, b_hash)];
@@ -267,7 +258,7 @@ pub(crate) fn chunk_verify_fp12_is_unity(
 
     fn tap_verify_fp12_is_unity(g: ark_bn254::Fq12) -> Script {
         let ginv = g.inverse().unwrap();
-        let ginv_hash = extern_hash_fps(ginv.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), true);
+        let ginv_hash = extern_hash_fps(ginv.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>());
         let ginv_hash_limb = extern_nibbles_to_limbs(ginv_hash);
 
         let scr = script! {
@@ -329,11 +320,9 @@ pub(crate) fn chunk_frob_fp12(
     let fvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
     let fhash = extern_hash_fps(
         fvec.clone(),
-        false,
     );
     let ghash = extern_hash_fps(
         g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-        false,
     );
 
 

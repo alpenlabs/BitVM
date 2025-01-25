@@ -16,7 +16,6 @@ mod test {
     use crate::chunk::taps_premiller::*;
     use crate::chunk::taps_point_eval::*;
     use crate::execute_script_without_stack_limit;
-    use ark_ec::AffineRepr;
     use ark_ff::AdditiveGroup;
     use ark_ff::Field;
     use ark_std::UniformRand;
@@ -34,7 +33,6 @@ mod test {
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fhash = extern_hash_fps(
             f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-            false,
         );
         let hint_in = ElemFp12Acc { f, hash: fhash };
         let (hint_out, tap_frob, mut hint_script) = chunk_frob_fp12(hint_in, power);
@@ -83,7 +81,7 @@ mod test {
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fqvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
 
-        let (hint_out, tap_hash_c, hint_script) = chunk_hash_c(fqvec.clone());
+        let (hint_out, tap_hash_c, hint_script) = chunk_hash_c(fqvec.clone().into_iter().map(|f| f.into()).collect::<Vec<ElemU256>>());
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
@@ -124,7 +122,7 @@ mod test {
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fqvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
 
-        let (is_valid, tap_hash_c, hint_script) = chunk_verify_fq12_is_on_field(fqvec.clone());
+        let (is_valid, tap_hash_c, hint_script) = chunk_verify_fq12_is_on_field(fqvec.clone().into_iter().map(|f| f.into()).collect::<Vec<ElemU256>>());
         assert!(is_valid);
         let bitcom_scr = script!{
             for f in fqvec.iter().rev() {
@@ -155,7 +153,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let q = ark_bn254::G2Affine::rand(&mut prng);
 
-        let (hint_out, init_t4_tap, hint_script) = chunk_init_t4(q.y.c1, q.y.c0, q.x.c1, q.x.c0);
+        let (hint_out, init_t4_tap, hint_script) = chunk_init_t4(q.y.c1.into(), q.y.c0.into(), q.x.c1.into(), q.x.c0.into());
 
         let bitcom_script = script!{
             for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
@@ -199,7 +197,7 @@ mod test {
     fn test_chunk_verify_g2_on_curve() {
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let q = ark_bn254::G2Affine::rand(&mut prng);
-        let (hint_out, init_t4_tap, hint_script) = chunk_verify_g2_on_curve(q.y.c1, q.y.c0, q.x.c1, q.x.c0);
+        let (hint_out, init_t4_tap, hint_script) = chunk_verify_g2_on_curve(q.y.c1.into(), q.y.c0.into(), q.x.c1.into(), q.x.c0.into());
         assert_eq!(hint_out, q.is_on_curve());
         let bitcom_script = script!{
             {fq_push_not_montgomery(q.y.c1)}
@@ -234,7 +232,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let p = ark_bn254::G1Affine::rand(&mut prng);
 
-        let (hint_out, tap_prex, hint_script) = chunk_precompute_p(p.y, p.x);
+        let (hint_out, tap_prex, hint_script) = chunk_precompute_p(p.y.into(), p.x.into());
 
         let bitcom_scr = script!{
             for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
@@ -318,7 +316,7 @@ mod test {
         // runtime
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let p = ark_bn254::G1Affine::rand(&mut prng);
-        let (is_valid_point, tap_prex, hint_script) = chunk_verify_g1_is_on_curve(p.y, p.x);
+        let (is_valid_point, tap_prex, hint_script) = chunk_verify_g1_is_on_curve(p.y.into(), p.x.into());
         assert_eq!(p.is_on_curve(), is_valid_point);
         let bitcom_scr = script!{
             {G1Affine::push_not_montgomery(p)}
@@ -384,7 +382,6 @@ mod test {
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fhash = extern_hash_fps(
             f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-            true,
         );
         let hint_f = ElemFp12Acc { f, hash: fhash };
 
@@ -454,14 +451,12 @@ mod test {
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fhash = extern_hash_fps(
             f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-            true,
         );
         let hint_f = ElemFp12Acc { f, hash: fhash };
 
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fhash = extern_hash_fps(
             f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-            false,
         );
         let hint_g = ElemFp12Acc { f, hash: fhash };
 
@@ -519,21 +514,19 @@ mod test {
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fhash = extern_hash_fps(
             f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-            true,
         );
         let hint_f = ElemFp12Acc { f, hash: fhash };
 
         let g = ark_bn254::Fq12::rand(&mut prng);
         let ghash = extern_hash_fps(
             g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-            false,
         );
         let hint_g = ElemFp12Acc { f: g, hash: ghash };
 
 
         let c = hint_f.f * hint_g.f;
         let hash_c0 = extern_hash_fps(
-            c.c0.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), true);
+            c.c0.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>());
 
         let hint_c0 = c.c0;
 
@@ -602,14 +595,12 @@ mod test {
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fhash = extern_hash_fps(
             f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-            true,
         );
         let hint_f = ElemFp12Acc { f, hash: fhash };
 
         let g = f.inverse().unwrap();
         let ghash = extern_hash_fps(
             g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-            true,
         );
         let hint_g = ElemFp12Acc { f: g, hash: ghash };
 
@@ -650,7 +641,6 @@ mod test {
         let f = ark_bn254::Fq12::rand(&mut prng);
         let fhash = extern_hash_fps(
             f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-            true,
         );
         let hint_f = ElemFp12Acc { f, hash: fhash };
 
@@ -709,7 +699,7 @@ mod test {
 
         let (hint_out, point_ops_tapscript, mut hint_script) = chunk_point_ops(
             t,
-            q.y.c1, q.y.c0, q.x.c1, q.x.c0,
+            q.y.c1.into(), q.y.c0.into(), q.x.c1.into(), q.x.c0.into(),
             p, ate);
 
 
@@ -847,7 +837,7 @@ mod test {
         let t = ElemG2PointAcc { t, dbl_le, add_le };
 
         let (hint_out, point_ops_tapscript, mut hint_script) = chunk_point_add_with_frob(
-            t, q.y.c1, q.y.c0, q.x.c1, q.x.c0, p, ate);
+            t, q.y.c1.into(), q.y.c0.into(), q.x.c1.into(), q.x.c0.into(), p, ate);
 
 
         let hint_out_hash = extern_nibbles_to_limbs(hint_out.hashed_output());
@@ -1090,7 +1080,7 @@ mod test {
 
             let a = ark_bn254::Fq12::rand(&mut prng);
 
-            let hash_in = extern_hash_fps(a.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(), true);
+            let hash_in = extern_hash_fps(a.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>());
             let (hout0,tscr0,  mut hscr0) = chunk_inv0(ElemFp12Acc { f: a, hash: hash_in });
             hscr0.extend_from_slice(&Element::Fp12(ElemFp12Acc { f: a, hash: hash_in }).get_hash_preimage_as_hints(ElementType::Fp12v0));
             

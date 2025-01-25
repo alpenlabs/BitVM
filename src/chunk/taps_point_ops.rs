@@ -168,10 +168,10 @@ fn utils_point_add_eval(t: ark_bn254::G2Affine, q: ark_bn254::G2Affine, p: ark_b
 
 pub(crate) fn chunk_point_add_with_frob(
     hint_t: ElemG2PointAcc,
-    hint_q4y1: ElemFq,
-    hint_q4y0: ElemFq,
-    hint_q4x1: ElemFq,
-    hint_q4x0: ElemFq,
+    hint_q4y1: ElemU256,
+    hint_q4y0: ElemU256,
+    hint_q4x1: ElemU256,
+    hint_q4x0: ElemU256,
     hint_p: ElemG1Point,
     ate: i8,
 ) -> (ElemG2PointAcc, Script, Vec<Hint>) {
@@ -243,7 +243,7 @@ pub(crate) fn chunk_point_add_with_frob(
     assert!(ate == 1 || ate == -1);
     let t = hint_t.t;
     let p = hint_p;
-    let q = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0, hint_q4x1), ark_bn254::Fq2::new(hint_q4y0, hint_q4y1));
+    let q = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0.into(), hint_q4x1.into()), ark_bn254::Fq2::new(hint_q4y0.into(), hint_q4y1.into()));
     let mut qq = q.clone();
 
     let mut frob_hint = vec![];
@@ -339,10 +339,10 @@ pub(crate) fn chunk_point_dbl(
 
 pub(crate) fn chunk_point_ops(
     hint_t: ElemG2PointAcc,
-    hint_q4y1: ElemFq,
-    hint_q4y0: ElemFq,
-    hint_q4x1: ElemFq,
-    hint_q4x0: ElemFq,
+    hint_q4y1: ElemU256,
+    hint_q4y0: ElemU256,
+    hint_q4x1: ElemU256,
+    hint_q4x0: ElemU256,
     hint_p: ElemG1Point,
     ate: i8,
 ) -> (ElemG2PointAcc, Script, Vec<Hint>) {
@@ -441,7 +441,7 @@ pub(crate) fn chunk_point_ops(
     assert!(ate == 1 || ate == -1);
     let t = hint_t.t;
     let p = hint_p;
-    let q = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0, hint_q4x1), ark_bn254::Fq2::new(hint_q4y0, hint_q4y1));
+    let q = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0.into(), hint_q4x1.into()), ark_bn254::Fq2::new(hint_q4y0.into(), hint_q4y1.into()));
     
     let mut qq = q.clone();
     if ate == -1 {

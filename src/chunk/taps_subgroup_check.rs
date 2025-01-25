@@ -4,7 +4,7 @@ use bitcoin_script::script;
 
 use crate::{bn254::{curves::G2Affine, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, g2_subgroup_check, utils::fq2_push_not_montgomery}, chunk::primitves::hash_fp4, treepp};
 
-use super::element::{ElemFq, ElemG2Point};
+use super::element::{ElemU256, ElemG2Point};
 use crate::chunk::element::ElemTraitExt;
 
 fn tap_g2_subgroup_check_msm(
@@ -161,14 +161,14 @@ fn tap_g2_subgroup_check_equality(equality_script: treepp::Script) -> treepp::Sc
 }
 
 fn hint_g2_subgroup_check(
-    hint_q4y1: ElemFq,
-    hint_q4y0: ElemFq,
-    hint_q4x1: ElemFq,
-    hint_q4x0: ElemFq,
+    hint_q4y1: ElemU256,
+    hint_q4y0: ElemU256,
+    hint_q4x1: ElemU256,
+    hint_q4x0: ElemU256,
     window: usize,
 ) -> Vec<(ElemG2Point, treepp::Script)>  {
-    let q4x = ark_bn254::Fq2::new(hint_q4x0, hint_q4x1);
-    let q4y = ark_bn254::Fq2::new(hint_q4y0, hint_q4y1);
+    let q4x = ark_bn254::Fq2::new(hint_q4x0.into(), hint_q4x1.into());
+    let q4y = ark_bn254::Fq2::new(hint_q4y0.into(), hint_q4y1.into());
     let q4 = ark_bn254::G2Affine::new_unchecked(q4x, q4y);
 
     let chunks = g2_subgroup_check::is_in_g2_subgroup(q4, window);
@@ -258,7 +258,7 @@ mod test {
         let q = ark_bn254::G2Affine::rand(&mut prng);
         let window = 4;
 
-        let hints = hint_g2_subgroup_check(q.y.c1, q.y.c0, q.x.c1, q.x.c0, window);
+        let hints = hint_g2_subgroup_check(q.y.c1.into(), q.y.c0.into(), q.x.c1.into(), q.x.c0.into(), window);
         let scripts = tap_g2_subgroup_check(window);
 
         assert_eq!(hints.len(), scripts.len());

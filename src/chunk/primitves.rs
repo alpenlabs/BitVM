@@ -121,6 +121,12 @@ pub(crate) fn extern_fq_to_nibbles(msg: ark_bn254::Fq) -> [u8; 64] {
     vu8.try_into().unwrap()
 }
 
+pub(crate) fn extern_bigint_to_nibbles(msg: ark_ff::BigInt<4>) -> [u8; 64] {
+    let v = fq_to_chunked_bits(msg, 4);
+    let vu8: Vec<u8> = v.iter().map(|x| (*x) as u8).collect();
+    vu8.try_into().unwrap()
+}
+
 fn fq_to_chunked_bits(fq: BigInt<4>, limb_size: usize) -> Vec<u32> {
     let bits: Vec<bool> = ark_ff::BitIteratorBE::new(fq.as_ref()).collect();
     assert!(bits.len() == 256);
@@ -203,17 +209,17 @@ fn replace_first_n_with_zero(hex_string: &str, n: usize) -> String {
     result
 }
 
-pub(crate) fn extern_hash_fps(fqs: Vec<ark_bn254::Fq>, mode: bool) -> [u8; 64] {
+pub(crate) fn extern_hash_fps(fqs: Vec<ark_bn254::Fq>) -> [u8; 64] {
     let mut msgs: Vec<[u8; 64]> = Vec::new();
     for fq in fqs {
         let v = fq_to_chunked_bits(fq.into(), 4);
         let nib_arr: Vec<u8> = v.into_iter().map(|x| x as u8).collect();
         msgs.push(nib_arr.try_into().unwrap());
     }
-    extern_hash_nibbles(msgs, mode)
+    extern_hash_nibbles(msgs)
 }
 
-pub(crate) fn extern_hash_nibbles(msgs: Vec<[u8; 64]>, mode: bool) -> [u8; 64] {
+pub(crate) fn extern_hash_nibbles(msgs: Vec<[u8; 64]>) -> [u8; 64] {
     assert!(msgs.len() == 4 || msgs.len() == 2 || msgs.len() == 12 || msgs.len() == 6);
 
     fn hex_string_to_nibble_array(hex_string: &str) -> Vec<u8> {
@@ -254,11 +260,7 @@ pub(crate) fn extern_hash_nibbles(msgs: Vec<[u8; 64]>, mode: bool) -> [u8; 64] {
     if msgs.len() == 4 || msgs.len() == 2 || msgs.len() == 6 {
         extern_hash_fp_var(msgs)
     } else if msgs.len() == 12 {
-        if mode {
-            extern_hash_fp12_v2(msgs)
-        } else {
-            extern_hash_fp12_v2(msgs)
-        }
+        extern_hash_fp12_v2(msgs)
     } else {
         panic!()
     }
@@ -537,7 +539,7 @@ mod test {
 
     #[test]
     fn test_emulate_external_hash() {
-        fn emulate_extern_hash_fps_scripted(msgs: Vec<ark_bn254::Fq>, mode: bool) -> [u8; 64] {
+        fn emulate_extern_hash_fps_scripted(msgs: Vec<ark_bn254::Fq>) -> [u8; 64] {
             assert!(msgs.len() == 4 || msgs.len() == 2 || msgs.len() == 12 || msgs.len() == 6);
             let scr = script! {
                 for i in 0..msgs.len() {
@@ -546,11 +548,7 @@ mod test {
                 if msgs.len() == 4 {
                     {hash_fp4()}
                 } else if msgs.len() == 12 {
-                    if mode {
-                        {hash_fp12_192()}
-                    } else {
-                        {hash_fp12_192()}
-                    }
+                    {hash_fp12_192()}
                 } else if msgs.len() == 2 {
                     {hash_fp2()}
                 } else if msgs.len() == 6 {
@@ -577,8 +575,8 @@ mod test {
         let g = ark_bn254::Fq12::rand(&mut prng);
 
         let ps = g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
-        let res = emulate_extern_hash_fps_scripted(ps.clone(), true);
-        let res2 = extern_hash_fps(ps, true);
+        let res = emulate_extern_hash_fps_scripted(ps.clone());
+        let res2 = extern_hash_fps(ps);
         assert_eq!(res, res2);
     }
 

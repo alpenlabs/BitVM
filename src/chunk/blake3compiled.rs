@@ -119,8 +119,8 @@ mod test {
         let hash_scr = hash_messages(vec![ElementType::Fp12v0, ElementType::Fp6]);
         let a = ark_bn254::Fq12::ONE;
         let b = ark_bn254::Fq6::ONE + ark_bn254::Fq6::ONE;
-        let ahash = extern_hash_fps(a.to_base_prime_field_elements().collect(), true);
-        let bhash = extern_hash_fps(b.to_base_prime_field_elements().collect(), true);
+        let ahash = extern_hash_fps(a.to_base_prime_field_elements().collect());
+        let bhash = extern_hash_fps(b.to_base_prime_field_elements().collect());
         let tap_len = hash_scr.len();
         let script = script!(
             for i in extern_nibbles_to_limbs(bhash) {

@@ -68,7 +68,7 @@ mod test {
     use ark_ff::Field;
     use rand::Rng;
 
-    use crate::{chunk::{api::mock_pubkeys, element::EvalIns}, groth16::{g16::test::test_utils::{read_scripts_from_file, write_scripts_to_file, write_scripts_to_separate_files}, offchain_checker::compute_c_wi}};
+    use crate::{chunk::{api::mock_pubkeys, element::InputProof}, groth16::{g16::test::test_utils::{read_scripts_from_file, write_scripts_to_file, write_scripts_to_separate_files}, offchain_checker::compute_c_wi}};
 
 
     use self::{chunk::{ assert::{self, script_exec, Pubs}, compile::NUM_PUBS, element::Element, segment::Segment}, test_utils::{read_map_from_file, write_map_to_file}};
@@ -553,7 +553,7 @@ mod test {
         let f_fixed = Bn254::multi_miller_loop_affine([p1], [q1]).0;
         let f = Bn254::multi_miller_loop_affine([p1, p2, p3, p4], [q1, q2, q3, q4]).0;
         let (c, s) = compute_c_wi(f);
-        let eval_ins: EvalIns = EvalIns {
+        let eval_ins: InputProof = InputProof {
             p2,
             p4,
             q4,
@@ -574,7 +574,7 @@ mod test {
 
         println!("eval_ins {:?}", eval_ins);
         println!("pubs {:?}", pubs);
-        assert::groth16(true, &mut segments, eval_ins, pubs, &mut None);
+        assert::groth16(true, &mut segments, eval_ins.to_raw(), pubs, &mut None);
 
         // let proof_asserts = acc::hint_to_data(segments.clone());
         // let signed_asserts = sign_assertions(proof_asserts);

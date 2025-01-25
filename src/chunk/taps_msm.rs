@@ -16,13 +16,13 @@ use num_bigint::BigUint;
 use num_traits::One;
 
 use super::blake3compiled::hash_messages;
-use super::element::{ElemFq, ElemG1Point, ElemTraitExt, ElementType};
+use super::element::{ElemU256, ElemG1Point, ElemTraitExt, ElementType};
 use super::primitves::{hash_fp2, HashBytes};
 use crate::bn254::fq2::Fq2;
 
-pub(crate) fn chunk_msm(window: usize, ks: Vec<ark_bn254::Fr>, qs: Vec<ark_bn254::G1Affine>) -> Vec<(ElemG1Point, Script, Vec<Hint>)> {
+pub(crate) fn chunk_msm(window: usize, ks: Vec<ElemU256>, qs: Vec<ark_bn254::G1Affine>) -> Vec<(ElemG1Point, Script, Vec<Hint>)> {
     let num_pubs = qs.len();
-    let chunks = G1Affine::hinted_scalar_mul_by_constant_g1(ks.clone(), qs.clone(), window as u32);
+    let chunks = G1Affine::hinted_scalar_mul_by_constant_g1(ks.into_iter().map(|f| f.into()).collect(), qs.clone(), window as u32);
 
     // [G1AccDashHash, G1AccHash, k0, k1, k2]
     // [Dec, G1Acc]
@@ -346,7 +346,7 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let q = ark_bn254::G1Affine::rand(&mut prng);
         let scalar = ark_bn254::Fr::rand(&mut prng);
-        let scalars = vec![scalar];
+        let scalars = vec![scalar.into()];
         let qs = vec![q];
 
         let window = 7;
@@ -366,7 +366,7 @@ mod test {
                 }
 
                 for scalar in &scalars {
-                    {fr_push_not_montgomery(*scalar)}
+                    {fr_push_not_montgomery(ark_bn254::Fr::from(*scalar))}
                     {Fr::toaltstack()}  
                 }
             };

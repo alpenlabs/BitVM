@@ -11,9 +11,9 @@ use crate::{chunk::element::ElemG1Point, treepp};
 use crate::chunk::element::ElemTraitExt;
 
 use super::blake3compiled::hash_messages;
-use super::element::{ElemFp6, ElemFq, ElementType};
+use super::element::{ElemFp6, ElemU256, ElementType};
 use super::taps_msm::{chunk_hash_p, chunk_msm};
-use super::{assert::{groth16, Pubs}, element::{ElemFp12Acc, ElemFr, ElemG2PointAcc, EvalIns}, primitves::gen_bitcom, segment::{ScriptType, Segment}, taps_mul::*, taps_point_eval::*, taps_point_ops::*, taps_premiller::*, wots::WOTSPubKey};
+use super::{assert::{groth16, Pubs}, element::{ElemFp12Acc, ElemG2PointAcc, InputProof}, primitves::gen_bitcom, segment::{ScriptType, Segment}, taps_mul::*, taps_point_eval::*, taps_point_ops::*, taps_premiller::*, wots::WOTSPubKey};
 
 pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 pub const NUM_PUBS: usize = 1;
@@ -110,13 +110,13 @@ fn segments_from_pubs(vk: Vkey) -> Vec<Segment> {
     let mut segments: Vec<Segment> = vec![];
     let g1 = ElemG1Point::mock();
     let g2 = ElemG2PointAcc::mock().t;
-    let fr = ElemFr::mock();
+    let fr = ElemU256::mock();
     let s = ElemFp12Acc::mock();
     let c = ElemFp12Acc::mock();
-    let eval_ins: EvalIns = EvalIns { p2: g1, p4: g1, q4: g2, c: c.f, s: s.f, ks: vec![fr] };
+    let eval_ins: InputProof = InputProof { p2: g1, p4: g1, q4: g2, c: c.f, s: s.f, ks: vec![fr.into()] };
 
     let pubs: Pubs = Pubs { q2: vk.q2, q3: vk.q3, fixed_acc: vk.p1q1, ks_vks: vk.p3vk, vky0: vk.vky0 };
-    groth16(true, &mut segments, eval_ins, pubs, &mut None);
+    groth16(true, &mut segments, eval_ins.to_raw(), pubs, &mut None);
     segments
 }
 
@@ -142,13 +142,13 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
     let mut tap_sparse_dense_mul = cached(|(a, b, c)| chunk_sparse_dense_mul(a, b, c ));
     let mut tap_final_verify = cached(|(a, b)| chunk_verify_fp12_is_unity(a, b)); 
     let mut tap_frob_fp12 = cached(|(a, b)| chunk_frob_fp12(a,b));
-    let mut tap_point_add_with_frob = cached(|a| chunk_point_add_with_frob(ElemG2PointAcc::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemG1Point::mock(), a));
+    let mut tap_point_add_with_frob = cached(|a| chunk_point_add_with_frob(ElemG2PointAcc::mock(), ElemU256::mock(), ElemU256::mock(), ElemU256::mock(), ElemU256::mock(), ElemG1Point::mock(), a));
     let mut chunk_hash_p = cached(|(a, b)| chunk_hash_p(a, b ));
     let mut tap_msm = cached(|(a, b, c)| chunk_msm(a, b, c ));
     let mut tap_multiply_point_evals_on_tangent_for_fixed_g2 = cached(|(a, b)| chunk_multiply_point_evals_on_tangent_for_fixed_g2(ElemG1Point::mock(), ElemG1Point::mock(), a, b));
     let mut tap_multiply_point_evals_on_chord_for_fixed_g2 = cached(|(a, b, c, d, e)| chunk_multiply_point_evals_on_chord_for_fixed_g2(ElemG1Point::mock(), ElemG1Point::mock(), a, b, c, d, e));
     let mut tap_multiply_point_evals_on_chord_for_fixed_g2_with_frob = cached(|(a, b, c, d, e)| chunk_multiply_point_evals_on_chord_for_fixed_g2_with_frob(ElemG1Point::mock(), ElemG1Point::mock(), a, b, c, d, e));
-    let tap_init_t4 = chunk_init_t4(ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock());
+    let tap_init_t4 = chunk_init_t4(ElemU256::mock(), ElemU256::mock(), ElemU256::mock(), ElemU256::mock());
     let mut tap_squaring = cached(chunk_squaring);
     let mut tap_point_dbl = cached(|(a, b)| chunk_point_dbl(a, b));
     let mut tap_dense_dense_mul0 = cached(|(a, b)| chunk_dense_dense_mul0(a, b));
@@ -185,28 +185,28 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
                 script!()
             },
             ScriptType::ValidateG1IsOnCurve => {
-                chunk_verify_g1_is_on_curve(ElemFq::mock(), ElemFq::mock()).1
+                chunk_verify_g1_is_on_curve(ElemU256::mock(), ElemU256::mock()).1
             }
             ScriptType::ValidateG1HashIsOnCurve => {
                 chunk_verify_g1_hash_is_on_curve(ElemG1Point::mock()).1
             }
             ScriptType::ValidateG2IsOnCurve => {
-                chunk_verify_g2_on_curve(ElemFq::mock(), ElemFq::mock(), ElemFq::mock(), ElemFq::mock()).1
+                chunk_verify_g2_on_curve(ElemU256::mock(), ElemU256::mock(), ElemU256::mock(), ElemU256::mock()).1
             },
             ScriptType::ValidateFq12OnField => {
-                chunk_verify_fq12_is_on_field([ElemFq::mock(); 12].to_vec()).1
+                chunk_verify_fq12_is_on_field([ElemU256::mock(); 12].to_vec()).1
             }
             ScriptType::PreMillerInitT4 => {
                 tap_init_t4.1.clone()
             }
             ScriptType::PreMillerPrecomputeP => {
-                chunk_precompute_p(ElemFq::mock(), ElemFq::mock()).1
+                chunk_precompute_p(ElemU256::mock(), ElemU256::mock()).1
             },
             ScriptType::PreMillerPrecomputePFromHash => {
                 chunk_precompute_p_from_hash(ElemG1Point::mock()).1
             },
             ScriptType::PreMillerHashC => {
-                chunk_hash_c([ElemFq::mock(); 12].to_vec()).1
+                chunk_hash_c([ElemU256::mock(); 12].to_vec()).1
             },
             ScriptType::PreMillerInv0 => {
                 chunk_inv0(ElemFp12Acc::mock()).1
@@ -221,7 +221,7 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
                 tap_squaring( ElemFp12Acc::mock()).1
             },
             ScriptType::MillerDoubleAdd(a) => {
-                tap_point_ops((ElemG2PointAcc::mock(), ElemFq::mock(), ElemFq::mock(),ElemFq::mock(), ElemFq::mock(), ElemG1Point::mock(), a)).1
+                tap_point_ops((ElemG2PointAcc::mock(), ElemU256::mock(), ElemU256::mock(),ElemU256::mock(), ElemU256::mock(), ElemG1Point::mock(), a)).1
             },
             ScriptType::MillerDouble => {
                 tap_point_dbl( (ElemG2PointAcc::mock(), ElemG1Point::mock()) ).1
@@ -240,7 +240,7 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
             },
             ScriptType::MSM(inp) => {
                 let msm_window = 7;
-                let g16_scalars = (0..inp.1.len()).into_iter().map(|_| ElemFr::mock()).collect();
+                let g16_scalars = (0..inp.1.len()).into_iter().map(|_| ElemU256::mock()).collect();
                 let msm_scr: Vec<Script> = tap_msm((msm_window, g16_scalars, inp.1)).iter().map(|f| f.1.clone()).collect();
                 msm_scr[inp.0].clone()
             },

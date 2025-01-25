@@ -21,7 +21,7 @@ use super::element::*;
 
 // HASH_C
 pub(crate) fn chunk_hash_c(
-    hint_in_c: Vec<ElemFq>,
+    hint_in_c: Vec<ElemU256>,
 ) -> (ElemFp12Acc, Script, Vec<Hint>) {
     fn tap_hash_c() -> Script {
         let ops_scr = script! {
@@ -42,8 +42,8 @@ pub(crate) fn chunk_hash_c(
         sc
     }
 
-    let fvec = hint_in_c;
-    let fhash = extern_hash_fps(fvec.clone(), false);
+    let fvec: Vec<ark_bn254::Fq> = hint_in_c.iter().map(|f| ark_bn254::Fq::from(*f)).collect();
+    let fhash = extern_hash_fps(fvec.clone());
 
     let f = ark_bn254::Fq12::new(
         ark_bn254::Fq6::new(
@@ -68,7 +68,7 @@ pub(crate) fn chunk_hash_c(
 }
 
 pub(crate) fn chunk_verify_fq12_is_on_field(
-    hint_in_c: Vec<ElemFq>,
+    hint_in_c: Vec<ElemU256>,
 ) -> (bool, Script, Vec<Hint>) {
     fn tap_verify_fq12_is_on_field() -> Script {
         let ops_scr = script! {
@@ -97,7 +97,7 @@ pub(crate) fn chunk_verify_fq12_is_on_field(
         sc
     }
 
-    let is_valid = hint_in_c.iter().filter(|f| f.into_bigint() >= ark_bn254::Fq::MODULUS).count() == 0; 
+    let is_valid = hint_in_c.iter().filter(|f| **f >= ark_bn254::Fq::MODULUS).count() == 0; 
     (
         is_valid,
         tap_verify_fq12_is_on_field(),
@@ -108,8 +108,8 @@ pub(crate) fn chunk_verify_fq12_is_on_field(
 
 // verify
 pub(crate) fn chunk_verify_g1_is_on_curve(
-    hint_in_py: ark_bn254::Fq,
-    hint_in_px: ark_bn254::Fq,
+    hint_in_py: ElemU256,
+    hint_in_px: ElemU256,
 ) -> (bool, Script, Vec<Hint>) {
     fn tap_verify_p_is_on_curve() -> Script {
         let (on_curve_scr, on_curve_hint) = crate::bn254::curves::G1Affine::hinted_is_on_curve(ark_bn254::Fq::ONE, ark_bn254::Fq::ONE);
@@ -132,7 +132,7 @@ pub(crate) fn chunk_verify_g1_is_on_curve(
         };
         scr
     }
-    let p =  ark_bn254::G1Affine::new_unchecked(hint_in_px, hint_in_py);
+    let p =  ark_bn254::G1Affine::new_unchecked(hint_in_px.into(), hint_in_py.into());
     let (_, hints) = crate::bn254::curves::G1Affine::hinted_is_on_curve(p.x, p.y);
 
     let is_on_curve = p.is_on_curve() && p.y().is_some() && p.y != ark_bn254::Fq::ZERO;
@@ -203,8 +203,8 @@ pub(crate) fn chunk_verify_g1_hash_is_on_curve(
 
 // precompute P
 pub(crate) fn chunk_precompute_p(
-    hint_in_py: ark_bn254::Fq,
-    hint_in_px: ark_bn254::Fq,
+    hint_in_py: ElemU256,
+    hint_in_px: ElemU256,
 ) -> (ark_bn254::G1Affine, Script, Vec<Hint>) {
     fn tap_precompute_p() -> Script {
         let (eval_xy, hints) = hinted_from_eval_point(
@@ -228,7 +228,7 @@ pub(crate) fn chunk_precompute_p(
             // {hash_scr}
         }
     }
-    let p =  ark_bn254::G1Affine::new_unchecked(hint_in_px, hint_in_py);
+    let p =  ark_bn254::G1Affine::new_unchecked(hint_in_px.into(), hint_in_py.into());
     let pdy = p.y.inverse().unwrap();
     let pdx = -p.x * pdy;
     let pd = ark_bn254::G1Affine::new_unchecked(pdx, pdy);
@@ -275,10 +275,10 @@ pub(crate) fn chunk_precompute_p_from_hash(
 
 // hash T4
 pub(crate) fn chunk_verify_g2_on_curve(
-    hint_q4y1: ElemFq,
-    hint_q4y0: ElemFq,
-    hint_q4x1: ElemFq,
-    hint_q4x0: ElemFq,
+    hint_q4y1: ElemU256,
+    hint_q4y0: ElemU256,
+    hint_q4x1: ElemU256,
+    hint_q4x0: ElemU256,
 ) -> (bool, Script, Vec<Hint>) {
 
     fn tap_verify_g2_on_curve(on_curve_scr: Script) -> Script {
@@ -293,7 +293,7 @@ pub(crate) fn chunk_verify_g2_on_curve(
         scr
     }
 
-    let t4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0, hint_q4x1), ark_bn254::Fq2::new(hint_q4y0, hint_q4y1));
+    let t4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0.into(), hint_q4x1.into()), ark_bn254::Fq2::new(hint_q4y0.into(), hint_q4y1.into()));
     let (on_curve_scr, hints) = bn254::curves::G2Affine::hinted_is_on_curve(t4.x, t4.y);
     let is_valid = t4.is_on_curve();
 
@@ -302,17 +302,17 @@ pub(crate) fn chunk_verify_g2_on_curve(
 
 
 pub(crate) fn chunk_init_t4(
-    hint_q4y1: ElemFq,
-    hint_q4y0: ElemFq,
-    hint_q4x1: ElemFq,
-    hint_q4x0: ElemFq,
+    hint_q4y1: ElemU256,
+    hint_q4y0: ElemU256,
+    hint_q4x1: ElemU256,
+    hint_q4x0: ElemU256,
 ) -> (ElemG2PointAcc, Script, Vec<Hint>) {
 
     fn tap_init_t4() -> Script {
         let zero = ark_bn254::Fq::ZERO;
-        let dle_hash = extern_hash_fps(vec![zero, zero, zero, zero], true);
+        let dle_hash = extern_hash_fps(vec![zero, zero, zero, zero]);
         let ale_hash = dle_hash.clone();
-        let le_hash = extern_hash_nibbles(vec![dle_hash, ale_hash], true);
+        let le_hash = extern_hash_nibbles(vec![dle_hash, ale_hash]);
         let le_nibs = extern_nibbles_to_limbs(le_hash);
         
         let ops_scr = script! {
@@ -338,13 +338,13 @@ pub(crate) fn chunk_init_t4(
     }
 
     let zero = ark_bn254::Fq::ZERO;
-    let dle_hash = extern_hash_fps(vec![zero, zero, zero, zero], true);
+    let dle_hash = extern_hash_fps(vec![zero, zero, zero, zero]);
     let ale_hash = dle_hash.clone();
-    let le_hash = extern_hash_nibbles(vec![dle_hash, ale_hash], true);
+    let le_hash = extern_hash_nibbles(vec![dle_hash, ale_hash]);
 
-    let t4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0, hint_q4x1), ark_bn254::Fq2::new(hint_q4y0, hint_q4y1));
-    let t4hash = extern_hash_fps(vec![t4.x.c0, t4.x.c1, t4.y.c0, t4.y.c1], false);
-    let t4hash = extern_hash_nibbles(vec![t4hash, le_hash], true);
+    let t4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(hint_q4x0.into(), hint_q4x1.into()), ark_bn254::Fq2::new(hint_q4y0.into(), hint_q4y1.into()));
+    let t4hash = extern_hash_fps(vec![t4.x.c0, t4.x.c1, t4.y.c0, t4.y.c1]);
+    let t4hash = extern_hash_nibbles(vec![t4hash, le_hash]);
 
 
     let hint_out: ElemG2PointAcc = ElemG2PointAcc {
@@ -428,7 +428,6 @@ pub(crate) fn chunk_inv2(
 
     let hash_h = extern_hash_fps(
         ark_bn254::Fq12::new(c0, c1).to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-        false,
     );
 
     let hout: ElemFp12Acc = ElemFp12Acc { f: ark_bn254::Fq12::new(c0, c1), hash: hash_h };
@@ -480,7 +479,6 @@ pub(crate) fn chunk_inv1(
         vec![
             t1.c0.c0, t1.c0.c1, t1.c1.c0, t1.c1.c1, t1.c2.c0, t1.c2.c1,
         ],
-        true,
     );
 
     let mut simulate_stack_input = vec![];
@@ -578,7 +576,6 @@ pub(crate) fn chunk_inv0(
         vec![
             t0.c0.c0, t0.c0.c1, t0.c1.c0, t0.c1.c1, t0.c2.c0, t0.c2.c1,
         ],
-        true,
     );
 
     let hout: ElemFp6 = t0;

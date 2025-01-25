@@ -4,7 +4,7 @@ use std::ops::Neg;
 use crate::chunk::assert::{groth16, hint_to_data, Pubs};
 use crate::chunk::compile::{compile_ops, compile_taps, Vkey};
 use crate::chunk::compile::{ NUM_PUBS};
-use crate::chunk::element::{ElemG1Point, EvalIns};
+use crate::chunk::element::{ElemG1Point, InputProof};
 use crate::chunk::element::ElemTraitExt;
 use crate::chunk::segment::Segment;
 use crate::chunk::wots::WOTSPubKey;
@@ -135,7 +135,7 @@ pub fn generate_assertions(
     let f_fixed = Bn254::multi_miller_loop_affine([p1], [q1]).0;
     let f = Bn254::multi_miller_loop_affine([p1, p2, p3, p4], [q1, q2, q3, q4]).0;
     let (c, s) = compute_c_wi(f);
-    let eval_ins: EvalIns = EvalIns {
+    let eval_ins: InputProof = InputProof {
         p2,
         p4,
         q4,
@@ -154,7 +154,7 @@ pub fn generate_assertions(
 
     let mut segments: Vec<Segment> = vec![];
     println!("generating assertions as prover");
-    let success = groth16(false, &mut segments, eval_ins, pubs, &mut None);
+    let success = groth16(false, &mut segments, eval_ins.to_raw(), pubs, &mut None);
     println!("segments len {}", segments.len());
     assert!(success);
     let proof_asserts = hint_to_data(segments.clone());
@@ -174,7 +174,7 @@ pub fn validate_assertions(
 
     let mut segments: Vec<Segment> = vec![];
     println!("generating assertions to validate");
-    let passed = groth16(false, &mut segments, eval_ins, get_pubs(vk), &mut Some(intermediates));
+    let passed = groth16(false, &mut segments, eval_ins.to_raw(), get_pubs(vk), &mut Some(intermediates));
     if passed {
         println!("assertion passed, running full script execution now");
         let exec_result = script_exec(segments, signed_asserts, disprove_scripts);

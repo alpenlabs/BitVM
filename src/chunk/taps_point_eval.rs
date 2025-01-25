@@ -159,7 +159,6 @@ pub(crate) fn chunk_multiply_point_evals_on_tangent_for_fixed_g2(
 
     let hash = extern_hash_fps(
         f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-        false,
     );
     let scr = tap_multiply_point_evals_on_tangent_for_fixed_g2(scr);
 
@@ -214,7 +213,6 @@ pub(crate) fn chunk_multiply_point_evals_on_chord_for_fixed_g2(
 
     let hash = extern_hash_fps(
         f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-        false,
     );
     let scr = tap_multiply_point_evals_on_chord_for_fixed_g2(scr);
 
@@ -289,7 +287,6 @@ pub(crate) fn chunk_multiply_point_evals_on_chord_for_fixed_g2_with_frob(
 
     let hash = extern_hash_fps(
         f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-        false,
     );
     let scr = tap_multiply_point_evals_on_chord_for_fixed_g2(scr);
 

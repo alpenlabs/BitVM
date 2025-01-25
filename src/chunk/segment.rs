@@ -68,7 +68,7 @@ pub(crate) fn wrap_hint_msm(
     pub_vky: Vec<ark_bn254::G1Affine>,
 ) -> Vec<Segment> {
     let mut scalar_input_segment_info: Vec<(SegmentID, ElementType)> = vec![];
-    let hint_scalars: Vec<ark_bn254::Fr> = scalars
+    let hint_scalars: Vec<ElemU256> = scalars
     .iter()
     .map(|f| {
         scalar_input_segment_info.push((f.id, ElementType::ScalarElem));
@@ -159,7 +159,7 @@ pub(crate) fn wrap_hint_hash_c(
 ) -> Segment {
     
     let mut input_segment_info: Vec<(SegmentID, ElementType)> = vec![];
-    let fqvec: Vec<ElemFq> = in_c
+    let fqvec: Vec<ElemU256> = in_c
     .iter()
     .map(|f| {
         f.result.0.try_into().unwrap()
@@ -299,10 +299,10 @@ pub(crate) fn wrap_hint_init_t4(
         (in_q4xc0.id, ElementType::FieldElem),
     ];
 
-    let q4xc0: ark_bn254::Fq = in_q4xc0.result.0.try_into().unwrap();
-    let q4xc1: ark_bn254::Fq = in_q4xc1.result.0.try_into().unwrap();
-    let q4yc0: ark_bn254::Fq = in_q4yc0.result.0.try_into().unwrap();
-    let q4yc1: ark_bn254::Fq = in_q4yc1.result.0.try_into().unwrap();
+    let q4xc0: ElemU256 =  in_q4xc0.result.0.try_into().unwrap();
+    let q4xc1: ElemU256 =  in_q4xc1.result.0.try_into().unwrap();
+    let q4yc0: ElemU256 =  in_q4yc0.result.0.try_into().unwrap();
+    let q4yc1: ElemU256 =  in_q4yc1.result.0.try_into().unwrap();
 
     let (mut tmpt4, mut op_hints) = (ElemG2PointAcc::mock(), vec![]);
     if !skip {
@@ -411,10 +411,10 @@ pub(crate) fn wrap_hint_point_ops(
 
     let t4: ElemG2PointAcc = in_t4.result.0.try_into().unwrap();
     let p4: ElemG1Point = in_p4.result.0.try_into().unwrap();
-    let q4xc0: ark_bn254::Fq = in_q4xc0.result.0.try_into().unwrap();
-    let q4xc1: ark_bn254::Fq = in_q4xc1.result.0.try_into().unwrap();
-    let q4yc0: ark_bn254::Fq = in_q4yc0.result.0.try_into().unwrap();
-    let q4yc1: ark_bn254::Fq = in_q4yc1.result.0.try_into().unwrap();
+    let q4xc0: ElemU256 =  in_q4xc0.result.0.try_into().unwrap();
+    let q4xc1: ElemU256 =  in_q4xc1.result.0.try_into().unwrap();
+    let q4yc0: ElemU256 =  in_q4yc0.result.0.try_into().unwrap();
+    let q4yc1: ElemU256 =  in_q4yc1.result.0.try_into().unwrap();
 
     let (mut dbladd, mut op_hints) = (ElemG2PointAcc::mock(), vec![]);
     if !skip {
@@ -778,10 +778,10 @@ pub(crate) fn wrap_hint_point_add_with_frob(
 
     let t4: ElemG2PointAcc = in_t4.result.0.try_into().unwrap();
     let p4: ElemG1Point = in_p4.result.0.try_into().unwrap();
-    let q4xc0: ark_bn254::Fq = in_q4xc0.result.0.try_into().unwrap();
-    let q4xc1: ark_bn254::Fq = in_q4xc1.result.0.try_into().unwrap();
-    let q4yc0: ark_bn254::Fq = in_q4yc0.result.0.try_into().unwrap();
-    let q4yc1: ark_bn254::Fq = in_q4yc1.result.0.try_into().unwrap();
+    let q4xc0: ElemU256 =  in_q4xc0.result.0.try_into().unwrap();
+    let q4xc1: ElemU256 =  in_q4xc1.result.0.try_into().unwrap();
+    let q4yc0: ElemU256 =  in_q4yc0.result.0.try_into().unwrap();
+    let q4yc1: ElemU256 =  in_q4yc1.result.0.try_into().unwrap();
 
     let (mut temp, mut op_hints) = (ElemG2PointAcc::mock(), vec![]);
     if !skip {
@@ -868,7 +868,6 @@ pub(crate) fn wrap_verify_fp12_is_unity(
         f: constant,
         hash: extern_hash_fps(
             constant.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-            true,
         ),
     };
 
@@ -882,9 +881,9 @@ pub(crate) fn wrap_verify_fp12_is_unity(
         // op_hints.extend_from_slice(&Element::Fp12v0(a).get_hash_preimage_as_hints());
     }
     let is_valid_fq = if is_valid {
-        ark_bn254::Fq::ONE
+        ark_ff::BigInt::<4>::one()
     } else {
-        ark_bn254::Fq::ZERO
+        ark_ff::BigInt::<4>::zero()
     };
 
     
@@ -892,7 +891,7 @@ pub(crate) fn wrap_verify_fp12_is_unity(
         id: segment_id as u32,
         is_validation: true,
         parameter_ids: input_segment_info,
-        result: (Element::FieldElem(is_valid_fq), ElementType::FieldElem),
+        result: (Element::U256(is_valid_fq), ElementType::FieldElem),
         hints: op_hints,
         scr_type: ScriptType::PostMillerFinalVerify(constant),
     }
@@ -938,9 +937,9 @@ pub(crate) fn wrap_verify_g1_is_on_curve(
 
     }
     let is_valid_fq = if is_valid {
-        ark_bn254::Fq::ONE
+        ark_ff::BigInt::<4>::one()
     } else {
-        ark_bn254::Fq::ZERO
+        ark_ff::BigInt::<4>::zero()
     };
 
     
@@ -948,7 +947,7 @@ pub(crate) fn wrap_verify_g1_is_on_curve(
         id: segment_id as u32,
         is_validation: true,
         parameter_ids: input_segment_info,
-        result: (Element::FieldElem(is_valid_fq), ElementType::FieldElem),
+        result: (Element::U256(is_valid_fq), ElementType::FieldElem),
         hints: op_hints,
         scr_type: ScriptType::ValidateG1IsOnCurve,
     }
@@ -968,15 +967,15 @@ pub(crate) fn wrap_verify_g1_hash_is_on_curve(
         (is_valid, _, op_hints) = chunk_verify_g1_hash_is_on_curve(in_p);
     }
     let is_valid_fq = if is_valid {
-        ark_bn254::Fq::ONE
+        ark_ff::BigInt::<4>::one()
     } else {
-        ark_bn254::Fq::ZERO
+        ark_ff::BigInt::<4>::zero()
     };
     Segment {
         id: segment_id as u32,
         is_validation: true,
         parameter_ids: input_segment_info,
-        result: (Element::FieldElem(is_valid_fq), ElementType::FieldElem),
+        result: (Element::U256(is_valid_fq), ElementType::FieldElem),
         hints: op_hints,
         scr_type: ScriptType::ValidateG1HashIsOnCurve,
     }
@@ -1000,10 +999,10 @@ pub(crate) fn wrap_verify_g2_is_on_curve(
     ];
     let (mut is_valid, mut op_hints) = (true, vec![]);
     if !skip {
-        let q4xc0: ark_bn254::Fq = in_q4xc0.result.0.try_into().unwrap();
-        let q4xc1: ark_bn254::Fq = in_q4xc1.result.0.try_into().unwrap();
-        let q4yc0: ark_bn254::Fq = in_q4yc0.result.0.try_into().unwrap();
-        let q4yc1: ark_bn254::Fq = in_q4yc1.result.0.try_into().unwrap();
+        let q4xc0: ElemU256 =  in_q4xc0.result.0.try_into().unwrap();
+        let q4xc1: ElemU256 =  in_q4xc1.result.0.try_into().unwrap();
+        let q4yc0: ElemU256 =  in_q4yc0.result.0.try_into().unwrap();
+        let q4yc1: ElemU256 =  in_q4yc1.result.0.try_into().unwrap();
         (is_valid,_, op_hints) = chunk_verify_g2_on_curve(
             q4yc1,
             q4yc0,
@@ -1012,15 +1011,16 @@ pub(crate) fn wrap_verify_g2_is_on_curve(
         );
     }
     let is_valid_fq = if is_valid {
-        ark_bn254::Fq::ONE
+        ark_ff::BigInt::<4>::one()
     } else {
-        ark_bn254::Fq::ZERO
+        ark_ff::BigInt::<4>::zero()
     };
+
     Segment {
         id: segment_id as u32,
         is_validation: true,
         parameter_ids: input_segment_info,
-        result: (Element::FieldElem(is_valid_fq), ElementType::FieldElem),
+        result: (Element::U256(is_valid_fq), ElementType::FieldElem),
         hints: op_hints,
         scr_type: ScriptType::ValidateG2IsOnCurve,
     }
@@ -1043,19 +1043,19 @@ pub(crate) fn wrap_verify_fq12_is_on_field(
 
     let (mut is_valid, mut op_hints) = (true, vec![]);
     if !skip {
-        let fqvec: Vec<ElemFq> = in_c.iter().map(|f| {f.result.0.try_into().unwrap()}).collect();
+        let fqvec: Vec<ElemU256> = in_c.iter().map(|f| {f.result.0.try_into().unwrap()}).collect();
         (is_valid,_, op_hints) = chunk_verify_fq12_is_on_field(fqvec);
     }
     let is_valid_fq = if is_valid {
-        ark_bn254::Fq::ONE
+        ark_ff::BigInt::<4>::one()
     } else {
-        ark_bn254::Fq::ZERO
+        ark_ff::BigInt::<4>::zero()
     };
     Segment {
         id: segment_id as u32,
         is_validation: true,
         parameter_ids: input_segment_info,
-        result: (Element::FieldElem(is_valid_fq), ElementType::FieldElem),
+        result: (Element::U256(is_valid_fq), ElementType::FieldElem),
         hints: op_hints,
         scr_type: ScriptType::ValidateFq12OnField,
     }

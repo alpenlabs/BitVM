@@ -4,6 +4,7 @@ use ark_bn254::{Bn254};
 use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::{Field, PrimeField};
 use bitcoin_script::script;
+use num_bigint::BigUint;
 
 use crate::{bn254::utils::Hint, chunk::{primitves::{tup_to_scr, HashBytes, Sig, SigData}, segment::*, taps_point_eval::get_hint_for_add_with_frob}, execute_script, groth16::g16::{Assertions, PublicKeys, Signatures, N_TAPLEAVES, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}, treepp};
 
@@ -42,7 +43,7 @@ fn compare(hint_out: &Element, claimed_assertions: &mut Option<Intermediates>) -
 pub(crate) fn groth16(
     is_compile_mode: bool,
     all_output_hints: &mut Vec<Segment>,
-    eval_ins: EvalIns,
+    eval_ins: InputProofRaw,
     pubs: Pubs,
     claimed_assertions: &mut Option<Intermediates>,
 ) -> bool {
@@ -50,8 +51,8 @@ pub(crate) fn groth16(
         ($seg:ident) => {{
             all_output_hints.push($seg.clone());
             if $seg.is_validation {
-                if let Element::FieldElem(felem) = $seg.result.0 {
-                    if felem != ark_bn254::Fq::ONE {
+                if let Element::U256(felem) = $seg.result.0 {
+                    if felem != ark_ff::BigInt::<4>::one() {
                         return false;
                     }
                 } else {
@@ -72,52 +73,52 @@ pub(crate) fn groth16(
         is_validation: false,
         id: (all_output_hints.len() + idx) as u32,
         parameter_ids: vec![],
-        result: (Element::ScalarElem(*f), ElementType::ScalarElem),
+        result: (Element::U256(*f), ElementType::ScalarElem),
         hints: vec![],
         scr_type: ScriptType::NonDeterministic,
     }).collect();
     all_output_hints.extend_from_slice(&pub_scalars);
 
     let p4vec: Vec<Segment> = vec![
-        eval_ins.p4.y, eval_ins.p4.x, eval_ins.p2.y, eval_ins.p2.x
+        eval_ins.p4[1], eval_ins.p4[0], eval_ins.p2[1], eval_ins.p2[0]
     ].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         is_validation: false,
         parameter_ids: vec![],
-        result: (Element::FieldElem(*f), ElementType::FieldElem),
+        result: (Element::U256(*f), ElementType::FieldElem),
         hints: vec![],
         scr_type: ScriptType::NonDeterministic
     }).collect();
     all_output_hints.extend_from_slice(&p4vec);
     let (gp4y, gp4x, gp2y, gp2x) = (&p4vec[0], &p4vec[1], &p4vec[2], &p4vec[3]);
 
-    let gc: Vec<Segment> = eval_ins.c.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>().iter().enumerate().map(|(idx, f)| Segment {
+    let gc: Vec<Segment> = eval_ins.c.iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         is_validation: false,
         parameter_ids: vec![],
-        result: (Element::FieldElem(*f), ElementType::FieldElem),
+        result: (Element::U256(*f), ElementType::FieldElem),
         hints: vec![],
         scr_type: ScriptType::NonDeterministic
     }).collect();
     all_output_hints.extend_from_slice(&gc);
 
-    let gs: Vec<Segment> = eval_ins.s.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>().iter().enumerate().map(|(idx, f)| Segment {
+    let gs: Vec<Segment> = eval_ins.s.iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         is_validation: false,
         parameter_ids: vec![],
-        result: (Element::FieldElem(*f), ElementType::FieldElem),
+        result: (Element::U256(*f), ElementType::FieldElem),
         hints: vec![],
         scr_type: ScriptType::NonDeterministic
     }).collect();
     all_output_hints.extend_from_slice(&gs);
 
     let temp_q4: Vec<Segment> = vec![
-        eval_ins.q4.x.c0, eval_ins.q4.x.c1, eval_ins.q4.y.c0, eval_ins.q4.y.c1
+        eval_ins.q4[0], eval_ins.q4[1], eval_ins.q4[2], eval_ins.q4[3]
     ].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         is_validation: false,
         parameter_ids: vec![],
-        result: (Element::FieldElem(*f), ElementType::FieldElem),
+        result: (Element::U256(*f), ElementType::FieldElem),
         hints: vec![],
         scr_type: ScriptType::NonDeterministic
     }).collect();
@@ -169,6 +170,7 @@ pub(crate) fn groth16(
 
     let valid_t4 = wrap_verify_g2_is_on_curve(is_compile_mode, all_output_hints.len(), &q4yc1, &q4yc0, &q4xc1, &q4xc0);
     push_compare_or_return!(valid_t4);
+
     let mut t4 = wrap_hint_init_t4(is_compile_mode, all_output_hints.len(), &q4yc1, &q4yc0, &q4xc1, &q4xc0);
     push_compare_or_return!(t4);
 
@@ -388,7 +390,7 @@ fn assertions_to_nibbles(tass: TypedAssertions) -> Vec<[u8;64]> {
 }
 
 type Intermediates = Vec<HashBytes>;
-pub(crate) fn get_proof(asserts: &TypedAssertions) -> EvalIns { // EvalIns
+pub(crate) fn get_proof(asserts: &TypedAssertions) -> InputProof { // EvalIns
     let numfqs = asserts.1;
     let p4 = ark_bn254::G1Affine::new_unchecked(numfqs[1], numfqs[0]);
     let p2 = ark_bn254::G1Affine::new_unchecked(numfqs[3], numfqs[2]);
@@ -422,7 +424,7 @@ pub(crate) fn get_proof(asserts: &TypedAssertions) -> EvalIns { // EvalIns
     let step = step + 12;
     let q4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(numfqs[step + 0], numfqs[step + 1]), ark_bn254::Fq2::new(numfqs[step + 2], numfqs[step + 3]));
 
-    let eval_ins: EvalIns = EvalIns { p2, p4, q4, c, s, ks: asserts.0.to_vec() };
+    let eval_ins: InputProof = InputProof { p2, p4, q4, c, s, ks: asserts.0.to_vec() };
     eval_ins
 }
 
