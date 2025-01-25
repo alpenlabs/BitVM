@@ -469,7 +469,7 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{bn254::{curves::{G1Affine, G2Affine}, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2}, chunk::taps_point_ops::{fq2_push_not_montgomery, fq_push_not_montgomery, utils_point_add_eval, ElemG2PointAcc, ElemTraitExt, Element}, execute_script, execute_script_without_stack_limit};
+    use crate::{bn254::{curves::{G1Affine, G2Affine}, fp254impl::Fp254Impl, fq2::Fq2}, chunk::taps_point_ops::{fq2_push_not_montgomery, utils_point_add_eval}, execute_script};
 
     use super::utils_point_double_eval;
 

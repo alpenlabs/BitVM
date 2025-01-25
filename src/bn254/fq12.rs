@@ -953,7 +953,7 @@ mod test {
     use crate::bn254::utils::{
         fq12_push, fq12_push_not_montgomery, fq2_push, fq2_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery, Hint
     };
-    use crate::{bn254, execute_script_without_stack_limit, treepp::*};
+    use crate::{execute_script_without_stack_limit, treepp::*};
     use ark_ff::AdditiveGroup;
     use ark_ff::{CyclotomicMultSubgroup, Field};
     use ark_std::UniformRand;

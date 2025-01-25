@@ -71,7 +71,7 @@ mod test {
     use crate::{chunk::{api::mock_pubkeys, element::InputProof}, groth16::{g16::test::test_utils::{read_scripts_from_file, write_scripts_to_file, write_scripts_to_separate_files}, offchain_checker::compute_c_wi}};
 
 
-    use self::{chunk::{ assert::{self, script_exec, Pubs}, compile::NUM_PUBS, element::Element, segment::Segment}, test_utils::{read_map_from_file, write_map_to_file}};
+    use self::{chunk::{ assert::{self, Pubs}, compile::NUM_PUBS, segment::Segment}, test_utils::{read_map_from_file, write_map_to_file}};
 
     use super::*;
 
@@ -426,7 +426,7 @@ mod test {
         }
     }
 
-    use sha2::{Digest, Sha256};
+    use sha2::Digest;
     // Step 4: Challenger finds fault given signatures
     #[test]
     fn test_fn_disprove_invalid_assertions() {

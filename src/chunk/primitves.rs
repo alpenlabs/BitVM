@@ -540,7 +540,7 @@ mod test {
                 // {unpack_limbs_to_nibbles()}
             };
             let exec_result = execute_script(scr);
-            let mut arr = [0u8; 64];
+            let arr = [0u8; 64];
             // for i in 0..exec_result.final_stack.len() {
             //     let v = exec_result.final_stack.get(i);
             //     if v.is_empty() {

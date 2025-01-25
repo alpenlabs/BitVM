@@ -1348,10 +1348,10 @@ pub fn double_line() -> Script {
 mod test {
     use super::*;
     use crate::bn254::{ fq2::Fq2};
-    use ark_bn254::G2Affine;
+    
     use ark_ff::AdditiveGroup;
     use ark_std::UniformRand;
-    use bitcoin::opcodes::OP_TRUE;
+    
     use num_traits::One;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;

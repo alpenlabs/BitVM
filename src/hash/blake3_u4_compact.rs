@@ -231,9 +231,9 @@ pub fn blake3_u4_compact(
 #[cfg(test)]
 mod tests {
 
-    use bitcoin::opcodes::all::OP_EQUALVERIFY;
+    
     pub use bitcoin_script::script;
-    use bitcoin_script_stack::{debugger::debug_script, optimizer::optimize, script_util::verify_n, stack::StackTracker};
+    use bitcoin_script_stack::{debugger::debug_script, optimizer::optimize, stack::StackTracker};
     use rand::Rng;
 
     use super::*;

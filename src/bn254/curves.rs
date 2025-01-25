@@ -2597,7 +2597,7 @@ mod test {
     use crate::bn254::fq2::Fq2;
     use crate::bn254::msm::prepare_msm_input;
     use crate::bn254::utils::{
-        fq2_push, fq2_push_not_montgomery, fq_push_not_montgomery, fr_push, fr_push_not_montgomery, g1_affine_push, g1_affine_push_not_montgomery, Hint
+        fq2_push, fq2_push_not_montgomery, fq_push_not_montgomery, fr_push, fr_push_not_montgomery, g1_affine_push, g1_affine_push_not_montgomery
     };
     use crate::{
         bn254, execute_script, execute_script_without_stack_limit, run, treepp::*
@@ -2609,7 +2609,7 @@ mod test {
     use ark_ff::{AdditiveGroup, BigInteger, Field, MontFp, PrimeField};
     use ark_std::{end_timer, start_timer, test_rng, UniformRand};
     use core::ops::{Add, Mul};
-    use std::str::FromStr;
+    
     use num_bigint::BigUint;
     use num_traits::{One, Zero};
 

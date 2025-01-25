@@ -246,7 +246,7 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::{element::{ElemG2Point, ElemTraitExt}, primitves::extern_nibbles_to_limbs}, execute_script, execute_script_without_stack_limit, treepp};
+    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, utils::fq_push_not_montgomery}, chunk::{element::{ElemG2Point, ElemTraitExt}, primitves::extern_nibbles_to_limbs}, execute_script_without_stack_limit, treepp};
 
     use super::{hint_g2_subgroup_check, tap_g2_subgroup_check};
 
