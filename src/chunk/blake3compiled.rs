@@ -22,13 +22,13 @@ pub fn hash_64b() -> Script {
 
 pub fn hash_128b() -> Script {
     let mut stack = StackTracker::new();
-    blake3_u4_compact(&mut stack, 128, true, false);
+    blake3_u4_compact(&mut stack, 128, true, true);
     wrap_scr(stack.get_script())
 }
 
 pub fn hash_192b() -> Script {
     let mut stack = StackTracker::new();
-    blake3_u4_compact(&mut stack, 192, true, false);
+    blake3_u4_compact(&mut stack, 192, true, true);
     wrap_scr(stack.get_script())
 }
 

@@ -399,7 +399,7 @@ macro_rules! fp_lc_mul {
 }
 
 fp_lc_mul!(Mul, 4, 4, [true]);
-fp_lc_mul!(Mul2LC, 3, 3, [true, true]);
+fp_lc_mul!(Mul2LC, 4, 4, [true, true]);
 
 
 #[cfg(test)]
