@@ -707,6 +707,140 @@ pub trait Fp254Impl {
 
         (script, hints)
     }
+
+    #[allow(clippy::too_many_arguments)]
+    fn hinted_mul_lc4(
+        a_depth: u32,
+        a: ark_bn254::Fq,
+        b_depth: u32,
+        b: ark_bn254::Fq,
+        c_depth: u32,
+        c: ark_bn254::Fq,
+        d_depth: u32,
+        d: ark_bn254::Fq,
+
+        e_depth: u32,
+        e: ark_bn254::Fq,
+        f_depth: u32,
+        f: ark_bn254::Fq,
+        g_depth: u32,
+        g: ark_bn254::Fq,
+        h_depth: u32,
+        h: ark_bn254::Fq,
+    ) -> (Script, Vec<Hint>) {
+        assert!(a_depth > b_depth && b_depth > c_depth && c_depth > d_depth && d_depth > e_depth && e_depth > f_depth && f_depth > g_depth && g_depth > h_depth);
+
+        let mut hints = Vec::new();
+
+        let modulus = &Fq::modulus_as_bigint();
+
+        let x1 = BigInt::from_str(&a.to_string()).unwrap();
+        let y1 = BigInt::from_str(&b.to_string()).unwrap();
+        let z1 = BigInt::from_str(&c.to_string()).unwrap();
+        let w1 = BigInt::from_str(&d.to_string()).unwrap();
+
+        let x2 = BigInt::from_str(&e.to_string()).unwrap();
+        let y2 = BigInt::from_str(&f.to_string()).unwrap();
+        let z2 = BigInt::from_str(&g.to_string()).unwrap();
+        let w2 = BigInt::from_str(&h.to_string()).unwrap();
+
+        let q = (x1 * x2 + y1 * y2 + z1 * z2 + w1 * w2) / modulus;
+
+        let script = script! {
+            for _ in 0..Self::N_LIMBS {
+                OP_DEPTH OP_1SUB OP_ROLL // hints
+            }
+            // { fq_push(ark_bn254::Fq::from_str(&q.to_string()).unwrap()) }
+            { Fq::roll(a_depth + 1) }
+            { Fq::roll(b_depth + 2) }
+            { Fq::roll(c_depth + 3) }
+            { Fq::roll(d_depth + 4) }
+            { Fq::roll(e_depth + 5) }
+            { Fq::roll(f_depth + 6) }
+            { Fq::roll(g_depth + 7) }
+            { Fq::roll(h_depth + 8) }
+            { Fq::tmul_lc4() }
+        };
+        hints.push(Hint::BigIntegerTmulLC4(q));
+
+        (script, hints)
+    }
+
+
+    #[allow(clippy::too_many_arguments)]
+    fn hinted_mul_lc6(
+        a_depth: u32,
+        a: ark_bn254::Fq,
+        b_depth: u32,
+        b: ark_bn254::Fq,
+        c_depth: u32,
+        c: ark_bn254::Fq,
+        d_depth: u32,
+        d: ark_bn254::Fq,
+        e_depth: u32,
+        e: ark_bn254::Fq,
+        f_depth: u32,
+        f: ark_bn254::Fq,
+
+        g_depth: u32,
+        g: ark_bn254::Fq,
+        h_depth: u32,
+        h: ark_bn254::Fq,
+        i_depth: u32,
+        i: ark_bn254::Fq,
+        j_depth: u32,
+        j: ark_bn254::Fq,
+        k_depth: u32,
+        k: ark_bn254::Fq,
+        l_depth: u32,
+        l: ark_bn254::Fq,
+    ) -> (Script, Vec<Hint>) {
+        assert!(a_depth > b_depth && b_depth > c_depth && c_depth > d_depth && d_depth > e_depth && e_depth > f_depth && f_depth > g_depth);
+        assert!(g_depth > h_depth && h_depth > i_depth && i_depth > j_depth && j_depth > k_depth && k_depth > l_depth);
+
+        let mut hints = Vec::new();
+
+        let modulus = &Fq::modulus_as_bigint();
+
+        let a1 = BigInt::from_str(&a.to_string()).unwrap();
+        let b1 = BigInt::from_str(&b.to_string()).unwrap();
+        let c1 = BigInt::from_str(&c.to_string()).unwrap();
+        let d1 = BigInt::from_str(&d.to_string()).unwrap();
+        let e1 = BigInt::from_str(&e.to_string()).unwrap();
+        let f1 = BigInt::from_str(&f.to_string()).unwrap();
+
+        let a2 = BigInt::from_str(&g.to_string()).unwrap();
+        let b2 = BigInt::from_str(&h.to_string()).unwrap();
+        let c2 = BigInt::from_str(&i.to_string()).unwrap();
+        let d2 = BigInt::from_str(&j.to_string()).unwrap();
+        let e2 = BigInt::from_str(&k.to_string()).unwrap();
+        let f2 = BigInt::from_str(&l.to_string()).unwrap();
+
+        let q = (a1 * a2 + b1 * b2 + c1 * c2 + d1 * d2 + e1 * e2 + f1 * f2) / modulus;
+
+        let script = script! {
+            for _ in 0..Self::N_LIMBS {
+                OP_DEPTH OP_1SUB OP_ROLL // hints
+            }
+            // { fq_push(ark_bn254::Fq::from_str(&q.to_string()).unwrap()) }
+            { Fq::roll(a_depth + 1) }
+            { Fq::roll(b_depth + 2) }
+            { Fq::roll(c_depth + 3) }
+            { Fq::roll(d_depth + 4) }
+            { Fq::roll(e_depth + 5) }
+            { Fq::roll(f_depth + 6) }
+            { Fq::roll(g_depth + 7) }
+            { Fq::roll(h_depth + 8) }
+            { Fq::roll(i_depth + 9) }
+            { Fq::roll(j_depth + 10) }
+            { Fq::roll(k_depth + 11) }
+            { Fq::roll(l_depth + 12) }
+            { Fq::tmul_lc6() }
+        };
+        hints.push(Hint::BigIntegerTmulLC6(q));
+
+        (script, hints)
+    }
     
     #[allow(clippy::too_many_arguments)]
     fn hinted_mul_lc2_keep_elements(

@@ -1,5 +1,5 @@
 use crate::bn254::fq6::Fq6;
-use crate::bn254::utils::{fq2_push_not_montgomery, fq6_push_not_montgomery, Hint};
+use crate::bn254::utils::{fq12_push_not_montgomery, fq2_push_not_montgomery, fq6_push_not_montgomery, hinted_ell_by_constant_affine, Hint};
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::blake3compiled::hash_messages;
 use crate::chunk::primitves::{
@@ -330,8 +330,43 @@ pub(crate) fn chunk_frob_fp12(
     (ElemFp12Acc { f: g, hash: ghash }, tap_frob_fp12(power, hinted_frob_scr), simulate_stack_input)
 }
 
+// f ^ 2 X l(P2)
+pub(crate) fn chunk_fp12_squared_times_point_eval_on_tangent_for_fixed_g2(
+    f: ElemFp6,
+    p2: ElemG1Point,
+    t2: ark_bn254::G2Affine,
+) {
+    let alpha_t2 = (t2.x.square() + t2.x.square() + t2.x.square()) / (t2.y + t2.y); 
+    let neg_bias_t2 = alpha_t2 * t2.x - t2.y;
+    let (hinted_ell_t2, hints_ell_t2) = hinted_ell_by_constant_affine(p2.x, p2.y, alpha_t2, neg_bias_t2);
+    let (_, sq_scr, sq_hints) = utils_dense_dense_mul_v0(f, f);
+    let scr = script!(
+        // [f, p2x, p2y]
+        {fq2_push_not_montgomery(alpha_t2)}
+        {fq2_push_not_montgomery(neg_bias_t2)}
+        // [f, p2x, p2y, a, b] []
+        {Fq2::copy(4)}
+        // [f, p2x, p2y, a, b, p2x, p2y] []
+        {hinted_ell_t2}
+        // [f, p2x, p2y, le0x, le0y, le1x, le1y] []
+        {Fq2::toaltstack()} {Fq2::toaltstack()} {Fq2::toaltstack()}
+        // [f] [le, p2]
+        {Fq6::copy(0)}
+        {Fq6::copy(0)}
+        // [f, f, f] [le, p2]
+        {sq_scr}
+        // [f, g] [le, p2]
+        {Fq2::fromaltstack()}
+        {Fq6::copy(2)}
+        // [f, p2, g] [le]
+        {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
+        {Fq2::fromaltstack()} {Fq2::fromaltstack()}
+        // [f, p2, g, le]
 
-pub(crate) fn chunk_dense_dense_mul_v0(a: ElemFp6, b: ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
+    );
+}
+
+pub(crate) fn utils_dense_dense_mul_v0(a: ElemFp6, b: ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
     let res = ark_bn254::Fq12Config::NONRESIDUE;
     let c = (a*b + res)/(a + b);
 
@@ -370,6 +405,7 @@ pub(crate) fn chunk_dense_dense_mul_v0(a: ElemFp6, b: ElemFp6) -> (ark_bn254::Fq
     let hash_scr = script!(
         // [a, b, c] [chash, bhash, ahash]
         {hash_messages(vec![ElementType::Fp6, ElementType::Fp6, ElementType::Fp6])}
+        OP_TRUE
     );
 
     let scr = script!(
@@ -384,7 +420,7 @@ pub(crate) fn chunk_dense_dense_mul_v0(a: ElemFp6, b: ElemFp6) -> (ark_bn254::Fq
     return (c, scr, hints);
 }
 
-pub(crate) fn chunk_dense_dense_mul_v2(a: ElemFp6, b: ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
+pub(crate) fn utils_dense_dense_mul_v2(a: ElemFp6, b: ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
     let res = ark_bn254::Fq12Config::NONRESIDUE;
     let c = (ark_bn254::Fq6::ONE + a * b * res)/(a + b);
 
@@ -429,12 +465,13 @@ pub(crate) fn chunk_dense_dense_mul_v2(a: ElemFp6, b: ElemFp6) -> (ark_bn254::Fq
     let hash_scr = script!(
         // [a, b, c] [chash, bhash, ahash]
         {hash_messages(vec![ElementType::Fp6, ElementType::Fp6, ElementType::Fp6])}
+        OP_TRUE
+
     );
 
     let scr = script!(
         {ops_scr}
         {hash_scr}
-        OP_TRUE
     );
     let mut hints = vec![];
     hints.extend_from_slice(&ab_hints);
@@ -442,7 +479,8 @@ pub(crate) fn chunk_dense_dense_mul_v2(a: ElemFp6, b: ElemFp6) -> (ark_bn254::Fq
 
     return (c, scr, hints);
 }
-pub(crate) fn chunk_dense_dense_mul_v1(a: ElemFp6, b: ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
+
+pub(crate) fn utils_dense_dense_mul_v1(a: ElemFp6, b: ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
     let res = ark_bn254::Fq12Config::NONRESIDUE;
     let c = (a + b * res)/(a*b + ark_bn254::Fq6::ONE);
 
@@ -487,12 +525,13 @@ pub(crate) fn chunk_dense_dense_mul_v1(a: ElemFp6, b: ElemFp6) -> (ark_bn254::Fq
     let hash_scr = script!(
         // [a, b, c] [chash, bhash, ahash]
         {hash_messages(vec![ElementType::Fp6, ElementType::Fp6, ElementType::Fp6])}
+        OP_TRUE
     );
+    println!("hlen {}", hash_scr.len());
 
     let scr = script!(
         {ops_scr}
         {hash_scr}
-        OP_TRUE
     );
     let mut hints = vec![];
     hints.extend_from_slice(&ab_hints);
@@ -501,16 +540,192 @@ pub(crate) fn chunk_dense_dense_mul_v1(a: ElemFp6, b: ElemFp6) -> (ark_bn254::Fq
 }
 
 
+pub(crate) fn utils_dense_dense_mul_v3(a: ElemFp6, b: ElemFp6, c: ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
+    let beta_sq = ark_bn254::Fq12Config::NONRESIDUE;
+    
+    let g = ark_bn254::Fq6::ONE + a * b * beta_sq;
+    let e = (a + b) + g * c;
+    let f = g + (a + b) * c * beta_sq;
+
+    let (ab_beta_sq_scr, ab_beta_sq_hints) = Fq6::hinted_mul(6, b*beta_sq, 0, a);
+    let (g_mul_c_scr, g_mul_c_hints) = Fq6::hinted_mul(6, g, 0, c);
+    let (a_plus_b_mul_c_scr, a_plus_b_mul_c_hints) = Fq6::hinted_mul(6, a+b, 0, c);
+
+    let mul_by_beta_sq_scr = script!(
+        {Fq6::mul_fq2_by_nonresidue()}
+        {Fq2::roll(4)} {Fq2::roll(4)}
+    );
+
+    let scr = script!(
+        // [a, b, c]
+        {Fq6::toaltstack()}
+        {Fq6::copy(0)}
+        // [a, b, b] [c]
+        {mul_by_beta_sq_scr.clone()}
+        // [a, b, b*beta_sq] [c]
+        {Fq6::copy(12)}
+        // [a, b, b*beta_sq, a] [c]
+        {ab_beta_sq_scr}
+        // [a, b, g] [c]
+        {Fq6::fromaltstack()}
+        // [a, b, g, c]
+        {Fq6::copy(6)} {Fq6::copy(6)}
+        // [a, b, g, c, g, c]
+        {g_mul_c_scr}
+        // [a, b, g, c, g*c]
+        {Fq6::copy(24)} {Fq6::copy(24)}
+        // [a, b, g, c, g*c, a, b]
+        {Fq6::add(6, 0)}
+        // [a, b, g, c, g*c, a+b]
+        {Fq6::copy(0)}
+        // [a, b, g, c, g*c, a+b, a+b]
+        {Fq6::add(0, 12)}
+        // [a, b, g, c, a+b, e]
+        {Fq6::toaltstack()}
+        // [a, b, g, c, a+b]
+        {Fq6::copy(6)} 
+        // [a, b, g, c, a+b, c]
+        {a_plus_b_mul_c_scr}
+        // [a, b, g, c, (a+b)c]
+        {mul_by_beta_sq_scr}
+        // [a, b, g, c, (a+b)*c*beta_sq]
+        {Fq6::add(0, 12)}
+        // [a, b, c, f]
+        {Fq6::fromaltstack()}
+        // [a, b, c, f, e]
+
+    );
+
+    (e/f, script!(), vec![])
+}
+
+pub(crate) fn hinted_fq6_mul_le0_le0(m: ElemFp6, n: ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
+    let b = m.c1;
+    let c = m.c2;
+    let e = n.c1;
+    let f = n.c2;
+
+    let g = (b * f + c * e) * ark_bn254::Fq6Config::NONRESIDUE;
+    let h = (c * f) * ark_bn254::Fq6Config::NONRESIDUE;
+    let i = b * e;
+    let result = ark_bn254::Fq6::new(g, h, i);
+
+    let mut hints = vec![];
+    let (be_mul_scr, be_mul_hints) = Fq2::hinted_mul(2, b, 0, e);
+    let (cf_mul_scr, cf_mul_hints) = Fq2::hinted_mul(2, f, 0, c);
+
+    let (bf_plus_ce_mul_scr, bf_plus_ce_mul_scr_hints) = Fq2::hinted_mul_lc4_keep_elements(c, e, f, b);
+
+    for hint in vec![be_mul_hints, cf_mul_hints, bf_plus_ce_mul_scr_hints] {
+        hints.extend_from_slice(&hint);
+    }
+
+    let mul_by_beta_sq_scr = script!(
+        {Fq6::mul_fq2_by_nonresidue()}
+    );
+
+    let scr = script!(
+        // [b, c, e, f]
+        {Fq2::copy(6)}
+        {Fq2::copy(4)}
+        // [b, c, e, f, b, e]
+        {be_mul_scr}
+        // [b, c, e, f, i]
+        {Fq2::toaltstack()}
+        // [b, c, e, f]
+        {Fq2::copy(0)} {Fq2::copy(6)}
+        // [b, c, e, f, f, c]
+        {cf_mul_scr} 
+        {mul_by_beta_sq_scr.clone()}
+        // [b, c, e, f, h]
+        {Fq2::toaltstack()}
+        // [b, c, e, f] [i, h]
+        {Fq2::roll(6)}
+        // [c, e, f, b] [i, h]
+        {bf_plus_ce_mul_scr}
+        // [c, e, f, b ce + fb] [i, h]
+        {mul_by_beta_sq_scr}
+        // [c, e, f, b, g] [i, h]
+        {Fq2::toaltstack()}
+        // [c, e, f, b] [i, h, g]
+        {Fq2::roll(6)} {Fq2::roll(6)} {Fq2::roll(6)}
+        {Fq2::fromaltstack()} {Fq2::fromaltstack()} {Fq2::fromaltstack()}
+        // [b, c, e, f, g, h, i]
+    );
+    (result, scr, hints)
+}
+
+pub(crate) fn hinted_fq6_mul_le0_le1(m: ElemFp6, n: ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
+    let a = m.c0;
+    let b = m.c1;
+    let c = m.c2;
+    let e = n.c1;
+    let f = n.c2;
+
+    let g = (b * f + c * e) * ark_bn254::Fq6Config::NONRESIDUE;
+    let h = (a*e ) + (c * f) * ark_bn254::Fq6Config::NONRESIDUE;
+    let i = b * e + a * f;
+    let result = ark_bn254::Fq6::new(g, h, i);
+
+    let mut hints = vec![];
+    let (be_mul_scr, be_mul_hints) = Fq2::hinted_mul(2, b, 0, e);
+    let (cf_mul_scr, cf_mul_hints) = Fq2::hinted_mul(2, f, 0, c);
+
+    let (bf_plus_ce_mul_scr, bf_plus_ce_mul_scr_hints) = Fq2::hinted_mul_lc4_keep_elements(c, e, f, b);
+    println!("diff {:?}", bf_plus_ce_mul_scr.len() - cf_mul_scr.len());
+
+
+    for hint in vec![be_mul_hints, cf_mul_hints, bf_plus_ce_mul_scr_hints] {
+        hints.extend_from_slice(&hint);
+    }
+
+    let mul_by_beta_sq_scr = script!(
+        {Fq6::mul_fq2_by_nonresidue()}
+    );
+
+    let scr = script!(
+        // [b, c, e, f]
+        {Fq2::copy(6)}
+        {Fq2::copy(4)}
+        // [b, c, e, f, b, e]
+        {be_mul_scr}
+        // [b, c, e, f, i]
+        {Fq2::toaltstack()}
+        // [b, c, e, f]
+        {Fq2::copy(0)} {Fq2::copy(6)}
+        // [b, c, e, f, f, c]
+        {cf_mul_scr} 
+        {mul_by_beta_sq_scr.clone()}
+        // [b, c, e, f, h]
+        {Fq2::toaltstack()}
+        // [b, c, e, f] [i, h]
+        {Fq2::roll(6)}
+        // [c, e, f, b] [i, h]
+        {bf_plus_ce_mul_scr}
+        // [c, e, f, b ce + fb] [i, h]
+        {mul_by_beta_sq_scr}
+        // [c, e, f, b, g] [i, h]
+        {Fq2::toaltstack()}
+        // [c, e, f, b] [i, h, g]
+        {Fq2::roll(6)} {Fq2::roll(6)} {Fq2::roll(6)}
+        {Fq2::fromaltstack()} {Fq2::fromaltstack()} {Fq2::fromaltstack()}
+        // [b, c, e, f, g, h, i]
+    );
+    (result, scr, hints)
+}
+
+
+
 #[cfg(test)]
 mod test {
-    use ark_ff::{Field, Fp12Config, Fp6Config, UniformRand};
+    use ark_ff::{AdditiveGroup, Field, Fp12Config, Fp2Config, Fp6Config, UniformRand};
     use bitcoin_script::script;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq}, chunk::{element::{ElemTraitExt, Element, ElementType}, primitves::{extern_nibbles_to_limbs, hash_fp2, hash_fp4, hash_fp6}, taps_mul::{chunk_dense_dense_mul_v1, chunk_dense_dense_mul_v2}}, execute_script};
+    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fq6::Fq6, utils::{fq2_push_not_montgomery, fq6_push_not_montgomery}}, chunk::{element::{ElemTraitExt, Element, ElementType}, primitves::{extern_nibbles_to_limbs, hash_fp2, hash_fp4, hash_fp6}, taps_mul::{hinted_fq6_mul_le0_le0, utils_dense_dense_mul_v1, utils_dense_dense_mul_v2, utils_dense_dense_mul_v3}}, execute_script, execute_script_without_stack_limit};
 
-    use super::chunk_dense_dense_mul_v0;
+    use super::{hinted_fq6_mul_le0_le1, utils_dense_dense_mul_v0};
 
     #[test]
     fn test_chunk_dense_dense_mul_v0() {
@@ -524,7 +739,7 @@ mod test {
         let h = f * g;
         let h_n =ark_bn254::Fq12::new(h.c0/h.c1, ark_bn254::Fq6::ONE);
 
-        let (hint_out, h_scr, mut mul_hints) = chunk_dense_dense_mul_v0(f_n.c0, g_n.c0);
+        let (hint_out, h_scr, mut mul_hints) = utils_dense_dense_mul_v0(f_n.c0, g_n.c0);
         let f6_hints = Element::Fp6(f_n.c0).get_hash_preimage_as_hints(ElementType::Fp6);
         let g6_hints = Element::Fp6(g_n.c0).get_hash_preimage_as_hints(ElementType::Fp6);
         let h6_hints = Element::Fp6(h_n.c0).get_hash_preimage_as_hints(ElementType::Fp6);
@@ -577,7 +792,7 @@ mod test {
         let h = f * g;
         let h_n =ark_bn254::Fq12::new(h.c0/h.c1, ark_bn254::Fq6::ONE);
 
-        let (hint_out, h_scr, mut mul_hints) = chunk_dense_dense_mul_v1(f_n.c0, g_n.c1);
+        let (hint_out, h_scr, mut mul_hints) = utils_dense_dense_mul_v1(f_n.c0, g_n.c1);
         let f6_hints = Element::Fp6(f_n.c0).get_hash_preimage_as_hints(ElementType::Fp6);
         let g6_hints = Element::Fp6(g_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
         let h6_hints = Element::Fp6(h_n.c0).get_hash_preimage_as_hints(ElementType::Fp6);
@@ -633,7 +848,7 @@ mod test {
         let h = f * g;
         let h_n =ark_bn254::Fq12::new(h.c0/h.c1, ark_bn254::Fq6::ONE);
 
-        let (hint_out, h_scr, mut mul_hints) = chunk_dense_dense_mul_v2(f_n.c1, g_n.c1);
+        let (hint_out, h_scr, mut mul_hints) = utils_dense_dense_mul_v2(f_n.c1, g_n.c1);
         assert_eq!(h_n.c0, hint_out);
 
         let f6_hints = Element::Fp6(f_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
@@ -676,4 +891,114 @@ mod test {
         assert!(res.final_stack.len() == 1);
         println!("script {} stack {:?}", tap_len, res.stats.max_nb_stack_items);
     }
+
+    #[test]
+    fn test_chunk_dense_dense_mul_v3() {
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let f = ark_bn254::Fq12::rand(&mut prng);
+        let f_n = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
+
+        let g = ark_bn254::Fq12::rand(&mut prng);
+        let g_n = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, g.c1/g.c0);
+
+        let h = ark_bn254::Fq12::rand(&mut prng);
+        let h_n = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, h.c1/h.c0);
+
+        let y = f * g * h;
+        let y_n =ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, y.c1/y.c0);
+
+        let (hint_out, h_scr, mut mul_hints) = utils_dense_dense_mul_v3(f_n.c1, g_n.c1, h_n.c1);
+        assert_eq!(y_n.c1, hint_out);
+    
+    }
+
+    #[test]
+    fn test_hinted_fq6_mul_le0_le0() {
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let mut m = ark_bn254::Fq6::rand(&mut prng);
+        let mut n = ark_bn254::Fq6::rand(&mut prng);
+        m.c0 = ark_bn254::Fq2::ZERO;
+        n.c0 = ark_bn254::Fq2::ZERO;
+        let o = m * n;
+
+        let (res, ops_scr, hints) = hinted_fq6_mul_le0_le0(m, n);
+        let ops_len = ops_scr.len();
+        let scr = script!(
+            for h in hints {
+                {h.push()}
+            }
+            {fq2_push_not_montgomery(m.c1)}
+            {fq2_push_not_montgomery(m.c2)}
+            {fq2_push_not_montgomery(n.c1)}
+            {fq2_push_not_montgomery(n.c2)}
+            {ops_scr}
+            {fq6_push_not_montgomery(o)}
+            {Fq6::equalverify()}
+
+            // inputs are in right order
+            {fq2_push_not_montgomery(n.c2)}
+            {Fq2::equalverify()}
+            {fq2_push_not_montgomery(n.c1)}
+            {Fq2::equalverify()}
+            {fq2_push_not_montgomery(m.c2)}
+            {Fq2::equalverify()}
+            {fq2_push_not_montgomery(m.c1)}
+            {Fq2::equalverify()}
+            OP_TRUE
+        );
+        let res = execute_script_without_stack_limit(scr);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        assert!(res.success); 
+        println!("scr len {:?} @ stack {:?}", ops_len, res.stats.max_nb_stack_items);
+
+    }
+
+
+    #[test]
+    fn test_hinted_fq6_mul_le0_le1() {
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let mut m = ark_bn254::Fq6::rand(&mut prng);
+        let mut n = ark_bn254::Fq6::rand(&mut prng);
+        n.c0 = ark_bn254::Fq2::ZERO;
+        let o = m * n;
+
+        let (res, ops_scr, hints) = hinted_fq6_mul_le0_le1(m, n);
+        println!("{:?}", ops_scr.len());
+        assert_eq!(res, o);
+
+        // let ops_len = ops_scr.len();
+        // let scr = script!(
+        //     for h in hints {
+        //         {h.push()}
+        //     }
+        //     {fq2_push_not_montgomery(m.c1)}
+        //     {fq2_push_not_montgomery(m.c2)}
+        //     {fq2_push_not_montgomery(n.c1)}
+        //     {fq2_push_not_montgomery(n.c2)}
+        //     {ops_scr}
+        //     {fq6_push_not_montgomery(o)}
+        //     {Fq6::equalverify()}
+
+        //     // inputs are in right order
+        //     {fq2_push_not_montgomery(n.c2)}
+        //     {Fq2::equalverify()}
+        //     {fq2_push_not_montgomery(n.c1)}
+        //     {Fq2::equalverify()}
+        //     {fq2_push_not_montgomery(m.c2)}
+        //     {Fq2::equalverify()}
+        //     {fq2_push_not_montgomery(m.c1)}
+        //     {Fq2::equalverify()}
+        //     OP_TRUE
+        // );
+        // let res = execute_script_without_stack_limit(scr);
+        // for i in 0..res.final_stack.len() {
+        //     println!("{i:} {:?}", res.final_stack.get(i));
+        // }
+        // assert!(res.success); 
+        // println!("scr len {:?} @ stack {:?}", ops_len, res.stats.max_nb_stack_items);
+
+    }
+
 }

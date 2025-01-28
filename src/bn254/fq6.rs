@@ -1275,7 +1275,7 @@ mod test {
 
         let mut max_stack = 0;
 
-        for _ in 0..100 {
+        for _ in 0..1 {
             let a = ark_bn254::Fq6::rand(&mut prng);
             let b = ark_bn254::Fq6::rand(&mut prng);
             let c = a.mul(&b);

@@ -298,7 +298,7 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::bn254::curves::{G1Affine, G2Affine};
+    use crate::{bn254::curves::{G1Affine, G2Affine}, chunk::primitves::{hash_fp2, hash_fp4, hash_fp6}};
 
     use super::*;
 
@@ -306,6 +306,9 @@ mod test {
     #[test]
     fn test_multiply_point_evals_for_fixed_g2() {
 
+        println!("{:?}", hash_fp6().len());
+        println!("{:?}", hash_fp4().len());
+        println!("{:?}", hash_fp2().len());
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let p3 = ark_bn254::G1Affine::rand(&mut prng);
         let p2 = ark_bn254::G1Affine::rand(&mut prng);

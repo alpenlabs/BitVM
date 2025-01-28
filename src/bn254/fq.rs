@@ -56,6 +56,18 @@ impl Fq {
             { <Fq as Fp254Mul2LC>::tmul() }
         }
     }
+
+    pub fn tmul_lc4() -> Script {
+        script!{ 
+            { <Fq as Fp254Mul4LC>::tmul() }
+        }
+    }
+
+    pub fn tmul_lc6() -> Script {
+        script!{ 
+            { <Fq as Fp254Mul6LC>::tmul() }
+        }
+    }
     
     pub const fn bigint_tmul_lc_1() -> (u32, u32) {
         const X: u32 = <Fq as Fp254Mul>::T::N_BITS;
@@ -66,6 +78,18 @@ impl Fq {
     pub const fn bigint_tmul_lc_2() -> (u32, u32) {
         const X: u32 = <Fq as Fp254Mul2LC>::T::N_BITS;
         const Y: u32 = <Fq as Fp254Mul2LC>::LIMB_SIZE;
+        (X, Y)
+    }
+
+    pub const fn bigint_tmul_lc_4() -> (u32, u32) {
+        const X: u32 = <Fq as Fp254Mul4LC>::T::N_BITS;
+        const Y: u32 = <Fq as Fp254Mul4LC>::LIMB_SIZE;
+        (X, Y)
+    }
+
+    pub const fn bigint_tmul_lc_6() -> (u32, u32) {
+        const X: u32 = <Fq as Fp254Mul6LC>::T::N_BITS;
+        const Y: u32 = <Fq as Fp254Mul6LC>::LIMB_SIZE;
         (X, Y)
     }
 }
@@ -400,6 +424,8 @@ macro_rules! fp_lc_mul {
 
 fp_lc_mul!(Mul, 4, 4, [true]);
 fp_lc_mul!(Mul2LC, 4, 4, [true, true]);
+fp_lc_mul!(Mul4LC, 3, 3, [true, true, true, true]);
+fp_lc_mul!(Mul6LC, 3, 3, [true, true, true, true, true, true]);
 
 
 #[cfg(test)]
@@ -1043,6 +1069,104 @@ mod test {
 
             max_stack = max_stack.max(res.stats.max_nb_stack_items);
             println!("Fq::hinted_mul_lc2: {} @ {} stack", hinted_mul_lc2.len(), max_stack);
+        }
+    }
+
+    #[test]
+    fn test_hinted_mul_lc4() {
+        let mut prng: ChaCha20Rng = ChaCha20Rng::seed_from_u64(0);
+
+        let mut max_stack = 0;
+
+        for _ in 0..100 {
+            let a = ark_bn254::Fq::rand(&mut prng);
+            let b = ark_bn254::Fq::rand(&mut prng);
+            let c = ark_bn254::Fq::rand(&mut prng);
+            let d = ark_bn254::Fq::rand(&mut prng);
+
+            let m = ark_bn254::Fq::rand(&mut prng);
+            let n = ark_bn254::Fq::rand(&mut prng);
+            let o = ark_bn254::Fq::rand(&mut prng);
+            let p = ark_bn254::Fq::rand(&mut prng);
+
+            let e = a.mul(&m).add(b.mul(&n)).add(c.mul(&o)).add(d.mul(&p));
+
+            let (hinted_mul_lc4, hints) = Fq::hinted_mul_lc4(7, a, 6, b, 5, c, 4, d, 3, m, 2, n, 1, o, 0, p);
+
+            let script = script! {
+                for hint in hints { 
+                    { hint.push() }
+                }
+                { fq_push_not_montgomery(a) }
+                { fq_push_not_montgomery(b) }
+                { fq_push_not_montgomery(c) }
+                { fq_push_not_montgomery(d) }
+                { fq_push_not_montgomery(m) }
+                { fq_push_not_montgomery(n) }
+                { fq_push_not_montgomery(o) }
+                { fq_push_not_montgomery(p) }
+                { hinted_mul_lc4.clone() }
+                { fq_push_not_montgomery(e) }
+                { Fq::equal(0, 1) }
+            };
+            let res = execute_script(script);
+            assert!(res.success);
+
+            max_stack = max_stack.max(res.stats.max_nb_stack_items);
+            println!("Fq::hinted_mul_lc2: {} @ {} stack", hinted_mul_lc4.len(), max_stack);
+        }
+    }
+
+    #[test]
+    fn test_hinted_mul_lc6() {
+        let mut prng: ChaCha20Rng = ChaCha20Rng::seed_from_u64(0);
+
+        let mut max_stack = 0;
+
+        for _ in 0..100 {
+            let a = ark_bn254::Fq::rand(&mut prng);
+            let b = ark_bn254::Fq::rand(&mut prng);
+            let c = ark_bn254::Fq::rand(&mut prng);
+            let d = ark_bn254::Fq::rand(&mut prng);
+            let e = ark_bn254::Fq::rand(&mut prng);
+            let f = ark_bn254::Fq::rand(&mut prng);
+
+            let m = ark_bn254::Fq::rand(&mut prng);
+            let n = ark_bn254::Fq::rand(&mut prng);
+            let o = ark_bn254::Fq::rand(&mut prng);
+            let p = ark_bn254::Fq::rand(&mut prng);
+            let q = ark_bn254::Fq::rand(&mut prng);
+            let r = ark_bn254::Fq::rand(&mut prng);
+
+            let t = a.mul(&m).add(b.mul(&n)).add(c.mul(&o)).add(d.mul(&p)).add(e.mul(&q)).add(f.mul(&r));
+
+            let (hinted_mul_lc6, hints) = Fq::hinted_mul_lc6(11, a, 10, b, 9, c, 8, d, 7, e, 6, f, 5, m, 4, n, 3, o, 2, p, 1, q, 0 , r);
+
+            let script = script! {
+                for hint in hints { 
+                    { hint.push() }
+                }
+                { fq_push_not_montgomery(a) }
+                { fq_push_not_montgomery(b) }
+                { fq_push_not_montgomery(c) }
+                { fq_push_not_montgomery(d) }
+                { fq_push_not_montgomery(e) }
+                { fq_push_not_montgomery(f) }
+                { fq_push_not_montgomery(m) }
+                { fq_push_not_montgomery(n) }
+                { fq_push_not_montgomery(o) }
+                { fq_push_not_montgomery(p) }
+                { fq_push_not_montgomery(q) }
+                { fq_push_not_montgomery(r) }
+                { hinted_mul_lc6.clone() }
+                { fq_push_not_montgomery(t) }
+                { Fq::equal(0, 1) }
+            };
+            let res = execute_script(script);
+            assert!(res.success);
+
+            max_stack = max_stack.max(res.stats.max_nb_stack_items);
+            println!("Fq::hinted_mul_lc2: {} @ {} stack", hinted_mul_lc6.len(), max_stack);
         }
     }
 
