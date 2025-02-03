@@ -903,6 +903,7 @@ pub fn hinted_check_line_through_point(x: ark_bn254::Fq2, c3: ark_bn254::Fq2, _c
 }
 
 
+
 /// check whether a tuple coefficient (alpha, -bias) of a tangent line is satisfied with expected point T (affine)
 /// two aspects:
 ///     1. alpha * (2 * T.y) = 3 * T.x^2, make sure the alpha is the right ONE

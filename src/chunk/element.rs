@@ -8,6 +8,7 @@ pub(crate) enum Element {
     Fp12(ElemFp12Acc), // 2,4, 2, 4
     Fp6(ElemFp6), // 6
     G2Acc(ElemG2PointAcc),
+    G2Eval(ElemG2Eval),
     G1(ElemG1Point), // 2
     U256(ark_ff::BigInt<4>), // 1
 }
@@ -24,6 +25,9 @@ pub(crate) enum ElementType {
     G2AddEval, // 4,4
     G2DblEvalMul,
     G2AddEvalMul,
+    G2EvalPoint,
+    G2EvalMul,
+    G2Eval,
     FieldElem, // 1
     ScalarElem, // 1
     G1, // 2
@@ -45,6 +49,9 @@ impl ElementType {
             ElementType::FieldElem => 0,
             ElementType::G1 => 2,
             ElementType::ScalarElem => 0,
+            ElementType::G2EvalPoint => 4 + 1,
+            ElementType::G2EvalMul => 6 + 1,
+            ElementType::G2Eval => 6 + 4,
         }
     }
 }
@@ -60,6 +67,7 @@ impl Element {
     pub fn hashed_output(&self) -> HashBytes {
         match self {
             Element::G2Acc(r) => r.hashed_output(),
+            Element::G2Eval(r) => r.hashed_output(),
             Element::Fp12(r) => r.hashed_output(),
             Element::Fp6(r) => {
                 extern_hash_fps(
@@ -73,6 +81,30 @@ impl Element {
 
     pub fn get_hash_preimage_as_hints(&self, elem_type: ElementType) -> Vec<Hint> {
         match elem_type {
+            ElementType::G2EvalPoint => {
+                if let Element::G2Eval(g) = self {
+                    vec![
+                        Hint::Fq(g.t.x.c0),
+                        Hint::Fq(g.t.x.c1),
+                        Hint::Fq(g.t.y.c0),
+                        Hint::Fq(g.t.y.c1),
+                        Hint::Hash(extern_nibbles_to_limbs(g.hash_le())),
+                    ]
+                } else {
+                    panic!();
+                    vec![]
+                }
+            },
+            ElementType::G2EvalMul => {
+                if let Element::G2Eval(g) = self {
+                    let mut hs: Vec<Hint> = g.le.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect();
+                    hs.push(Hint::Hash(extern_nibbles_to_limbs(g.hash_t())));
+                    hs
+                } else {
+                    panic!();
+                    vec![]
+                }
+            },
             ElementType::G2AddEval => {
                 if let Element::G2Acc(g) = self {
                     vec![
@@ -155,14 +187,6 @@ impl Element {
                     vec![]
                 }
             },
-            ElementType::Fp12v0=> {
-                if let Element::Fp12(r) = self {
-                    r.f.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect()
-                } else {
-                    panic!();
-                    vec![]
-                }
-            },
             ElementType::Fp12v2 => vec![],
             ElementType::Fp6 => {
                 if let Element::Fp6(r) = self {
@@ -194,6 +218,7 @@ impl Element {
             ElementType::FieldElem => vec![],
             ElementType::ScalarElem => vec![],
             ElementType::G2T => vec![],
+            ElementType::G2Eval => vec![],
         }
     }
 
@@ -336,6 +361,12 @@ pub(crate) struct ElemG2PointAcc {
     pub(crate) add_le: Option<(ark_bn254::Fq2, ark_bn254::Fq2)>,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub(crate) struct ElemG2Eval {
+    pub(crate) t: ark_bn254::G2Affine,
+    pub(crate) le: ark_bn254::Fq6,
+}
+
 impl ElemG2PointAcc {
     pub(crate) fn hash_t(&self) -> HashBytes {
         extern_hash_fps(vec![self.t.x.c0, self.t.x.c1, self.t.y.c0, self.t.y.c1])
@@ -402,6 +433,36 @@ impl ElemTraitExt for ElemG2PointAcc {
         let ty =  ark_bn254::Fq2::new(q4yc0, q4yc1);
         let t = ark_bn254::G2Affine::new(tx, ty);
         ElemG2PointAcc { t, dbl_le: Some((tx, ty)), add_le: Some((tx, ty)) }
+    }
+}
+
+impl ElemG2Eval {
+    pub(crate) fn hash_t(&self) -> HashBytes {
+        extern_hash_fps(vec![self.t.x.c0, self.t.x.c1, self.t.y.c0, self.t.y.c1])
+    }
+
+    pub(crate) fn hash_le(&self) -> HashBytes {
+        self.le.hashed_output()
+    }
+}
+
+impl ElemTraitExt for ElemG2Eval {
+    fn hashed_output(&self) -> HashBytes {
+        let hash_t = self.hash_t();
+        let hash_le = self.hash_le();
+        let hash = extern_hash_nibbles(vec![hash_t, hash_le]);
+        hash
+    }
+
+    fn mock() -> Self {
+        let q4xc0: ark_bn254::Fq = MontFp!("18327300221956260726652878806040774028373651771658608258634994907375058801387");
+        let q4xc1: ark_bn254::Fq = MontFp!("2791853351403597124265928925229664715548948431563105825401192338793643440152"); 
+        let q4yc0: ark_bn254::Fq = MontFp!("9203020065248672543175273161372438565462224153828027408202959864555260432617");
+        let q4yc1: ark_bn254::Fq = MontFp!("21242559583226289516723159151189961292041850314492937202099045542257932723954");
+        let tx = ark_bn254::Fq2::new(q4xc0, q4xc1);
+        let ty =  ark_bn254::Fq2::new(q4yc0, q4yc1);
+        let t = ark_bn254::G2Affine::new(tx, ty);
+        ElemG2Eval { t, le: ark_bn254::Fq6::ONE }
     }
 }
 

@@ -4,6 +4,7 @@ use ark_ff::{BigInt, BigInteger};
 
 use crate::bigint::U256;
 use crate::bn254::fq2::Fq2;
+use crate::bn254::fq6::Fq6;
 use crate::chunk::blake3compiled::{hash_128b, hash_192b, hash_64b};
 use crate::signatures::wots::{wots160, wots256};
 use crate::{
@@ -279,6 +280,20 @@ pub(crate) fn new_hash_g2acc_with_both_raw_le() -> Script {
         {Fq::fromaltstack()} // [Hle, HT]
         {Fq::roll(1)}
         {hash_fp2()} // [HTcacl]
+    )
+}
+
+pub(crate) fn new_hash_g2acc() -> Script {
+    script!(
+        // [t, le]
+        {Fq6::toaltstack()}
+        {hash_fp4()}
+        {Fq6::fromaltstack()}
+        {Fq::roll(6)} {Fq::toaltstack()}
+        {hash_fp6()}
+        {Fq::fromaltstack()}
+        {Fq::roll(1)}
+        {hash_fp2()}
     )
 }
 

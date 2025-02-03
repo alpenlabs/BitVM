@@ -1,7 +1,7 @@
 use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq}, hash::blake3_u4_compact::blake3_u4_compact, treepp::*};
 use bitcoin_script_stack::stack::StackTracker;
 
-use super::{element::ElementType, primitves::{hash_fp12_192, hash_fp12_with_hints, hash_fp2, hash_fp6, new_hash_g2acc_with_both_raw_le, new_hash_g2acc_with_hashed_le, new_hash_g2acc_with_hashed_t}};
+use super::{element::ElementType, primitves::{hash_fp12_192, hash_fp12_with_hints, hash_fp2, hash_fp6, new_hash_g2acc, new_hash_g2acc_with_both_raw_le, new_hash_g2acc_with_hashed_le, new_hash_g2acc_with_hashed_t}};
 
 
 fn wrap_scr(scr: Script) -> Script {
@@ -38,7 +38,6 @@ pub fn hash_messages(elem_types: Vec<ElementType>) -> Script {
     let elem_types: Vec<ElementType> = elem_types.into_iter().filter(|et| et.num_limbs() > 0).collect();
     let mut loop_script = script!();
     for msg_index in 0..elem_types.len() {
-
         // send other elems to altstack
         let mut remaining = elem_types[msg_index+1..].to_vec();
         let mut from_altstack = script!();
@@ -80,6 +79,12 @@ pub fn hash_messages(elem_types: Vec<ElementType>) -> Script {
                 {new_hash_g2acc_with_hashed_t(true)}
             } else if elem_type == ElementType::G2AddEvalMul {
                 {new_hash_g2acc_with_hashed_t(false)}
+            } else if elem_type == ElementType::G2EvalPoint {
+                {new_hash_g2acc_with_hashed_le()}
+            } else if elem_type == ElementType::G2EvalMul {
+                {new_hash_g2acc_with_hashed_le()}
+            } else if elem_type == ElementType::G2Eval {
+                {new_hash_g2acc()}
             }
         );
 

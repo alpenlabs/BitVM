@@ -88,7 +88,8 @@ pub(crate) fn utils_point_add_eval(t: ark_bn254::G2Affine, q: ark_bn254::G2Affin
         (ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO)
     };
 
-    let (hinted_script1, hint1) = hinted_check_chord_line(t, q, alpha, -bias); // todo: remove unused arg: bias
+    let (hinted_script11, hint11) = hinted_check_line_through_point(t.x, alpha, -bias); // todo: remove unused arg: bias
+    let (hinted_script12, hint12) = hinted_check_line_through_point(q.x, alpha, -bias); // todo: remove unused arg: bias
     let (hinted_script2, hint2) = hinted_affine_add_line(t.x, q.x, alpha, -bias);
     let (hinted_script3, hint3) = hinted_ell_by_constant_affine(p.x, p.y,alpha, -bias);
 
@@ -104,7 +105,8 @@ pub(crate) fn utils_point_add_eval(t: ark_bn254::G2Affine, q: ark_bn254::G2Affin
         hints.push(Hint::Fq(alpha.c1));
         hints.push(Hint::Fq(-bias.c0));
         hints.push(Hint::Fq(-bias.c1));
-        hints.extend(hint1);
+        hints.extend(hint11);
+        hints.extend(hint12);
         hints.extend(hint2);
         hints.extend(hint3);
     }
@@ -145,10 +147,11 @@ pub(crate) fn utils_point_add_eval(t: ark_bn254::G2Affine, q: ark_bn254::G2Affin
                     { Fq2::copy(2) }                    // qx qy tx ty c3 c4 c3 c4
                     { Fq2::copy(10) }
                     { Fq2::copy(10) }                    // qx qy tx ty c3 c4 c3 c4 tx ty
-                    { Fq2::copy(18) }
-                    { Fq2::roll(18) }                    // qx tx ty c3 c4 c3 c4 tx ty qx qy
-                    { hinted_script1 }                 // qx tx ty c3 c4 0/1
-
+                    { hinted_script11 }
+                    { Fq2::copy(2) } { Fq2::copy(2) }    // qx qy tx ty c3 c4, c3, c4
+                    { Fq2::copy(14) }
+                    { Fq2::roll(14) }                    // qx tx ty c3 c4 c3 c4 qx qy
+                    { hinted_script12 }                 // qx tx ty c3 c4 0/1
                     {Fq2::copy(2)} {Fq2::copy(2)}     // qx tx ty c3 c4, c3 c4
                     { Fq2::copy(10) }                    // qx tx ty c3 c4, c3 c4, tx
                     { Fq2::roll(14) }                    // c3 c4 tx qx
