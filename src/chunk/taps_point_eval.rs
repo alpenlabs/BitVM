@@ -1,12 +1,14 @@
+use crate::bn254::fq6::Fq6;
 use crate::bn254::{self, utils::*};
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::blake3compiled::hash_messages;
+use crate::chunk::norm_fp12::utils_fq6_ss_mul;
 use crate::{
     bn254::fp254impl::Fp254Impl,
     treepp::*,
 };
 use ark_ec::CurveGroup;
-use ark_ff::{Field, Zero};
+use ark_ff::{AdditiveGroup, Field, Zero};
 use num_traits::One;
 use std::ops::Neg;
 
@@ -90,6 +92,54 @@ fn utils_multiply_point_evals_for_fixed_g2(
     (f*g, scr, hints)
 
 }
+
+
+pub(crate) fn utils_multiply_by_line_eval(
+    f: ark_bn254::Fq6,
+    alpha_t3: ark_bn254::Fq2,
+    neg_bias_t3: ark_bn254::Fq2,
+    p3: ark_bn254::G1Affine,
+) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
+
+    assert_eq!(f.c2, ark_bn254::Fq2::ZERO);
+
+    let mut l0_t3 = alpha_t3;
+    l0_t3.mul_assign_by_fp(&p3.x);
+    let mut l1_t3 = neg_bias_t3;
+    l1_t3.mul_assign_by_fp(&p3.y);
+
+    let (hinted_ell_t3, hints_ell_t3) = hinted_ell_by_constant_affine(p3.x, p3.y, alpha_t3, neg_bias_t3);
+
+    let g = ark_bn254::Fq6::new(l0_t3, l1_t3, ark_bn254::Fq2::ZERO);
+    let (fg, fg_scr, fg_hints) = utils_fq6_ss_mul(g, f);
+    
+    let scr = script!(
+        // [f, p3]
+        {Fq2::copy(0)}
+        // [f, p3, p3]
+        {fq2_push_not_montgomery(alpha_t3)}
+        {fq2_push_not_montgomery(neg_bias_t3)}
+        // [f, p3, p3, a, b]
+        {Fq2::roll(4)}
+        // [f, p3, a, b, p3]
+        {hinted_ell_t3}
+        // [f, p3, le0, le1]
+        {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
+        // [f, p3, g]
+        {Fq6::roll(8)}
+        // [p3, g, f]
+        {fg_scr}
+        // [p3, fg]
+    );
+
+    let mut hints = vec![];
+    hints.extend_from_slice(&hints_ell_t3);
+    hints.extend_from_slice(&fg_hints);
+
+    (fg, scr, hints)
+
+}
+
 
 // DOUBLE EVAL
 fn utils_multiply_point_evals_on_tangent_for_fixed_g2(
