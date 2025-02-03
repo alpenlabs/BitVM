@@ -496,6 +496,40 @@ pub(crate) fn chunk_point_ops_and_mul(
     (hint_out, scr, hints)
 }
 
+pub(crate) fn chunk_multiply_fq6_with_g2_eval(
+    f: ElemFp6,
+    g: ElemG2Eval,
+)-> (ElemFp6, Script, Vec<Hint> ) {
+    let (h, h_scr, h_hints) = utils_fq12_mul(f, g.le, 1);
+
+    let ops_scr = script!(
+        // [f, g, gle, h] [h_hash, g_hash, f_hash]
+        {Fq::roll(6)} {Fq::toaltstack()}
+        // [f, g, h] [h_hash, g_hash, f_hash, gle]
+        {h_scr}
+        // [f, g, h] [h_hash, g_hash, f_hash, gle]
+    );
+    let pre_hash_scr = script!(
+        // [f, g, h] [h_hash, g_hash, f_hash, gle]
+        {Fq::fromaltstack()}
+        {Fq6::roll(1)}
+        // [f, g, gle, h] [h_hash, g_hash, f_hash]
+    );
+    
+    let hash_scr = script!(
+        // [f, g, gle, h] [h_hash, g_hash, f_hash]
+        {hash_messages(vec![ElementType::Fp6, ElementType::G2EvalMul, ElementType::Fp6])}
+        OP_TRUE
+    );
+
+    let scr = script!(
+        {ops_scr}
+        {pre_hash_scr}
+        {hash_scr}
+    );
+    (h, scr, h_hints)
+}
+
 #[cfg(test)]
 mod test {
     use ark_ff::{AdditiveGroup, Field, Fp12Config, Fp4Config, Fp6Config, UniformRand};
@@ -503,7 +537,7 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{bn254::{curves::G1Affine, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fq6::Fq6, utils::{fq2_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery, Hint}}, chunk::{blake3compiled::hash_messages, element::{ElemG2Eval, ElemTraitExt, Element, ElementType}, norm_fp12::{chunk_point_ops_and_mul, hinted_square, utils_fq12_mul, utils_fq6_ss_mul}, primitves::{extern_nibbles_to_limbs, hash_fp4, hash_fp6}, taps_mul::*}, execute_script, execute_script_without_stack_limit};
+    use crate::{bn254::{curves::G1Affine, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fq6::Fq6, utils::{fq2_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery, Hint}}, chunk::{blake3compiled::hash_messages, element::{ElemG2Eval, ElemTraitExt, Element, ElementType}, norm_fp12::{chunk_multiply_fq6_with_g2_eval, chunk_point_ops_and_mul, hinted_square, utils_fq12_mul, utils_fq6_ss_mul}, primitves::{extern_nibbles_to_limbs, hash_fp4, hash_fp6}, taps_mul::*}, execute_script, execute_script_without_stack_limit};
 
     use super::point_ops_and_mul;
 
@@ -882,5 +916,65 @@ mod test {
     }
 
     
+    #[test]
+    fn test_chunk_multiply_fq6_with_g2_eval() {
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let f = ark_bn254::Fq12::rand(&mut prng);
+        let f_n = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
+
+        let g = ark_bn254::Fq12::rand(&mut prng);
+        let g_n = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, g.c1/g.c0);
+        let mut gle = ElemG2Eval::mock();
+        gle.le = g_n.c1;
+
+        let h = f * g;
+        let h_n =ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, h.c1/h.c0);
+
+        let (hint_out, h_scr, mul_hints) = chunk_multiply_fq6_with_g2_eval(f_n.c1, gle);
+        assert_eq!(h_n.c1, hint_out);
+
+        let mut preimage_hints = vec![];
+        let f6_hints = Element::Fp6(f_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
+        let g6_hints = Element::G2Eval(gle).get_hash_preimage_as_hints(ElementType::G2EvalMul);
+        let h6_hints = Element::Fp6(h_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
+        preimage_hints.extend_from_slice(&f6_hints);
+        preimage_hints.extend_from_slice(&g6_hints);
+        preimage_hints.extend_from_slice(&h6_hints);
+
+        let bitcom_scr = script!(
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}
+            for i in extern_nibbles_to_limbs(gle.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}
+            for i in extern_nibbles_to_limbs(f_n.c1.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}
+        );
+
+        let tap_len = h_scr.len();
+        let scr= script!(
+            for h in mul_hints {
+                {h.push()}
+            }
+            for h in preimage_hints {
+                {h.push()}
+            }
+            {bitcom_scr}
+            {h_scr}
+        );
+        let res = execute_script(scr);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        assert!(!res.success); 
+        assert!(res.final_stack.len() == 1);
+        println!("script {} stack {:?}", tap_len, res.stats.max_nb_stack_items);
+    }
+
 }
 

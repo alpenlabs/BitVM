@@ -297,6 +297,17 @@ pub(crate) fn new_hash_g2acc() -> Script {
     )
 }
 
+pub(crate) fn new_hash_g2acc_with_hash_t() -> Script {
+    script!(
+        // [le, ht]
+        {Fq::toaltstack()}
+        {hash_fp6()}
+        {Fq::fromaltstack()}
+        {Fq::roll(1)}
+        {hash_fp2()}
+    )
+}
+
 pub(crate) fn new_hash_g2acc_with_hashed_t(is_dbl: bool) -> Script {
     script!(
 
