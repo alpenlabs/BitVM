@@ -816,6 +816,57 @@ pub fn check_line_through_point(c3: ark_bn254::Fq2, c4: ark_bn254::Fq2) -> Scrip
         { Fq2::equalverify() }
     }
 }
+pub fn hinted_check_tangent_line_keep_elements(
+    t: ark_bn254::G2Affine,
+    c3: ark_bn254::Fq2,
+    c4: ark_bn254::Fq2,
+) -> (Script, Vec<Hint>) {
+    let mut hints = Vec::new();
+
+    let (hinted_script3, hint3) = hinted_check_line_through_point_keep_elements(t.x, c3, c4);
+    let (hinted_script1, hint1) = Fq2::hinted_mul(2, t.y.double(), 0, c3);
+    let (hinted_script2, hint2) = Fq2::hinted_square(t.x);
+
+
+    // [a, b, x, y]
+    let script_lines = vec![
+        hinted_script3,
+        // alpha * (2 * T.y) = 3 * T.x^2
+        Fq2::copy(0),
+        Fq2::double(0),
+        // [a, b, x, y, 2y]
+        Fq2::copy(8),
+        // [a, b, x, y, 2y, a]
+        hinted_script1,
+        // [T.x, T.y, alpha * (2 * T.y)]
+        Fq2::copy(4),
+        hinted_script2,
+        Fq2::copy(0),
+        Fq2::double(0),
+        Fq2::add(2, 0),
+        // [T.x, T.y, alpha * (2 * T.y), 3 * T.x^2]
+        Fq2::neg(0),
+        Fq2::add(2, 0),
+        Fq2::push_zero(),
+        Fq2::equalverify(),
+        // [T.x, T.y]
+
+        // check: T.y - alpha * T.x - bias = 0
+        // hinted_script3,
+        // []
+    ];
+
+    let mut script = script! {};
+    for script_line in script_lines {
+        script = script.push_script(script_line.compile());
+    }
+    hints.extend(hint3);
+    hints.extend(hint1);
+    hints.extend(hint2);
+
+    (script, hints)
+}
+
 
 
 pub fn hinted_check_tangent_line(
@@ -888,6 +939,42 @@ pub fn hinted_check_line_through_point(x: ark_bn254::Fq2, c3: ark_bn254::Fq2, _c
         Fq2::add(2, 0),
         // [y - alpha * x - bias]
 
+        Fq2::push_zero(),
+        // [y - alpha * x - bias, 0]
+        Fq2::equalverify(),
+    ];
+
+    let mut script = script!{};
+    for script_line in script_lines {
+        script = script.push_script(script_line.compile());
+    }
+    hints.extend(hint1);
+
+    (script, hints)
+}
+
+pub fn hinted_check_line_through_point_keep_elements(x: ark_bn254::Fq2, c3: ark_bn254::Fq2, _c4: ark_bn254::Fq2) -> (Script, Vec<Hint>) {
+    let mut hints: Vec<Hint> = Vec::new();
+    
+    let (hinted_script1, hint1) = Fq2::hinted_mul(2, x,0, c3);
+
+    let script_lines = vec![
+        // [alpha, bias, x, y ]
+        Fq2::copy(2),
+        // [alpha, bias, x, y, x ]
+        Fq2::copy(8),
+        // [alpha, bias, x, y, x, alpha]
+        hinted_script1,
+        // [alpha, bias, x, y, alpha * x]
+        Fq2::neg(0),
+        // [alpha, bias, x, y, -alpha * x]
+        Fq2::copy(2),
+        Fq2::add(2, 0),
+        // [alpha, bias, x, y, y - alpha * x]
+        Fq2::copy(6),
+        // [alpha, bias, x, y, y - alpha * x, bias]
+        Fq2::add(2, 0),
+        // [alpha, bias, x, y, y - alpha * x - bias]
         Fq2::push_zero(),
         // [y - alpha * x - bias, 0]
         Fq2::equalverify(),
@@ -1516,6 +1603,7 @@ mod test {
             ell_by_constant_affine_script.len()
         );
 
+        println!("hints len {}", hints.len());
         let script = script! {
             for tmp in hints {
                 { tmp.push() }
@@ -1539,8 +1627,13 @@ mod test {
             { Fq2::equalverify() }
             OP_TRUE
         };
-        let exec_result = execute_script(script);
-        assert!(exec_result.success);        
+        let exec_result = execute_script(script.clone());
+        assert!(exec_result.success);
+        println!(
+            "hinted_add_line: {} @ {} stack",
+            script.len(),
+            exec_result.stats.max_nb_stack_items
+        );     
     }
 
     #[test]
@@ -1826,10 +1919,58 @@ mod test {
             
             { fq2_push_not_montgomery(t.x) }
             { fq2_push_not_montgomery(t.y) }
-            {scr}
+            {scr.clone()}
             OP_TRUE
         };
-        assert!(execute_script(script).success);
+        let exec_result = execute_script(script);
+        assert!(exec_result.success);
+        println!(
+            "hinted_check_line_through_point: {} @ {} stack",
+            scr.len(),
+            exec_result.stats.max_nb_stack_items
+        );
+
+
+    }
+
+    #[test]
+    fn test_hinted_check_line_through_point_keep_elements() {
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let t = ark_bn254::G2Affine::rand(&mut prng);
+        let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
+        let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
+        let mut alpha = t.x.square();
+        alpha /= t.y;
+        alpha.mul_assign_by_fp(&three_div_two);
+        // -bias
+        let bias_minus = alpha * t.x - t.y;
+
+        let (scr, hints) = hinted_check_line_through_point_keep_elements(t.x, alpha, bias_minus);
+        println!("hinted_check_line_through_point_keep_elements: {}", scr.len());
+
+        let script = script! {
+            for hint in hints {
+                { hint.push() }
+            }
+            { fq2_push_not_montgomery(alpha) }
+            { fq2_push_not_montgomery(bias_minus) }
+            
+            { fq2_push_not_montgomery(t.x) }
+            { fq2_push_not_montgomery(t.y) }
+            {scr.clone()}
+            for v in vec![t.y, t.x, bias_minus, alpha] {
+                {fq2_push_not_montgomery(v)}
+                {Fq2::equalverify()}
+            }
+            OP_TRUE
+        };
+        let exec_result = execute_script(script);
+        assert!(exec_result.success);
+        println!(
+            "test_hinted_check_line_through_point_keep_elements: {} @ {} stack",
+            scr.len(),
+            exec_result.stats.max_nb_stack_items
+        );
 
 
     }
@@ -1933,6 +2074,51 @@ mod test {
             OP_TRUE
         };
         let exec_result = execute_script(script);
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:3}: {:?}", exec_result.final_stack.get(i));
+        }
+        assert!(exec_result.success);
+        println!(
+            "hinted_check_line: {} @ {} stack",
+            hinted_check_line.len(),
+            exec_result.stats.max_nb_stack_items
+        );
+    }
+
+    #[test]
+    fn test_hinted_check_tangent_line_keep_elements() {
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let t = ark_bn254::G2Affine::rand(&mut prng);
+        let two_inv = ark_bn254::Fq::one().double().inverse().unwrap();
+        let three_div_two = (ark_bn254::Fq::one().double() + ark_bn254::Fq::one()) * two_inv;
+        let mut alpha = t.x.square();
+        alpha /= t.y;
+        alpha.mul_assign_by_fp(&three_div_two);
+        // -bias
+        let bias_minus = alpha * t.x - t.y;
+        assert_eq!(alpha * t.x - t.y, bias_minus);
+
+        let (hinted_check_line, hints) = hinted_check_tangent_line_keep_elements(t, alpha, bias_minus);
+
+        let script = script! {
+            for hint in hints {
+                { hint.push() }
+            }
+            { fq2_push_not_montgomery(alpha) }
+            { fq2_push_not_montgomery(bias_minus) }
+            { fq2_push_not_montgomery(t.x) }
+            { fq2_push_not_montgomery(t.y) }
+            { hinted_check_line.clone() }
+            for v in vec![t.y, t.x, bias_minus, alpha] {
+                {fq2_push_not_montgomery(v)}
+                {Fq2::equalverify()}
+            }
+            OP_TRUE
+        };
+        let exec_result = execute_script(script);
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:3}: {:?}", exec_result.final_stack.get(i));
+        }
         assert!(exec_result.success);
         println!(
             "hinted_check_line: {} @ {} stack",

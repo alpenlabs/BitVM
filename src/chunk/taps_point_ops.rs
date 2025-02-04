@@ -24,7 +24,7 @@ pub(crate) fn utils_point_double_eval(t: ark_bn254::G2Affine, p: ark_bn254::G1Af
         (alpha, bias)
     };
 
-    let (hinted_script1, hint1) = hinted_check_tangent_line(t,alpha, -bias);
+    let (hinted_script1, hint1) = hinted_check_tangent_line_keep_elements(t,alpha, -bias);
     let (hinted_script2, hint2) = hinted_affine_double_line(t.x,alpha, -bias);
     let (hinted_script3, hint3) = hinted_ell_by_constant_affine(p.x, p.y,alpha, -bias);
 
@@ -55,11 +55,9 @@ pub(crate) fn utils_point_double_eval(t: ark_bn254::G2Affine, p: ark_bn254::G1Af
             for _ in 0..Fq::N_LIMBS * 2 {
                 OP_DEPTH OP_1SUB OP_ROLL 
             }                                        // x, y, alpha, -bias
-            { Fq2::copy(2) }                          // x, y, alpha, -bias, alpha
-            { Fq2::copy(2) }                          // x, y, alpha, -bias, alpha, -bias
-            { Fq2::copy(10) }                          // x, y, alpha, -bias, alpha, -bias, x
-            { Fq2::copy(10) }                          // x, y, alpha, -bias, alpha, -bias, x, y
+            {Fq2::roll(6)} {Fq2::roll(6)}          // alpha, -bias, x, y
             { hinted_script1 }                       // x, y, alpha, -bias, is_tangent_line_correct 
+            {Fq2::roll(6)} {Fq2::roll(6)}
             { Fq2::copy(2) } {Fq2::copy(2)}           // x, y alpha, -bias, alpha, -bias
             { Fq2::copy(10) }                          // x, y alpha, -bias, alpha, -bias, x
             { hinted_script2 }                       // x, y, alpha, -bias, x', y'
@@ -88,7 +86,7 @@ pub(crate) fn utils_point_add_eval(t: ark_bn254::G2Affine, q: ark_bn254::G2Affin
         (ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO)
     };
 
-    let (hinted_script11, hint11) = hinted_check_line_through_point(t.x, alpha, -bias); // todo: remove unused arg: bias
+    let (hinted_script11, hint11) = hinted_check_line_through_point_keep_elements(t.x, alpha, -bias); // todo: remove unused arg: bias
     let (hinted_script12, hint12) = hinted_check_line_through_point(q.x, alpha, -bias); // todo: remove unused arg: bias
     let (hinted_script2, hint2) = hinted_affine_add_line(t.x, q.x, alpha, -bias);
     let (hinted_script3, hint3) = hinted_ell_by_constant_affine(p.x, p.y,alpha, -bias);
@@ -142,12 +140,10 @@ pub(crate) fn utils_point_add_eval(t: ark_bn254::G2Affine, q: ark_bn254::G2Affin
                     }
                     for _ in 0..Fq::N_LIMBS * 2 {
                         OP_DEPTH OP_1SUB OP_ROLL 
-                    }                                  // qx qy tx ty c3 c4
-                    { Fq2::copy(2) }
-                    { Fq2::copy(2) }                    // qx qy tx ty c3 c4 c3 c4
-                    { Fq2::copy(10) }
-                    { Fq2::copy(10) }                    // qx qy tx ty c3 c4 c3 c4 tx ty
-                    { hinted_script11 }
+                    }                                  
+                    {Fq2::roll(6)} {Fq2::roll(6)}
+                    {hinted_script11}
+                    {Fq2::roll(6)} {Fq2::roll(6)}
                     { Fq2::copy(2) } { Fq2::copy(2) }    // qx qy tx ty c3 c4, c3, c4
                     { Fq2::copy(14) }
                     { Fq2::roll(14) }                    // qx tx ty c3 c4 c3 c4 qx qy
@@ -520,6 +516,7 @@ mod test {
         }
         assert!(res.success);
         assert!(res.final_stack.len() == 1);    
+        println!("max_stack {:?}", res.stats.max_nb_stack_items);
     }
 
 

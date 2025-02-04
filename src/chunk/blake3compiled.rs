@@ -32,6 +32,18 @@ pub fn hash_192b() -> Script {
     wrap_scr(stack.get_script())
 }
 
+pub fn hash_256b() -> Script {
+    let mut stack = StackTracker::new();
+    blake3_u4_compact(&mut stack, 256, true, true);
+    wrap_scr(stack.get_script())
+}
+
+pub fn hash_448b() -> Script {
+    let mut stack = StackTracker::new();
+    blake3_u4_compact(&mut stack, 448, true, true);
+    wrap_scr(stack.get_script())
+}
+
 pub fn hash_messages(elem_types: Vec<ElementType>) -> Script {
     // Altstack: [Hc, Hb, Ha]
     // Stack: [a, b, c]
@@ -115,7 +127,7 @@ mod test {
 
     use ark_ff::Field;
 
-    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, utils::{fq12_push_not_montgomery, fq6_push_not_montgomery}}, chunk::primitves::{extern_hash_fps, extern_nibbles_to_limbs}};
+    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, utils::{fq12_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery}}, chunk::primitves::{extern_hash_fps, extern_nibbles_to_limbs, hash_fp14, hash_fp8, pack_nibbles_to_limbs}};
 
     use super::*;
 
@@ -146,6 +158,28 @@ mod test {
             println!("{i:} {:?}", res.final_stack.get(i));
         }
         // assert!(!res.success && res.final_stack.len() == 1);
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+    }
+
+    #[test]
+    fn test_sth2() {
+        let a = vec![ark_bn254::Fq::ONE; 14].to_vec();
+        let ahash = extern_hash_fps(a.clone());
+        let tap_len = hash_448b().len();
+        let script = script!(
+            for v in a {
+                {fq_push_not_montgomery(v)}
+            }
+            {hash_fp14()}
+            for v in ahash {
+                {v}
+            }
+            {pack_nibbles_to_limbs()}
+            {Fq::equalverify(1, 0)}
+            OP_TRUE
+        );
+        let res = execute_script(script);
+        assert!(res.success && res.final_stack.len() == 1);
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
 }

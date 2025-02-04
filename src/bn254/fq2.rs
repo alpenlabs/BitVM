@@ -844,6 +844,7 @@ mod test {
 
             let (hinted_mul, hints) = Fq2::hinted_mul_lc6(a, b, c, d, e, f);
 
+            println!("hints len {}", hints.len());
             let script = script! {
                 for hint in hints { 
                     { hint.push() }

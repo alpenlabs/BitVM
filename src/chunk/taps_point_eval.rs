@@ -2,7 +2,7 @@ use crate::bn254::fq6::Fq6;
 use crate::bn254::{self, utils::*};
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::blake3compiled::hash_messages;
-use crate::chunk::norm_fp12::utils_fq6_ss_mul;
+use crate::chunk::norm_fp12::{utils_fq6_ss_mul, utils_fq6_ss_mul_keep_element};
 use crate::{
     bn254::fp254impl::Fp254Impl,
     treepp::*,
@@ -111,7 +111,7 @@ pub(crate) fn utils_multiply_by_line_eval(
     let (hinted_ell_t3, hints_ell_t3) = hinted_ell_by_constant_affine(p3.x, p3.y, alpha_t3, neg_bias_t3);
 
     let g = ark_bn254::Fq6::new(l0_t3, l1_t3, ark_bn254::Fq2::ZERO);
-    let (fg, fg_scr, fg_hints) = utils_fq6_ss_mul(g, f);
+    let (_, fg_scr, fg_hints) = utils_fq6_ss_mul_keep_element(g, f);
     
     let scr = script!(
         // [f, p3]
@@ -129,14 +129,14 @@ pub(crate) fn utils_multiply_by_line_eval(
         {Fq6::roll(8)}
         // [p3, g, f]
         {fg_scr}
-        // [p3, fg]
+        // [p3, g, f, fg]
     );
 
     let mut hints = vec![];
     hints.extend_from_slice(&hints_ell_t3);
     hints.extend_from_slice(&fg_hints);
 
-    (fg, scr, hints)
+    (g, scr, hints)
 
 }
 

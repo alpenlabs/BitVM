@@ -5,7 +5,7 @@ use ark_ff::{BigInt, BigInteger};
 use crate::bigint::U256;
 use crate::bn254::fq2::Fq2;
 use crate::bn254::fq6::Fq6;
-use crate::chunk::blake3compiled::{hash_128b, hash_192b, hash_64b};
+use crate::chunk::blake3compiled::{hash_128b, hash_192b, hash_256b, hash_448b, hash_64b};
 use crate::signatures::wots::{wots160, wots256};
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
@@ -204,7 +204,7 @@ pub(crate) fn extern_hash_fps(fqs: Vec<ark_bn254::Fq>) -> [u8; 64] {
 }
 
 pub(crate) fn extern_hash_nibbles(msgs: Vec<[u8; 64]>) -> [u8; 64] {
-    assert!(msgs.len() == 4 || msgs.len() == 2 || msgs.len() == 12 || msgs.len() == 6);
+    assert!(msgs.len() == 4 || msgs.len() == 2 || msgs.len() == 12 || msgs.len() == 14 || msgs.len() == 6 || msgs.len() == 8);
 
     fn hex_string_to_nibble_array(hex_string: &str) -> Vec<u8> {
         hex_string
@@ -241,7 +241,7 @@ pub(crate) fn extern_hash_nibbles(msgs: Vec<[u8; 64]>) -> [u8; 64] {
         hash_out.try_into().unwrap()
     }
 
-    if msgs.len() == 4 || msgs.len() == 2 || msgs.len() == 6 {
+    if msgs.len() == 4 || msgs.len() == 2 || msgs.len() == 6 || msgs.len() == 8 || msgs.len() == 14 {
         extern_hash_fp_var(msgs)
     } else if msgs.len() == 12 {
         extern_hash_fp12_v2(msgs)
@@ -286,11 +286,15 @@ pub(crate) fn new_hash_g2acc_with_both_raw_le() -> Script {
 pub(crate) fn new_hash_g2acc() -> Script {
     script!(
         // [t, le]
-        {Fq6::toaltstack()}
+        for _ in 0..14 {
+            {Fq::toaltstack()}
+        }
         {hash_fp4()}
-        {Fq6::fromaltstack()}
-        {Fq::roll(6)} {Fq::toaltstack()}
-        {hash_fp6()}
+        for _ in 0..14 {
+            {Fq::fromaltstack()}
+        }
+        {Fq::roll(14)} {Fq::toaltstack()}
+        {hash_fp14()}
         {Fq::fromaltstack()}
         {Fq::roll(1)}
         {hash_fp2()}
@@ -301,7 +305,7 @@ pub(crate) fn new_hash_g2acc_with_hash_t() -> Script {
     script!(
         // [le, ht]
         {Fq::toaltstack()}
-        {hash_fp6()}
+        {hash_fp14()}
         {Fq::fromaltstack()}
         {Fq::roll(1)}
         {hash_fp2()}
@@ -335,6 +339,25 @@ pub(crate) fn hash_fp6() -> Script {
     script! {
         {Fq2::roll(2)} {Fq2::roll(4)}
         {hash_192b()}
+        {pack_nibbles_to_limbs()}
+
+    }
+}
+
+pub(crate) fn hash_fp8() -> Script {
+    script! {
+        {Fq2::roll(2)} {Fq2::roll(4)} {Fq2::roll(6)}
+        {hash_256b()}
+        {pack_nibbles_to_limbs()}
+
+    }
+}
+
+pub(crate) fn hash_fp14() -> Script {
+    script! {
+        {Fq2::roll(2)} {Fq2::roll(4)} {Fq2::roll(6)} 
+        {Fq2::roll(8)} {Fq2::roll(10)} {Fq2::roll(12)}
+        {hash_448b()}
         {pack_nibbles_to_limbs()}
 
     }
@@ -549,7 +572,8 @@ mod test {
     #[test]
     fn test_emulate_external_hash() {
         fn emulate_extern_hash_fps_scripted(msgs: Vec<ark_bn254::Fq>) -> [u8; 64] {
-            assert!(msgs.len() == 4 || msgs.len() == 2 || msgs.len() == 12 || msgs.len() == 6);
+            assert!(msgs.len() == 4 || msgs.len() == 2 || msgs.len() == 12 || msgs.len() == 14 || msgs.len() == 6 || msgs.len() == 8);
+
             let scr = script! {
                 for i in 0..msgs.len() {
                     {fq_push_not_montgomery(msgs[i])}
@@ -562,20 +586,25 @@ mod test {
                     {hash_fp2()}
                 } else if msgs.len() == 6 {
                     {hash_fp6()}
+                } else if msgs.len() == 8 {
+                    {hash_fp8()}
+                }  else if msgs.len() == 14 {
+                    {hash_fp14()}
                 }
-                // {unpack_limbs_to_nibbles()}
+                {unpack_limbs_to_nibbles()}
             };
-            let exec_result = execute_script(scr);
-            let arr = [0u8; 64];
-            // for i in 0..exec_result.final_stack.len() {
-            //     let v = exec_result.final_stack.get(i);
-            //     if v.is_empty() {
-            //         arr[i] = 0;
-            //     } else {
-            //         arr[i] = v[0];
-            //     }
-            // }
+            let exec_result = execute_script(scr.clone());
+            let mut arr = [0u8; 64];
+            for i in 0..exec_result.final_stack.len() {
+                let v = exec_result.final_stack.get(i);
+                if v.is_empty() {
+                    arr[i] = 0;
+                } else {
+                    arr[i] = v[0];
+                }
+            }
             println!("exec result {:?}", exec_result.stats.max_nb_stack_items);
+            println!("exec result {:?}", scr.len());
             arr
         }
     
@@ -583,7 +612,7 @@ mod test {
         let _f = ark_bn254::Fq12::rand(&mut prng);
         let g = ark_bn254::Fq12::rand(&mut prng);
 
-        let ps = g.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
+        let ps = vec![ark_bn254::Fq::ONE + ark_bn254::Fq::ONE; 14];
         let res = emulate_extern_hash_fps_scripted(ps.clone());
         let res2 = extern_hash_fps(ps);
         assert_eq!(res, res2);
