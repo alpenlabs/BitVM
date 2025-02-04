@@ -373,6 +373,7 @@ pub(crate) struct ElemG2Eval {
     pub(crate) p2le: [ark_bn254::Fq2;2],
     pub(crate) ab: ark_bn254::Fq6,
     pub(crate) apb: [ark_bn254::Fq2;2],
+    pub(crate) res_hint: ark_bn254::Fq6,
     //g+f, fg, p2le
 }
 
@@ -476,7 +477,7 @@ impl ElemTraitExt for ElemG2Eval {
         let tx = ark_bn254::Fq2::new(q4xc0, q4xc1);
         let ty =  ark_bn254::Fq2::new(q4yc0, q4yc1);
         let t = ark_bn254::G2Affine::new(tx, ty);
-        ElemG2Eval { t, p2le: [ark_bn254::Fq2::ONE; 2], apb:[ark_bn254::Fq2::ONE; 2], ab: ark_bn254::Fq6::ONE }
+        ElemG2Eval { t, p2le: [ark_bn254::Fq2::ONE; 2], apb:[ark_bn254::Fq2::ONE; 2], ab: ark_bn254::Fq6::ONE, res_hint: ark_bn254::Fq6::ONE }
     }
 }
 
