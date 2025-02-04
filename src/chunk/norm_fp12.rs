@@ -606,44 +606,32 @@ pub(crate) fn chunk_point_ops_and_mul(
     (hint_out, scr, hints)
 }
 
-// pub(crate) fn chunk_multiply_fq6_with_g2(
-//     f: ElemFp6,
-//     g: ElemG2Eval,
-// )-> (ElemFp6, Script, Vec<Hint> ) {
-//     let (h, h_scr, h_hints) = utils_fq12_mul(f, g.le, 1);
+pub(crate) fn chunk_complete_point_eval_and_mul(f: ElemG2Eval) -> (ElemFp6, Script, Vec<Hint>) {
+    let (ops_res, ops_scr, ops_hints) = complete_point_eval_and_mul(f);
+    let scr = script!(
+        // [hints, apb, Ab, c, h, Haux_in] [hash_h, hash_in]
+        {Fq::toaltstack()}
+        // [hints, {apb, Ab, c}, h] [hash_h, hash_in, Haux_in]
+        {ops_scr}
+        // [{apb, Ab, c}, h] [hash_h, hash_in, Haux_in]
+        {Fq::fromaltstack()}
+        // [{apb, Ab, c}, h, Haux_in] [hash_h, hash_in]
+        {Fq6::roll(1)}
+        // [{apb, Ab, c, Haux_in}, h] [hash_h, hash_in]
+    );
 
-//     let ops_scr = script!(
-//         // [f, g, gle, h] [h_hash, g_hash, f_hash]
-//         {Fq::roll(6)} {Fq::toaltstack()}
-//         // [f, g, h] [h_hash, g_hash, f_hash, gle]
-//         {h_scr}
-//         // [f, g, h] [h_hash, g_hash, f_hash, gle]
-//     );
-//     let pre_hash_scr = script!(
-//         // [f, g, h] [h_hash, g_hash, f_hash, gle]
-//         {Fq::fromaltstack()}
-//         {Fq6::roll(1)}
-//         // [f, g, gle, h] [h_hash, g_hash, f_hash]
-//     );
-    
-//     let hash_scr = script!(
-//         // [f, g, gle, h] [h_hash, g_hash, f_hash]
-//         {hash_messages(vec![ElementType::Fp6, ElementType::G2EvalMul, ElementType::Fp6])}
-//         OP_TRUE
-//     );
+    let _hash_scr = script!(
+        // [t4, ht4_le, p4, p3, nt4, fg] [outhash, p3hash, p4hash, in_t4hash]
+        {hash_messages(vec![ElementType::G2EvalMul, ElementType::Fp6])}
+        OP_TRUE
+    );
 
-//     let scr = script!(
-//         {ops_scr}
-//         {pre_hash_scr}
-//         {hash_scr}
-//     );
-//     (h, scr, h_hints)
-// }
-
+    (ops_res, scr, ops_hints)
+}
 
 pub(crate) fn complete_point_eval_and_mul(
     f: ElemG2Eval,
-) -> (Script, Vec<Hint>) {
+) -> (ElemFp6, Script, Vec<Hint>) {
     let ab = f.ab;
     let apb = ark_bn254::Fq6::new( f.apb[0],  f.apb[1], ark_bn254::Fq2::ZERO);
     let c = ark_bn254::Fq6::new( f.p2le[0],  f.p2le[1], ark_bn254::Fq2::ZERO);
@@ -715,7 +703,7 @@ pub(crate) fn complete_point_eval_and_mul(
     hints.extend_from_slice(&abc_hints);
     hints.extend_from_slice(&apb_mul_c_hints);
     hints.extend_from_slice(&den_mul_h_hints);
-    (scr, hints)
+    (f.res_hint, scr, hints)
 }
 
 
@@ -797,7 +785,7 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{bn254::{curves::G1Affine, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fq6::Fq6, utils::{fq2_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery, Hint}}, chunk::{blake3compiled::hash_messages, element::{ElemG2Eval, ElemTraitExt, Element, ElementType}, norm_fp12::{complete_point_eval_and_mul, chunk_point_ops_and_mul, hinted_square, utils_fq12_mul, utils_fq6_hinted_sd_mul, utils_fq6_ss_mul, utils_fq6_ss_mul_keep_element}, primitves::{extern_nibbles_to_limbs, hash_fp4, hash_fp6}, taps_mul::*}, execute_script, execute_script_without_stack_limit};
+    use crate::{bn254::{curves::G1Affine, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fq6::Fq6, utils::{fq2_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery, Hint}}, chunk::{blake3compiled::hash_messages, element::{ElemG2Eval, ElemTraitExt, Element, ElementType}, norm_fp12::{chunk_complete_point_eval_and_mul, chunk_point_ops_and_mul, complete_point_eval_and_mul, hinted_square, utils_fq12_mul, utils_fq6_hinted_sd_mul, utils_fq6_ss_mul, utils_fq6_ss_mul_keep_element}, primitves::{extern_nibbles_to_limbs, hash_fp4, hash_fp6}, taps_mul::*}, execute_script, execute_script_without_stack_limit};
 
     use super::point_ops_and_mul;
 
@@ -1172,7 +1160,7 @@ mod test {
         let t4 = ElemG2Eval {t: t4, p2le:[ark_bn254::Fq2::ONE; 2], ab: ark_bn254::Fq6::ONE, apb: [ark_bn254::Fq2::ONE; 2], res_hint: ark_bn254::Fq6::ONE};
         let (inp, _, _) = chunk_point_ops_and_mul(is_dbl, t4, p4, Some(q4), p3, t3, Some(q3), p2, t2, Some(q2));
 
-        let (ops_scr, ops_hints) = complete_point_eval_and_mul(inp);
+        let (_, ops_scr, ops_hints) = complete_point_eval_and_mul(inp);
         
         let mut preimage_hints = vec![];
         let hint_apb: Vec<Hint> = vec![inp.apb[0].c0, inp.apb[0].c1, inp.apb[1].c0, inp.apb[1].c1].into_iter().map(|f| Hint::Fq(f)).collect();
@@ -1211,6 +1199,68 @@ mod test {
 
     }
 
+    #[test]
+    fn test_chunk_complete_point_eval_and_mul() {
+        let is_dbl = true;
+
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+
+        let t4 = ark_bn254::G2Affine::rand(&mut prng);
+        let q4 = ark_bn254::G2Affine::rand(&mut prng);
+        let p4 = ark_bn254::G1Affine::rand(&mut prng);
+        let t3 = ark_bn254::G2Affine::rand(&mut prng);
+        let q3 = ark_bn254::G2Affine::rand(&mut prng);
+        let p3 = ark_bn254::G1Affine::rand(&mut prng);
+
+        let t2 = ark_bn254::G2Affine::rand(&mut prng);
+        let q2 = ark_bn254::G2Affine::rand(&mut prng);
+        let p2 = ark_bn254::G1Affine::rand(&mut prng);
+
+        let t4 = ElemG2Eval {t: t4, p2le:[ark_bn254::Fq2::ONE; 2], ab: ark_bn254::Fq6::ONE, apb: [ark_bn254::Fq2::ONE; 2], res_hint: ark_bn254::Fq6::ONE};
+        let (inp, _, _) = chunk_point_ops_and_mul(is_dbl, t4, p4, Some(q4), p3, t3, Some(q3), p2, t2, Some(q2));
+
+        let (hint_out, ops_scr, ops_hints) = chunk_complete_point_eval_and_mul(inp);
+
+        let preimage_hints =  Element::G2Eval(inp).get_hash_preimage_as_hints(ElementType::G2EvalMul);
+
+        let bitcom_scr = script!(
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}
+            for i in extern_nibbles_to_limbs(inp.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}
+        );
+
+        let hash_scr = script!(
+            {hash_messages(vec![ElementType::G2EvalMul, ElementType::Fp6])}
+            OP_TRUE
+        );
+
+        let tap_len= ops_scr.len() + hash_scr.len();
+        let scr = script!(
+            for h in ops_hints {
+                {h.push()}
+            }
+            for h in &preimage_hints {
+                {h.push()}
+            }
+            {bitcom_scr}
+            {ops_scr}
+            {hash_scr}
+        );
+
+        let res = execute_script(scr);
+        assert!(!res.success); 
+        assert!(res.final_stack.len() == 1);
+        println!("script {} stack {:?}", tap_len, res.stats.max_nb_stack_items);
+
+
+    }
+
+    
     #[test]
     fn test_chunk_point_ops_and_mul() {
         let is_dbl = true;

@@ -101,9 +101,11 @@ impl Element {
                     let hint_apb: Vec<Hint> = vec![g.apb[0].c0, g.apb[0].c1, g.apb[1].c0, g.apb[1].c1].into_iter().map(|f| Hint::Fq(f)).collect();
                     let hint_ab: Vec<Hint> = g.ab.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect();
                     let hint_p2le: Vec<Hint> = vec![g.p2le[0].c0, g.p2le[0].c1, g.p2le[1].c0, g.p2le[1].c1].into_iter().map(|f| Hint::Fq(f)).collect();
+                    let hint_res: Vec<Hint> = g.res_hint.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect();
                     hs.extend_from_slice(&hint_apb);
                     hs.extend_from_slice(&hint_ab);
                     hs.extend_from_slice(&hint_p2le);
+                    hs.extend_from_slice(&hint_res);
                     hs.push(Hint::Hash(extern_nibbles_to_limbs(g.hash_t())));
                     hs
                 } else {
