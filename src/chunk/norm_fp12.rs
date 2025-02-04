@@ -287,9 +287,6 @@ pub(crate) fn utils_fq6_ss_mul_keep_element(m: ElemFp6, n: ElemFp6) -> (ark_bn25
     }
 
     let scr = script!(
-        // [a, b, c, d, e, f]
-        {Fq2::drop()}
-        {Fq2::roll(4)} {Fq2::drop()}
         // [a, b, d, e]
         {Fq2::copy(0)} {Fq2::copy(6)}
         // [a, b, d, e, e, b]
@@ -311,14 +308,9 @@ pub(crate) fn utils_fq6_ss_mul_keep_element(m: ElemFp6, n: ElemFp6) -> (ark_bn25
         // [b, d, e, a] [i, g, h]
         {Fq6::roll(2)}
         // [a, b, d, e] [i, g, h]
-        {Fq2::toaltstack()} {Fq2::toaltstack()}
-        {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
-        {Fq2::fromaltstack()} {Fq2::fromaltstack()}
-        {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
-        // [a, b, c, d, e, f] [i, g, h]
         {Fq2::fromaltstack()} {Fq2::fromaltstack()}
         {Fq2::roll(2)} {Fq2::fromaltstack()}
-        // [a, b,c d, e,f, g, h, i] 
+        // [a, b, d, e, g, h, i] 
     );
     (result, scr, hints)
 }
@@ -503,15 +495,15 @@ pub(crate) fn point_ops_and_mul(
         // [hints, t4, (q4), p4] [p2, p4, p3]
         {nt_scr}
         // [hints, t4, nt4, le0, le1] [p2, p4, p3]
-        {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
         // [hints, t4, nt4, le] [p2, p4, p3]
         {Fq2::fromaltstack()}
         // [hints, t4, nt4, le, p3] [p2, p4]
         {fg_scr}
         // [t4, nt4, p3, g, f, fg] [p2, p4]
         {Fq6::toaltstack()}
-        {Fq6::add(6, 0)}
-        {Fq2::drop()} // c2 is zero
+        // [t4, nt4, p3, g0, g1, f0, f1] [p2, p4, fg]
+        {Fq2::add(6, 2)}
+        {Fq2::add(4, 2)} 
         {Fq6::fromaltstack()}
         // [t4, nt4, p3, g+f, fg] [p2, p4]
         {Fq2::fromaltstack()}
@@ -651,7 +643,7 @@ pub(crate) fn chunk_point_ops_and_mul(
 
 pub(crate) fn complete_point_eval_and_mul(
     f: ElemG2Eval,
-) {
+) -> (Script, Vec<Hint>) {
     let ab = f.ab;
     let apb = ark_bn254::Fq6::new( f.apb[0],  f.apb[1], ark_bn254::Fq2::ZERO);
     let c = ark_bn254::Fq6::new( f.p2le[0],  f.p2le[1], ark_bn254::Fq2::ZERO);
@@ -660,14 +652,70 @@ pub(crate) fn complete_point_eval_and_mul(
     let apbpc = apb + c;
     let numerator = apbpc + abc_beta_sq;
 
-    let c_mul_apb_beta = c * apb;
-    let denom = ark_bn254::Fq6::ONE + (c_mul_apb_beta + ab) * ark_bn254::Fq12Config::NONRESIDUE;
+    let apb_mul_c = c * apb;
+    let denom = ark_bn254::Fq6::ONE + (apb_mul_c + ab) * ark_bn254::Fq12Config::NONRESIDUE;
 
     assert_eq!(f.res_hint * denom, numerator);
 
-    let scr = script!(
-        // [hints, apb, ab, c, h]
+    let (abc_out, abc_scr, abc_hints) = utils_fq6_hinted_sd_mul(ab, c);
+    assert_eq!(abc_out, ab*c);
+    let (apb_mul_c_out, apb_mul_c_scr, apb_mul_c_hints) = utils_fq6_ss_mul_keep_element(apb, c);
+    assert_eq!(apb_mul_c, apb_mul_c_out);
+
+    let (den_mul_h_scr, den_mul_h_hints) = Fq6::hinted_mul_keep_elements(6, denom, 0, f.res_hint);
+
+    assert_eq!(apb_mul_c, apb_mul_c_out);
+
+    let mul_by_beta_sq_scr = script!(
+        {Fq6::mul_fq2_by_nonresidue()}
+        {Fq2::roll(4)} {Fq2::roll(4)}
     );
+
+    let scr = script!(
+        // [hints, apb, Ab, c] [h]
+        {Fq6::toaltstack()}
+        {abc_scr}
+        // [hints, apb, Ab, c, Abc] [h]
+        {mul_by_beta_sq_scr.clone()}
+        // [hints, apb, Ab, c, Abc_beta_sq] [h]
+        {Fq2::copy(18)} {Fq2::copy(18)}
+        // [hints, apb, Ab, c, Abc_beta_sq, apb] [h]
+        {Fq2::copy(12)} {Fq2::copy(12)}
+        // [hints, apb, Ab, c, Abc_beta_sq, apb, c] [h]
+        {apb_mul_c_scr}        
+        // [hints, apb, Ab, c, Abc_beta_sq, apb, c, Apb_mul_C] [h]
+        {Fq6::copy(24)}
+        // [hints, apb, Ab, c, Abc_beta_sq, apb, c, Apb_mul_C, Ab] [h]
+        {Fq6::add(6, 0)}
+        // [hints, apb, Ab, c, Abc_beta_sq, apb, c, Apb_mul_C_p_Ab] [h]
+        {mul_by_beta_sq_scr}
+        {fq6_push_not_montgomery(ark_bn254::Fq6::ONE)}
+        {Fq6::add(6, 0)}
+        // [hints, apb, Ab, c, Abc_beta_sq, apb, c, denom] [h]
+        {Fq6::toaltstack()}
+        // [hints, apb, Ab, c, Abc_beta_sq, apb, c] [h, denom]
+        {Fq2::add(6, 2)}
+        {Fq2::add(4, 2)}
+        // [hints, apb, Ab, c, Abc_beta_sq, apbpc] [h, denom]
+        {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
+        {Fq6::add(6, 0)}
+        // [hints, apb, Ab, c, numerator] [h, denom]
+        {Fq6::fromaltstack()}
+        {Fq6::fromaltstack()}
+        // [hints, apb, Ab, c, numerator, denom, h]
+        {den_mul_h_scr}
+        // [hints, apb, Ab, c, numerator, denom, h, denom_mul_h]
+        {Fq12::roll(12)}
+        // [hints, apb, Ab, c, h, denom_mul_h, numerator, denom]
+        {Fq6::drop()}
+        {Fq6::equalverify()}
+        // [ apb, Ab, c, h ]
+    );
+    let mut hints = vec![];
+    hints.extend_from_slice(&abc_hints);
+    hints.extend_from_slice(&apb_mul_c_hints);
+    hints.extend_from_slice(&den_mul_h_hints);
+    (scr, hints)
 }
 
 
@@ -733,10 +781,10 @@ fn utils_fq6_hinted_sd_mul(m: ElemFp6, n: ElemFp6) -> (ark_bn254::Fq6, Script, V
         {Fq2::fromaltstack()} {Fq2::fromaltstack()} 
          // [a,b, c, d, g, e] [i, h]
          {Fq2::roll(2)} {Fq2::toaltstack()}
-         {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
-        // [a,b, c, d, e, f] [i, h, g]
+        //  {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
+        // [a,b, c, d, e, _f] [i, h, g]
         {Fq6::fromaltstack()}
-        // [a, b, c, d, e, f, g, h, i]
+        // [a, b, c, d, e, _f, g, h, i]
     );
     (result, scr, hints)
 }
@@ -937,17 +985,15 @@ mod test {
             }
             {fq2_push_not_montgomery(m.c0)}
             {fq2_push_not_montgomery(m.c1)}
-            {fq2_push_not_montgomery(m.c2)}
             {fq2_push_not_montgomery(n.c0)}
             {fq2_push_not_montgomery(n.c1)}
-            {fq2_push_not_montgomery(n.c2)}
             {ops_scr}
             {fq6_push_not_montgomery(o)}
             {Fq6::equalverify()}
-            {fq6_push_not_montgomery(n)}
-            {Fq6::equalverify()}
-            {fq6_push_not_montgomery(m)}
-            {Fq6::equalverify()}
+            for v in vec![n.c1, n.c0, m.c1, m.c0] {
+                {fq2_push_not_montgomery(v)}
+                {Fq2::equalverify()}
+            }
             OP_TRUE
         );
         let res = execute_script_without_stack_limit(scr);
@@ -1009,7 +1055,7 @@ mod test {
 
     #[test]
     fn test_point_ops_and_mul() {
-        let is_dbl = true;
+        let is_dbl = false;
 
         let mut prng = ChaCha20Rng::seed_from_u64(0);
 
@@ -1104,6 +1150,65 @@ mod test {
         assert!(res.success); 
         assert!(res.final_stack.len() == 1);
         println!("script {} stack {:?}", tap_len, res.stats.max_nb_stack_items);
+    }
+
+    #[test]
+    fn test_complete_point_eval_and_mul() {
+        let is_dbl = true;
+
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+
+        let t4 = ark_bn254::G2Affine::rand(&mut prng);
+        let q4 = ark_bn254::G2Affine::rand(&mut prng);
+        let p4 = ark_bn254::G1Affine::rand(&mut prng);
+        let t3 = ark_bn254::G2Affine::rand(&mut prng);
+        let q3 = ark_bn254::G2Affine::rand(&mut prng);
+        let p3 = ark_bn254::G1Affine::rand(&mut prng);
+
+        let t2 = ark_bn254::G2Affine::rand(&mut prng);
+        let q2 = ark_bn254::G2Affine::rand(&mut prng);
+        let p2 = ark_bn254::G1Affine::rand(&mut prng);
+
+        let t4 = ElemG2Eval {t: t4, p2le:[ark_bn254::Fq2::ONE; 2], ab: ark_bn254::Fq6::ONE, apb: [ark_bn254::Fq2::ONE; 2], res_hint: ark_bn254::Fq6::ONE};
+        let (inp, _, _) = chunk_point_ops_and_mul(is_dbl, t4, p4, Some(q4), p3, t3, Some(q3), p2, t2, Some(q2));
+
+        let (ops_scr, ops_hints) = complete_point_eval_and_mul(inp);
+        
+        let mut preimage_hints = vec![];
+        let hint_apb: Vec<Hint> = vec![inp.apb[0].c0, inp.apb[0].c1, inp.apb[1].c0, inp.apb[1].c1].into_iter().map(|f| Hint::Fq(f)).collect();
+        let hint_ab: Vec<Hint> = inp.ab.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect();
+        let hint_p2le: Vec<Hint> = vec![inp.p2le[0].c0, inp.p2le[0].c1, inp.p2le[1].c0, inp.p2le[1].c1].into_iter().map(|f| Hint::Fq(f)).collect();
+        let hint_result: Vec<Hint> = inp.res_hint.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect();
+
+        preimage_hints.extend_from_slice(&hint_apb);
+        preimage_hints.extend_from_slice(&hint_ab);
+        preimage_hints.extend_from_slice(&hint_p2le);
+        preimage_hints.extend_from_slice(&hint_result);
+
+
+        // [hints, apb, ab, c] [h]
+        let tap_len= ops_scr.len();
+        let scr = script!(
+            for h in ops_hints {
+                {h.push()}
+            }
+            for h in &preimage_hints {
+                {h.push()}
+            }
+            {ops_scr}
+            for h in preimage_hints.iter().rev() {
+                {h.push()}
+                {Fq::equalverify(1, 0)}
+            }
+            OP_TRUE
+        );
+
+        let res = execute_script(scr);
+        assert!(res.success); 
+        assert!(res.final_stack.len() == 1);
+        println!("script {} stack {:?}", tap_len, res.stats.max_nb_stack_items);
+
+
     }
 
     #[test]

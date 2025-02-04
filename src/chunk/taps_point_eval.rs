@@ -124,9 +124,8 @@ pub(crate) fn utils_multiply_by_line_eval(
         // [f, p3, a, b, p3]
         {hinted_ell_t3}
         // [f, p3, le0, le1]
-        {fq2_push_not_montgomery(ark_bn254::Fq2::ZERO)}
         // [f, p3, g]
-        {Fq6::roll(8)}
+        {Fq2::roll(8)} {Fq2::roll(8)}
         // [p3, g, f]
         {fg_scr}
         // [p3, g, f, fg]
