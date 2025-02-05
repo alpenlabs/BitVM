@@ -9,6 +9,7 @@ use crate::bn254::fq6::Fq6;
 use crate::bn254::utils::{fq2_push_not_montgomery, fq6_push_not_montgomery, hinted_ell_by_constant_affine, Hint};
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::blake3compiled::hash_messages;
+use crate::chunk::taps_point_eval::get_hint_for_add_with_frob;
 use crate::chunk::taps_point_ops::utils_point_add_eval_ate;
 use crate::{
     bn254::{fq::Fq},
@@ -17,10 +18,11 @@ use crate::{
 use ark_ff::{ Fp12Config, Fp6Config};
 
 use super::element::*;
+use super::primitves::extern_nibbles_to_limbs;
 use super::taps_point_eval::utils_multiply_by_line_eval;
 use super::taps_point_ops::{utils_point_add_eval, utils_point_double_eval};
 
-pub fn verify_pairing(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::G2Affine>, gc: ark_bn254::Fq12, s: ark_bn254::Fq12) {
+pub fn verify_pairing(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::G2Affine>, gc: ark_bn254::Fq12, s: ark_bn254::Fq12, p1q1: ark_bn254::Fq6) {
     let beta_12x = BigUint::from_str(
         "21575463638280843010398324269430826099269044274347216827212613867836435027261",
     )
@@ -189,16 +191,284 @@ pub fn verify_pairing(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::G2Affine>
         le.c1.c0 = le0;
         le.c1.c1 = le1;
     
-        if i != num_pairings-1 {
-            f = f * le;
-            f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
-        } else {
-            assert_eq!(f.c1+le.c1, ark_bn254::Fq6::ZERO); // final check, f: (a+b == 0 => (1 + a) * (1 + b) == Fq12::ONE)
-        }
+        f = f * le;
+        f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
         ts[i] = (t + q).into_affine();
     }
+    assert_eq!(f.c1+p1q1, ark_bn254::Fq6::ZERO); // final check, f: (a+b == 0 => (1 + a) * (1 + b) == Fq12::ONE)
 }
 
+
+pub fn verify_pairing_scripted(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::G2Affine>, gc: ark_bn254::Fq12, s: ark_bn254::Fq12, p1q1: ark_bn254::Fq6) {
+    let beta_12x = BigUint::from_str(
+        "21575463638280843010398324269430826099269044274347216827212613867836435027261",
+    )
+    .unwrap();
+    let beta_12y = BigUint::from_str(
+        "10307601595873709700152284273816112264069230130616436755625194854815875713954",
+    )
+    .unwrap();
+    let beta_12 = ark_bn254::Fq2::from_base_prime_field_elems([
+        ark_bn254::Fq::from(beta_12x.clone()),
+        ark_bn254::Fq::from(beta_12y.clone()),
+    ])
+    .unwrap();
+    let beta_13x = BigUint::from_str(
+        "2821565182194536844548159561693502659359617185244120367078079554186484126554",
+    )
+    .unwrap();
+    let beta_13y = BigUint::from_str(
+        "3505843767911556378687030309984248845540243509899259641013678093033130930403",
+    )
+    .unwrap();
+    let beta_13 = ark_bn254::Fq2::from_base_prime_field_elems([
+        ark_bn254::Fq::from(beta_13x.clone()),
+        ark_bn254::Fq::from(beta_13y.clone()),
+    ])
+    .unwrap();
+    let beta_22x = BigUint::from_str(
+        "21888242871839275220042445260109153167277707414472061641714758635765020556616",
+    )
+    .unwrap();
+    let beta_22y = BigUint::from_str("0").unwrap();
+    let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([
+        ark_bn254::Fq::from(beta_22x.clone()),
+        ark_bn254::Fq::from(beta_22y.clone()),
+    ])
+    .unwrap();
+
+    let mut cinv = gc.inverse().unwrap();
+    cinv = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, cinv.c1/cinv.c0);
+    let mut c =  gc.clone();
+    c = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, c.c1/c.c0);
+    
+    let mut f = cinv.clone();
+    let mut g = cinv.c1.clone();
+    
+    let mut ts = qs.clone();
+    let ps: Vec<ark_bn254::G1Affine> = ps.iter().map(|p1|ark_bn254::G1Affine::new_unchecked(-p1.x/p1.y, p1.y.inverse().unwrap())).collect();
+    let num_pairings = ps.len();
+
+    let mut total_script_size = 0;
+    let mut temp_scr = script!();
+
+    let (mut t4, scr, _) = chunk_init_t4([qs[2].x.c0, qs[2].x.c1, qs[2].y.c0, qs[2].y.c1]);
+    total_script_size += scr.len();
+    let mut t3 = qs[1].clone();
+    let mut t2 = qs[0].clone();
+
+
+    for itr in (1..ark_bn254::Config::ATE_LOOP_COUNT.len()).rev() {
+        let ate_bit = ark_bn254::Config::ATE_LOOP_COUNT[itr - 1];
+        println!("itr {} ate_bit {}", itr, ate_bit);
+        // square
+        f = f * f;
+        f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
+        (g, temp_scr, _) = chunk_hinted_square(g);
+        total_script_size += temp_scr.len();
+
+        assert_eq!(g, f.c1);
+
+        // double and eval
+        for i in 0..num_pairings {
+            let t = ts[i].clone();
+            let p = ps[i].clone();
+            let alpha = (t.x.square() + t.x.square() + t.x.square()) / (t.y + t.y); 
+            let neg_bias = alpha * t.x - t.y;
+            let mut le0 = alpha;
+            le0.mul_assign_by_fp(&p.x);
+            let mut le1 = neg_bias;
+            le1.mul_assign_by_fp(&p.y);
+            let mut le = ark_bn254::Fq12::ZERO;
+            le.c0.c0 = ark_bn254::fq2::Fq2::ONE;
+            le.c1.c0 = le0;
+            le.c1.c1 = le1;
+
+            f = f * le;
+            f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
+    
+            ts[i] = (t + t).into_affine();
+        }
+        (t4, temp_scr, _) = chunk_point_ops_and_mul(true, None, None, t4, ps[2], None, ps[1], t3, None, ps[0], t2, None);
+        total_script_size += temp_scr.len();
+
+        t3 = (t3 + t3).into_affine();
+        t2 = (t2 + t2).into_affine();
+        let (lev, scr, _) = chunk_complete_point_eval_and_mul(t4);
+        total_script_size += scr.len();
+        (g, temp_scr, _) = chunk_dense_dense_mul(g, lev);
+        total_script_size += temp_scr.len();
+
+        assert_eq!(g, f.c1);
+        
+
+        if ate_bit == 1 || ate_bit == -1 {
+            let c_or_cinv = if ate_bit == -1 { c.clone() } else { cinv.clone() };
+            f = f * c_or_cinv;
+            f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
+            (g, temp_scr, _) = chunk_dense_dense_mul(g, c_or_cinv.c1);
+            total_script_size += temp_scr.len();
+
+            assert_eq!(g, f.c1);
+
+            for i in 0..num_pairings {
+                let t = ts[i].clone();
+                let mut q = qs[i].clone();
+                let p = ps[i].clone();
+
+                if ate_bit == -1 {
+                    q = q.neg();
+                };
+                let alpha = (t.y - q.y) / (t.x - q.x);
+                let neg_bias = alpha * t.x - t.y;
+    
+                let mut le0 = alpha;
+                le0.mul_assign_by_fp(&p.x);
+                let mut le1 = neg_bias;
+                le1.mul_assign_by_fp(&p.y);
+                let mut le = ark_bn254::Fq12::ZERO;
+                le.c0.c0 = ark_bn254::fq2::Fq2::ONE;
+                le.c1.c0 = le0;
+                le.c1.c1 = le1;
+    
+                f = f * le;
+                f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
+
+                ts[i] = (t + q).into_affine();
+                // println!("pair {:?} ts {:?}", i, ts[i]);
+            }
+
+            (t4, temp_scr, _) = chunk_point_ops_and_mul(
+                false, Some(false), Some(ate_bit), 
+                t4, ps[2], Some(qs[2]), 
+                ps[1], t3, Some(qs[1]), 
+                ps[0], t2, Some(qs[0]));
+            total_script_size += temp_scr.len();
+            
+            if ate_bit == 1 {
+                t3 = (t3 + qs[1]).into_affine();
+                t2 = (t2 + qs[0]).into_affine();
+            } else {
+                t3 = (t3 + qs[1].clone().neg()).into_affine();
+                t2 = (t2 + qs[0].clone().neg()).into_affine();
+            }
+
+            let (lev, scr, _) = chunk_complete_point_eval_and_mul(t4);
+            total_script_size += scr.len();
+
+            (g, temp_scr, _) = chunk_dense_dense_mul(g, lev);
+            total_script_size += temp_scr.len();
+        }
+        assert_eq!(g, f.c1);
+    }
+
+    let cinv_q = cinv.frobenius_map(1);
+    let c_q2 = c.frobenius_map(2);
+    let cinv_q3 = cinv.frobenius_map(3);
+
+    let (sc_cinv_q, scr, _) = chunk_frob_fp12(cinv.c1, 1);
+    total_script_size += scr.len();
+    let (sc_c_q2, scr, _) = chunk_frob_fp12(c.c1, 2);
+    total_script_size += scr.len();
+    let (sc_cinv_q3, scr, _) = chunk_frob_fp12(cinv.c1, 3);
+    total_script_size += scr.len();
+
+    for mut cq in vec![cinv_q, c_q2, cinv_q3] {
+        cq = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, cq.c1/cq.c0); 
+        f = f * cq;
+        f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
+    }
+    for sc_cq in vec![sc_cinv_q, sc_c_q2, sc_cinv_q3] {
+        (g, temp_scr, _) = chunk_dense_dense_mul(g, sc_cq);
+        total_script_size += temp_scr.len();
+    }
+    assert_eq!(g, f.c1);
+
+    f = f * s;
+    f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
+    (g, temp_scr, _) = chunk_dense_dense_mul(g, s.c1);
+    total_script_size += temp_scr.len();
+    assert_eq!(g, f.c1);
+
+    for i in 0..num_pairings {
+        let mut q = qs[i].clone();
+        let t = ts[i].clone();
+        let p = ps[i].clone();
+        
+        q.x.conjugate_in_place();
+        q.x = q.x * beta_12;
+        q.y.conjugate_in_place();
+        q.y = q.y * beta_13;
+        let alpha = (t.y - q.y) / (t.x - q.x);
+        let neg_bias = alpha * t.x - t.y;
+        let mut le0 = alpha;
+        le0.mul_assign_by_fp(&p.x);
+        let mut le1 = neg_bias;
+        le1.mul_assign_by_fp(&p.y);
+        let mut le = ark_bn254::Fq12::ZERO;
+        le.c0.c0 = ark_bn254::fq2::Fq2::ONE;
+        le.c1.c0 = le0;
+        le.c1.c1 = le1;
+    
+        f = f * le;
+        f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
+    
+        ts[i] = (t + q).into_affine();
+    }
+    (t4, temp_scr, _) = chunk_point_ops_and_mul(false, Some(true), Some(1), t4, ps[2], Some(qs[2]), ps[1], t3, Some(qs[1]), ps[0], t2, Some(qs[0]));
+    total_script_size += temp_scr.len();
+
+    let (lev, scr, _) = chunk_complete_point_eval_and_mul(t4);
+    total_script_size += scr.len();
+
+    (g, temp_scr, _) = chunk_dense_dense_mul(g, lev);
+    total_script_size += temp_scr.len();
+    t2 = get_hint_for_add_with_frob(qs[0], t2, 1);
+    t3 = get_hint_for_add_with_frob(qs[1], t3, 1);
+    assert_eq!(g, f.c1);
+
+    // t + q^3
+    for i in 0..num_pairings {
+        let mut q = qs[i].clone();
+        let t = ts[i].clone();
+        let p = ps[i].clone();
+
+        q.x = q.x * beta_22;
+    
+        let alpha = (t.y - q.y) / (t.x - q.x);
+        let neg_bias = alpha * t.x - t.y;
+        let mut le0 = alpha;
+        le0.mul_assign_by_fp(&p.x);
+        let mut le1 = neg_bias;
+        le1.mul_assign_by_fp(&p.y);
+        let mut le = ark_bn254::Fq12::ZERO;
+        le.c0.c0 = ark_bn254::fq2::Fq2::ONE;
+        le.c1.c0 = le0;
+        le.c1.c1 = le1;
+    
+        f = f * le;
+        f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
+
+        ts[i] = (t + q).into_affine();
+    }
+    (t4, temp_scr, _) = chunk_point_ops_and_mul(false, Some(true), Some(-1), t4, ps[2], Some(qs[2]), ps[1], t3, Some(qs[1]), ps[0], t2, Some(qs[0]));
+    total_script_size += temp_scr.len();
+
+    let (lev, scr, _) = chunk_complete_point_eval_and_mul(t4);
+    total_script_size += scr.len();
+    
+    (g, temp_scr, _) = chunk_dense_dense_mul(g, lev);
+    total_script_size += temp_scr.len();
+
+    println!("total script size {:?}", total_script_size);
+    
+    t2 = get_hint_for_add_with_frob(qs[0], t2, -1);
+    t3 = get_hint_for_add_with_frob(qs[1], t3, -1);
+    assert_eq!(g, f.c1);
+
+    assert_eq!(g+p1q1, ark_bn254::Fq6::ZERO); // final check, f: (a+b == 0 => (1 + a) * (1 + b) == Fq12::ONE)    
+    assert_eq!(f.c1+p1q1, ark_bn254::Fq6::ZERO); // final check, f: (a+b == 0 => (1 + a) * (1 + b) == Fq12::ONE)
+}
 
 
 pub(crate) fn utils_fq12_mul(a: ElemFp6, b: ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
@@ -433,7 +703,23 @@ pub(crate) fn point_ops_and_mul(
         let neg_bias_t3 = alpha_t3 * t3.x - t3.y;
         (alpha_t3, neg_bias_t3)
     } else {
-        let q3 = q3.unwrap();
+        let ate_bit = ate_bit.unwrap();
+        let is_frob = is_frob.unwrap();
+        let temp_q = q3.unwrap().clone();
+        let q3 = if is_frob {
+            if ate_bit == 1 {
+                bn254::curves::G2Affine::hinted_p_power_endomorphism(temp_q).0
+            } else {
+                bn254::curves::G2Affine::hinted_endomorphism_affine(temp_q).0
+            }
+        } else {
+            if ate_bit == -1 {
+                temp_q.neg()
+            } else {
+                temp_q
+            }
+        };
+
         let alpha_t3 = (t3.y - q3.y) / (t3.x - q3.x); 
         let neg_bias_t3 = alpha_t3 * t3.x - t3.y;
         (alpha_t3, neg_bias_t3)
@@ -444,7 +730,23 @@ pub(crate) fn point_ops_and_mul(
         let neg_bias_t2 = alpha_t2 * t2.x - t2.y;
         (alpha_t2, neg_bias_t2)
     } else {
-        let q2 = q2.unwrap();
+        let ate_bit = ate_bit.unwrap();
+        let is_frob = is_frob.unwrap();
+        let temp_q = q2.unwrap().clone();
+        let q2 = if is_frob {
+            if ate_bit == 1 {
+                bn254::curves::G2Affine::hinted_p_power_endomorphism(temp_q).0
+            } else {
+                bn254::curves::G2Affine::hinted_endomorphism_affine(temp_q).0
+            }
+        } else {
+            if ate_bit == -1 {
+                temp_q.neg()
+            } else {
+                temp_q
+            }
+        };
+
         let alpha_t2 = (t2.y - q2.y) / (t2.x - q2.x); 
         let neg_bias_t2 = alpha_t2 * t2.x - t2.y;
         (alpha_t2, neg_bias_t2)
@@ -768,6 +1070,34 @@ fn utils_fq6_hinted_sd_mul(m: ElemFp6, n: ElemFp6) -> (ark_bn254::Fq6, Script, V
 }
 
 
+pub(crate) fn chunk_init_t4(ts: [ark_bn254::Fq; 4]) -> (ElemG2Eval, Script, Vec<Hint>) {
+    let t4: ElemG2Eval = ElemG2Eval {
+        t: ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(ts[0], ts[1]), ark_bn254::Fq2::new(ts[2], ts[3])),
+        p2le: [ark_bn254::Fq2::ZERO; 2],
+        ab: ark_bn254::Fq6::ZERO,
+        apb: [ark_bn254::Fq2::ZERO; 2],
+        res_hint: ark_bn254::Fq6::ZERO,
+    };
+
+    let t4_hash_le = t4.hash_le();
+
+    let ops_scr = script! {
+        for _ in 0..4 {
+            {Fq::fromaltstack()}
+        }
+        // Stack:[f_hash_claim, x0,x1,y0,y1]
+        // Altstack : [f_hash]
+        for le in extern_nibbles_to_limbs(t4_hash_le) {
+            {le}
+        }
+    };
+    let _hash_scr = script!(
+        {hash_messages(vec![ElementType::G2EvalPoint])}
+        OP_TRUE
+    );
+    (t4, ops_scr, vec![])
+}
+
 #[cfg(test)]
 mod test {
     use std::ops::Neg;
@@ -780,9 +1110,55 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{bn254::{curves::G1Affine, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fq6::Fq6, utils::{fq2_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery, Hint}}, chunk::{blake3compiled::hash_messages, compile::NUM_PUBS, element::{ElemG2Eval, ElemTraitExt, Element, ElementType}, norm_fp12::{chunk_complete_point_eval_and_mul, chunk_dense_dense_mul, chunk_hinted_square, chunk_point_ops_and_mul, complete_point_eval_and_mul, hinted_square, verify_pairing, utils_fq12_mul, utils_fq6_hinted_sd_mul, utils_fq6_ss_mul_keep_element}, primitves::{extern_nibbles_to_limbs, hash_fp4, hash_fp6}, taps_mul::*}, execute_script, execute_script_without_stack_limit, groth16::{constants::LAMBDA, offchain_checker::compute_c_wi}};
+    use crate::{bn254::{curves::G1Affine, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fq6::Fq6, utils::{fq2_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery, Hint}}, chunk::{blake3compiled::hash_messages, compile::NUM_PUBS, element::{ElemG2Eval, ElemTraitExt, Element, ElementType}, norm_fp12::{chunk_complete_point_eval_and_mul, chunk_dense_dense_mul, chunk_hinted_square, chunk_init_t4, chunk_point_ops_and_mul, complete_point_eval_and_mul, hinted_square, utils_fq12_mul, utils_fq6_hinted_sd_mul, utils_fq6_ss_mul_keep_element, verify_pairing}, primitves::{extern_nibbles_to_limbs, hash_fp4, hash_fp6}, taps_mul::*}, execute_script, execute_script_without_stack_limit, groth16::{constants::LAMBDA, offchain_checker::compute_c_wi}};
 
-    use super::{chunk_frob_fp12, point_ops_and_mul};
+    use super::{chunk_frob_fp12, point_ops_and_mul, verify_pairing_scripted};
+
+    #[test]
+    fn test_tap_init_t4() {
+
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let q = ark_bn254::G2Affine::rand(&mut prng);
+
+        let (hint_out, init_t4_tap, hint_script) = chunk_init_t4([q.x.c0, q.x.c1, q.y.c0, q.y.c1]);
+
+        let bitcom_script = script!{
+            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
+                {i}
+            }
+            {Fq::toaltstack()}
+
+            {fq_push_not_montgomery(q.y.c1)}
+            {Fq::toaltstack()}
+            {fq_push_not_montgomery(q.y.c0)}
+            {Fq::toaltstack()}
+            {fq_push_not_montgomery(q.x.c1)}
+            {Fq::toaltstack()}
+            {fq_push_not_montgomery(q.x.c0)}
+            {Fq::toaltstack()}
+        };
+        let hash_scr = script!(
+            {hash_messages(vec![ElementType::G2EvalPoint])}
+            OP_TRUE
+        );
+
+        let tap_len = init_t4_tap.len() + hash_scr.len();
+        let script = script! {
+            for h in hint_script {
+                { h.push() }
+            }
+            {bitcom_script}
+            {init_t4_tap}
+            {hash_scr}
+        };
+
+        let res = execute_script(script);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        assert!(!res.success && res.final_stack.len() == 1);
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+    }
 
     #[test]
     fn test_chunk_frob_fp12() {
@@ -1567,13 +1943,15 @@ mod test {
 
         // precompute c, s
         let mut g = Bn254::multi_miller_loop_affine([p1, p2, p3, p4], [q1, q2, q3, q4]).0;
+        let fixed_p1q1 = Bn254::multi_miller_loop_affine([p1], [q1]).0;
+        let fixed_p1q1 = fixed_p1q1.c1/fixed_p1q1.c0;
         if g.c1 != ark_bn254::Fq6::ZERO {
             g = ark_bn254::Fq12::new( ark_bn254::Fq6::ONE, g.c1/g.c0);
         }
         let (c, wi) = compute_c_wi(g);
 
         // actual scripted verification
-        verify_pairing(vec![p1, p2, p3, p4], vec![q1, q2, q3, q4], c, wi);
+        verify_pairing_scripted(vec![p2, p3, p4], vec![q2, q3, q4], c, wi, fixed_p1q1);
 
     }
 }
