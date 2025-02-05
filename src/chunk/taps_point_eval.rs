@@ -2,7 +2,7 @@ use crate::bn254::fq6::Fq6;
 use crate::bn254::{self, utils::*};
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::blake3compiled::hash_messages;
-use crate::chunk::norm_fp12::{utils_fq6_ss_mul, utils_fq6_ss_mul_keep_element};
+use crate::chunk::norm_fp12::{utils_fq6_ss_mul_keep_element};
 use crate::{
     bn254::fp254impl::Fp254Impl,
     treepp::*,
