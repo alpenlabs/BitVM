@@ -66,6 +66,7 @@ mod test {
 
     use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
     use ark_ff::{AdditiveGroup, Field};
+    use ark_serialize::CanonicalSerialize;
     use rand::Rng;
 
     use crate::{chunk::{api::mock_pubkeys, element::InputProof, norm_fp12::multi_miller_loop_affine_norm}, groth16::{constants::LAMBDA, g16::test::test_utils::{read_scripts_from_file, write_scripts_to_file, write_scripts_to_separate_files}, offchain_checker::compute_c_wi}};
@@ -590,44 +591,64 @@ mod test {
         let (_, vk) = mock::compile_circuit();
         let (proof, scalars) = mock::generate_proof();
 
-        let mut msm_scalar = scalars.to_vec();
-        msm_scalar.reverse();
-        let mut msm_gs = vk.gamma_abc_g1.clone(); // vk.vk_pubs[0]
-        msm_gs.reverse();
-        let vky0 = msm_gs.pop().unwrap();
+        let mut vk_bytes = Vec::new();
+        vk.serialize_uncompressed(&mut vk_bytes).unwrap();
 
-        let mut p3 = vky0 * ark_bn254::Fr::ONE;
-        for i in 0..NUM_PUBS {
-            p3 = p3 + msm_gs[i] * msm_scalar[i];
+        let mut proof_bytes = Vec::new();
+        proof.serialize_uncompressed(&mut proof_bytes).unwrap();
+
+
+        println!("{:?}", vk_bytes);
+        println!("{:?}", proof_bytes);
+
+        let scalars_bytes = scalars.iter().map(|s| {
+            let mut scb = Vec::new();
+            s.serialize_uncompressed(&mut scb).unwrap();
+            scb
+        }).collect::<Vec<Vec<u8>>>();
+        for s in scalars_bytes {
+            println!("{:?}", s);
         }
-        let p3 = p3.into_affine();
 
-        let (p2, p1, p4) = (proof.c, vk.alpha_g1, proof.a);
-        let (q3, q2, q1, q4) = (
-            vk.gamma_g2.into_group().neg().into_affine(),
-            vk.delta_g2.into_group().neg().into_affine(),
-            -vk.beta_g2,
-            proof.b,
-        );
 
-        // let d = bn254_mm(p, q);
-        let mut g = Bn254::multi_miller_loop_affine([p1, p2, p3, p4], [q1, q2, q3, q4]).0;
-        if g.c1 != ark_bn254::Fq6::ZERO {
-            g = ark_bn254::Fq12::new(g.c0/g.c1, ark_bn254::Fq6::ONE);
-        }
-        let (c, wi) = compute_c_wi(g);
-        //assert_eq!(c.pow(LAMBDA.to_u64_digits()), g * wi);
+        // let mut msm_scalar = scalars.to_vec();
+        // msm_scalar.reverse();
+        // let mut msm_gs = vk.gamma_abc_g1.clone(); // vk.vk_pubs[0]
+        // msm_gs.reverse();
+        // let vky0 = msm_gs.pop().unwrap();
+
+        // let mut p3 = vky0 * ark_bn254::Fr::ONE;
+        // for i in 0..NUM_PUBS {
+        //     p3 = p3 + msm_gs[i] * msm_scalar[i];
+        // }
+        // let p3 = p3.into_affine();
+
+        // let (p2, p1, p4) = (proof.c, vk.alpha_g1, proof.a);
+        // let (q3, q2, q1, q4) = (
+        //     vk.gamma_g2.into_group().neg().into_affine(),
+        //     vk.delta_g2.into_group().neg().into_affine(),
+        //     -vk.beta_g2,
+        //     proof.b,
+        // );
+
+        // // let d = bn254_mm(p, q);
+        // let mut g = Bn254::multi_miller_loop_affine([p1, p2, p3, p4], [q1, q2, q3, q4]).0;
+        // if g.c1 != ark_bn254::Fq6::ZERO {
+        //     g = ark_bn254::Fq12::new(g.c0/g.c1, ark_bn254::Fq6::ONE);
+        // }
+        // let (c, wi) = compute_c_wi(g);
+        // //assert_eq!(c.pow(LAMBDA.to_u64_digits()), g * wi);
         
-        let mut cl = c.pow(LAMBDA.to_u64_digits());
-        cl = cl.inverse().unwrap();
-        cl = cl * wi;
-        cl = ark_bn254::Fq12::new(cl.c0/cl.c1, ark_bn254::Fq6::ONE);
+        // let mut cl = c.pow(LAMBDA.to_u64_digits());
+        // cl = cl.inverse().unwrap();
+        // cl = cl * wi;
+        // cl = ark_bn254::Fq12::new(cl.c0/cl.c1, ark_bn254::Fq6::ONE);
 
-        println!("cl {:?}", (cl * g).inverse().unwrap());
+        // println!("cl {:?}", (cl * g).inverse().unwrap());
 
-        let h = multi_miller_loop_affine_norm(vec![p1, p2, p3, p4], vec![q1, q2, q3, q4], c, wi);
-        // println!("h {:?}", h);
-        // println!("g {:?}", g);
+        // let h = multi_miller_loop_affine_norm(vec![p1, p2, p3, p4], vec![q1, q2, q3, q4], c, wi);
+        // // println!("h {:?}", h);
+        // // println!("g {:?}", g);
 
 
 
