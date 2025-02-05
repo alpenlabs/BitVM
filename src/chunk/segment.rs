@@ -323,6 +323,7 @@ pub(crate) fn wrap_hint_init_t4(
     }
 }
 
+
 pub(crate) fn wrap_hint_squaring(
     skip: bool,
     segment_id: usize,
@@ -557,6 +558,7 @@ pub(crate) fn wrap_hints_dense_dense_mul0(
     }
 }
 
+
 pub(crate) fn wrap_hints_dense_dense_mul1(
     skip: bool,
     segment_id: usize,
@@ -753,6 +755,7 @@ pub(crate) fn wrap_hints_frob_fp12(
         scr_type: ScriptType::PostMillerFrobFp12(power as u8),
     }
 }
+
 
 pub(crate) fn wrap_hint_point_add_with_frob(
     skip: bool,

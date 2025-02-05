@@ -338,6 +338,7 @@ impl_try_from_element!(ElemFp6, { Fp6 });
 impl_try_from_element!(ElemG2PointAcc, { G2Acc, G2Acc, G2Acc, G2Acc });
 impl_try_from_element!(ElemU256, { U256 });
 impl_try_from_element!(ElemG1Point, { G1 });
+impl_try_from_element!(ElemG2Eval, { G2Eval });
 
 pub(crate) type ElemU256 = ark_ff::BigInt<4>;
 pub(crate) type ElemFp6 = ark_bn254::Fq6;
