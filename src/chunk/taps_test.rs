@@ -55,7 +55,7 @@ mod test {
             OP_TRUE
         };
 
-        let tap_len = tap_frob.len();
+        let tap_len = tap_frob.len() + hash_scr.len();
         let script = script! {
             for h in hint_script {
                 { h.push() }
