@@ -2,8 +2,7 @@ use std::ops::Neg;
 
 use crate::chunk::assert::{groth16,Pubs};
 use crate::chunk::assigner::{get_assertions, get_intermediates, get_proof, get_pubs, hint_to_data};
-use crate::chunk::compile::{compile_ops, compile_taps, Vkey};
-use crate::chunk::compile::{ NUM_PUBS};
+use crate::chunk::compile::{ append_bitcom_locking_script_to_partial_scripts, generate_partial_script, Vkey, NUM_PUBS};
 use crate::chunk::element::{ElemG1Point, InputProof};
 use crate::chunk::element::ElemTraitExt;
 use crate::chunk::segment::Segment;
@@ -37,7 +36,7 @@ pub fn api_compile(vk: &ark_groth16::VerifyingKey<Bn254>) -> Vec<Script> {
     p3vk.reverse();
     let vky0 = p3vk.pop().unwrap();
 
-    let taps = compile_ops(
+    let taps = generate_partial_script(
         Vkey {
             q2,
             q3,
@@ -55,7 +54,7 @@ pub fn generate_tapscripts(
     ops_scripts_per_link: &[Script],
 ) -> Vec<Script> {
 
-    let taps_per_link = compile_taps(
+    let taps_per_link = append_bitcom_locking_script_to_partial_scripts(
         Vkey {
             q2: ark_bn254::G2Affine::identity(),
             q3: ark_bn254::G2Affine::identity(),
@@ -139,7 +138,7 @@ pub fn generate_assertions(
         p4,
         q4,
         c: c.c1/c.c0,
-        s: s.c0,
+        s: s.c1,
         ks: msm_scalar.clone(),
     };
 

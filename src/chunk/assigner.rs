@@ -3,6 +3,7 @@ use std::ops::Neg;
 use ark_bn254::{Bn254};
 use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::PrimeField;
+use bitcoin_script::script;
 
 use crate::{chunk::{primitves::HashBytes, segment::*}, groth16::g16::{Assertions, Signatures, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}};
 
@@ -146,7 +147,7 @@ pub(crate) fn get_pubs(vk: &ark_groth16::VerifyingKey<Bn254>) -> Pubs {
     pubs
 }
 
-pub(crate) fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hints: &mut Vec<Segment>) -> ([Segment;2], [Segment;2], [Segment;4], [Segment;12], [Segment;12], [Segment;NUM_PUBS]) {
+pub(crate) fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hints: &mut Vec<Segment>) -> ([Segment;2], [Segment;2], [Segment;4], [Segment;6], [Segment;6], [Segment;NUM_PUBS]) {
     let pub_scalars: Vec<Segment> = eval_ins.ks.iter().enumerate().map(|(idx, f)| Segment {
         is_validation: false,
         id: (all_output_hints.len() + idx) as u32,
@@ -154,6 +155,7 @@ pub(crate) fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hi
         result: (Element::U256(*f), ElementType::ScalarElem),
         hints: vec![],
         scr_type: ScriptType::NonDeterministic,
+        scr: script!(),
     }).collect();
     all_output_hints.extend_from_slice(&pub_scalars);
 
@@ -165,7 +167,8 @@ pub(crate) fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hi
         parameter_ids: vec![],
         result: (Element::U256(*f), ElementType::FieldElem),
         hints: vec![],
-        scr_type: ScriptType::NonDeterministic
+        scr_type: ScriptType::NonDeterministic,
+        scr: script!(),
     }).collect();
     all_output_hints.extend_from_slice(&p4vec);
     let (gp4y, gp4x, gp2y, gp2x) = (&p4vec[0], &p4vec[1], &p4vec[2], &p4vec[3]);
@@ -176,7 +179,8 @@ pub(crate) fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hi
         parameter_ids: vec![],
         result: (Element::U256(*f), ElementType::FieldElem),
         hints: vec![],
-        scr_type: ScriptType::NonDeterministic
+        scr_type: ScriptType::NonDeterministic,
+        scr: script!(),
     }).collect();
     all_output_hints.extend_from_slice(&gc);
 
@@ -186,7 +190,8 @@ pub(crate) fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hi
         parameter_ids: vec![],
         result: (Element::U256(*f), ElementType::FieldElem),
         hints: vec![],
-        scr_type: ScriptType::NonDeterministic
+        scr_type: ScriptType::NonDeterministic,
+        scr: script!(),
     }).collect();
     all_output_hints.extend_from_slice(&gs);
 
@@ -198,10 +203,10 @@ pub(crate) fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hi
         parameter_ids: vec![],
         result: (Element::U256(*f), ElementType::FieldElem),
         hints: vec![],
-        scr_type: ScriptType::NonDeterministic
+        scr_type: ScriptType::NonDeterministic,
+        scr: script!(),
     }).collect();
     all_output_hints.extend_from_slice(&temp_q4);
-    // let (q4xc0, q4xc1, q4yc0, q4yc1) = (&temp_q4[0], &temp_q4[1], &temp_q4[2], &temp_q4[3]);
 
     ([gp2x.clone(), gp2y.clone()], [gp4x.clone(), gp4y.clone()], temp_q4.try_into().unwrap(), gc.try_into().unwrap(), gs.try_into().unwrap(), pub_scalars.try_into().unwrap())
 }

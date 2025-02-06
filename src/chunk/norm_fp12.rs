@@ -2004,7 +2004,7 @@ mod test {
         let (c, wi) = compute_c_wi(g);
 
         // actual scripted verification
-        verify_pairing_scripted(vec![p2, p3, p4], vec![q2, q3, q4], c, wi, fixed_p1q1);
+        verify_pairing(vec![p2, p3, p4], vec![q2, q3, q4], c, wi, fixed_p1q1);
 
     }
 

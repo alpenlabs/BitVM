@@ -1,11 +1,14 @@
 
 use std::collections::HashMap;
 
+use ark_bn254::Bn254;
 use ark_ec::bn::BnConfig;
+use ark_ff::Field;
 use bitcoin_script::script;
 use treepp::Script;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
+use crate::chunk::norm_fp12::{chunk_hash_c, chunk_hash_c_inv, chunk_hinted_square, chunk_init_t4, chunk_verify_fq6_is_on_field};
 use crate::groth16::g16::{PublicKeys, N_TAPLEAVES};
 use crate::{chunk::element::ElemG1Point, treepp};
 use crate::chunk::element::ElemTraitExt;
@@ -17,8 +20,8 @@ use super::{assert::{groth16, Pubs}, element::{InputProof}, primitves::gen_bitco
 
 pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 pub const NUM_PUBS: usize = 1;
-pub const NUM_U256: usize = 32;
-pub const NUM_U160: usize = 560;
+pub const NUM_U256: usize = 20;
+pub const NUM_U160: usize = 380;
 const VALIDATING_TAPS: usize = 7;
 const HASHING_TAPS: usize = NUM_U160;
 pub const NUM_TAPS: usize = HASHING_TAPS + VALIDATING_TAPS; 
@@ -51,23 +54,23 @@ where
     f
 }
 
-pub(crate) fn compile_ops(
+pub(crate) fn generate_partial_script(
     vk: Vkey,
 ) -> Vec<bitcoin_script::Script>  {
     println!("Preparing segments");
-    let mock_segments = segments_from_pubs(vk);
+    let mock_segments = segments_from_pubs(vk, false);
     println!("Generating op scripts");
     let op_scripts: Vec<Script> = op_scripts_from_segments(&mock_segments).into_iter().collect();
     assert_eq!(op_scripts.len(), N_TAPLEAVES);
     op_scripts
 }
 
-pub(crate) fn compile_taps(
-    vk: Vkey,
+pub(crate) fn append_bitcom_locking_script_to_partial_scripts(
+    mock_vk: Vkey,
     inpubkeys: PublicKeys,
     ops_scripts: Vec<bitcoin_script::Script>,
 ) ->  Vec<bitcoin_script::Script> {
-    let mock_segments = segments_from_pubs(vk);
+    let mock_segments = segments_from_pubs(mock_vk, true);
 
     let mut scalar_pubkeys = inpubkeys.0.to_vec();
     scalar_pubkeys.reverse();
@@ -106,18 +109,19 @@ pub(crate) fn compile_taps(
     res
 }
 
-fn segments_from_pubs(vk: Vkey) -> Vec<Segment> {
+fn segments_from_pubs(vk: Vkey, skip_evaluation: bool) -> Vec<Segment> {
+    // values known only at runtime, can be mocked
     let mut segments: Vec<Segment> = vec![];
     let g1 = ElemG1Point::mock();
     let g2 = ElemG2Eval::mock().t;
     let fr = ElemU256::mock();
     let s = ElemFp6::mock();
     let c = ElemFp6::mock();
-    let eval_ins: InputProof = InputProof { p2: g1, p4: g1, q4: g2, c, s, ks: vec![fr.into()] };
-    let p1q1 = vk.p1q1.c1/vk.p1q1.c0;
-    
-    let pubs: Pubs = Pubs { q2: vk.q2, q3: vk.q3, fixed_acc: p1q1, ks_vks: vk.p3vk, vky0: vk.vky0 };
-    groth16(true, &mut segments, eval_ins.to_raw(), pubs, &mut None);
+    let mocked_eval_ins: InputProof = InputProof { p2: g1, p4: g1, q4: g2, c, s, ks: vec![fr.into()] };
+
+    // public values known at compile time
+    let pubs: Pubs = Pubs { q2: vk.q2, q3: vk.q3, fixed_acc: vk.p1q1.c1/vk.p1q1.c0, ks_vks: vk.p3vk, vky0: vk.vky0 };
+    groth16(skip_evaluation, &mut segments, mocked_eval_ins.to_raw(), pubs, &mut None);
     segments
 }
 
@@ -166,7 +170,7 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
             continue;
         }
 
-        let op_scr  =  script!();
+        let op_scr  = seg.scr.clone();
 
         if seg.is_validation { // validating segments do not have output hash, so don't add hashing layer; they are self sufficient
             op_scripts.push(op_scr);

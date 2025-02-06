@@ -179,8 +179,8 @@ pub(crate) struct InputProofRaw {
     pub(crate) p2: [ark_ff::BigInt<4>; 2],
     pub(crate) p4: [ark_ff::BigInt<4>; 2],
     pub(crate) q4: [ark_ff::BigInt<4>; 4],
-    pub(crate) c: [ark_ff::BigInt<4>; 12],
-    pub(crate) s: [ark_ff::BigInt<4>; 12],
+    pub(crate) c: [ark_ff::BigInt<4>; 6],
+    pub(crate) s: [ark_ff::BigInt<4>; 6],
     pub(crate) ks: [ark_ff::BigInt<4>; NUM_PUBS],
 }
 
