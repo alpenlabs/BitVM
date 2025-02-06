@@ -494,6 +494,7 @@ pub(crate) fn chunk_inv1(
     )
 }
 
+
 pub(crate) fn chunk_inv0(
     a: ElemFp12Acc
 ) -> (ElemFp6, Script, Vec<Hint>) {

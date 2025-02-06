@@ -1,4 +1,4 @@
-use ark_ff::{AdditiveGroup, Field, PrimeField};
+use ark_ff::{AdditiveGroup, Field, MontFp, PrimeField};
 use num_bigint::BigUint;
 use core::ops::Neg;
 use std::str::FromStr;
@@ -9,6 +9,7 @@ use crate::bn254::fq6::Fq6;
 use crate::bn254::utils::{fq2_push_not_montgomery, fq6_push_not_montgomery, hinted_ell_by_constant_affine, Hint};
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::blake3compiled::hash_messages;
+use crate::chunk::primitves::extern_hash_fps;
 use crate::chunk::taps_point_eval::get_hint_for_add_with_frob;
 use crate::chunk::taps_point_ops::utils_point_add_eval_ate;
 use crate::{
@@ -18,7 +19,7 @@ use crate::{
 use ark_ff::{ Fp12Config, Fp6Config};
 
 use super::element::*;
-use super::primitves::extern_nibbles_to_limbs;
+use super::primitves::{extern_nibbles_to_limbs, hash_fp6};
 use super::taps_point_eval::utils_multiply_by_line_eval;
 use super::taps_point_ops::{utils_point_add_eval, utils_point_double_eval};
 
@@ -1098,6 +1099,93 @@ pub(crate) fn chunk_init_t4(ts: [ark_bn254::Fq; 4]) -> (ElemG2Eval, Script, Vec<
     (t4, ops_scr, vec![])
 }
 
+pub(crate) fn chunk_hash_c(
+    hint_in_c: Vec<ElemU256>,
+) -> (ElemFp6, Script, Vec<Hint>) {
+    let fvec: Vec<ark_bn254::Fq> = hint_in_c.iter().map(|f| ark_bn254::Fq::from(*f)).collect();
+
+    let f = ark_bn254::Fq6::new(
+        ark_bn254::Fq2::new(fvec[0], fvec[1]),
+        ark_bn254::Fq2::new(fvec[2], fvec[3]),
+        ark_bn254::Fq2::new(fvec[4], fvec[5]),
+    );
+    let ops_scr = script! {
+        for _ in 0..6 {
+            {Fq::fromaltstack()}
+        }
+        // Stack:[fs]
+        // Altstack: [f_hash_claim]
+    };
+    let _hash_scr = script!(
+        {hash_messages(vec![ElementType::Fp6])}
+        OP_TRUE
+    );
+
+    (
+        f,
+        ops_scr,
+        vec![],
+    )
+}
+
+pub(crate) fn chunk_hash_c_inv(
+    hint_in_c: Vec<ElemU256>,
+) -> (ElemFp6, Script, Vec<Hint>) {
+    let fvec: Vec<ark_bn254::Fq> = hint_in_c.iter().map(|f| ark_bn254::Fq::from(*f)).collect();
+
+    let f = ark_bn254::Fq6::new(
+        ark_bn254::Fq2::new(fvec[0], fvec[1]),
+        ark_bn254::Fq2::new(fvec[2], fvec[3]),
+        ark_bn254::Fq2::new(fvec[4], fvec[5]),
+    );
+    let ops_scr = script! {
+        for _ in 0..6 {
+            {Fq::fromaltstack()}
+            {Fq::neg(0)}
+        }
+        // Stack:[fs]
+        // Altstack: [f_hash_claim]
+    };
+    let _hash_scr = script!(
+        {hash_messages(vec![ElementType::Fp6])}
+        OP_TRUE
+    );
+    let fneg = f.neg();
+    (
+        fneg,
+        ops_scr,
+        vec![],
+    )
+}
+
+pub(crate) fn chunk_verify_fp12_is_unity(
+    hint_in_a: ElemFp6, // 
+    hint_in_b: ark_bn254::Fq6,
+) -> (bool, Script, Vec<Hint>) {
+
+    let (f, g) = (hint_in_a, hint_in_b);
+    let is_valid = f + g == ark_bn254::Fq6::ZERO;
+
+    let scr = script!(
+        // [f] [fhash]
+        {Fq6::copy(0)}
+        {hash_fp6()}
+        {Fq::fromaltstack()}
+        {Fq::equalverify(1, 0)}
+        // [f]
+        {fq6_push_not_montgomery(hint_in_b)}
+        {Fq6::add(6, 0)}
+        {Fq::equal(1, 0)}
+        OP_NOT
+    );
+
+    (
+        is_valid,
+        scr,
+        vec![],
+    )
+}
+
 #[cfg(test)]
 mod test {
     use std::ops::Neg;
@@ -1954,5 +2042,6 @@ mod test {
         verify_pairing_scripted(vec![p2, p3, p4], vec![q2, q3, q4], c, wi, fixed_p1q1);
 
     }
+
 }
 

@@ -1,10 +1,11 @@
+use ark_ff::AdditiveGroup;
+
 use crate::{bn254::{fp254impl::Fp254Impl, fr::Fr, utils::Hint}, chunk::taps_msm::chunk_msm};
 
 use super::{element::{ElemFp6, ElemG1Point, ElemG2Eval, ElemTraitExt, ElemU256, Element, ElementType}, norm_fp12::{chunk_complete_point_eval_and_mul, chunk_dense_dense_mul, chunk_frob_fp12, chunk_hinted_square, chunk_init_t4, chunk_point_ops_and_mul}, segment::{ScriptType, Segment, SegmentID}, taps_msm::chunk_hash_p, taps_point_eval::*, taps_premiller::*};
 
 
 // final verify
-
 // sq
 pub(crate) fn wrap_hint_squaring(
     skip: bool,

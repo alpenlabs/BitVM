@@ -220,6 +220,7 @@ pub(crate) fn wrap_hints_precompute_p_from_hash(
     Segment { id:  segment_id as u32, is_validation: false, parameter_ids: input_segment_info, result: (Element::G1(p3d), ElementType::G1), hints: op_hints, scr_type: ScriptType::PreMillerPrecomputePFromHash }
 }
 
+
 pub(crate) fn wrap_inv0(
     skip: bool,
     segment_id: usize,
@@ -439,6 +440,7 @@ pub(crate) fn wrap_hint_point_ops(
         scr_type: ScriptType::MillerDoubleAdd(ate),
     }
 }
+
 
 pub(crate) fn wrap_hint_sparse_dense_mul(
     skip: bool,
