@@ -6,16 +6,12 @@ mod test {
     use crate::bn254::fp254impl::Fp254Impl;
     use crate::bn254::fq::Fq;
     use crate::bn254::fq2::Fq2;
-    use crate::bn254::utils::{fq2_push_not_montgomery, fq_push_not_montgomery, Hint};
+    use crate::bn254::utils::{fq_push_not_montgomery, Hint};
     use crate::chunk::blake3compiled::hash_messages;
     use crate::chunk::element::*;
     use crate::chunk::norm_fp12::{chunk_final_verify, chunk_hash_c, chunk_verify_fq6_is_on_field};
-    use crate::chunk::primitves::{new_hash_g2acc_with_both_raw_le, new_hash_g2acc_with_hashed_le, pack_nibbles_to_limbs};
-    use crate::chunk::taps_point_ops::*;
-    use crate::chunk::primitves::{extern_hash_fps, extern_nibbles_to_limbs};
+    use crate::chunk::primitves::extern_nibbles_to_limbs;
     use crate::chunk::taps_premiller::*;
-    use crate::execute_script_without_stack_limit;
-    use ark_ff::AdditiveGroup;
     use ark_ff::Field;
     use ark_std::UniformRand;
     use rand::SeedableRng;
@@ -291,7 +287,7 @@ mod test {
 
         let (_, tap_scr, mut hint_script) = chunk_final_verify(f.c1, g.c1);
 
-        let fvec = f.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
+        let fvec = f.c1.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>();
         for f in &fvec {
             hint_script.push(Hint::Fq(*f));
         } 

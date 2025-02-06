@@ -4,8 +4,7 @@ use ark_ff::{BigInt, BigInteger};
 
 use crate::bigint::U256;
 use crate::bn254::fq2::Fq2;
-use crate::bn254::fq6::Fq6;
-use crate::chunk::blake3compiled::{hash_128b, hash_192b, hash_256b, hash_448b, hash_64b};
+use crate::chunk::blake3compiled::{hash_128b, hash_192b, hash_448b, hash_64b};
 use crate::signatures::wots::{wots160, wots256};
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
@@ -80,21 +79,13 @@ pub(crate) fn gen_bitcom(
     tot_script
 }
 
-pub fn unpack_limbs_to_nibbles() -> Script {
+pub(crate) fn unpack_limbs_to_nibbles() -> Script {
     U256::transform_limbsize(29,4)
 }
 
 pub fn pack_nibbles_to_limbs() -> Script {
     U256::transform_limbsize(4,29)
 }
-
-// [a0, a1, a2, a3, a4, a5]
-// [H(a0,a1), H(a2,a3,a4,a5)]
-// [Hb0, Hb1]
-// [Hb1, Hb0]
-// Hash(Hb1, Hb0)
-// Hb
-
 
 pub(crate) fn hash_fp2() -> Script {
     script! {
@@ -229,25 +220,7 @@ pub(crate) fn extern_hash_nibbles(msgs: Vec<[u8; 64]>) -> [u8; 64] {
         res.try_into().unwrap()
     }
 
-
-    fn extern_hash_fp12_v2(fqs: Vec<[u8; 64]>) -> [u8;64] {
-        let hash_out_first = extern_hash_fp_var(fqs[0..6].to_vec());
-        let mut hash_out_second = extern_hash_fp_var(fqs[6..12].to_vec()).to_vec();
-        hash_out_second.extend_from_slice(&hash_out_first);
-        let p_bytes:Vec<u8> = nib_to_byte_array(&hash_out_second);
-        let hash_out = blake3::hash(&p_bytes).to_string();
-        let hash_out = replace_first_n_with_zero(&hash_out.to_string(), (32-20)*2);
-        let hash_out = hex_string_to_nibble_array(&hash_out);
-        hash_out.try_into().unwrap()
-    }
-
-    if msgs.len() == 4 || msgs.len() == 2 || msgs.len() == 6 || msgs.len() == 8 || msgs.len() == 14 {
-        extern_hash_fp_var(msgs)
-    } else if msgs.len() == 12 {
-        extern_hash_fp12_v2(msgs)
-    } else {
-        panic!()
-    }
+    extern_hash_fp_var(msgs)
 }
 
 pub(crate) fn new_hash_g2acc_with_hashed_le() -> Script {
@@ -260,27 +233,6 @@ pub(crate) fn new_hash_g2acc_with_hashed_le() -> Script {
         {Fq::fromaltstack()}
         {hash_fp2()}
     }
-}
-
-pub(crate) fn new_hash_g2acc_with_both_raw_le() -> Script {
-    script!(
-        {Fq2::toaltstack()} {Fq2::toaltstack()}
-        {Fq2::toaltstack()} {Fq2::toaltstack()}
-        {hash_fp4()} 
-        {Fq2::fromaltstack()} {Fq2::fromaltstack()} // [HT, dbl_le]
-        {Fq::roll(4)} {Fq::toaltstack()} // [dbl_le]
-        {hash_fp4()} // [Hdbl_le]
-        {Fq::fromaltstack()} // [Hdbl_le, HT]
-        {Fq2::fromaltstack()} {Fq2::fromaltstack()} // [Hdbl_le, HT, add_le]
-        {Fq2::roll(4)} {Fq2::toaltstack()} // [add_le]
-        {hash_fp4()} // [Hadd_le]
-        {Fq::fromaltstack()} // [Hadd_le, Hdbl_le]
-        {Fq::roll(1)}
-        {hash_fp2()} // [Hle]
-        {Fq::fromaltstack()} // [Hle, HT]
-        {Fq::roll(1)}
-        {hash_fp2()} // [HTcacl]
-    )
 }
 
 pub(crate) fn new_hash_g2acc() -> Script {
@@ -312,28 +264,6 @@ pub(crate) fn new_hash_g2acc_with_hash_t() -> Script {
     )
 }
 
-pub(crate) fn new_hash_g2acc_with_hashed_t(is_dbl: bool) -> Script {
-    script!(
-
-        //Stack: [cur_le, H_ale, H_at]
-        {Fq2::toaltstack()}
-        // [cur_le] [.., H_at, H_ale]
-        {hash_fp4()} 
-    
-        {Fq::fromaltstack()}
-        // [H_le, H_le]
-        if !is_dbl {
-            {Fq::roll(1)}
-        }
-        {hash_fp2()}
-        // [Hle]
-        {Fq::fromaltstack()}
-        // [Hle, HT]
-        {Fq::roll(1)}
-        {hash_fp2()}
-    )
-
-}
 
 pub(crate) fn hash_fp6() -> Script {
     script! {
@@ -344,14 +274,6 @@ pub(crate) fn hash_fp6() -> Script {
     }
 }
 
-pub(crate) fn hash_fp8() -> Script {
-    script! {
-        {Fq2::roll(2)} {Fq2::roll(4)} {Fq2::roll(6)}
-        {hash_256b()}
-        {pack_nibbles_to_limbs()}
-
-    }
-}
 
 pub(crate) fn hash_fp14() -> Script {
     script! {
@@ -363,49 +285,6 @@ pub(crate) fn hash_fp14() -> Script {
     }
 }
 
-pub(crate) fn hash_fp12_192() -> Script {
-
-    script! {
-        for _ in 0..6 {
-            {Fq::toaltstack()}
-        }
-        {Fq2::roll(2)} {Fq2::roll(4)}
-        {hash_192b()}
-        {pack_nibbles_to_limbs()}
-
-        for _ in 0..6 {
-            { Fq::fromaltstack()}
-        }
-        {Fq::roll(6)}
-        {Fq::toaltstack()}
-
-        {Fq2::roll(2)} {Fq2::roll(4)}
-        {hash_192b()}
-        {pack_nibbles_to_limbs()}
-
-        {Fq::fromaltstack()}
-        {hash_64b()}
-        {pack_nibbles_to_limbs()}
-    }
-}
-
-
-
-// 6Fp_hash
-// fp6
-pub fn hash_fp12_with_hints() -> Script {
-    script! {
-        {Fq::toaltstack()} //Hc0
-        {Fq2::roll(2)} {Fq2::roll(4)}
-        {hash_192b()}
-        {pack_nibbles_to_limbs()}
-
-        // wrap up
-        {Fq::fromaltstack()}
-        {hash_64b()}
-        {pack_nibbles_to_limbs()}
-    }
-}
 
 #[cfg(test)]
 mod test {
@@ -418,130 +297,6 @@ mod test {
     use crate::{
         bn254::utils::fq_push_not_montgomery, execute_script, u4::u4_std::u4_hex_to_nibbles
     };
-    
-
-    #[test]
-    fn test_fq_from_nibbles() {
-        // pack_nibbles_to_fq
-        let mut prng = ChaCha20Rng::seed_from_u64(1);
-        let p = ark_bn254::Fq::rand(&mut prng);
-
-        let nib32 = [15u8; 64];
-        let script = script! {
-             {fq_push_not_montgomery(ark_bn254::Fq::ONE)}
-             {unpack_limbs_to_nibbles()}
-             //{Fq::add(1, 0)}
-        };
-        let exec_result = execute_script(script);
-        for i in 0..exec_result.final_stack.len() {
-            println!("{i:} {:?}", exec_result.final_stack.get(i));
-        }
-    }
-
-    #[test]
-    fn test_emulator() {
-        let repeat = 16;
-        let mut prng = ChaCha20Rng::seed_from_u64(17);
-        let mut nu32_arr: Vec<u32> = (0..repeat).into_iter().map(|_| prng.gen()).collect();
-        nu32_arr.pop();
-        nu32_arr.push(1);
-        let blake3_in = nu32_arr.iter().flat_map(|i| (i).to_le_bytes()).collect::<Vec<_>>();
-        let hash_out = blake3::hash(&blake3_in).to_string();
-
-        fn replace_first_n_with_zero(hex_string: &str, n: usize) -> String {
-            let mut result = String::new();
-        
-            if hex_string.len() <= n {
-                result.push_str(&"0".repeat(hex_string.len())); // If n >= string length, replace all
-            } else {
-                result.push_str(&"0".repeat(n)); // Replace first n characters
-                result.push_str(&hex_string[n..]); // Keep the rest of the string
-            }
-            result
-        }
-        let expected_hex_out = replace_first_n_with_zero(&hash_out, (32-20)*2);
-
-        let bytes: Vec<u8> = nu32_arr
-        .iter()
-        .flat_map(|&word| word.to_be_bytes())
-        .collect::<Vec<u8>>();
-
-        fn bytes_to_nibbles(byte_array: Vec<u8>) -> Vec<u8> {
-            byte_array
-                .iter()
-                .flat_map(|&byte| vec![(byte >> 4) & 0x0F, byte & 0x0F]) // Extract high and low nibbles
-                .collect()
-        }
-        let hex_in = bytes_to_nibbles(bytes);
-        println!("input msg {:?}", blake3_in);
-        println!("hex msg {:?}", hex_in);
-
-        let script = script! {
-            for i in hex_in {
-                {i}
-            }
-            { pack_nibbles_to_limbs() }
-            { hash_64b() }
-            { pack_nibbles_to_limbs() }
-            { u4_hex_to_nibbles(&expected_hex_out)}
-            {pack_nibbles_to_limbs()}
-            {Fq::equalverify(1, 0)}
-        };
-        println!("expected hex_out {:?}", expected_hex_out);
-        let exec_result = execute_script(script);
-        for i in 0..exec_result.final_stack.len() {
-            println!("{i:} {:?}", exec_result.final_stack.get(i));
-        }
-
-    }
-
-
-    #[test]
-    fn test_emulator2() {
-        let mut prng = ChaCha20Rng::seed_from_u64(10);
-        let p = ark_bn254::Fq::rand(&mut prng);
-        let q = ark_bn254::Fq::rand(&mut prng);
-        let mut p_nibs = fq_to_chunked_bits(p.into(), 4);
-        let q_nibs = fq_to_chunked_bits(q.into(), 4);
-        p_nibs.extend_from_slice(&q_nibs);
-        
-        let nib_arr: Vec<u8> = p_nibs.clone().into_iter().map(|x| x as u8).collect();
-        let p_bytes:Vec<u8> = nib_to_byte_array(&nib_arr);
-
-        let hash_out = blake3::hash(&p_bytes);
-
-        fn replace_first_n_with_zero(hex_string: &str, n: usize) -> String {
-            let mut result = String::new();
-        
-            if hex_string.len() <= n {
-                result.push_str(&"0".repeat(hex_string.len())); // If n >= string length, replace all
-            } else {
-                result.push_str(&"0".repeat(n)); // Replace first n characters
-                result.push_str(&hex_string[n..]); // Keep the rest of the string
-            }
-            result
-        }
-        let expected_hex_out = replace_first_n_with_zero(&hash_out.to_string(), (32-20)*2);
-
-        let script = script! {
-            for i in p_nibs {
-                {i}
-            }
-            { pack_nibbles_to_limbs() }
-            { hash_64b() }
-            { pack_nibbles_to_limbs() }
-            { u4_hex_to_nibbles(&expected_hex_out)}
-            {pack_nibbles_to_limbs()}
-            {Fq::equalverify(1, 0)}
-        };
-        println!("expected hex_out {:?}", expected_hex_out);
-        let exec_result = execute_script(script);
-        for i in 0..exec_result.final_stack.len() {
-            println!("{i:} {:?}", exec_result.final_stack.get(i));
-        }
-
-    }
-
 
     #[test]
     fn test_emulate_fq_to_nibbles() {
@@ -580,15 +335,11 @@ mod test {
                 }
                 if msgs.len() == 4 {
                     {hash_fp4()}
-                } else if msgs.len() == 12 {
-                    {hash_fp12_192()}
                 } else if msgs.len() == 2 {
                     {hash_fp2()}
                 } else if msgs.len() == 6 {
                     {hash_fp6()}
-                } else if msgs.len() == 8 {
-                    {hash_fp8()}
-                }  else if msgs.len() == 14 {
+                } else if msgs.len() == 14 {
                     {hash_fp14()}
                 }
                 {unpack_limbs_to_nibbles()}
@@ -603,8 +354,6 @@ mod test {
                     arr[i] = v[0];
                 }
             }
-            println!("exec result {:?}", exec_result.stats.max_nb_stack_items);
-            println!("exec result {:?}", scr.len());
             arr
         }
     

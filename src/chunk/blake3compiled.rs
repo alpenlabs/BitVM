@@ -1,7 +1,7 @@
 use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq}, hash::blake3_u4_compact::blake3_u4_compact, treepp::*};
 use bitcoin_script_stack::stack::StackTracker;
 
-use super::{element::ElementType, primitves::{hash_fp12_192, hash_fp12_with_hints, hash_fp2, hash_fp6, new_hash_g2acc, new_hash_g2acc_with_both_raw_le, new_hash_g2acc_with_hash_t, new_hash_g2acc_with_hashed_le, new_hash_g2acc_with_hashed_t}};
+use super::{element::ElementType, primitves::{ hash_fp2, hash_fp6, new_hash_g2acc, new_hash_g2acc_with_hash_t, new_hash_g2acc_with_hashed_le}};
 
 
 fn wrap_scr(scr: Script) -> Script {
@@ -29,12 +29,6 @@ pub fn hash_128b() -> Script {
 pub fn hash_192b() -> Script {
     let mut stack = StackTracker::new();
     blake3_u4_compact(&mut stack, 192, true, true);
-    wrap_scr(stack.get_script())
-}
-
-pub fn hash_256b() -> Script {
-    let mut stack = StackTracker::new();
-    blake3_u4_compact(&mut stack, 256, true, true);
     wrap_scr(stack.get_script())
 }
 
@@ -115,7 +109,7 @@ mod test {
 
     use ark_ff::Field;
 
-    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, utils::{fq12_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery}}, chunk::primitves::{extern_hash_fps, extern_nibbles_to_limbs, hash_fp14, hash_fp8, pack_nibbles_to_limbs}};
+    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, utils::{fq12_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery}}, chunk::primitves::{extern_hash_fps, extern_nibbles_to_limbs, hash_fp14, pack_nibbles_to_limbs}};
 
     use super::*;
 

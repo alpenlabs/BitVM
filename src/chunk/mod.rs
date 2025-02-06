@@ -12,7 +12,6 @@ pub mod norm_fp12;
 mod wots;
 pub mod assert;
 pub mod segment;
-// pub mod segment_new;
 #[allow(unused_variables)]
 mod taps_premiller;
 mod assigner;

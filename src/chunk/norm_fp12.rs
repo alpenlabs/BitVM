@@ -7,10 +7,9 @@ use crate::bigint::U254;
 use crate::bn254;
 use crate::bn254::fp254impl::Fp254Impl;
 use crate::bn254::fq6::Fq6;
-use crate::bn254::utils::{fq2_push_not_montgomery, fq6_push_not_montgomery, hinted_ell_by_constant_affine, Hint};
+use crate::bn254::utils::{fq2_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery, hinted_ell_by_constant_affine, Hint};
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::blake3compiled::hash_messages;
-use crate::chunk::primitves::extern_hash_fps;
 use crate::chunk::taps_point_ops::utils_point_add_eval_ate;
 use crate::{
     bn254::{fq::Fq},
@@ -52,7 +51,7 @@ fn utils_multiply_by_line_eval(
     let (hinted_ell_t3, hints_ell_t3) = hinted_ell_by_constant_affine(p3.x, p3.y, alpha_t3, neg_bias_t3);
 
     let g = ark_bn254::Fq6::new(l0_t3, l1_t3, ark_bn254::Fq2::ZERO);
-    let (_, fg_scr, fg_hints) = utils_fq6_ss_mul_keep_element(g, f);
+    let (_, fg_scr, fg_hints) = utils_fq6_ss_mul(g, f);
     
     let scr = script!(
         // [f, p3]
@@ -585,7 +584,7 @@ pub(crate) fn utils_fq12_mul(a: ElemFp6, b: ElemFp6) -> (ark_bn254::Fq6, Script,
     return (c, scr, hints);
 }
 
-pub(crate) fn utils_fq6_ss_mul_keep_element(m: ElemFp6, n: ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
+pub(crate) fn utils_fq6_ss_mul(m: ElemFp6, n: ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
     let a = m.c0;
     let b = m.c1;
     let d = n.c0;
@@ -997,7 +996,7 @@ pub(crate) fn complete_point_eval_and_mul(
 
     let (abc_out, abc_scr, abc_hints) = utils_fq6_hinted_sd_mul(ab, c);
     assert_eq!(abc_out, ab*c);
-    let (apb_mul_c_out, apb_mul_c_scr, apb_mul_c_hints) = utils_fq6_ss_mul_keep_element(apb, c);
+    let (apb_mul_c_out, apb_mul_c_scr, apb_mul_c_hints) = utils_fq6_ss_mul(apb, c);
     assert_eq!(apb_mul_c, apb_mul_c_out);
 
     let (den_mul_h_scr, den_mul_h_hints) = Fq6::hinted_mul_keep_elements(6, denom, 0, f.res_hint);
@@ -1226,13 +1225,25 @@ pub(crate) fn chunk_final_verify(
     let scr = script!(
         // [f] [fhash]
         {Fq6::copy(0)}
+        {Fq6::toaltstack()}
         {hash_fp6()}
+        {Fq6::fromaltstack()}
         {Fq::fromaltstack()}
-        {Fq::equalverify(1, 0)}
+        // [fh, f, fhash]
+        {Fq::equalverify(7, 0)}
         // [f]
         {fq6_push_not_montgomery(hint_in_b)}
         {Fq6::add(6, 0)}
-        {Fq::equal(1, 0)}
+        for _ in 0..6 {
+            {fq_push_not_montgomery(ark_bn254::Fq::ZERO)}
+            {Fq::equal(1, 0)}
+            OP_TOALTSTACK
+        }
+        {1}
+        for _ in 0..6 {
+            OP_FROMALTSTACK
+            OP_BOOLAND
+        }
         OP_NOT
     );
 
@@ -1293,7 +1304,7 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{bn254::{curves::G1Affine, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fq6::Fq6, utils::{fq2_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery, Hint}}, chunk::{blake3compiled::hash_messages, compile::NUM_PUBS, element::{ElemG2Eval, ElemTraitExt, Element, ElementType}, norm_fp12::{chunk_complete_point_eval_and_mul, chunk_dense_dense_mul, chunk_hinted_square, chunk_init_t4, chunk_point_ops_and_mul, complete_point_eval_and_mul, hinted_square, utils_fq12_mul, utils_fq6_hinted_sd_mul, utils_fq6_ss_mul_keep_element, verify_pairing}, primitves::{extern_nibbles_to_limbs, hash_fp4, hash_fp6}}, execute_script, execute_script_without_stack_limit, groth16::{constants::LAMBDA, offchain_checker::compute_c_wi}};
+    use crate::{bn254::{curves::G1Affine, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fq6::Fq6, utils::{fq2_push_not_montgomery, fq6_push_not_montgomery, fq_push_not_montgomery, Hint}}, chunk::{blake3compiled::hash_messages, compile::NUM_PUBS, element::{ElemG2Eval, ElemTraitExt, Element, ElementType}, norm_fp12::{chunk_complete_point_eval_and_mul, chunk_dense_dense_mul, chunk_hinted_square, chunk_init_t4, chunk_point_ops_and_mul, complete_point_eval_and_mul, hinted_square, utils_fq12_mul, utils_fq6_hinted_sd_mul, utils_fq6_ss_mul, verify_pairing}, primitves::{extern_nibbles_to_limbs, hash_fp4, hash_fp6}}, execute_script, execute_script_without_stack_limit, groth16::{constants::LAMBDA, offchain_checker::compute_c_wi}};
 
     use super::{chunk_frob_fp12, point_ops_and_mul, verify_pairing_scripted};
 
@@ -1553,100 +1564,8 @@ mod test {
     }
 
     
-
     #[test]
-    fn test_dense_dense_mul_v2() {
-        let mut prng = ChaCha20Rng::seed_from_u64(0);
-        let f = ark_bn254::Fq12::rand(&mut prng);
-        let f_n = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
-
-        let g = ark_bn254::Fq12::rand(&mut prng);
-        let g_n = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, g.c1/g.c0);
-
-        let h = f * g;
-        let h_n =ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, h.c1/h.c0);
-
-        let (hint_out, h_scr, mut mul_hints) = utils_fq12_mul(f_n.c1, g_n.c1);
-        assert_eq!(h_n.c1, hint_out);
-
-        let f6_hints = Element::Fp6(f_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
-        let g6_hints = Element::Fp6(g_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
-        let h6_hints = Element::Fp6(h_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
-        mul_hints.extend_from_slice(&f6_hints);
-        mul_hints.extend_from_slice(&g6_hints);
-        mul_hints.extend_from_slice(&h6_hints);
-
-        let tap_len = h_scr.len();
-        let scr= script!(
-            for h in mul_hints {
-                {h.push()}
-            }
-            {h_scr}
-            {fq6_push_not_montgomery(h_n.c1)}
-            {Fq6::equalverify()}
-            {fq6_push_not_montgomery(g_n.c1)}
-            {Fq6::equalverify()}
-            {fq6_push_not_montgomery(f_n.c1)}
-            {Fq6::equalverify()}
-            OP_TRUE
-        );
-        let res = execute_script(scr);
-        for i in 0..res.final_stack.len() {
-            println!("{i:} {:?}", res.final_stack.get(i));
-        }
-        assert!(res.success); 
-        assert!(res.final_stack.len() == 1);
-        println!("script {} stack {:?}", tap_len, res.stats.max_nb_stack_items);
-    }
-
-
-    #[test]
-    fn test_dense_dense_mul_v1() {
-        let mut prng = ChaCha20Rng::seed_from_u64(0);
-        let f = ark_bn254::Fq12::rand(&mut prng);
-        let f_n = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
-
-        let g = ark_bn254::Fq12::rand(&mut prng);
-        let g_n = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, g.c1/g.c0);
-
-        let h = f * g;
-        let h_n =ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, h.c1/h.c0);
-
-        let (hint_out, h_scr, mut mul_hints) = utils_fq12_mul(f_n.c1, g_n.c1);
-        assert_eq!(h_n.c1, hint_out);
-
-        let f6_hints = Element::Fp6(f_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
-        let g6_hints = Element::Fp6(g_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
-        let h6_hints = Element::Fp6(h_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
-        mul_hints.extend_from_slice(&f6_hints);
-        mul_hints.extend_from_slice(&g6_hints);
-        mul_hints.extend_from_slice(&h6_hints);
-
-        let tap_len = h_scr.len();
-        let scr= script!(
-            for h in mul_hints {
-                {h.push()}
-            }
-            {h_scr}
-            {fq6_push_not_montgomery(h_n.c1)}
-            {Fq6::equalverify()}
-            {fq6_push_not_montgomery(g_n.c1)}
-            {Fq6::equalverify()}
-            {fq6_push_not_montgomery(f_n.c1)}
-            {Fq6::equalverify()}
-            OP_TRUE
-        );
-        let res = execute_script(scr);
-        for i in 0..res.final_stack.len() {
-            println!("{i:} {:?}", res.final_stack.get(i));
-        }
-        assert!(res.success); 
-        assert!(res.final_stack.len() == 1);
-        println!("script {} stack {:?}", tap_len, res.stats.max_nb_stack_items);
-    }
-
-    #[test]
-    fn test_fq6_mul_le0_le0_keep() {
+    fn test_utils_fq6_ss_mul() {
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         let mut m = ark_bn254::Fq6::rand(&mut prng);
         let mut n = ark_bn254::Fq6::rand(&mut prng);
@@ -1654,7 +1573,7 @@ mod test {
         n.c2 = ark_bn254::Fq2::ZERO;
         let o = m * n;
 
-        let (res, ops_scr, hints) = utils_fq6_ss_mul_keep_element(m, n);
+        let (res, ops_scr, hints) = utils_fq6_ss_mul(m, n);
         assert_eq!(res, o);
         let ops_len = ops_scr.len();
         let scr = script!(
@@ -1682,54 +1601,6 @@ mod test {
         println!("scr len {:?} @ stack {:?}", ops_len, res.stats.max_nb_stack_items);
 
     }
-
-    #[test]
-    fn test_dense_dense_mul_v0() {
-        let mut prng = ChaCha20Rng::seed_from_u64(0);
-        let f = ark_bn254::Fq12::rand(&mut prng);
-        let mut f_n = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
-        f_n.c1.c2 = ark_bn254::Fq2::ZERO;
-
-        let g = ark_bn254::Fq12::rand(&mut prng);
-        let mut g_n = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, g.c1/g.c0);
-        g_n.c1.c2 = ark_bn254::Fq2::ZERO;
-
-        let h = f_n * g_n;
-        let h_n =ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, h.c1/h.c0);
-
-        let (hint_out, h_scr, mut mul_hints) = utils_fq12_mul(f_n.c1, g_n.c1);
-        assert_eq!(h_n.c1, hint_out);
-
-        let f6_hints = Element::Fp6(f_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
-        let g6_hints = Element::Fp6(g_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
-        let h6_hints = Element::Fp6(h_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
-        mul_hints.extend_from_slice(&f6_hints);
-        mul_hints.extend_from_slice(&g6_hints);
-        mul_hints.extend_from_slice(&h6_hints);
-
-        let tap_len = h_scr.len();
-        let scr= script!(
-            for h in mul_hints {
-                {h.push()}
-            }
-            {h_scr}
-            {fq6_push_not_montgomery(h_n.c1)}
-            {Fq6::equalverify()}
-            {fq6_push_not_montgomery(g_n.c1)}
-            {Fq6::equalverify()}
-            {fq6_push_not_montgomery(f_n.c1)}
-            {Fq6::equalverify()}
-            OP_TRUE
-        );
-        let res = execute_script(scr);
-        for i in 0..res.final_stack.len() {
-            println!("{i:} {:?}", res.final_stack.get(i));
-        }
-        assert!(res.success); 
-        assert!(res.final_stack.len() == 1);
-        println!("script {} stack {:?}", tap_len, res.stats.max_nb_stack_items);
-    }
-
 
     #[test]
     fn test_point_ops_and_mul() {
@@ -1953,7 +1824,6 @@ mod test {
 
 
     }
-
     
     #[test]
     fn test_chunk_point_ops_and_mul() {
