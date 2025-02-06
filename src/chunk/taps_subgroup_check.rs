@@ -3,7 +3,7 @@ use bitcoin_script::script;
 
 use crate::{bn254::{curves::G2Affine, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, g2_subgroup_check, utils::fq2_push_not_montgomery}, chunk::primitves::hash_fp4, treepp};
 
-use super::element::{ElemU256, ElemG2Point};
+use super::element::{ElemU256};
 use crate::chunk::element::ElemTraitExt;
 
 fn tap_g2_subgroup_check_msm(

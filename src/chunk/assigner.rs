@@ -62,33 +62,19 @@ pub(crate) fn get_proof(asserts: &TypedAssertions) -> InputProof { // EvalIns
     let p4 = ark_bn254::G1Affine::new_unchecked(numfqs[1], numfqs[0]);
     let p2 = ark_bn254::G1Affine::new_unchecked(numfqs[3], numfqs[2]);
     let step = 4;
-    let c = ark_bn254::Fq12::new(
-        ark_bn254::Fq6::new(
-            ark_bn254::Fq2::new(numfqs[step+0], numfqs[step+1]),
-            ark_bn254::Fq2::new(numfqs[step+2], numfqs[step+3]),
-            ark_bn254::Fq2::new(numfqs[step+4], numfqs[step+5]),
-        ),
-        ark_bn254::Fq6::new(
-            ark_bn254::Fq2::new(numfqs[step+6], numfqs[step+7]),
-            ark_bn254::Fq2::new(numfqs[step+8], numfqs[step+9]),
-            ark_bn254::Fq2::new(numfqs[step+10], numfqs[step+11]),
-        ),
-    );
-    let step = step + 12;
-    let s = ark_bn254::Fq12::new(
-        ark_bn254::Fq6::new(
-            ark_bn254::Fq2::new(numfqs[step+0], numfqs[step+1]),
-            ark_bn254::Fq2::new(numfqs[step+2], numfqs[step+3]),
-            ark_bn254::Fq2::new(numfqs[step+4], numfqs[step+5]),
-        ),
-        ark_bn254::Fq6::new(
-            ark_bn254::Fq2::new(numfqs[step+6], numfqs[step+7]),
-            ark_bn254::Fq2::new(numfqs[step+8], numfqs[step+9]),
-            ark_bn254::Fq2::new(numfqs[step+10], numfqs[step+11]),
-        ),
+    let c = ark_bn254::Fq6::new(
+        ark_bn254::Fq2::new(numfqs[step+0], numfqs[step+1]),
+        ark_bn254::Fq2::new(numfqs[step+2], numfqs[step+3]),
+        ark_bn254::Fq2::new(numfqs[step+4], numfqs[step+5]),
+        );       
+    let step = step + 6;
+    let s = ark_bn254::Fq6::new(
+        ark_bn254::Fq2::new(numfqs[step+0], numfqs[step+1]),
+        ark_bn254::Fq2::new(numfqs[step+2], numfqs[step+3]),
+        ark_bn254::Fq2::new(numfqs[step+4], numfqs[step+5]),
     );
 
-    let step = step + 12;
+    let step = step + 6;
     let q4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(numfqs[step + 0], numfqs[step + 1]), ark_bn254::Fq2::new(numfqs[step + 2], numfqs[step + 3]));
 
     let eval_ins: InputProof = InputProof { p2, p4, q4, c, s, ks: asserts.0.to_vec() };

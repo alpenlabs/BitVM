@@ -3,6 +3,7 @@ use num_bigint::BigUint;
 use core::ops::Neg;
 use std::str::FromStr;
 use ark_ec::{bn::BnConfig,  CurveGroup};
+use crate::bigint::U254;
 use crate::bn254;
 use crate::bn254::fp254impl::Fp254Impl;
 use crate::bn254::fq6::Fq6;
@@ -10,7 +11,6 @@ use crate::bn254::utils::{fq2_push_not_montgomery, fq6_push_not_montgomery, hint
 use crate::bn254::{fq12::Fq12, fq2::Fq2};
 use crate::chunk::blake3compiled::hash_messages;
 use crate::chunk::primitves::extern_hash_fps;
-use crate::chunk::taps_point_eval::get_hint_for_add_with_frob;
 use crate::chunk::taps_point_ops::utils_point_add_eval_ate;
 use crate::{
     bn254::{fq::Fq},
@@ -20,8 +20,65 @@ use ark_ff::{ Fp12Config, Fp6Config};
 
 use super::element::*;
 use super::primitves::{extern_nibbles_to_limbs, hash_fp6};
-use super::taps_point_eval::utils_multiply_by_line_eval;
-use super::taps_point_ops::{utils_point_add_eval, utils_point_double_eval};
+use super::taps_point_ops::{utils_point_double_eval};
+
+fn get_hint_for_add_with_frob(q: ark_bn254::G2Affine, t: ark_bn254::G2Affine, ate: i8) -> ark_bn254::G2Affine {
+    let mut qq = q.clone();
+    if ate == 1 {
+        let (qdash, _, _) = bn254::curves::G2Affine::hinted_p_power_endomorphism(qq);
+        qq = qdash;
+    } else if ate == -1 {
+        let (qdash, _, _) = bn254::curves::G2Affine::hinted_endomorphism_affine(qq);
+        qq = qdash;
+    }
+    let r = (t + qq).into_affine();
+    r
+
+}
+fn utils_multiply_by_line_eval(
+    f: ark_bn254::Fq6,
+    alpha_t3: ark_bn254::Fq2,
+    neg_bias_t3: ark_bn254::Fq2,
+    p3: ark_bn254::G1Affine,
+) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
+
+    assert_eq!(f.c2, ark_bn254::Fq2::ZERO);
+
+    let mut l0_t3 = alpha_t3;
+    l0_t3.mul_assign_by_fp(&p3.x);
+    let mut l1_t3 = neg_bias_t3;
+    l1_t3.mul_assign_by_fp(&p3.y);
+
+    let (hinted_ell_t3, hints_ell_t3) = hinted_ell_by_constant_affine(p3.x, p3.y, alpha_t3, neg_bias_t3);
+
+    let g = ark_bn254::Fq6::new(l0_t3, l1_t3, ark_bn254::Fq2::ZERO);
+    let (_, fg_scr, fg_hints) = utils_fq6_ss_mul_keep_element(g, f);
+    
+    let scr = script!(
+        // [f, p3]
+        {Fq2::copy(0)}
+        // [f, p3, p3]
+        {fq2_push_not_montgomery(alpha_t3)}
+        {fq2_push_not_montgomery(neg_bias_t3)}
+        // [f, p3, p3, a, b]
+        {Fq2::roll(4)}
+        // [f, p3, a, b, p3]
+        {hinted_ell_t3}
+        // [f, p3, le0, le1]
+        // [f, p3, g]
+        {Fq2::roll(8)} {Fq2::roll(8)}
+        // [p3, g, f]
+        {fg_scr}
+        // [p3, g, f, fg]
+    );
+
+    let mut hints = vec![];
+    hints.extend_from_slice(&hints_ell_t3);
+    hints.extend_from_slice(&fg_hints);
+
+    (g, scr, hints)
+
+}
 
 pub fn verify_pairing(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::G2Affine>, gc: ark_bn254::Fq12, s: ark_bn254::Fq12, p1q1: ark_bn254::Fq6) {
     let beta_12x = BigUint::from_str(
@@ -1158,7 +1215,7 @@ pub(crate) fn chunk_hash_c_inv(
     )
 }
 
-pub(crate) fn chunk_verify_fp12_is_unity(
+pub(crate) fn chunk_final_verify(
     hint_in_a: ElemFp6, // 
     hint_in_b: ark_bn254::Fq6,
 ) -> (bool, Script, Vec<Hint>) {
@@ -1182,6 +1239,44 @@ pub(crate) fn chunk_verify_fp12_is_unity(
     (
         is_valid,
         scr,
+        vec![],
+    )
+}
+
+pub(crate) fn chunk_verify_fq6_is_on_field(
+    hint_in_c: Vec<ElemU256>,
+) -> (bool, Script, Vec<Hint>) {
+    fn tap_verify_fq6_is_on_field() -> Script {
+        let ops_scr = script! {
+            for _ in 0..6 {
+                {Fq::fromaltstack()}
+            }
+            // Stack:[f11 ..,f0], []
+            for i in 0..6 {
+                { Fq::push_hex_not_montgomery(Fq::MODULUS) }
+                { U254::lessthan(1, 0) } // a < p
+                OP_TOALTSTACK
+            }
+            for _ in 0..6 {
+                OP_FROMALTSTACK
+            }
+            for _ in 0..5 {
+                OP_BOOLAND
+            }
+            // <p => 1 -> good
+            // >p => 0 -> faulty
+            OP_NOT
+        };
+        let sc = script! {
+            {ops_scr}
+        };
+        sc
+    }
+
+    let is_valid = hint_in_c.iter().filter(|f| **f >= ark_bn254::Fq::MODULUS).count() == 0; 
+    (
+        is_valid,
+        tap_verify_fq6_is_on_field(),
         vec![],
     )
 }

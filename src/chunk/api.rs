@@ -138,8 +138,8 @@ pub fn generate_assertions(
         p2,
         p4,
         q4,
-        c,
-        s,
+        c: c.c1/c.c0,
+        s: s.c0,
         ks: msm_scalar.clone(),
     };
 

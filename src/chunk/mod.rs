@@ -14,10 +14,10 @@ pub mod norm_fp12;
 mod wots;
 pub mod assert;
 pub mod segment;
-pub mod segment_new;
+// pub mod segment_new;
 #[allow(unused_variables)]
 mod taps_premiller;
 #[allow(unused_variables)]
 mod taps_point_eval;
-mod taps_subgroup_check;
+// mod taps_subgroup_check;
 mod assigner;

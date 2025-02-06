@@ -75,22 +75,10 @@ pub fn hash_messages(elem_types: Vec<ElementType>) -> Script {
         // hash remaining element
         let elem_type = elem_types[msg_index];
         let hash_scr = script!(
-            if elem_type == ElementType::Fp12v0 {
-                {hash_fp12_192()}
-            } else if elem_type == ElementType::Fp12v2 {
-                {hash_fp12_with_hints()}
-            } else if elem_type == ElementType::Fp6 {
+            if elem_type == ElementType::Fp6 {
                 {hash_fp6()}
-            } else if elem_type == ElementType::G2DblAddEval {
-                {new_hash_g2acc_with_both_raw_le()}
-            } else if elem_type == ElementType::G2DblEval || elem_type == ElementType::G2AddEval ||  elem_type == ElementType::G2T {
-                {new_hash_g2acc_with_hashed_le()}
             } else if elem_type == ElementType::G1 {
                 {hash_fp2()}
-            } else if elem_type == ElementType::G2DblEvalMul {
-                {new_hash_g2acc_with_hashed_t(true)}
-            } else if elem_type == ElementType::G2AddEvalMul {
-                {new_hash_g2acc_with_hashed_t(false)}
             } else if elem_type == ElementType::G2EvalPoint {
                 {new_hash_g2acc_with_hashed_le()}
             } else if elem_type == ElementType::G2EvalMul {
@@ -133,8 +121,8 @@ mod test {
 
     #[test]
     fn test_sth() {
-        let hash_scr = hash_messages(vec![ElementType::Fp12v0, ElementType::Fp6]);
-        let a = ark_bn254::Fq12::ONE;
+        let hash_scr = hash_messages(vec![ElementType::Fp6, ElementType::Fp6]);
+        let a = ark_bn254::Fq6::ONE;
         let b = ark_bn254::Fq6::ONE + ark_bn254::Fq6::ONE;
         let ahash = extern_hash_fps(a.to_base_prime_field_elements().collect());
         let bhash = extern_hash_fps(b.to_base_prime_field_elements().collect());
@@ -148,7 +136,7 @@ mod test {
                 {i}
             }
             {Fq::toaltstack()}
-            {fq12_push_not_montgomery(a)}
+            {fq6_push_not_montgomery(a)}
             {fq6_push_not_montgomery(b)}
             {hash_scr}
             OP_TRUE
