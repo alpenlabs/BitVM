@@ -453,7 +453,7 @@ mod test {
 
 
         let total = N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES;
-        for i in 286..total {
+        for i in 0..total {
             println!("ITERATION {:?}", i);
             let mut proof_asserts = read_asserts_from_file("bridge_data/chunker_data/assert.json");
             corrupt(&mut proof_asserts, Some(i));

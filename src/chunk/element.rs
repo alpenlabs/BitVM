@@ -38,10 +38,7 @@ impl ElementType {
 
 impl Element {
     pub fn output_is_field_element(&self) -> bool {
-        match *self {
-            Element::U256(_) => true, 
-            _ => false,
-        }
+        matches!(self, Element::U256(_))
     }
 
     pub fn hashed_output(&self) -> HashBytes {
@@ -58,63 +55,36 @@ impl Element {
     }
 
     pub fn get_hash_preimage_as_hints(&self, elem_type: ElementType) -> Vec<Hint> {
-        match elem_type {
-            ElementType::G2EvalPoint => {
-                if let Element::G2Eval(g) = self {
-                    vec![
-                        Hint::Fq(g.t.x.c0),
-                        Hint::Fq(g.t.x.c1),
-                        Hint::Fq(g.t.y.c0),
-                        Hint::Fq(g.t.y.c1),
-                        Hint::Hash(extern_nibbles_to_limbs(g.hash_le())),
-                    ]
-                } else {
-                    panic!();
-                    vec![]
-                }
+        match (elem_type, self) {
+            (ElementType::G2EvalPoint, Element::G2Eval(g)) => vec![
+                Hint::Fq(g.t.x.c0),
+                Hint::Fq(g.t.x.c1),
+                Hint::Fq(g.t.y.c0),
+                Hint::Fq(g.t.y.c1),
+                Hint::Hash(extern_nibbles_to_limbs(g.hash_le())),
+            ],
+            (ElementType::G2EvalMul, Element::G2Eval(g)) => {
+                let mut hints: Vec<Hint> = g.apb
+                    .iter()
+                    .flat_map(|pt| [pt.c0, pt.c1]) // each point gives two values
+                    .chain(g.ab.to_base_prime_field_elements().into_iter())
+                    .chain(g.p2le.iter().flat_map(|pt| [pt.c0, pt.c1]))
+                    .chain(g.res_hint.to_base_prime_field_elements().into_iter())
+                    .map(Hint::Fq)
+                    .collect();
+                hints.push(Hint::Hash(extern_nibbles_to_limbs(g.hash_t())));
+                hints
             },
-            ElementType::G2EvalMul => {
-                if let Element::G2Eval(g) = self {
-                    let mut hs = vec![];
-                    let hint_apb: Vec<Hint> = vec![g.apb[0].c0, g.apb[0].c1, g.apb[1].c0, g.apb[1].c1].into_iter().map(|f| Hint::Fq(f)).collect();
-                    let hint_ab: Vec<Hint> = g.ab.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect();
-                    let hint_p2le: Vec<Hint> = vec![g.p2le[0].c0, g.p2le[0].c1, g.p2le[1].c0, g.p2le[1].c1].into_iter().map(|f| Hint::Fq(f)).collect();
-                    let hint_res: Vec<Hint> = g.res_hint.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect();
-                    hs.extend_from_slice(&hint_apb);
-                    hs.extend_from_slice(&hint_ab);
-                    hs.extend_from_slice(&hint_p2le);
-                    hs.extend_from_slice(&hint_res);
-                    hs.push(Hint::Hash(extern_nibbles_to_limbs(g.hash_t())));
-                    hs
-                } else {
-                    panic!();
-                    vec![]
-                }
+            (ElementType::Fp6, Element::Fp6(r)) => {
+                r.to_base_prime_field_elements().into_iter().map(Hint::Fq).collect()
             },
-            ElementType::Fp6 => {
-                if let Element::Fp6(r) = self {
-                    r.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect()
-                } else {
-                    panic!();
-                    vec![]
-                }
-            },
-            ElementType::G1 => {
-                if let Element::G1(r) = self {
-                    vec![Hint::Fq(r.x), Hint::Fq(r.y)]
-                } else {
-                    panic!();
-                    vec![]
-                }
-            }
-            ElementType::FieldElem => vec![],
-            ElementType::ScalarElem => vec![],
-            ElementType::G2Eval => vec![],
+            (ElementType::G1, Element::G1(r)) => vec![Hint::Fq(r.x), Hint::Fq(r.y)],
+            (ElementType::FieldElem, _)
+            | (ElementType::ScalarElem, _)
+            | (ElementType::G2Eval, _) => Vec::new(),
+            _ => panic!("Element type does not match the element"),
         }
     }
-
-    
-
 }
 
 #[derive(Debug)]
