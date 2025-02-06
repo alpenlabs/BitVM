@@ -22,7 +22,7 @@ use super::element::*;
 use super::primitves::{extern_nibbles_to_limbs, hash_fp6};
 use super::taps_point_ops::{utils_point_double_eval};
 
-fn get_hint_for_add_with_frob(q: ark_bn254::G2Affine, t: ark_bn254::G2Affine, ate: i8) -> ark_bn254::G2Affine {
+pub(crate) fn get_hint_for_add_with_frob(q: ark_bn254::G2Affine, t: ark_bn254::G2Affine, ate: i8) -> ark_bn254::G2Affine {
     let mut qq = q.clone();
     if ate == 1 {
         let (qdash, _, _) = bn254::curves::G2Affine::hinted_p_power_endomorphism(qq);

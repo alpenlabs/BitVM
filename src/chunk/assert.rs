@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use ark_ec::CurveGroup;
 use bitcoin_script::script;
 
-use crate::{bn254::utils::Hint, chunk::{primitves::{tup_to_scr, HashBytes, Sig, SigData}, segment::*, taps_point_eval::get_hint_for_add_with_frob}, execute_script, groth16::g16::{Signatures, N_TAPLEAVES}, treepp};
+use crate::{bn254::utils::Hint, chunk::{norm_fp12::get_hint_for_add_with_frob, primitves::{tup_to_scr, HashBytes, Sig, SigData}, segment::*}, execute_script, groth16::g16::{Signatures, N_TAPLEAVES}, treepp};
 
 
 use super::{compile::ATE_LOOP_COUNT, element::*, assigner::*};
@@ -14,7 +14,7 @@ use super::{compile::ATE_LOOP_COUNT, element::*, assigner::*};
 pub struct Pubs {
     pub q2: ark_bn254::G2Affine,
     pub q3: ark_bn254::G2Affine,
-    pub fixed_acc: ark_bn254::Fq12,
+    pub fixed_acc: ark_bn254::Fq6,
     pub ks_vks: Vec<ark_bn254::G1Affine>,
     pub vky0: ark_bn254::G1Affine,
 }
@@ -99,7 +99,7 @@ pub(crate) fn groth16(
 
     let valid_gc = wrap_verify_fq12_is_on_field(is_compile_mode, all_output_hints.len(), gc.clone());
     push_compare_or_return!(valid_gc);
-    let c = wrap_hint_hash_c(is_compile_mode, all_output_hints.len(), gc);
+    let c = wrap_hint_hash_c(is_compile_mode, all_output_hints.len(), gc.clone());
     push_compare_or_return!(c);
 
     let valid_gs = wrap_verify_fq12_is_on_field(is_compile_mode, all_output_hints.len(), gs.clone());
@@ -107,13 +107,7 @@ pub(crate) fn groth16(
     let s = wrap_hint_hash_c(is_compile_mode, all_output_hints.len(), gs);
     push_compare_or_return!(s);
 
-    let dmul0 = wrap_inv0(is_compile_mode, all_output_hints.len(), &c);
-    push_compare_or_return!(dmul0);
-
-    let dmul1 = wrap_inv1(is_compile_mode, all_output_hints.len(), &dmul0);
-    push_compare_or_return!(dmul1);
-
-    let gcinv = wrap_inv2(is_compile_mode, all_output_hints.len(), &dmul1, &c);
+    let gcinv = wrap_hint_hash_c_inv(is_compile_mode, all_output_hints.len(),gc);
     push_compare_or_return!(gcinv);
 
     let valid_t4 = wrap_verify_g2_is_on_curve(is_compile_mode, all_output_hints.len(), &q4yc1, &q4yc0, &q4xc1, &q4xc0);
@@ -134,63 +128,44 @@ pub(crate) fn groth16(
         push_compare_or_return!(sq);
         f_acc = sq;
 
-        if ate == 0 {
-            let dbl = wrap_hint_point_dbl(is_compile_mode, all_output_hints.len(), &t4, &p4);
-            push_compare_or_return!(dbl);
-            t4 = dbl;
-        } else {
-            let dbladd = wrap_hint_point_ops(is_compile_mode, all_output_hints.len(), &t4, &q4yc1, &q4yc0, &q4xc1, &q4xc0, &p4, ate);
-            push_compare_or_return!(dbladd);
-            t4 = dbladd;
-        }
-
-        let sdmul = wrap_hint_sparse_dense_mul(is_compile_mode, all_output_hints.len(), &f_acc, &t4, true);
-        push_compare_or_return!(sdmul);
-        f_acc = sdmul;
-
-        let leval = wrap_hint_multiply_point_evals_on_tangent_for_fixed_g2(is_compile_mode, all_output_hints.len(), &p3, &p2,  t2, t3);
-        push_compare_or_return!(leval);
+        t4 = wrap_hint_point_ops(
+            is_compile_mode, all_output_hints.len(), true, None, None,
+            &t4, &p4, None, &p3, t3, None, &p2, t2, None
+        );
+        push_compare_or_return!(t4);
         (t2, t3) = ((t2 + t2).into_affine(), (t3 + t3).into_affine());
 
+        let lev = wrap_complete_point_eval_and_mul(is_compile_mode, all_output_hints.len(), &t4);
+        push_compare_or_return!(lev);
 
-        let dmul0 = wrap_hints_dense_le_mul0(is_compile_mode, all_output_hints.len(), &f_acc, &leval);
-        push_compare_or_return!(dmul0);
-
-        let dmul1 = wrap_hints_dense_le_mul1(is_compile_mode, all_output_hints.len(), &f_acc, &leval, &dmul0);
-        push_compare_or_return!(dmul1);
-        f_acc = dmul1;
+        f_acc = wrap_hints_dense_dense_mul(is_compile_mode, all_output_hints.len(), &f_acc, &lev);
+        push_compare_or_return!(f_acc);
 
         if ate == 0 {
             continue;
         }
 
         let c_or_cinv = if ate == -1 { c.clone() } else { gcinv.clone() };
+        f_acc = wrap_hints_dense_dense_mul(is_compile_mode, all_output_hints.len(), &f_acc, &c_or_cinv);
+        push_compare_or_return!(f_acc);
 
-        let dmul0 = wrap_hints_dense_dense_mul0(is_compile_mode, all_output_hints.len(), &f_acc, &c_or_cinv);
-        push_compare_or_return!(dmul0);
 
-        let dmul1 = wrap_hints_dense_dense_mul1(is_compile_mode, all_output_hints.len(), &f_acc, &c_or_cinv, &dmul0);
-        push_compare_or_return!(dmul1);
-        f_acc = dmul1;
-
-        let sdmul = wrap_hint_sparse_dense_mul(is_compile_mode, all_output_hints.len(), &f_acc, &t4, false);
-        push_compare_or_return!(sdmul);
-        f_acc = sdmul;
-
-        let leval = wrap_hint_multiply_point_evals_on_chord_for_fixed_g2(is_compile_mode, all_output_hints.len(), &p3, &p2,  t2, t3, pubs.q2, pubs.q3, ate);
-        push_compare_or_return!(leval);
+        t4 = wrap_hint_point_ops(
+            is_compile_mode, all_output_hints.len(), false, Some(false), Some(ate),
+            &t4, &p4, Some(gq4.to_vec()), &p3, t3, Some(pubs.q3), &p2, t2, Some(pubs.q2)
+        );
+        push_compare_or_return!(t4);
         if ate == 1 {
             (t2, t3) = ((t2 + pubs.q2).into_affine(), (t3 + pubs.q3).into_affine());
         } else {
             (t2, t3) = ((t2 - pubs.q2).into_affine(), (t3 - pubs.q3).into_affine());
         }
 
-        let dmul0 = wrap_hints_dense_le_mul0(is_compile_mode, all_output_hints.len(), &f_acc, &leval);
-        push_compare_or_return!(dmul0);
+        let lev = wrap_complete_point_eval_and_mul(is_compile_mode, all_output_hints.len(), &t4);
+        push_compare_or_return!(lev);
 
-        let dmul1 = wrap_hints_dense_le_mul1(is_compile_mode, all_output_hints.len(), &f_acc, &leval, &dmul0);
-        push_compare_or_return!(dmul1);
-        f_acc = dmul1;
+        f_acc = wrap_hints_dense_dense_mul(is_compile_mode, all_output_hints.len(), &f_acc, &lev);
+        push_compare_or_return!(f_acc);
     }
 
     let cp = wrap_hints_frob_fp12(is_compile_mode, all_output_hints.len(), &gcinv, 1);
@@ -202,80 +177,59 @@ pub(crate) fn groth16(
     let cp3 = wrap_hints_frob_fp12(is_compile_mode, all_output_hints.len(), &gcinv, 3);
     push_compare_or_return!(cp3);
 
-    let dmul0 = wrap_hints_dense_dense_mul0(is_compile_mode, all_output_hints.len(), &f_acc, &cp);
-    push_compare_or_return!(dmul0);
+    f_acc = wrap_hints_dense_dense_mul(is_compile_mode, all_output_hints.len(), &f_acc, &cp);
+    push_compare_or_return!(f_acc);
 
-    let dmul1 = wrap_hints_dense_dense_mul1(is_compile_mode, all_output_hints.len(), &f_acc, &cp, &dmul0);
-    push_compare_or_return!(dmul1);
-    f_acc = dmul1;
+    f_acc = wrap_hints_dense_dense_mul(is_compile_mode, all_output_hints.len(), &f_acc, &cp2);
+    push_compare_or_return!(f_acc);
 
-    let dmul0 = wrap_hints_dense_dense_mul0(is_compile_mode, all_output_hints.len(), &f_acc, &cp2);
-    push_compare_or_return!(dmul0);
+    f_acc = wrap_hints_dense_dense_mul(is_compile_mode, all_output_hints.len(), &f_acc, &cp3);
+    push_compare_or_return!(f_acc);
 
-    let dmul1 = wrap_hints_dense_dense_mul1(is_compile_mode, all_output_hints.len(), &f_acc, &cp2, &dmul0);
-    push_compare_or_return!(dmul1);
-    f_acc = dmul1;
+    f_acc = wrap_hints_dense_dense_mul(is_compile_mode, all_output_hints.len(), &f_acc, &s);
+    push_compare_or_return!(f_acc);
 
-    let dmul0 = wrap_hints_dense_dense_mul0(is_compile_mode, all_output_hints.len(), &f_acc, &cp3);
-    push_compare_or_return!(dmul0);
 
-    let dmul1 = wrap_hints_dense_dense_mul1(is_compile_mode, all_output_hints.len(), &f_acc, &cp3, &dmul0);
-    push_compare_or_return!(dmul1);
-    f_acc = dmul1;
 
-    let dmul0 = wrap_hints_dense_dense_mul0(is_compile_mode, all_output_hints.len(), &f_acc, &s);
-    push_compare_or_return!(dmul0);
+    t4 = wrap_hint_point_ops(
+        is_compile_mode, all_output_hints.len(), false, Some(true), Some(1),
+        &t4, &p4, Some(gq4.to_vec()), &p3, t3, Some(pubs.q3), &p2, t2, Some(pubs.q2)
+    );
+    push_compare_or_return!(t4);
 
-    let dmul1 = wrap_hints_dense_dense_mul1(is_compile_mode, all_output_hints.len(), &f_acc, &s, &dmul0);
-    push_compare_or_return!(dmul1);
-    f_acc = dmul1;
-
-    let addf = wrap_hint_point_add_with_frob(is_compile_mode, all_output_hints.len(), &t4, &q4yc1, &q4yc0, &q4xc1, &q4xc0, &p4, 1);
-    push_compare_or_return!(addf);
-    t4 = addf;
-
-    let sdmul = wrap_hint_sparse_dense_mul(is_compile_mode, all_output_hints.len(), &f_acc, &t4, false);
-    push_compare_or_return!(sdmul);
-    f_acc = sdmul;
-
-    let leval = wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(is_compile_mode, all_output_hints.len(), &p3, &p2,  t2, t3, pubs.q2, pubs.q3, 1);
-    push_compare_or_return!(leval);
     // (t2, t3) = (le.t2, le.t3);
     t2 = get_hint_for_add_with_frob(pubs.q2, t2, 1);
     t3 = get_hint_for_add_with_frob(pubs.q3, t3, 1);
+    let lev = wrap_complete_point_eval_and_mul(is_compile_mode, all_output_hints.len(), &t4);
+    push_compare_or_return!(lev);
+
+    f_acc = wrap_hints_dense_dense_mul(is_compile_mode, all_output_hints.len(), &f_acc, &lev);
+    push_compare_or_return!(f_acc);
 
 
-    let dmul0 = wrap_hints_dense_le_mul0(is_compile_mode, all_output_hints.len(), &f_acc, &leval);
-    push_compare_or_return!(dmul0);
+    t4 = wrap_hint_point_ops(
+        is_compile_mode, all_output_hints.len(), false, Some(true), Some(-1),
+        &t4, &p4, Some(gq4.to_vec()), &p3, t3, Some(pubs.q3), &p2, t2, Some(pubs.q2)
+    );
+    push_compare_or_return!(t4);
 
-    let dmul1 = wrap_hints_dense_le_mul1(is_compile_mode, all_output_hints.len(), &f_acc, &leval, &dmul0);
-    push_compare_or_return!(dmul1);
-    f_acc = dmul1;
-
-    let addf = wrap_hint_point_add_with_frob(is_compile_mode, all_output_hints.len(), &t4, &q4yc1, &q4yc0, &q4xc1, &q4xc0, &p4, -1);
-    push_compare_or_return!(addf);
-    t4 = addf;
-
-    let sdmul = wrap_hint_sparse_dense_mul(is_compile_mode, all_output_hints.len(), &f_acc, &t4, false);
-    push_compare_or_return!(sdmul);
-    f_acc = sdmul;
-
-    let leval = wrap_multiply_point_evals_on_chord_for_fixed_g2_with_frob(is_compile_mode, all_output_hints.len(), &p3, &p2,  t2, t3, pubs.q2, pubs.q3, -1);
-    push_compare_or_return!(leval);
+    // (t2, t3) = (le.t2, le.t3);
     t2 = get_hint_for_add_with_frob(pubs.q2, t2, -1);
     t3 = get_hint_for_add_with_frob(pubs.q3, t3, -1);
+    let lev = wrap_complete_point_eval_and_mul(is_compile_mode, all_output_hints.len(), &t4);
+    push_compare_or_return!(lev);
 
-    let dmul0 = wrap_hints_dense_le_mul0(is_compile_mode, all_output_hints.len(), &f_acc, &leval);
-    push_compare_or_return!(dmul0);
+    f_acc = wrap_hints_dense_dense_mul(is_compile_mode, all_output_hints.len(), &f_acc, &lev);
+    push_compare_or_return!(f_acc);
 
-    let dmul1 = wrap_hints_dense_le_mul1(is_compile_mode, all_output_hints.len(), &f_acc, &leval, &dmul0);
-    push_compare_or_return!(dmul1);
-    f_acc = dmul1;
 
-    let valid_facc = wrap_verify_fp12_is_unity(is_compile_mode, all_output_hints.len(), &f_acc, pubs.fixed_acc);
+    let valid_facc = wrap_chunk_final_verify(is_compile_mode, all_output_hints.len(), &f_acc, pubs.fixed_acc);
     push_compare_or_return!(valid_facc);
 
-    true
+    let is_valid: ark_ff::BigInt::<4> = valid_facc.result.0.try_into().unwrap();
+    let is_valid = is_valid == ark_ff::BigInt::<4>::one();
+    
+    is_valid
 }
 
 pub(crate) fn script_exec(

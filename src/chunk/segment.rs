@@ -241,12 +241,12 @@ pub(crate) fn wrap_hint_point_ops(
 }
 
 // complete
-fn wrap_complete_point_eval_and_mul(
+pub(crate) fn wrap_complete_point_eval_and_mul(
     skip: bool,
     segment_id: usize,
-    in_f: Segment
+    in_f: &Segment
 ) -> Segment {
-    let mut input_segment_info: Vec<(SegmentID, ElementType)> = vec![
+    let input_segment_info: Vec<(SegmentID, ElementType)> = vec![
         (in_f.id, ElementType::G2EvalMul),
     ];
 

@@ -566,7 +566,7 @@ mod test {
         let pubs: Pubs = Pubs {
             q2, 
             q3, 
-            fixed_acc: f_fixed, 
+            fixed_acc: f_fixed.c1/f_fixed.c0, 
             ks_vks: msm_gs, 
             vky0
         };

@@ -114,8 +114,9 @@ fn segments_from_pubs(vk: Vkey) -> Vec<Segment> {
     let s = ElemFp6::mock();
     let c = ElemFp6::mock();
     let eval_ins: InputProof = InputProof { p2: g1, p4: g1, q4: g2, c, s, ks: vec![fr.into()] };
-
-    let pubs: Pubs = Pubs { q2: vk.q2, q3: vk.q3, fixed_acc: vk.p1q1, ks_vks: vk.p3vk, vky0: vk.vky0 };
+    let p1q1 = vk.p1q1.c1/vk.p1q1.c0;
+    
+    let pubs: Pubs = Pubs { q2: vk.q2, q3: vk.q3, fixed_acc: p1q1, ks_vks: vk.p3vk, vky0: vk.vky0 };
     groth16(true, &mut segments, eval_ins.to_raw(), pubs, &mut None);
     segments
 }

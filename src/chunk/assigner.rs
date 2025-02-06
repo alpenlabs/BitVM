@@ -141,8 +141,8 @@ pub(crate) fn get_pubs(vk: &ark_groth16::VerifyingKey<Bn254>) -> Pubs {
         -vk.beta_g2,
     );
     let fixed_acc = Bn254::multi_miller_loop_affine([vk.alpha_g1], [q1]).0;
-
-    let pubs: Pubs = Pubs { q2, q3, fixed_acc, ks_vks: msm_gs.clone(), vky0 };
+    
+    let pubs: Pubs = Pubs { q2, q3, fixed_acc: fixed_acc.c1/fixed_acc.c0, ks_vks: msm_gs.clone(), vky0 };
     pubs
 }
 
