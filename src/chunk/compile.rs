@@ -34,26 +34,6 @@ pub(crate) struct Vkey {
     pub(crate) vky0: ark_bn254::G1Affine,
 }
 
-fn cached<F, T, R>(fun: F) -> impl FnMut(T) -> R
-where
-    F: Fn(T) -> R + 'static,
-    R: Clone + 'static,
-    T: Eq + std::hash::Hash + 'static + Clone,
-{
-    let mut cache: HashMap<T, R> = HashMap::new();
-    let f = move |a| {
-        let ret = if let Some(v) = cache.get(&a) {
-            v.clone()
-        } else {
-            let ret = fun(a.clone());
-            cache.insert(a, ret.clone());
-            ret
-        };
-        ret
-    };
-    f
-}
-
 pub(crate) fn generate_partial_script(
     vk: Vkey,
 ) -> Vec<bitcoin_script::Script>  {

@@ -1,8 +1,8 @@
 
 
-use crate::{bn254::{fp254impl::Fp254Impl, fr::Fr, utils::Hint}, chunk::taps_msm::chunk_msm};
+use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fr::Fr, utils::Hint}, chunk::taps_msm::chunk_msm, execute_script_without_stack_limit};
 
-use super::{element::{ElemFp6, Element, ElementType}, taps_msm::chunk_hash_p, taps_premiller::*};
+use super::{blake3compiled::hash_messages, element::{ElemFp6, Element, ElementType}, primitves::extern_nibbles_to_limbs, taps_msm::chunk_hash_p, taps_premiller::*};
 use ark_ff::AdditiveGroup;
 use bitcoin_script::script;
 
@@ -200,10 +200,10 @@ pub(crate) fn wrap_hint_point_ops(
 ) -> Segment {
     
     let mut input_segment_info: Vec<(SegmentID, ElementType)> = vec![
-        (in_t4.id, ElementType::G2EvalPoint),
-        (in_p4.id, ElementType::G1),
-        (in_p3.id, ElementType::G1),
         (in_p2.id, ElementType::G1),
+        (in_p3.id, ElementType::G1),
+        (in_p4.id, ElementType::G1),
+        (in_t4.id, ElementType::G2EvalPoint),
     ];
 
     let t4: ElemG2Eval = in_t4.result.0.try_into().unwrap();
@@ -214,7 +214,7 @@ pub(crate) fn wrap_hint_point_ops(
 
     if !is_dbl {
         let in_q4 = in_q4.unwrap();
-        for v in &in_q4 {
+        for v in in_q4.iter().rev() {
             input_segment_info.push((v.id, ElementType::FieldElem))
         }
 
@@ -518,31 +518,7 @@ pub(crate) fn wrap_verify_g1_is_on_curve(
     if !skip {
         let in_py = in_py.result.0.try_into().unwrap();
         let in_px = in_px.result.0.try_into().unwrap();
-        // let mut tap_prex = script!();
-
         (is_valid, scr, op_hints) = chunk_verify_g1_is_on_curve(in_py, in_px);
-        // let bitcom_scr = script!{
-        //     {fq_push_not_montgomery(in_py)}
-        //     {Fq::toaltstack()}     
-        //     {fq_push_not_montgomery(in_py)}
-        //     {Fq::toaltstack()}     
-        // };
-        // println!("seg id {} is valid {}", segment_id, is_valid);
-
-        // let script = script! {
-        //     for h in &op_hints {
-        //         { h.push() }
-        //     }
-        //     {bitcom_scr}
-        //     {tap_prex}
-        // };
-        // let res = execute_script(script);
-        // for i in 0..res.final_stack.len() {
-        //     println!("{i:} {:?}", res.final_stack.get(i));
-        // }
-        // assert!(!res.success);
-        // assert!(res.final_stack.len() == 1);
-
     }
     let is_valid_fq = if is_valid {
         ark_ff::BigInt::<4>::one()

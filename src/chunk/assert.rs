@@ -266,11 +266,16 @@ pub(crate) fn script_exec(
 
     let aux_hints: Vec<Vec<Hint>> = segments.iter().map(|seg| {
         let mut hints = seg.hints.clone();
+        // hashing preimage for input
         seg.parameter_ids.iter().rev().for_each(|(param_seg_id, param_seg_type)| {
             let param_seg = &segments[*(param_seg_id) as usize];
             let preimage_hints = param_seg.result.0.get_hash_preimage_as_hints(*param_seg_type);
             hints.extend_from_slice(&preimage_hints);
         });
+        // hashing preimage for output
+        if seg.scr_type == ScriptType::FoldedFp12Multiply || seg.scr_type == ScriptType::MillerSquaring {
+            hints.extend_from_slice(&seg.result.0.get_hash_preimage_as_hints(seg.result.1));
+        }
         hints
     }).collect();
 

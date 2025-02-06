@@ -150,28 +150,6 @@ impl InputProof {
             ks: ks.try_into().unwrap(),
         }
     }
-
-    pub(crate) fn from_raw(raw: InputProofRaw) -> InputProof {
-        let mod_q = ark_bn254::Fq::MODULUS;
-        let mod_r = ark_bn254::Fr::MODULUS;
-        raw.p2.iter().for_each(|f| assert!(*f < mod_q));
-        raw.p4.iter().for_each(|f| assert!(*f < mod_q));
-        raw.q4.iter().for_each(|f| assert!(*f < mod_q));
-        raw.c.iter().for_each(|f| assert!(*f < mod_q));
-        raw.s.iter().for_each(|f| assert!(*f < mod_q));
-        raw.ks.iter().for_each(|f| assert!(*f < mod_r));
-        InputProof {
-            p2: ark_bn254::G1Affine::new_unchecked(raw.p2[0].clone().into(), raw.p2[1].clone().into()),
-            p4: ark_bn254::G1Affine::new_unchecked(raw.p4[0].clone().into(), raw.p4[1].clone().into()),
-            q4: ark_bn254::G2Affine::new_unchecked(
-                ark_bn254::Fq2::new(raw.q4[0].clone().into(), raw.q4[1].clone().into()), 
-                ark_bn254::Fq2::new(raw.q4[2].clone().into(), raw.q4[3].clone().into()),
-            ),
-            c: ark_bn254::Fq6::from_base_prime_field_elems(raw.c.into_iter().map(|f| ark_bn254::Fq::from(f)).collect::<Vec<ark_bn254::Fq>>()).unwrap(),
-            s: ark_bn254::Fq6::from_base_prime_field_elems(raw.s.into_iter().map(|f| ark_bn254::Fq::from(f)).collect::<Vec<ark_bn254::Fq>>()).unwrap(),
-            ks: raw.ks.into_iter().map(|f| ark_bn254::Fr::from(f)).collect::<Vec<ark_bn254::Fr>>(),
-        }
-    }
 }
 
 #[derive(Debug)]
