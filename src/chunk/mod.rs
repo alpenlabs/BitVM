@@ -7,8 +7,6 @@ mod taps_msm;
 mod primitves;
 #[allow(unused_variables)]
 mod taps_point_ops;
-#[allow(unused_variables)]
-mod taps_mul;
 mod taps_test;
 pub mod norm_fp12;
 mod wots;
@@ -17,7 +15,4 @@ pub mod segment;
 // pub mod segment_new;
 #[allow(unused_variables)]
 mod taps_premiller;
-#[allow(unused_variables)]
-mod taps_point_eval;
-// mod taps_subgroup_check;
 mod assigner;

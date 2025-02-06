@@ -13,7 +13,7 @@ use crate::chunk::element::ElemTraitExt;
 use super::blake3compiled::hash_messages;
 use super::element::{ElemFp6, ElemG2Eval, ElemU256, ElementType};
 use super::taps_msm::{chunk_hash_p, chunk_msm};
-use super::{assert::{groth16, Pubs}, element::{InputProof}, primitves::gen_bitcom, segment::{ScriptType, Segment}, taps_mul::*, taps_point_eval::*, taps_point_ops::*, taps_premiller::*, wots::WOTSPubKey};
+use super::{assert::{groth16, Pubs}, element::{InputProof}, primitves::gen_bitcom, segment::{ScriptType, Segment}, taps_point_ops::*, taps_premiller::*, wots::WOTSPubKey};
 
 pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 pub const NUM_PUBS: usize = 1;

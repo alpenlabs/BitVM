@@ -2,7 +2,7 @@
 
 use crate::{bn254::{fp254impl::Fp254Impl, fr::Fr, utils::Hint}, chunk::taps_msm::chunk_msm};
 
-use super::{element::{ElemFp6, Element, ElementType}, taps_msm::chunk_hash_p, taps_point_eval::*, taps_premiller::*};
+use super::{element::{ElemFp6, Element, ElementType}, taps_msm::chunk_hash_p, taps_premiller::*};
 use ark_ff::AdditiveGroup;
 
 

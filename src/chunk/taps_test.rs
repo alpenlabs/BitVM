@@ -13,9 +13,7 @@ mod test {
     use crate::chunk::primitves::{new_hash_g2acc_with_both_raw_le, new_hash_g2acc_with_hashed_le, pack_nibbles_to_limbs};
     use crate::chunk::taps_point_ops::*;
     use crate::chunk::primitves::{extern_hash_fps, extern_nibbles_to_limbs};
-    use crate::chunk::taps_mul::*;
     use crate::chunk::taps_premiller::*;
-    use crate::chunk::taps_point_eval::*;
     use crate::execute_script_without_stack_limit;
     use ark_ff::AdditiveGroup;
     use ark_ff::Field;
