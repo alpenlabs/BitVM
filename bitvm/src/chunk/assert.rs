@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use ark_ec::CurveGroup;
 use bitcoin_script::script;
 
-use crate::{bn254::utils::Hint, chunk::{norm_fp12::get_hint_for_add_with_frob, primitives::{tup_to_scr, HashBytes, Sig, SigData}, segment::*}, execute_script, groth16::g16::{Signatures, N_TAPLEAVES}, treepp};
+use crate::{bn254::utils::Hint, chunk::{norm_fp12::get_hint_for_add_with_frob, primitives::{get_bitcom_signature_as_witness, HashBytes, Sig, SigData}, segment::*}, execute_script, groth16::g16::{Signatures, N_TAPLEAVES}, treepp};
 
 
 use super::{compile::ATE_LOOP_COUNT, element::*, assigner::*};
@@ -296,7 +296,7 @@ pub(crate) fn script_exec(
             tot.push(sec_out);
         }
 
-        let bcelems = tup_to_scr(&mut sig, tot);
+        let bcelems = get_bitcom_signature_as_witness(&mut sig, tot);
         bc_hints.push(bcelems);
     }
 

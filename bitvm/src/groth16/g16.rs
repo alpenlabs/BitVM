@@ -69,7 +69,7 @@ mod test {
     use ark_serialize::CanonicalSerialize;
     use rand::Rng;
 
-    use crate::{chunk::{api::mock_pubkeys, element::InputProof, norm_fp12::verify_pairing}, groth16::{constants::LAMBDA, g16::test::test_utils::{read_scripts_from_file, write_scripts_to_file, write_scripts_to_separate_files}, offchain_checker::compute_c_wi}};
+    use crate::{chunk::{api::mock_pubkeys, element::{ElemFp6, ElemG2Eval, Element, InputProof}, norm_fp12::verify_pairing}, groth16::{constants::LAMBDA, g16::test::test_utils::{read_scripts_from_file, write_scripts_to_file, write_scripts_to_separate_files}, offchain_checker::compute_c_wi}};
 
 
     use self::{chunk::{ assert::{self, Pubs}, compile::NUM_PUBS, segment::Segment}, test_utils::{read_map_from_file, write_map_to_file}};
@@ -673,5 +673,4 @@ mod test {
 
 
     }
-
 }

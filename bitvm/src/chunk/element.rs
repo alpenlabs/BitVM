@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::{bn254::utils::Hint, chunk::primitives::extern_hash_nibbles};
 use ark_bn254::{G1Affine, G2Affine};
-use ark_ff::{AdditiveGroup, Field, MontFp, PrimeField};
+use ark_ff::{Field, PrimeField};
 use num_bigint::BigUint;
 use super::{compile::NUM_PUBS, primitives::{extern_bigint_to_nibbles, extern_hash_fps, extern_nibbles_to_limbs, HashBytes}};
 
@@ -26,10 +26,10 @@ pub(crate) enum ElementType {
 }
 
 impl ElementType {
-    pub fn num_limbs(&self) -> usize {
+    pub fn number_of_limbs_of_hashing_preimage(&self) -> usize {
         match self {
             ElementType::Fp6 => 6,
-            ElementType::FieldElem => 0,
+            ElementType::FieldElem => 0, // field element is not hashed
             ElementType::G1 => 2,
             ElementType::ScalarElem => 0,
             ElementType::G2EvalPoint => 4 + 1,
@@ -47,11 +47,7 @@ impl Element {
     pub fn hashed_output(&self) -> HashBytes {
         match self {
             Element::G2Eval(r) => r.hashed_output(),
-            Element::Fp6(r) => {
-                extern_hash_fps(
-                    r.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>(),
-                )
-            },
+            Element::Fp6(r) => r.hashed_output(),
             Element::U256(f) => f.hashed_output(),
             Element::G1(r) => r.hashed_output(),
         }
@@ -88,6 +84,8 @@ impl Element {
             _ => panic!("Element type does not match the element"),
         }
     }
+
+    
 }
 
 #[derive(Debug)]
@@ -135,21 +133,11 @@ pub(crate) struct InputProofRaw {
     pub(crate) ks: [ark_ff::BigInt<4>; NUM_PUBS],
 }
 
-#[derive(Debug)]
-pub(crate) enum ElementConversionError {
-    /// Returned when an attempt to convert an `Element` variant into a type that
-    /// does not match its stored variant is made.
-    InvalidVariantConversion {
-        attempted: &'static str,
-        found: &'static str,
-    },
-}
-
 /// Helper macro to reduce repetitive code for `TryFrom<Element>`.
 macro_rules! impl_try_from_element {
     ($t:ty, { $($variant:ident),+ }) => {
         impl TryFrom<Element> for $t {
-            type Error = ElementConversionError;
+            type Error = String;
 
             fn try_from(value: Element) -> Result<Self, Self::Error> {
                 match value {
@@ -157,10 +145,10 @@ macro_rules! impl_try_from_element {
                         Element::$variant(v) => Ok(v),
                     )+
                     other => {
-                        Err(ElementConversionError::InvalidVariantConversion {
-                        attempted: stringify!($t),
-                        found: stringify!(other),
-                    })},
+                        Err(format!("attempted: {:?} found: {:?}",
+                        stringify!($t),
+                        other,
+                    ))},
                 }
             }
         }
@@ -177,7 +165,7 @@ pub(crate) type ElemFp6 = ark_bn254::Fq6;
 
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub(crate) struct ElemG2Eval {
+pub struct ElemG2Eval {
     pub(crate) t: ark_bn254::G2Affine,
     pub(crate) p2le: [ark_bn254::Fq2;2],
     pub(crate) ab: ark_bn254::Fq6,

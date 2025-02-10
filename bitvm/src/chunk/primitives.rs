@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use ark_ff::{BigInt, BigInteger};
+use num_bigint::BigUint;
 
 use crate::bigint::U256;
 use crate::bn254::fq2::Fq2;
@@ -28,7 +29,7 @@ pub struct Sig {
     pub(crate) cache: HashMap<u32, SigData>,
 }
 
-pub(crate) fn tup_to_scr(sig: &mut Sig, tup: Vec<Link>) -> Script {
+pub(crate) fn get_bitcom_signature_as_witness(sig: &mut Sig, tup: Vec<Link>) -> Script {
     let mut compact_bc_scripts = script!();
     if !sig.cache.is_empty() {
         for skey in tup {
@@ -124,6 +125,39 @@ fn fq_to_chunked_bits(fq: BigInt<4>, limb_size: usize) -> Vec<u32> {
         })
         .collect()
 }
+
+pub(crate) fn extern_nibbles_to_bigint(nibble_array: [u8; 64]) -> ark_ff::BigInt<4> {
+    let bit_array: Vec<bool> = nibble_array
+    .iter()
+    .flat_map(|&nibble| (0..4).rev().map(move |i| (nibble >> i) & 1 != 0)) // Extract each bit
+    .collect();
+
+    let r: ark_ff::BigInt<4> = BigInt::from_bits_be(&bit_array);
+    r
+}
+
+// pub(crate) fn extern_bigint_to_limbs(r: ark_ff::BigInt<4>) -> [u32; 9] {
+//     fn bigint_to_limbs(n: num_bigint::BigInt, n_bits: u32) -> Vec<u32> {
+//         const LIMB_SIZE: u64 = 29;
+//         let mut limbs = vec![];
+//         let mut limb: u32 = 0;
+//         for i in 0..n_bits as u64 {
+//             if i > 0 && i % LIMB_SIZE == 0 {
+//                 limbs.push(limb);
+//                 limb = 0;
+//             }
+//             if n.bit(i) {
+//                 limb += 1 << (i % LIMB_SIZE);
+//             }
+//         }
+//         limbs.push(limb);
+//         limbs
+//     }
+
+//     let mut limbs = bigint_to_limbs(r.into(), 256);
+//     limbs.reverse();
+//     limbs.try_into().unwrap()
+// }
 
 pub(crate) fn extern_nibbles_to_limbs(nibble_array: [u8; 64]) -> [u32; 9] {
     let bit_array: Vec<bool> = nibble_array

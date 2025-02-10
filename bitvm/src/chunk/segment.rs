@@ -1,8 +1,8 @@
 
 
-use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fr::Fr, utils::Hint}, chunk::taps_msm::chunk_msm, execute_script_without_stack_limit};
+use crate::{bn254::{fp254impl::Fp254Impl, fr::Fr, utils::Hint}, chunk::taps_msm::chunk_msm};
 
-use super::{blake3compiled::hash_messages, element::{ElemFp6, Element, ElementType}, primitives::extern_nibbles_to_limbs, taps_msm::chunk_hash_p, taps_premiller::*};
+use super::{element::{ElemFp6, Element, ElementType}, taps_msm::chunk_hash_p, taps_premiller::*};
 use ark_ff::AdditiveGroup;
 use bitcoin_script::script;
 
@@ -31,7 +31,7 @@ pub(crate) struct Segment {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ScriptType {
     NonDeterministic,
-    MSM((usize, Vec<ark_bn254::G1Affine>)),
+    MSM(u32),
     ValidateG1IsOnCurve,
     ValidateG1HashIsOnCurve,
     ValidateG2IsOnCurve,
@@ -43,7 +43,7 @@ pub enum ScriptType {
     PreMillerHashC,
     PreMillerHashCInv,
 
-    PreMillerHashP(ark_bn254::G1Affine),
+    PreMillerHashP,
 
     MillerSquaring,
     MillerPointOpsStep1(bool, Option<i8>, Option<bool>),
@@ -320,7 +320,7 @@ pub(crate) fn wrap_hint_msm(
                 is_validation: false,
                 parameter_ids: input_segment_info, 
                 result: (Element::G1(hout_msm), ElementType::G1), 
-                hints: op_hints, scr_type: ScriptType::MSM((msm_chunk_index, pub_vky.clone())),
+                hints: op_hints, scr_type: ScriptType::MSM(msm_chunk_index as u32),
                 scr,
             });
         }
@@ -339,7 +339,7 @@ pub(crate) fn wrap_hint_msm(
                 is_validation: false,
                 parameter_ids: input_segment_info, 
                 result: (Element::G1(hout_msm), ElementType::G1), 
-                hints: vec![], scr_type: ScriptType::MSM((msm_chunk_index as usize, pub_vky.clone())),
+                hints: vec![], scr_type: ScriptType::MSM(msm_chunk_index),
                 scr: script!(),
             });
         }
@@ -366,7 +366,7 @@ pub(crate) fn wrap_hint_hash_p(
         );
         // op_hints.extend_from_slice(&Element::G1(t).get_hash_preimage_as_hints());
     }
-    Segment { id: segment_id as u32, is_validation: false, parameter_ids: input_segment_info, result: (Element::G1(p3), ElementType::G1), hints: op_hints, scr_type: ScriptType::PreMillerHashP(pub_vky0), scr }
+    Segment { id: segment_id as u32, is_validation: false, parameter_ids: input_segment_info, result: (Element::G1(p3), ElementType::G1), hints: op_hints, scr_type: ScriptType::PreMillerHashP, scr }
 }
 
 pub(crate) fn wrap_hints_precompute_p(

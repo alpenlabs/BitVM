@@ -41,7 +41,7 @@ pub fn hash_448b() -> Script {
 pub fn hash_messages(elem_types: Vec<ElementType>) -> Script {
     // Altstack: [Hc, Hb, Ha]
     // Stack: [a, b, c]
-    let elem_types: Vec<ElementType> = elem_types.into_iter().filter(|et| et.num_limbs() > 0).collect();
+    let elem_types: Vec<ElementType> = elem_types.into_iter().filter(|et| et.number_of_limbs_of_hashing_preimage() > 0).collect();
     let mut loop_script = script!();
     for msg_index in 0..elem_types.len() {
         // send other elems to altstack
@@ -50,7 +50,7 @@ pub fn hash_messages(elem_types: Vec<ElementType>) -> Script {
         for elem_type in &remaining {
             from_altstack = script!(
                 {from_altstack}
-                for _ in 0..elem_type.num_limbs() {
+                for _ in 0..elem_type.number_of_limbs_of_hashing_preimage() {
                     {Fq::fromaltstack()}
                 }
             );
@@ -60,7 +60,7 @@ pub fn hash_messages(elem_types: Vec<ElementType>) -> Script {
         for elem_type in &remaining {
             to_altstack = script!(
                 {to_altstack}
-                for _ in 0..elem_type.num_limbs() {
+                for _ in 0..elem_type.number_of_limbs_of_hashing_preimage() {
                     {Fq::toaltstack()}
                 }
             );

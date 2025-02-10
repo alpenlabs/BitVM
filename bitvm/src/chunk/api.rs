@@ -104,6 +104,17 @@ pub(crate) fn nib_to_byte_array(digits: &[u8]) -> Vec<u8> {
     msg_bytes
 }
 
+pub(crate) fn byte_array_to_nib(bytes: &[u8]) -> Vec<u8> {
+    let mut nibbles = Vec::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        let low = b & 0x0F;
+        let high = b >> 4;
+        nibbles.push(low);
+        nibbles.push(high);
+    }
+    nibbles
+}
+
 pub fn generate_assertions(
     proof: ark_groth16::Proof<Bn<ark_bn254::Config>>,
     scalars: Vec<ark_bn254::Fr>,
