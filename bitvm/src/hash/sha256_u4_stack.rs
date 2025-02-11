@@ -755,6 +755,14 @@ mod tests {
     }
 
     #[test]
+    fn test_sizes_64bytes() {
+        let mut stack = StackTracker::new();
+        let x = sha256_stack(&mut stack, 64, true, true);
+        println!("sha 64 bytes: {}", x.len());
+        println!("max stack: {}", stack.get_max_stack_size());
+    }
+
+    #[test]
     fn test_shatemp() {
         let mut stack = StackTracker::new();
         stack.custom(

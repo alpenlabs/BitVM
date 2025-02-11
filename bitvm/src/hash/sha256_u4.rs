@@ -489,6 +489,13 @@ mod tests {
     }
 
     #[test]
+    fn test_sizes_64bytes() {
+        let x = sha256(64);
+        println!("sha 64 bytes: {}", x.len());
+
+    }
+
+    #[test]
     fn test_shatemp() {
         let script = script! {
             { u4_number_to_nibble(0xdeadbeaf) }
@@ -533,8 +540,12 @@ mod tests {
 
         };
 
-        let res = execute_script(script);
+        let res = execute_script(script.clone());
         assert!(res.success);
+
+        println!("\n\n {} bytes", hex_in.len() / 2);
+        println!("Max Stack use : {}", res.stats.max_nb_stack_items);
+        println!("Script Size : {}", script.len());
     }
 
     #[test]
@@ -563,6 +574,12 @@ mod tests {
         test_sha256(hex);
         let hex = "7788ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaaaaaaaaaaaaaaaa001122334455667788";
         test_sha256(hex);
+    }
+
+    #[test]
+    fn test_sha256_64bytes() {
+        let hex = "f".repeat(128);
+        test_sha256(&hex);
     }
 
     #[test]

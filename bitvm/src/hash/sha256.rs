@@ -915,6 +915,7 @@ pub fn maj(x: u32, y: u32, z: u32, stack_depth: u32) -> Script {
 mod tests {
     use crate::hash::blake3::push_bytes_hex;
     use crate::hash::sha256::*;
+    use crate::test;
     use crate::treepp::{execute_script, script};
     use crate::u32::u32_std::{u32_equal, u32_equalverify};
     use sha2::{Digest, Sha256};
@@ -926,27 +927,22 @@ mod tests {
         (x >> n) | (x << (32 - n))
     }
 
-    #[test]
-    fn test_sha256() {
-        println!("sha256(32): {} bytes", sha256(32).len());
-        println!("sha256(80): {} bytes", sha256(80).len());
-        println!(
-            "sha256 chunk: {} bytes",
-            sha256_transform(8 + 16 + 64 + 1, 8 + 16).len()
-        );
-        let hex_in = "6162636462636465636465666465666765666768666768696768696a68696a6b696a6b6c6a6b6c6d6b6c6d6e6c6d6e6f6d6e6f706e6f70716f7071727071727371727374727374757374757674757677";
+    fn test_sha256(hex_in : &str) {
         let mut hasher = Sha256::new();
         let data = hex::decode(hex_in).unwrap();
         hasher.update(&data);
         let mut result = hasher.finalize();
-        hasher = Sha256::new();
-        hasher.update(result);
-        result = hasher.finalize();
+        // hasher = Sha256::new();
+        // hasher.update(result);
+        // result = hasher.finalize();
         let res = hex::encode(result);
+
+        println!(" input :: {}", hex_in);
+        println!(" hash :: {}", res);
+
         let script = script! {
             {push_bytes_hex(hex_in)}
             {sha256(hex_in.len()/2)}
-            {sha256(32)}
             {push_bytes_hex(res.as_str())}
             for _ in 0..32 {
                 OP_TOALTSTACK
@@ -963,8 +959,18 @@ mod tests {
             }
             OP_TRUE
         };
-        let res = execute_script(script);
+        let res = execute_script(script.clone());
         assert!(res.success);
+
+        println!("\n\n {} bytes", hex_in.len() / 2);
+        println!("Max Stack use : {}", res.stats.max_nb_stack_items);
+        println!("Script Size : {}", script.len());
+    }
+
+    #[test]
+    fn test_sha256_64bytes(){
+        let hex = "f".repeat(128);
+        test_sha256(&hex);
     }
 
     #[test]
