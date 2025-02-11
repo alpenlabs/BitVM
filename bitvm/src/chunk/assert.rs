@@ -276,8 +276,10 @@ pub(crate) fn script_exec(
         // hashing preimage for input
         seg.parameter_ids.iter().rev().for_each(|(param_seg_id, param_seg_type)| {
             let param_seg = &segments[*(param_seg_id) as usize];
-            let preimage_hints = param_seg.result.0.to_witness(*param_seg_type);
-            hints.extend_from_slice(&preimage_hints);
+            if !param_seg.result.0.output_is_field_element() {
+                let preimage_hints = param_seg.result.0.to_witness(*param_seg_type);
+                hints.extend_from_slice(&preimage_hints);
+            }
         });
         // hashing preimage for output
         if seg.scr_type == ScriptType::FoldedFp12Multiply || seg.scr_type == ScriptType::MillerSquaring {
