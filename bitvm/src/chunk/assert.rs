@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use ark_ec::CurveGroup;
 use bitcoin_script::script;
 
-use crate::{bn254::utils::Hint, chunk::{norm_fp12::get_hint_for_add_with_frob, primitives::{get_bitcom_signature_as_witness, HashBytes, Sig, SigData}, segment::*}, execute_script, groth16::g16::{Signatures, N_TAPLEAVES}, treepp};
+use crate::{bn254::utils::Hint, chunk::{elements::CompressedStateObject, norm_fp12::get_hint_for_add_with_frob, primitives::{get_bitcom_signature_as_witness, HashBytes, Sig, SigData}, segment::*}, execute_script, groth16::g16::{Signatures, N_TAPLEAVES}, treepp};
 
 
-use super::{compile::ATE_LOOP_COUNT, element::*, assigner::*};
+use super::{assigner::*, compile::ATE_LOOP_COUNT, elements::{DataType, ElementType}};
 
 
 
@@ -20,7 +20,7 @@ pub struct Pubs {
 }
 
 
-fn compare(hint_out: &Element, claimed_assertions: &mut Option<Intermediates>) -> Option<bool> {
+fn compare(hint_out: &DataType, claimed_assertions: &mut Option<Intermediates>) -> Option<bool> {
     if claimed_assertions.is_none() {
         return None;
     }
@@ -33,7 +33,14 @@ fn compare(hint_out: &Element, claimed_assertions: &mut Option<Intermediates>) -
         }
     }
     assert!(!hint_out.output_is_field_element());
-    let matches = get_hash(claimed_assertions) == hint_out.hashed_output();
+    let hint_out_hash = hint_out.to_hash();
+    let mut matches = false;
+    if let CompressedStateObject::Hash(hash) = hint_out_hash {
+        matches = get_hash(claimed_assertions) == hash;
+    } else {
+        panic!()
+    }
+    
     return Some(matches) 
 }
 
@@ -48,7 +55,7 @@ pub(crate) fn groth16(
         ($seg:ident) => {{
             all_output_hints.push($seg.clone());
             if $seg.is_validation {
-                if let Element::U256(felem) = $seg.result.0 {
+                if let DataType::U256Data(felem) = $seg.result.0 {
                     if felem != ark_ff::BigInt::<4>::one() {
                         return false;
                     }
@@ -269,12 +276,12 @@ pub(crate) fn script_exec(
         // hashing preimage for input
         seg.parameter_ids.iter().rev().for_each(|(param_seg_id, param_seg_type)| {
             let param_seg = &segments[*(param_seg_id) as usize];
-            let preimage_hints = param_seg.result.0.get_hash_preimage_as_hints(*param_seg_type);
+            let preimage_hints = param_seg.result.0.to_witness(*param_seg_type);
             hints.extend_from_slice(&preimage_hints);
         });
         // hashing preimage for output
         if seg.scr_type == ScriptType::FoldedFp12Multiply || seg.scr_type == ScriptType::MillerSquaring {
-            hints.extend_from_slice(&seg.result.0.get_hash_preimage_as_hints(seg.result.1));
+            hints.extend_from_slice(&&seg.result.0.to_witness(seg.result.1));
         }
         hints
     }).collect();
