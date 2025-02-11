@@ -35,7 +35,9 @@ pub fn api_compile(vk: &ark_groth16::VerifyingKey<Bn254>) -> Vec<Script> {
     p3vk.reverse();
     let vky0 = p3vk.pop().unwrap();
 
-    let taps = generate_partial_script(
+    
+    // let taps: Vec<Script> = res.into_iter().map(|(_, f)| f).collect();
+    generate_partial_script(
         Vkey {
             q2,
             q3,
@@ -43,9 +45,7 @@ pub fn api_compile(vk: &ark_groth16::VerifyingKey<Bn254>) -> Vec<Script> {
             p1q1,
             vky0,
         },
-    );
-    // let taps: Vec<Script> = res.into_iter().map(|(_, f)| f).collect();
-    taps
+    )
 }
 
 pub fn generate_tapscripts(
@@ -129,7 +129,7 @@ pub fn generate_assertions(
 
     let mut p3 = vky0 * ark_bn254::Fr::ONE;
     for i in 0..NUM_PUBS {
-        p3 = p3 + msm_gs[i] * msm_scalar[i];
+        p3 += msm_gs[i] * msm_scalar[i];
     }
     let p3 = p3.into_affine();
 
@@ -165,8 +165,8 @@ pub fn generate_assertions(
     let success = groth16(false, &mut segments, eval_ins.to_raw(), pubs, &mut None);
     println!("segments len {}", segments.len());
     assert!(success);
-    let proof_asserts = hint_to_data(segments);
-    proof_asserts
+    
+    hint_to_data(segments)
 }
 
 pub fn validate_assertions(
@@ -191,5 +191,5 @@ pub fn validate_assertions(
     println!("assertion failed, return faulty script segments acc {:?} at {:?}", segments.len(), segments[segments.len()-1].scr_type);
     let exec_result = script_exec(segments, signed_asserts, disprove_scripts);
     assert!(exec_result.is_some());
-    return exec_result;
+    exec_result
 }

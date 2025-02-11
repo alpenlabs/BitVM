@@ -4,7 +4,6 @@ use core::ops::Neg;
 use std::str::FromStr;
 use ark_ec::{bn::BnConfig,  CurveGroup};
 use crate::bigint::U254;
-use crate::bn254;
 use crate::bn254::fp254impl::Fp254Impl;
 use crate::bn254::fq6::Fq6;
 use crate::bn254::g2::{hinted_ell_by_constant_affine, hinted_mul_by_char_on_phi_q, hinted_mul_by_char_on_q};
@@ -23,7 +22,7 @@ use super::primitives::{extern_nibbles_to_limbs, hash_fp6};
 use super::taps_point_ops::{utils_point_double_eval};
 
 pub(crate) fn get_hint_for_add_with_frob(q: ark_bn254::G2Affine, t: ark_bn254::G2Affine, ate: i8) -> ark_bn254::G2Affine {
-    let mut qq = q.clone();
+    let mut qq = q;
     if ate == 1 {
         let (qdash, _, _) = hinted_mul_by_char_on_q(qq);
         qq = qdash;
@@ -31,8 +30,8 @@ pub(crate) fn get_hint_for_add_with_frob(q: ark_bn254::G2Affine, t: ark_bn254::G
         let (qdash, _, _) = hinted_mul_by_char_on_phi_q(qq);
         qq = qdash;
     }
-    let r = (t + qq).into_affine();
-    r
+    
+    (t + qq).into_affine()
 
 }
 fn utils_multiply_by_line_eval(
@@ -120,10 +119,10 @@ pub fn verify_pairing(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::G2Affine>
 
     let mut cinv = gc.inverse().unwrap();
     cinv = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, cinv.c1/cinv.c0);
-    let mut c =  gc.clone();
+    let mut c =  gc;
     c = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, c.c1/c.c0);
     
-    let mut f = cinv.clone();
+    let mut f = cinv;
     
     let mut ts = qs.clone();
     let ps: Vec<ark_bn254::G1Affine> = ps.iter().map(|p1|ark_bn254::G1Affine::new_unchecked(-p1.x/p1.y, p1.y.inverse().unwrap())).collect();
@@ -137,8 +136,8 @@ pub fn verify_pairing(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::G2Affine>
 
         // double and eval
         for i in 0..num_pairings {
-            let t = ts[i].clone();
-            let p = ps[i].clone();
+            let t = ts[i];
+            let p = ps[i];
             let alpha = (t.x.square() + t.x.square() + t.x.square()) / (t.y + t.y); 
             let neg_bias = alpha * t.x - t.y;
             let mut le0 = alpha;
@@ -150,7 +149,7 @@ pub fn verify_pairing(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::G2Affine>
             le.c1.c0 = le0;
             le.c1.c1 = le1;
 
-            f = f * le;
+            f *= le;
             f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
     
             ts[i] = (t + t).into_affine();
@@ -159,14 +158,14 @@ pub fn verify_pairing(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::G2Affine>
 
 
         if ate_bit == 1 || ate_bit == -1 {
-            let c_or_cinv = if ate_bit == -1 { c.clone() } else { cinv.clone() };
-            f = f * c_or_cinv;
+            let c_or_cinv = if ate_bit == -1 { c } else { cinv };
+            f *= c_or_cinv;
             f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
 
             for i in 0..num_pairings {
-                let t = ts[i].clone();
-                let mut q = qs[i].clone();
-                let p = ps[i].clone();
+                let t = ts[i];
+                let mut q = qs[i];
+                let p = ps[i];
 
                 if ate_bit == -1 {
                     q = q.neg();
@@ -183,7 +182,7 @@ pub fn verify_pairing(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::G2Affine>
                 le.c1.c0 = le0;
                 le.c1.c1 = le1;
     
-                f = f * le;
+                f *= le;
                 f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
 
                 ts[i] = (t + q).into_affine();
@@ -196,22 +195,22 @@ pub fn verify_pairing(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::G2Affine>
 
     for mut cq in vec![cinv_q, c_q2, cinv_q3] {
         cq = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, cq.c1/cq.c0); 
-        f = f * cq;
+        f *= cq;
         f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
     }
 
-    f = f * s;
+    f *= s;
     f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
 
     for i in 0..num_pairings {
-        let mut q = qs[i].clone();
-        let t = ts[i].clone();
-        let p = ps[i].clone();
+        let mut q = qs[i];
+        let t = ts[i];
+        let p = ps[i];
         
         q.x.conjugate_in_place();
-        q.x = q.x * beta_12;
+        q.x *= beta_12;
         q.y.conjugate_in_place();
-        q.y = q.y * beta_13;
+        q.y *= beta_13;
         let alpha = (t.y - q.y) / (t.x - q.x);
         let neg_bias = alpha * t.x - t.y;
         let mut le0 = alpha;
@@ -223,7 +222,7 @@ pub fn verify_pairing(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::G2Affine>
         le.c1.c0 = le0;
         le.c1.c1 = le1;
     
-        f = f * le;
+        f *= le;
         f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
     
         ts[i] = (t + q).into_affine();
@@ -232,11 +231,11 @@ pub fn verify_pairing(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::G2Affine>
 
     // t + q^3
     for i in 0..num_pairings {
-        let mut q = qs[i].clone();
-        let t = ts[i].clone();
-        let p = ps[i].clone();
+        let mut q = qs[i];
+        let t = ts[i];
+        let p = ps[i];
 
-        q.x = q.x * beta_22;
+        q.x *= beta_22;
     
         let alpha = (t.y - q.y) / (t.x - q.x);
         let neg_bias = alpha * t.x - t.y;
@@ -249,7 +248,7 @@ pub fn verify_pairing(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::G2Affine>
         le.c1.c0 = le0;
         le.c1.c1 = le1;
     
-        f = f * le;
+        f *= le;
         f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
         ts[i] = (t + q).into_affine();
     }
@@ -297,11 +296,11 @@ pub fn verify_pairing_scripted(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::
 
     let mut cinv = gc.inverse().unwrap();
     cinv = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, cinv.c1/cinv.c0);
-    let mut c =  gc.clone();
+    let mut c =  gc;
     c = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, c.c1/c.c0);
     
-    let mut f = cinv.clone();
-    let mut g = cinv.c1.clone();
+    let mut f = cinv;
+    let mut g = cinv.c1;
     
     let mut ts = qs.clone();
     let ps: Vec<ark_bn254::G1Affine> = ps.iter().map(|p1|ark_bn254::G1Affine::new_unchecked(-p1.x/p1.y, p1.y.inverse().unwrap())).collect();
@@ -312,8 +311,8 @@ pub fn verify_pairing_scripted(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::
 
     let (mut t4, scr, _) = chunk_init_t4([qs[2].x.c0, qs[2].x.c1, qs[2].y.c0, qs[2].y.c1]);
     total_script_size += scr.len();
-    let mut t3 = qs[1].clone();
-    let mut t2 = qs[0].clone();
+    let mut t3 = qs[1];
+    let mut t2 = qs[0];
 
 
     for itr in (1..ark_bn254::Config::ATE_LOOP_COUNT.len()).rev() {
@@ -329,8 +328,8 @@ pub fn verify_pairing_scripted(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::
 
         // double and eval
         for i in 0..num_pairings {
-            let t = ts[i].clone();
-            let p = ps[i].clone();
+            let t = ts[i];
+            let p = ps[i];
             let alpha = (t.x.square() + t.x.square() + t.x.square()) / (t.y + t.y); 
             let neg_bias = alpha * t.x - t.y;
             let mut le0 = alpha;
@@ -342,7 +341,7 @@ pub fn verify_pairing_scripted(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::
             le.c1.c0 = le0;
             le.c1.c1 = le1;
 
-            f = f * le;
+            f *= le;
             f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
     
             ts[i] = (t + t).into_affine();
@@ -361,8 +360,8 @@ pub fn verify_pairing_scripted(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::
         
 
         if ate_bit == 1 || ate_bit == -1 {
-            let c_or_cinv = if ate_bit == -1 { c.clone() } else { cinv.clone() };
-            f = f * c_or_cinv;
+            let c_or_cinv = if ate_bit == -1 { c } else { cinv };
+            f *= c_or_cinv;
             f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
             (g, temp_scr, _) = chunk_dense_dense_mul(g, c_or_cinv.c1);
             total_script_size += temp_scr.len();
@@ -370,9 +369,9 @@ pub fn verify_pairing_scripted(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::
             assert_eq!(g, f.c1);
 
             for i in 0..num_pairings {
-                let t = ts[i].clone();
-                let mut q = qs[i].clone();
-                let p = ps[i].clone();
+                let t = ts[i];
+                let mut q = qs[i];
+                let p = ps[i];
 
                 if ate_bit == -1 {
                     q = q.neg();
@@ -389,7 +388,7 @@ pub fn verify_pairing_scripted(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::
                 le.c1.c0 = le0;
                 le.c1.c1 = le1;
     
-                f = f * le;
+                f *= le;
                 f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
 
                 ts[i] = (t + q).into_affine();
@@ -407,8 +406,8 @@ pub fn verify_pairing_scripted(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::
                 t3 = (t3 + qs[1]).into_affine();
                 t2 = (t2 + qs[0]).into_affine();
             } else {
-                t3 = (t3 + qs[1].clone().neg()).into_affine();
-                t2 = (t2 + qs[0].clone().neg()).into_affine();
+                t3 = (t3 + qs[1].neg()).into_affine();
+                t2 = (t2 + qs[0].neg()).into_affine();
             }
 
             let (lev, scr, _) = chunk_complete_point_eval_and_mul(t4);
@@ -433,7 +432,7 @@ pub fn verify_pairing_scripted(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::
 
     for mut cq in vec![cinv_q, c_q2, cinv_q3] {
         cq = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, cq.c1/cq.c0); 
-        f = f * cq;
+        f *= cq;
         f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
     }
     for sc_cq in vec![sc_cinv_q, sc_c_q2, sc_cinv_q3] {
@@ -442,21 +441,21 @@ pub fn verify_pairing_scripted(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::
     }
     assert_eq!(g, f.c1);
 
-    f = f * s;
+    f *= s;
     f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
     (g, temp_scr, _) = chunk_dense_dense_mul(g, s.c1);
     total_script_size += temp_scr.len();
     assert_eq!(g, f.c1);
 
     for i in 0..num_pairings {
-        let mut q = qs[i].clone();
-        let t = ts[i].clone();
-        let p = ps[i].clone();
+        let mut q = qs[i];
+        let t = ts[i];
+        let p = ps[i];
         
         q.x.conjugate_in_place();
-        q.x = q.x * beta_12;
+        q.x *= beta_12;
         q.y.conjugate_in_place();
-        q.y = q.y * beta_13;
+        q.y *= beta_13;
         let alpha = (t.y - q.y) / (t.x - q.x);
         let neg_bias = alpha * t.x - t.y;
         let mut le0 = alpha;
@@ -468,7 +467,7 @@ pub fn verify_pairing_scripted(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::
         le.c1.c0 = le0;
         le.c1.c1 = le1;
     
-        f = f * le;
+        f *= le;
         f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
     
         ts[i] = (t + q).into_affine();
@@ -487,11 +486,11 @@ pub fn verify_pairing_scripted(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::
 
     // t + q^3
     for i in 0..num_pairings {
-        let mut q = qs[i].clone();
-        let t = ts[i].clone();
-        let p = ps[i].clone();
+        let mut q = qs[i];
+        let t = ts[i];
+        let p = ps[i];
 
-        q.x = q.x * beta_22;
+        q.x *= beta_22;
     
         let alpha = (t.y - q.y) / (t.x - q.x);
         let neg_bias = alpha * t.x - t.y;
@@ -504,7 +503,7 @@ pub fn verify_pairing_scripted(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::
         le.c1.c0 = le0;
         le.c1.c1 = le1;
     
-        f = f * le;
+        f *= le;
         f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
 
         ts[i] = (t + q).into_affine();
@@ -582,7 +581,7 @@ pub(crate) fn utils_fq12_mul(a: ark_bn254::Fq6, b: ark_bn254::Fq6) -> (ark_bn254
     hints.extend_from_slice(&ab_hints);
     hints.extend_from_slice(&denom_mul_c_hints);
 
-    return (c, scr, hints);
+    (c, scr, hints)
 }
 
 pub(crate) fn utils_fq6_ss_mul(m: ark_bn254::Fq6, n: ark_bn254::Fq6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
@@ -601,7 +600,7 @@ pub(crate) fn utils_fq6_ss_mul(m: ark_bn254::Fq6, n: ark_bn254::Fq6) -> (ark_bn2
     let (i_scr, i_hints) = Fq2::hinted_mul(2, e, 0, b);
 
     let mut hints = vec![];
-    for hint in vec![i_hints, g_hints, h_hints] {
+    for hint in [i_hints, g_hints, h_hints] {
         hints.extend_from_slice(&hint);
     }
 
@@ -731,7 +730,7 @@ pub(crate) fn hinted_square(a: ark_bn254::Fq6) -> (ark_bn254::Fq6, Script, Vec<H
     hints.extend_from_slice(&asq_hints);
     hints.extend_from_slice(&denom_mul_c_hints);
 
-    return (c, scr, hints);
+    (c, scr, hints)
 }
 
 pub(crate) fn point_ops_and_mul(
@@ -763,19 +762,17 @@ pub(crate) fn point_ops_and_mul(
     } else {
         let ate_bit = ate_bit.unwrap();
         let is_frob = is_frob.unwrap();
-        let temp_q = q3.unwrap().clone();
+        let temp_q = q3.unwrap();
         let q3 = if is_frob {
             if ate_bit == 1 {
                 hinted_mul_by_char_on_q(temp_q).0
             } else {
                 hinted_mul_by_char_on_phi_q(temp_q).0
             }
+        } else if ate_bit == -1 {
+            temp_q.neg()
         } else {
-            if ate_bit == -1 {
-                temp_q.neg()
-            } else {
-                temp_q
-            }
+            temp_q
         };
 
         let alpha_t3 = (t3.y - q3.y) / (t3.x - q3.x); 
@@ -790,19 +787,17 @@ pub(crate) fn point_ops_and_mul(
     } else {
         let ate_bit = ate_bit.unwrap();
         let is_frob = is_frob.unwrap();
-        let temp_q = q2.unwrap().clone();
+        let temp_q = q2.unwrap();
         let q2 = if is_frob {
             if ate_bit == 1 {
                 hinted_mul_by_char_on_q(temp_q).0
             } else {
                 hinted_mul_by_char_on_phi_q(temp_q).0
             }
+        } else if ate_bit == -1 {
+            temp_q.neg()
         } else {
-            if ate_bit == -1 {
-                temp_q.neg()
-            } else {
-                temp_q
-            }
+            temp_q
         };
 
         let alpha_t2 = (t2.y - q2.y) / (t2.x - q2.x); 
@@ -1075,7 +1070,7 @@ fn utils_fq6_hinted_sd_mul(m: ark_bn254::Fq6, n: ark_bn254::Fq6) -> (ark_bn254::
     let (g_scr, g_hints) = Fq2::hinted_mul_lc4_keep_elements(e * ark_bn254::Fq6Config::NONRESIDUE, c, d, a);
 
 
-    for hint in vec![i_hints, h_hints, g_hints] {
+    for hint in [i_hints, h_hints, g_hints] {
         hints.extend_from_slice(&hint);
     }
 
@@ -1299,15 +1294,15 @@ mod test {
 
     use ark_bn254::Bn254;
     use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
-    use ark_ff::{AdditiveGroup, Field, Fp12Config, Fp4Config, Fp6Config, UniformRand};
+    use ark_ff::{AdditiveGroup, Field, UniformRand};
     use ark_serialize::CanonicalDeserialize;
     use bitcoin_script::script;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fq6::Fq6, g1::G1Affine, utils::Hint}, chunk::{blake3compiled::hash_messages, compile::NUM_PUBS, elements::{DataType, ElemG2Eval, ElementTrait, ElementType}, norm_fp12::{chunk_complete_point_eval_and_mul, chunk_dense_dense_mul, chunk_hinted_square, chunk_init_t4, chunk_point_ops_and_mul, complete_point_eval_and_mul, hinted_square, utils_fq12_mul, utils_fq6_hinted_sd_mul, utils_fq6_ss_mul, verify_pairing}, primitives::{extern_nibbles_to_limbs, hash_fp4, hash_fp6}}, chunker::elements::G1PointType, execute_script, execute_script_without_stack_limit, groth16::{constants::LAMBDA, offchain_checker::compute_c_wi}};
+    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fq6::Fq6, g1::G1Affine, utils::Hint}, chunk::{blake3compiled::hash_messages, compile::NUM_PUBS, elements::{DataType, ElemG2Eval, ElementTrait, ElementType}, norm_fp12::{chunk_complete_point_eval_and_mul, chunk_dense_dense_mul, chunk_hinted_square, chunk_init_t4, chunk_point_ops_and_mul, complete_point_eval_and_mul, hinted_square, utils_fq6_hinted_sd_mul, utils_fq6_ss_mul, verify_pairing}}, execute_script, execute_script_without_stack_limit, groth16::offchain_checker::compute_c_wi};
 
-    use super::{chunk_frob_fp12, point_ops_and_mul, verify_pairing_scripted};
+    use super::{chunk_frob_fp12, point_ops_and_mul};
 
     #[test]
     fn test_tap_init_t4() {
@@ -1625,35 +1620,25 @@ mod test {
         let (hint_out, ops_scr, ops_hints) = point_ops_and_mul(is_dbl, is_frob, ate_bit, t4, p4, Some(q4), p3, t3, Some(q3), p2, t2, Some(q2));
      
         let mut preimage_hints = vec![];
-        preimage_hints.extend_from_slice(&vec![
-            Hint::Fq(t4.x.c0),
+        preimage_hints.extend_from_slice(&[Hint::Fq(t4.x.c0),
             Hint::Fq(t4.x.c1),
             Hint::Fq(t4.y.c0),
-            Hint::Fq(t4.y.c1),
-        ]);
+            Hint::Fq(t4.y.c1)]);
 
         if !is_dbl {
-            preimage_hints.extend_from_slice(&vec![
-                Hint::Fq(q4.x.c0),
+            preimage_hints.extend_from_slice(&[Hint::Fq(q4.x.c0),
                 Hint::Fq(q4.x.c1),
                 Hint::Fq(q4.y.c0),
-                Hint::Fq(q4.y.c1),
-            ]);
+                Hint::Fq(q4.y.c1)]);
         }
 
 
-        preimage_hints.extend_from_slice(&vec![
-            Hint::Fq(p4.x),
-            Hint::Fq(p4.y),
-        ]);
-        preimage_hints.extend_from_slice(&vec![
-            Hint::Fq(p3.x),
-            Hint::Fq(p3.y),
-        ]);
-        preimage_hints.extend_from_slice(&vec![
-            Hint::Fq(p2.x),
-            Hint::Fq(p2.y),
-        ]);
+        preimage_hints.extend_from_slice(&[Hint::Fq(p4.x),
+            Hint::Fq(p4.y)]);
+        preimage_hints.extend_from_slice(&[Hint::Fq(p3.x),
+            Hint::Fq(p3.y)]);
+        preimage_hints.extend_from_slice(&[Hint::Fq(p2.x),
+            Hint::Fq(p2.y)]);
 
         let tap_len = ops_scr.len();
         // [hints, t4, (q2), p4, p3, p2]
@@ -1725,10 +1710,10 @@ mod test {
         let (_, ops_scr, ops_hints) = complete_point_eval_and_mul(inp);
         
         let mut preimage_hints = vec![];
-        let hint_apb: Vec<Hint> = vec![inp.apb[0].c0, inp.apb[0].c1, inp.apb[1].c0, inp.apb[1].c1].into_iter().map(|f| Hint::Fq(f)).collect();
-        let hint_ab: Vec<Hint> = inp.ab.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect();
-        let hint_p2le: Vec<Hint> = vec![inp.p2le[0].c0, inp.p2le[0].c1, inp.p2le[1].c0, inp.p2le[1].c1].into_iter().map(|f| Hint::Fq(f)).collect();
-        let hint_result: Vec<Hint> = inp.res_hint.to_base_prime_field_elements().into_iter().map(|f| Hint::Fq(f)).collect();
+        let hint_apb: Vec<Hint> = vec![inp.apb[0].c0, inp.apb[0].c1, inp.apb[1].c0, inp.apb[1].c1].into_iter().map(Hint::Fq).collect();
+        let hint_ab: Vec<Hint> = inp.ab.to_base_prime_field_elements().map(Hint::Fq).collect();
+        let hint_p2le: Vec<Hint> = vec![inp.p2le[0].c0, inp.p2le[0].c1, inp.p2le[1].c0, inp.p2le[1].c1].into_iter().map(Hint::Fq).collect();
+        let hint_result: Vec<Hint> = inp.res_hint.to_base_prime_field_elements().map(Hint::Fq).collect();
 
         preimage_hints.extend_from_slice(&hint_apb);
         preimage_hints.extend_from_slice(&hint_ab);
@@ -1963,7 +1948,7 @@ mod test {
         let proof: ark_groth16::Proof<Bn254> = ark_groth16::Proof::deserialize_uncompressed(&proof_bytes[..]).unwrap();
         let vk: ark_groth16::VerifyingKey<Bn254> = ark_groth16::VerifyingKey::deserialize_uncompressed(&vk_bytes[..]).unwrap();
         let scalar: ark_bn254::Fr = ark_bn254::Fr::deserialize_uncompressed(&scalar[..]).unwrap();
-        let scalars = vec![scalar];
+        let scalars = [scalar];
 
         // compute msm
         let mut msm_scalar = scalars.to_vec();
@@ -1973,7 +1958,7 @@ mod test {
         let vky0 = msm_gs.pop().unwrap();
         let mut p3 = vky0 * ark_bn254::Fr::ONE;
         for i in 0..NUM_PUBS {
-            p3 = p3 + msm_gs[i] * msm_scalar[i];
+            p3 += msm_gs[i] * msm_scalar[i];
         }
         let p3 = p3.into_affine();
 

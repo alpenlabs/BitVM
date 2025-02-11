@@ -1,22 +1,18 @@
-use crate::bigint::U254;
-use crate::bn254::fq6::Fq6;
 use crate::bn254::{utils::*};
 use crate::bn254::g1::{hinted_from_eval_points, G1Affine};
 use crate::bn254::g2::G2Affine;
-use crate::bn254::{fq12::Fq12, fq2::Fq2};
+use crate::bn254::fq2::Fq2;
 use crate::chunk::blake3compiled::hash_messages;
 use crate::chunk::elements::ElementType;
 use crate::chunk::primitives::*;
-use crate::bn254;
 use crate::{
     bn254::{fp254impl::Fp254Impl, fq::Fq},
     treepp::*,
 };
 use ark_ec::AffineRepr;
-use ark_ff::{AdditiveGroup, Field, MontFp, PrimeField};
+use ark_ff::{AdditiveGroup, Field};
 
 
-use super::primitives::extern_hash_fps;
 
 // verify
 pub(crate) fn chunk_verify_g1_is_on_curve(

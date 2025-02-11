@@ -1,15 +1,14 @@
 
 
-use std::rc::Rc;
 
-use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fr::Fr, g1::G1Affine, utils::Hint}, chunk::taps_msm::chunk_msm, execute_script};
+use crate::{bn254::{fp254impl::Fp254Impl, fr::Fr, utils::Hint}, chunk::taps_msm::chunk_msm};
 
 use super::{elements::{DataType, ElemG2Eval, ElementTrait, ElementType}, taps_msm::chunk_hash_p, taps_premiller::*};
 use ark_ff::{AdditiveGroup, Field};
 use bitcoin_script::script;
 
 
-use super::{norm_fp12::{chunk_complete_point_eval_and_mul, chunk_dense_dense_mul, chunk_final_verify, chunk_frob_fp12, chunk_hash_c, chunk_hash_c_inv, chunk_hinted_square, chunk_init_t4, chunk_point_ops_and_mul, chunk_verify_fq6_is_on_field}, taps_premiller::*};
+use super::norm_fp12::{chunk_complete_point_eval_and_mul, chunk_dense_dense_mul, chunk_final_verify, chunk_frob_fp12, chunk_hash_c, chunk_hash_c_inv, chunk_hinted_square, chunk_init_t4, chunk_point_ops_and_mul, chunk_verify_fq6_is_on_field};
 use crate::treepp::Script;
 
 pub type SegmentID = u32;
@@ -145,7 +144,7 @@ pub(crate) fn wrap_hints_dense_dense_mul(
     
     let (mut dmul0, mut scr, mut op_hints) = (ark_bn254::Fq6::ONE, script!(), vec![]);
     if !skip {
-        (dmul0, scr, op_hints) = chunk_dense_dense_mul(a.clone(), b.clone());
+        (dmul0, scr, op_hints) = chunk_dense_dense_mul(a, b);
     }
     
     Segment {
@@ -315,7 +314,7 @@ pub(crate) fn wrap_hint_msm(
             // if msm_chunk_index > 0 {
                 // op_hints.extend_from_slice(&DataType::G1Data(prev_input).get_hash_preimage_as_hints());
             // }
-            prev_input = hout_msm.clone();
+            prev_input = hout_msm;
 
             segments.push(Segment { 
                 id: (segment_id + msm_chunk_index) as u32, 
@@ -364,7 +363,7 @@ pub(crate) fn wrap_hint_hash_p(
     if !skip {
         (p3, scr, op_hints) = chunk_hash_p(
             t,
-            pub_vky0.clone(),
+            pub_vky0,
         );
         // op_hints.extend_from_slice(&DataType::G1Data(t).get_hash_preimage_as_hints());
     }
@@ -483,7 +482,7 @@ pub(crate) fn wrap_chunk_final_verify(
     let (mut is_valid, mut scr, mut op_hints) = (true, script!(), vec![]);
     if !skip {
         (is_valid, scr, op_hints) = chunk_final_verify(
-            a.clone(),
+            a,
             fixedacc_const,
         );
 

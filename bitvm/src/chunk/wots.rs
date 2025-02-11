@@ -1,6 +1,6 @@
 use bitcoin_script::script;
 
-use crate::chunk::primitives::{pack_bytes_to_limbs, pack_nibbles_to_limbs};
+use crate::chunk::primitives::pack_bytes_to_limbs;
 use crate::pseudo::NMUL;
 use crate::treepp::Script;
 use crate::signatures::wots::{wots160, wots256};
@@ -12,7 +12,7 @@ pub(crate) fn checksig_verify_to_limbs(pub_key: &WOTSPubKey) -> Script {
         WOTSPubKey::P160(pb) => {
             let sc_nib = wots160::compact::checksig_verify(*pb);
             const N0: usize = 40;
-            return script!{
+            script!{
                 {sc_nib}
                 for _ in 0..(64-N0) { // padding
                     {0}
@@ -29,7 +29,7 @@ pub(crate) fn checksig_verify_to_limbs(pub_key: &WOTSPubKey) -> Script {
         },
         WOTSPubKey::P256(pb) => {
             let sc_nib = wots256::compact::checksig_verify(*pb);
-            return script!{
+            script!{
                 {sc_nib}
                 for i in 1..64 {
                     {i} OP_ROLL
@@ -93,7 +93,7 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
     use bitcoin_script::script;
-    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq}, chunk::{elements::CompressedStateObject, primitives::{extern_hash_fps, unpack_limbs_to_nibbles}, wots::{byte_array_to_wots160_sig, byte_array_to_wots256_sig, checksig_verify_to_limbs, wots160_sig_to_byte_array, wots256_sig_to_byte_array, WOTSPubKey}}, execute_script, signatures::wots::{wots160, wots256, SignatureImpl}};
+    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq}, chunk::{elements::CompressedStateObject, primitives::extern_hash_fps, wots::{byte_array_to_wots160_sig, byte_array_to_wots256_sig, checksig_verify_to_limbs, wots160_sig_to_byte_array, wots256_sig_to_byte_array, WOTSPubKey}}, execute_script, signatures::wots::{wots160, wots256, SignatureImpl}};
 
     #[test]
     fn test_wots256_sig_to_byte_array() {
@@ -113,7 +113,7 @@ mod test {
         assert_eq!(a, msg);
 
         let sig_witness = signature.to_compact_script();
-        let pub_key = WOTSPubKey::P256(wots256::generate_public_key(&secret));
+        let pub_key = WOTSPubKey::P256(wots256::generate_public_key(secret));
         let scr = script!(
             {sig_witness}
             {checksig_verify_to_limbs(&pub_key)}
@@ -145,7 +145,7 @@ mod test {
         assert_eq!(a, msg);
 
         let sig_witness = signature.to_compact_script();
-        let pub_key = WOTSPubKey::P160(wots160::generate_public_key(&secret));
+        let pub_key = WOTSPubKey::P160(wots160::generate_public_key(secret));
         let scr = script!(
             {sig_witness}
             {checksig_verify_to_limbs(&pub_key)}

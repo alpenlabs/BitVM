@@ -2,7 +2,6 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use ark_bn254::Bn254;
 use ark_ec::bn::BnConfig;
 use ark_ff::Field;
 use bitcoin_script::script;
@@ -11,16 +10,14 @@ use treepp::Script;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use crate::chunk::elements::ElementType;
-use crate::chunk::norm_fp12::{chunk_hash_c, chunk_hash_c_inv, chunk_hinted_square, chunk_init_t4, chunk_verify_fq6_is_on_field};
 use crate::groth16::g16::{PublicKeys, N_TAPLEAVES};
 use crate::{treepp};
 
 use super::assigner::InputProof;
 use super::blake3compiled::hash_messages;
-use super::taps_msm::{chunk_hash_p, chunk_msm};
-use super::{assert::{groth16, Pubs}, primitives::gen_bitcom, segment::{ScriptType, Segment}, taps_point_ops::*, taps_premiller::*, wots::WOTSPubKey};
+use super::{assert::{groth16, Pubs}, primitives::gen_bitcom, segment::{ScriptType, Segment}, wots::WOTSPubKey};
 
-pub const ATE_LOOP_COUNT: &'static [i8] = ark_bn254::Config::ATE_LOOP_COUNT;
+pub const ATE_LOOP_COUNT: &[i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 pub const NUM_PUBS: usize = 1;
 pub const NUM_U256: usize = 20;
 pub const NUM_U160: usize = 380;
@@ -68,14 +65,12 @@ pub(crate) fn append_bitcom_locking_script_to_partial_scripts(
         if s.is_validation {
             let mock_fld_pub_key = WOTSPubKey::P256(mock_felt_pub);
             pubkeys.insert(si as u32, mock_fld_pub_key);
+        } else if s.result.1 == ElementType::FieldElem {
+            pubkeys.insert(si as u32, WOTSPubKey::P256(felts_pubkeys.pop().unwrap()));
+        } else if s.result.1 == ElementType::ScalarElem {
+            pubkeys.insert(si as u32, WOTSPubKey::P256(scalar_pubkeys.pop().unwrap()));
         } else {
-            if s.result.1 == ElementType::FieldElem {
-                pubkeys.insert(si as u32, WOTSPubKey::P256(felts_pubkeys.pop().unwrap()));
-            } else if s.result.1 == ElementType::ScalarElem {
-                pubkeys.insert(si as u32, WOTSPubKey::P256(scalar_pubkeys.pop().unwrap()));
-            } else {
-                pubkeys.insert(si as u32, WOTSPubKey::P160(hash_pubkeys.pop().unwrap()));
-            }
+            pubkeys.insert(si as u32, WOTSPubKey::P160(hash_pubkeys.pop().unwrap()));
         }
     }
 
@@ -106,8 +101,8 @@ fn segments_from_pubs(vk: Vkey, skip_evaluation: bool) -> Vec<Segment> {
     let t1 = ark_bn254::G1Affine::new(g1x, g1y);
 
     let mut segments: Vec<Segment> = vec![];
-    let g1 = t1.clone();
-    let g2 = t2.clone();
+    let g1 = t1;
+    let g2 = t2;
     let fr : ark_ff::BigInt<4> = ark_ff::BigInt::from(1u64);
     let s = ark_bn254::Fq6::ONE;
     let c = ark_bn254::Fq6::ONE;
@@ -148,13 +143,13 @@ pub(crate) fn op_scripts_from_segments(segments: &Vec<Segment>) -> Vec<treepp::S
         let mut elem_types_to_hash: Vec<ElementType> = s.parameter_ids.iter().rev().map(|f| f.1).collect();
         elem_types_to_hash.push(s.result.1);
         let elem_types_str = serialize_element_types(&elem_types_to_hash);
-        if !hashing_script_cache.contains_key(&elem_types_str) {
+        hashing_script_cache.entry(elem_types_str).or_insert_with(|| {
             let hash_scr = script!(
                 {hash_messages(elem_types_to_hash)}
                 OP_TRUE
             );
-            hashing_script_cache.insert(elem_types_str, hash_scr);
-        }
+            hash_scr
+        });
     };
 
     for i in 0..segments.len() {
@@ -188,7 +183,7 @@ pub(crate) fn bitcom_scripts_from_segments(segments: &Vec<Segment>, pubkeys_map:
     for seg in segments {
         let mut sec = vec![];
         if !seg.is_validation {
-            sec.push((seg.id as u32, segments[seg.id as usize].result.0.output_is_field_element()));
+            sec.push((seg.id, segments[seg.id as usize].result.0.output_is_field_element()));
         };
         let sec_in: Vec<(u32, bool)> = seg.parameter_ids.iter().map(|(f, _)| {
             let elem = &segments[*(f) as usize];

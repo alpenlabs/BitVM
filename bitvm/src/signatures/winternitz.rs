@@ -828,10 +828,10 @@ mod test {
         let ps = Parameters::new(64, 4);
         let public_key = generate_public_key(&ps, &secret_key);
 
-        let message = 860033 as u32;
+        let message = 860033_u32;
         let message_bytes = &message.to_le_bytes();
         let msg = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-        let message_bytes = hex::decode(&msg).unwrap();
+        let message_bytes = hex::decode(msg).unwrap();
 
         let winternitz_verifier = Winternitz::<ListpickVerifier, VoidConverter>::new();
 

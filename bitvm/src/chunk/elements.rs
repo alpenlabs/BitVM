@@ -1,7 +1,7 @@
-use std::{any::Any, str::FromStr};
+use std::str::FromStr;
 
-use crate::{bigint::U256, bn254::{fq::Fq, utils::Hint}, chunk::primitives::{extern_bigint_to_nibbles, extern_hash_nibbles, extern_nibbles_to_bigint}, chunker::common::extract_witness_from_stack, execute_script};
-use ark_ff::{BigInteger, Field, PrimeField};
+use crate::{bn254::utils::Hint, chunk::primitives::{extern_bigint_to_nibbles, extern_hash_nibbles, extern_nibbles_to_bigint}};
+use ark_ff::Field;
 use num_bigint::{BigInt, BigUint};
 use std::fmt::Debug;
 
@@ -121,7 +121,7 @@ impl CompressedStateObject {
                 bal.to_vec()
             }
             CompressedStateObject::U256(n) => {
-                let n = extern_bigint_to_nibbles(n.clone());
+                let n = extern_bigint_to_nibbles(*n);
                 let bal: [u8; 32] = nib_to_byte_array(&n).try_into().unwrap();
                 bal.to_vec()
             }
@@ -345,7 +345,7 @@ macro_rules! impl_element_trait {
 
 
 fn as_hints_fq6type_fq6data(elem: ark_bn254::Fq6) -> Vec<Hint> {
-    let hints: Vec<Hint> = elem.to_base_prime_field_elements().into_iter().map(Hint::Fq).collect();
+    let hints: Vec<Hint> = elem.to_base_prime_field_elements().map(Hint::Fq).collect();
     hints
 }
 
@@ -364,9 +364,9 @@ fn as_hints_g2evalmultype_g2evaldata(g: ElemG2Eval) -> Vec<Hint> {
     let mut hints: Vec<Hint> = g.apb
         .iter()
         .flat_map(|pt| [pt.c0, pt.c1]) // each point gives two values
-        .chain(g.ab.to_base_prime_field_elements().into_iter())
+        .chain(g.ab.to_base_prime_field_elements())
         .chain(g.p2le.iter().flat_map(|pt| [pt.c0, pt.c1]))
-        .chain(g.res_hint.to_base_prime_field_elements().into_iter())
+        .chain(g.res_hint.to_base_prime_field_elements())
         .map(Hint::Fq)
         .collect();
     hints.push(Hint::Hash(extern_nibbles_to_limbs(g.hash_t())));
@@ -384,9 +384,9 @@ fn as_hints_g2evaltype_g2evaldata(g: ElemG2Eval) -> Vec<Hint> {
     let and_hints: Vec<Hint> = g.apb
         .iter()
         .flat_map(|pt| [pt.c0, pt.c1]) // each point gives two values
-        .chain(g.ab.to_base_prime_field_elements().into_iter())
+        .chain(g.ab.to_base_prime_field_elements())
         .chain(g.p2le.iter().flat_map(|pt| [pt.c0, pt.c1]))
-        .chain(g.res_hint.to_base_prime_field_elements().into_iter())
+        .chain(g.res_hint.to_base_prime_field_elements())
         .map(Hint::Fq)
         .collect();
     hints.extend_from_slice(&and_hints);
@@ -432,9 +432,9 @@ impl ElemG2Eval {
 
     pub(crate) fn hash_le(&self) -> HashBytes {
         let mut le = vec![];
-        le.extend_from_slice(&vec![self.apb[0].c0, self.apb[0].c1, self.apb[1].c0, self.apb[1].c1]);
+        le.extend_from_slice(&[self.apb[0].c0, self.apb[0].c1, self.apb[1].c0, self.apb[1].c1]);
         le.extend_from_slice(&self.ab.to_base_prime_field_elements().collect::<Vec<ark_bn254::Fq>>());
-        le.extend_from_slice(&vec![self.p2le[0].c0, self.p2le[0].c1, self.p2le[1].c0, self.p2le[1].c1]);
+        le.extend_from_slice(&[self.p2le[0].c0, self.p2le[0].c1, self.p2le[1].c0, self.p2le[1].c1]);
         extern_hash_fps(le)
     }
 
@@ -456,7 +456,7 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
     use bitcoin_script::script;
-    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq}, chunk::{blake3compiled::hash_messages, elements::ElementType, primitives::hash_fp6}, execute_script};
+    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq}, chunk::{blake3compiled::hash_messages, elements::ElementType}, execute_script};
 
     use super::{ElementTrait};
 

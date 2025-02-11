@@ -111,20 +111,20 @@ pub(crate) fn get_proof(asserts: &TypedAssertions) -> InputProofRaw { // EvalIns
     let p2 = [numfqs[3], numfqs[2]];
     let step = 4;
     let c = [
-            numfqs[step+0], numfqs[step+1],
+            numfqs[step], numfqs[step+1],
             numfqs[step+2], numfqs[step+3],
             numfqs[step+4], numfqs[step+5],
     ];       
     let step = step + 6;
     let s = [
-        numfqs[step+0], numfqs[step+1],
+        numfqs[step], numfqs[step+1],
         numfqs[step+2], numfqs[step+3],
         numfqs[step+4], numfqs[step+5],
 ];
 
     let step = step + 6;
     let q4 = [
-        numfqs[step+0], numfqs[step+1],
+        numfqs[step], numfqs[step+1],
         numfqs[step+2], numfqs[step+3],
     ];
 
@@ -202,9 +202,7 @@ pub(crate) fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hi
     }).collect();
     all_output_hints.extend_from_slice(&pub_scalars);
 
-    let p4vec: Vec<Segment> = vec![
-        eval_ins.p4[1], eval_ins.p4[0], eval_ins.p2[1], eval_ins.p2[0]
-    ].iter().enumerate().map(|(idx, f)| Segment {
+    let p4vec: Vec<Segment> = [eval_ins.p4[1], eval_ins.p4[0], eval_ins.p2[1], eval_ins.p2[0]].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         is_validation: false,
         parameter_ids: vec![],
@@ -238,9 +236,7 @@ pub(crate) fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hi
     }).collect();
     all_output_hints.extend_from_slice(&gs);
 
-    let temp_q4: Vec<Segment> = vec![
-        eval_ins.q4[0], eval_ins.q4[1], eval_ins.q4[2], eval_ins.q4[3]
-    ].iter().enumerate().map(|(idx, f)| Segment {
+    let temp_q4: Vec<Segment> = [eval_ins.q4[0], eval_ins.q4[1], eval_ins.q4[2], eval_ins.q4[3]].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         is_validation: false,
         parameter_ids: vec![],

@@ -41,7 +41,7 @@ fn compare(hint_out: &DataType, claimed_assertions: &mut Option<Intermediates>) 
         panic!()
     }
     
-    return Some(matches) 
+    Some(matches) 
 }
 
 pub(crate) fn groth16(
@@ -250,7 +250,7 @@ pub(crate) fn script_exec(
     felts_sigs.reverse();
     let mut hash_sigs = signed_asserts.2.to_vec();
     hash_sigs.reverse();
-    let mock_felt_sig = signed_asserts.0[0].clone();
+    let mock_felt_sig = signed_asserts.0[0];
 
     let mut sigcache: HashMap<u32, SigData> = HashMap::new();
     for si  in 0..segments.len() {
@@ -258,14 +258,12 @@ pub(crate) fn script_exec(
         if s.is_validation {
             let mock_fld_pub_key = SigData::Sig256(mock_felt_sig);
             sigcache.insert(si as u32, mock_fld_pub_key);
+        } else if s.result.1 == ElementType::FieldElem {
+            sigcache.insert(si as u32, SigData::Sig256(felts_sigs.pop().unwrap()));
+        } else if s.result.1 == ElementType::ScalarElem {
+            sigcache.insert(si as u32, SigData::Sig256(scalar_sigs.pop().unwrap()));
         } else {
-            if s.result.1 == ElementType::FieldElem {
-                sigcache.insert(si as u32, SigData::Sig256(felts_sigs.pop().unwrap()));
-            } else if s.result.1 == ElementType::ScalarElem {
-                sigcache.insert(si as u32, SigData::Sig256(scalar_sigs.pop().unwrap()));
-            } else {
-                sigcache.insert(si as u32, SigData::Sig160(hash_sigs.pop().unwrap()));
-            }
+            sigcache.insert(si as u32, SigData::Sig160(hash_sigs.pop().unwrap()));
         }
     }
     
@@ -283,7 +281,7 @@ pub(crate) fn script_exec(
         });
         // hashing preimage for output
         if seg.scr_type == ScriptType::FoldedFp12Multiply || seg.scr_type == ScriptType::MillerSquaring {
-            hints.extend_from_slice(&&seg.result.0.to_witness(seg.result.1));
+            hints.extend_from_slice(&seg.result.0.to_witness(seg.result.1));
         }
         hints
     }).collect();
@@ -362,7 +360,7 @@ mod test {
 
     use crate::{chunk::compile::NUM_PUBS, groth16::offchain_checker::compute_c_wi};
 
-    use super::{groth16, hint_to_data, InputProof, Pubs, Segment};
+    use super::{groth16, InputProof, Pubs, Segment};
 
 
     #[test]
@@ -374,7 +372,7 @@ mod test {
         let proof: ark_groth16::Proof<Bn254> = ark_groth16::Proof::deserialize_uncompressed(&proof_bytes[..]).unwrap();
         let vk: ark_groth16::VerifyingKey<Bn254> = ark_groth16::VerifyingKey::deserialize_uncompressed(&vk_bytes[..]).unwrap();
         let scalar: ark_bn254::Fr = ark_bn254::Fr::deserialize_uncompressed(&scalar[..]).unwrap();
-        let scalars = vec![scalar];
+        let scalars = [scalar];
 
 
         let mut msm_scalar = scalars.to_vec();
@@ -385,7 +383,7 @@ mod test {
     
         let mut pp3 = vky0 * ark_bn254::Fr::ONE;
         for i in 0..NUM_PUBS {
-            pp3 = pp3 + msm_gs[i] * msm_scalar[i];
+            pp3 += msm_gs[i] * msm_scalar[i];
         }
         let p3 = pp3.into_affine();
     
@@ -400,7 +398,7 @@ mod test {
         let f = Bn254::multi_miller_loop_affine([p1, p2, p3, p4], [q1, q2, q3, q4]).0;
         let (c, s) = compute_c_wi(f);
         let eval_ins: InputProof = InputProof {
-            p2: p2.clone(),
+            p2: p2,
             p4,
             q4,
             c: c.c1/c.c0,

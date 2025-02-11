@@ -6,11 +6,11 @@ mod test {
     use crate::bn254::fp254impl::Fp254Impl;
     use crate::bn254::fq::Fq;
     use crate::bn254::fq2::Fq2;
-    use crate::bn254::utils::{Hint};
+    
     use crate::chunk::blake3compiled::hash_messages;
     use crate::chunk::elements::{DataType, ElementTrait, ElementType};
     use crate::chunk::norm_fp12::{chunk_final_verify, chunk_hash_c, chunk_verify_fq6_is_on_field};
-    use crate::chunk::primitives::extern_nibbles_to_limbs;
+    
     use crate::chunk::taps_premiller::*;
     use ark_ff::{Field, PrimeField};
     use ark_std::UniformRand;

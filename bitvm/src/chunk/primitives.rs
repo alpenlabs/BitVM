@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use ark_ff::{BigInt, BigInteger};
-use num_bigint::BigUint;
 
 use crate::bigint::U256;
 use crate::bn254::fq2::Fq2;
@@ -250,7 +249,7 @@ pub(crate) fn extern_hash_nibbles(msgs: Vec<[u8; 64]>) -> [u8; 64] {
             let v = fq.to_vec();
             vs.extend_from_slice(&v);
         }
-        let nib_arr: Vec<u8> = vs.clone().into_iter().map(|x| x as u8).collect();
+        let nib_arr: Vec<u8> = vs.clone().into_iter().collect();
         let p_bytes:Vec<u8> = nib_to_byte_array(&nib_arr);
 
         let hash_out = blake3::hash(&p_bytes).to_string();
@@ -331,12 +330,10 @@ mod test {
     use super::*;
     use ark_ff::{Field, PrimeField, UniformRand};
     use ark_std::iterable::Iterable;
-    use rand::{Rng, SeedableRng};
+    use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{
-         execute_script, u4::u4_std::u4_hex_to_nibbles
-    };
+    use crate::execute_script;
 
     #[test]
     fn test_emulate_fq_to_nibbles() {

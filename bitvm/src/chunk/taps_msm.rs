@@ -1,6 +1,5 @@
 
 use crate::bn254::g1::G1Affine;
-use crate::bn254::{self};
 use crate::bn254::fr::Fr;
 use crate::bn254::utils::Hint;
 use crate::{
@@ -130,7 +129,7 @@ pub(crate) fn chunk_hash_p(
 mod test {
 
     use crate::{
-        bn254::{fq::Fq, fq2::Fq2}, chunk::{elements::{DataType, ElementTrait}, primitives::extern_nibbles_to_limbs}, execute_script_without_stack_limit
+        bn254::{fq::Fq, fq2::Fq2}, chunk::elements::{DataType, ElementTrait}, execute_script_without_stack_limit
     };
     use super::*;
     use ark_ff::{Field, UniformRand};
@@ -154,7 +153,7 @@ mod test {
         let mut p_mul: Vec<ark_bn254::G1Affine> = Vec::new();
         p_mul.push(ark_bn254::G1Affine::zero());
         for _ in 1..(1 << window) {
-            p_mul.push((p_mul.last().unwrap().clone() + q.clone()).into_affine());
+            p_mul.push((*p_mul.last().unwrap() + q).into_affine());
         }
 
         let scr = script!{ 
