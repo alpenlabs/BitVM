@@ -398,7 +398,7 @@ mod test {
         let f = Bn254::multi_miller_loop_affine([p1, p2, p3, p4], [q1, q2, q3, q4]).0;
         let (c, s) = compute_c_wi(f);
         let eval_ins: InputProof = InputProof {
-            p2: p2,
+            p2,
             p4,
             q4,
             c: c.c1/c.c0,
