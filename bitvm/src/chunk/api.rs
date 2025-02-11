@@ -181,7 +181,7 @@ pub fn validate_assertions(
 
     let mut segments: Vec<Segment> = vec![];
     println!("generating assertions to validate");
-    let passed = groth16(false, &mut segments, eval_ins.to_raw(), get_pubs(vk), &mut Some(intermediates));
+    let passed = groth16(false, &mut segments, eval_ins, get_pubs(vk), &mut Some(intermediates));
     if passed {
         println!("assertion passed, running full script execution now");
         let exec_result = script_exec(segments, signed_asserts, disprove_scripts);

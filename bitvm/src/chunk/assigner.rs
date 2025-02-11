@@ -8,7 +8,7 @@ use bitcoin_script::script;
 use crate::{chunk::{primitives::HashBytes, segment::*}, groth16::g16::{Assertions, Signatures, N_VERIFIER_FQS, N_VERIFIER_HASHES, N_VERIFIER_PUBLIC_INPUTS}};
 
 
-use super::{api::nib_to_byte_array, assert::Pubs, compile::{NUM_PUBS, NUM_U160, NUM_U256}, elements::{CompressedStateObject, DataType, ElementType}};
+use super::{assert::Pubs, compile::{NUM_PUBS, NUM_U160, NUM_U256}, elements::{CompressedStateObject, DataType, ElementType}, wots::{wots160_sig_to_byte_array, wots256_sig_to_byte_array}};
 
 
 
@@ -89,8 +89,7 @@ pub(crate) fn hint_to_data(segments: Vec<Segment>) -> Assertions {
     let mut batch3 = vec![];
     for i in 0..NUM_U160 {
         let val = &vs[i+len];
-        let bal: [u8; 32] = val.serialize_to_byte_array().try_into().unwrap();
-        let bal: [u8; 20] = bal[12..32].try_into().unwrap();
+        let bal: [u8; 20] = val.serialize_to_byte_array().try_into().unwrap();
         batch3.push(bal);
     }
     let batch3: [[u8; 20]; N_VERIFIER_HASHES] = batch3.try_into().unwrap();
@@ -99,33 +98,37 @@ pub(crate) fn hint_to_data(segments: Vec<Segment>) -> Assertions {
 }
 
 pub(crate) type TypedAssertions = (
-    [ark_bn254::Fr; N_VERIFIER_PUBLIC_INPUTS],
-    [ark_bn254::Fq; N_VERIFIER_FQS],
+    [ark_ff::BigInt<4>; N_VERIFIER_PUBLIC_INPUTS],
+    [ark_ff::BigInt<4>; N_VERIFIER_FQS],
     [HashBytes; N_VERIFIER_HASHES],
 );
 
 pub(crate) type Intermediates = Vec<HashBytes>;
-pub(crate) fn get_proof(asserts: &TypedAssertions) -> InputProof { // EvalIns
+
+pub(crate) fn get_proof(asserts: &TypedAssertions) -> InputProofRaw { // EvalIns
     let numfqs = asserts.1;
-    let p4 = ark_bn254::G1Affine::new_unchecked(numfqs[1], numfqs[0]);
-    let p2 = ark_bn254::G1Affine::new_unchecked(numfqs[3], numfqs[2]);
+    let p4 = [numfqs[1], numfqs[0]];
+    let p2 = [numfqs[3], numfqs[2]];
     let step = 4;
-    let c = ark_bn254::Fq6::new(
-        ark_bn254::Fq2::new(numfqs[step+0], numfqs[step+1]),
-        ark_bn254::Fq2::new(numfqs[step+2], numfqs[step+3]),
-        ark_bn254::Fq2::new(numfqs[step+4], numfqs[step+5]),
-        );       
+    let c = [
+            numfqs[step+0], numfqs[step+1],
+            numfqs[step+2], numfqs[step+3],
+            numfqs[step+4], numfqs[step+5],
+    ];       
     let step = step + 6;
-    let s = ark_bn254::Fq6::new(
-        ark_bn254::Fq2::new(numfqs[step+0], numfqs[step+1]),
-        ark_bn254::Fq2::new(numfqs[step+2], numfqs[step+3]),
-        ark_bn254::Fq2::new(numfqs[step+4], numfqs[step+5]),
-    );
+    let s = [
+        numfqs[step+0], numfqs[step+1],
+        numfqs[step+2], numfqs[step+3],
+        numfqs[step+4], numfqs[step+5],
+];
 
     let step = step + 6;
-    let q4 = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(numfqs[step + 0], numfqs[step + 1]), ark_bn254::Fq2::new(numfqs[step + 2], numfqs[step + 3]));
+    let q4 = [
+        numfqs[step+0], numfqs[step+1],
+        numfqs[step+2], numfqs[step+3],
+    ];
 
-    let eval_ins: InputProof = InputProof { p2, p4, q4, c, s, ks: asserts.0.to_vec() };
+    let eval_ins: InputProofRaw = InputProofRaw { p2, p4, q4, c, s, ks: asserts.0 };
     eval_ins
 }
 
@@ -136,44 +139,37 @@ pub(crate) fn get_intermediates(asserts: &TypedAssertions) -> Intermediates { //
 }
 
 pub(crate) fn get_assertions(signed_asserts: Signatures) -> TypedAssertions {
-    let mut ks: Vec<ark_bn254::Fr> = vec![];
+    let mut ks: Vec<ark_ff::BigInt<4>> = vec![];
     for i in 0..N_VERIFIER_PUBLIC_INPUTS {
-        let sc = signed_asserts.0[i];
-        let nibs = sc.map(|(_, digit)| digit);
-        let mut nibs = nibs[0..64]
-        .chunks(2)
-        .rev()
-        .map(|bn| (bn[1] << 4) + bn[0])
-        .collect::<Vec<u8>>();
-        nibs.reverse();
-        let fr =  ark_bn254::Fr::from_le_bytes_mod_order(&nibs);
-        ks.push(fr);
+        let nibs = wots256_sig_to_byte_array(signed_asserts.0[i]);
+        let cobj = CompressedStateObject::deserialize_from_byte_array(nibs);
+        if let CompressedStateObject::U256(cobj) = cobj {
+            ks.push(cobj);
+        } else {
+            panic!()
+        }
     }
 
-    let mut numfqs: Vec<ark_bn254::Fq> = vec![];
+    let mut numfqs: Vec<ark_ff::BigInt<4>> = vec![];
     for i in 0..N_VERIFIER_FQS {
-        let sc = signed_asserts.1[i];
-        let nibs = sc.map(|(_, digit)| digit);
-        let mut nibs = nibs[0..64]
-        .chunks(2)
-        .rev()
-        .map(|bn| (bn[1] << 4) + bn[0])
-        .collect::<Vec<u8>>();
-        nibs.reverse();
-        let fq =  ark_bn254::Fq::from_le_bytes_mod_order(&nibs);
-        numfqs.push(fq);
+        let nibs = wots256_sig_to_byte_array(signed_asserts.1[i]);
+        let cobj = CompressedStateObject::deserialize_from_byte_array(nibs);
+        if let CompressedStateObject::U256(cobj) = cobj {
+            numfqs.push(cobj);
+        } else {
+            panic!()
+        }
     }
 
     let mut numhashes: Vec<HashBytes> = vec![];
     for i in 0..N_VERIFIER_HASHES {
-        let sc = signed_asserts.2[i];
-        let nibs = sc.map(|(_, digit)| digit);
-        let mut nibs = nibs[0..40].to_vec();
-        nibs.reverse();
-        let nibs: [u8; 40] = nibs.try_into().unwrap();
-        let mut padded_nibs = [0u8; 64]; // initialize with zeros
-        padded_nibs[24..64].copy_from_slice(&nibs[0..40]);
-        numhashes.push(padded_nibs);
+        let nibs = wots160_sig_to_byte_array(signed_asserts.2[i]);
+        let cobj = CompressedStateObject::deserialize_from_byte_array(nibs);
+        if let CompressedStateObject::Hash(cobj) = cobj {
+            numhashes.push(cobj);
+        } else {
+            panic!()
+        }
     }
     (ks.try_into().unwrap(), numfqs.try_into().unwrap(), numhashes.try_into().unwrap())
 }

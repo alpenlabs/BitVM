@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use crate::{bn254::{fp254impl::Fp254Impl, fr::Fr, utils::Hint}, chunk::taps_msm::chunk_msm};
+use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fr::Fr, g1::G1Affine, utils::Hint}, chunk::taps_msm::chunk_msm, execute_script};
 
 use super::{elements::{DataType, ElemG2Eval, ElementTrait, ElementType}, taps_msm::chunk_hash_p, taps_premiller::*};
 use ark_ff::{AdditiveGroup, Field};

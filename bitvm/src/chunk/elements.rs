@@ -1,16 +1,11 @@
 use std::{any::Any, str::FromStr};
 
-use crate::{bigint::U256, bn254::{fq::Fq, utils::Hint}, chunk::{primitives::extern_hash_nibbles}, chunker::common::extract_witness_from_stack, execute_script};
-use ark_bn254::{G1Affine, G2Affine};
+use crate::{bigint::U256, bn254::{fq::Fq, utils::Hint}, chunk::primitives::{extern_bigint_to_nibbles, extern_hash_nibbles, extern_nibbles_to_bigint}, chunker::common::extract_witness_from_stack, execute_script};
 use ark_ff::{BigInteger, Field, PrimeField};
-use crate::treepp::Script;
-use bitcoin_script::script;
 use num_bigint::{BigInt, BigUint};
-use super::{compile::NUM_PUBS, primitives::{extern_bigint_to_nibbles, extern_hash_fps, extern_nibbles_to_bigint, extern_nibbles_to_limbs, HashBytes}};
-use crate::chunk::elements::ElementType::*;
-pub type RawWitness = Vec<Vec<u8>>;
-use crate::{chunker::assigner::BCAssigner};
 use std::fmt::Debug;
+
+use super::primitives::{extern_hash_fps, extern_nibbles_to_limbs, HashBytes};
 
 /// FqElements are used in the chunker, representing muliple Fq.
 #[derive(Debug, Clone)]
@@ -215,7 +210,10 @@ impl DataType {
             (ElementType::ScalarElem, DataType::U256Data(r)) => {
                 as_hints_scalarelemtype_u256data(*r)
             }
-            _ => panic!()
+            _ => {
+                println!("Unhandled ElementType {:?} ", elem_type);
+                panic!()
+            }
         }
     }
 }
