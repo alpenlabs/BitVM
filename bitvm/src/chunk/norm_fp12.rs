@@ -1,4 +1,4 @@
-use ark_ff::{AdditiveGroup, Field, MontFp, PrimeField};
+use ark_ff::{AdditiveGroup, Field, PrimeField};
 use num_bigint::BigUint;
 use core::ops::Neg;
 use std::str::FromStr;
@@ -18,7 +18,7 @@ use crate::{
 };
 use ark_ff::{ Fp12Config, Fp6Config};
 
-use super::element::*;
+use super::elements::{ElemG2Eval, ElementType};
 use super::primitives::{extern_nibbles_to_limbs, hash_fp6};
 use super::taps_point_ops::{utils_point_double_eval};
 
@@ -529,7 +529,7 @@ pub fn verify_pairing_scripted(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::
 }
 
 
-pub(crate) fn utils_fq12_mul(a: ElemFp6, b: ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
+pub(crate) fn utils_fq12_mul(a: ark_bn254::Fq6, b: ark_bn254::Fq6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
     let beta_sq = ark_bn254::Fq12Config::NONRESIDUE;
     let denom = ark_bn254::Fq6::ONE + a * b * beta_sq;
     let c = (a + b)/denom;
@@ -585,7 +585,7 @@ pub(crate) fn utils_fq12_mul(a: ElemFp6, b: ElemFp6) -> (ark_bn254::Fq6, Script,
     return (c, scr, hints);
 }
 
-pub(crate) fn utils_fq6_ss_mul(m: ElemFp6, n: ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
+pub(crate) fn utils_fq6_ss_mul(m: ark_bn254::Fq6, n: ark_bn254::Fq6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
     let a = m.c0;
     let b = m.c1;
     let d = n.c0;
@@ -634,7 +634,7 @@ pub(crate) fn utils_fq6_ss_mul(m: ElemFp6, n: ElemFp6) -> (ark_bn254::Fq6, Scrip
     (result, scr, hints)
 }
 
-pub(crate) fn chunk_hinted_square(a: ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
+pub(crate) fn chunk_hinted_square(a: ark_bn254::Fq6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
     let (asq, asq_scr, asq_hints) = hinted_square(a);
     let _hash_scr = script!(
         {hash_messages(vec![ElementType::Fp6, ElementType::Fp6])}
@@ -648,7 +648,7 @@ pub(crate) fn chunk_hinted_square(a: ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hi
     (asq, scr, asq_hints)
 }
 
-pub(crate) fn chunk_dense_dense_mul(a: ElemFp6, b:ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
+pub(crate) fn chunk_dense_dense_mul(a: ark_bn254::Fq6, b:ark_bn254::Fq6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
     let (amulb, amulb_scr, amulb_hints) = utils_fq12_mul(a, b);
     let _hash_scr = script!(
         {hash_messages(vec![ElementType::Fp6, ElementType::Fp6, ElementType::Fp6])}
@@ -662,7 +662,7 @@ pub(crate) fn chunk_dense_dense_mul(a: ElemFp6, b:ElemFp6) -> (ark_bn254::Fq6, S
     (amulb, scr, amulb_hints)
 }
 
-pub(crate) fn chunk_frob_fp12(f: ElemFp6, power: usize) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
+pub(crate) fn chunk_frob_fp12(f: ark_bn254::Fq6, power: usize) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
 
     let fp12 = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f);
     let (hinted_frob_scr, hints_frobenius_map) = Fq12::hinted_frobenius_map(power, fp12);
@@ -684,7 +684,7 @@ pub(crate) fn chunk_frob_fp12(f: ElemFp6, power: usize) -> (ark_bn254::Fq6, Scri
     (g.c1, ops_scr, hints_frobenius_map)
 }
  
-pub(crate) fn hinted_square(a: ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
+pub(crate) fn hinted_square(a: ark_bn254::Fq6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
     let denom = ark_bn254::Fq6::ONE + a * a * ark_bn254::Fq12Config::NONRESIDUE;
     let c = (a + a)/denom;
 
@@ -895,7 +895,7 @@ pub(crate) fn point_ops_and_mul(
         apb: [fpg.c0, fpg.c1],
         res_hint: res_hint.c1/res_hint.c0,
     };
-
+ 
     (hout, scr, hints)
 
 }
@@ -903,9 +903,9 @@ pub(crate) fn point_ops_and_mul(
 
 pub(crate) fn chunk_point_ops_and_mul(
     is_dbl: bool, is_frob: Option<bool>, ate_bit: Option<i8>,
-    t4: ElemG2Eval, p4: ElemG1Point, 
+    t4: ElemG2Eval, p4: ark_bn254::G1Affine, 
     q4: Option<ark_bn254::G2Affine>,
-    p3: ElemG1Point,
+    p3: ark_bn254::G1Affine,
     t3: ark_bn254::G2Affine, q3: Option<ark_bn254::G2Affine>,
     p2: ark_bn254::G1Affine,
     t2: ark_bn254::G2Affine, q2: Option<ark_bn254::G2Affine>,
@@ -956,7 +956,7 @@ pub(crate) fn chunk_point_ops_and_mul(
     (hint_out, scr, hints)
 }
 
-pub(crate) fn chunk_complete_point_eval_and_mul(f: ElemG2Eval) -> (ElemFp6, Script, Vec<Hint>) {
+pub(crate) fn chunk_complete_point_eval_and_mul(f: ElemG2Eval) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
     let (ops_res, ops_scr, ops_hints) = complete_point_eval_and_mul(f);
     let scr = script!(
         // [hints, apb, Ab, c, h, Haux_in] [hash_h, hash_in]
@@ -981,7 +981,7 @@ pub(crate) fn chunk_complete_point_eval_and_mul(f: ElemG2Eval) -> (ElemFp6, Scri
 
 pub(crate) fn complete_point_eval_and_mul(
     f: ElemG2Eval,
-) -> (ElemFp6, Script, Vec<Hint>) {
+) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
     let ab = f.ab;
     let apb = ark_bn254::Fq6::new( f.apb[0],  f.apb[1], ark_bn254::Fq2::ZERO);
     let c = ark_bn254::Fq6::new( f.p2le[0],  f.p2le[1], ark_bn254::Fq2::ZERO);
@@ -1057,7 +1057,7 @@ pub(crate) fn complete_point_eval_and_mul(
 }
 
 
-fn utils_fq6_hinted_sd_mul(m: ElemFp6, n: ElemFp6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
+fn utils_fq6_hinted_sd_mul(m: ark_bn254::Fq6, n: ark_bn254::Fq6) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
     let a = m.c0;
     let b = m.c1;
     let c = m.c2;
@@ -1157,8 +1157,8 @@ pub(crate) fn chunk_init_t4(ts: [ark_bn254::Fq; 4]) -> (ElemG2Eval, Script, Vec<
 }
 
 pub(crate) fn chunk_hash_c(
-    hint_in_c: Vec<ElemU256>,
-) -> (ElemFp6, Script, Vec<Hint>) {
+    hint_in_c: Vec<ark_ff::BigInt<4>>,
+) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
     let fvec: Vec<ark_bn254::Fq> = hint_in_c.iter().map(|f| ark_bn254::Fq::from(*f)).collect();
 
     let f = ark_bn254::Fq6::new(
@@ -1186,8 +1186,8 @@ pub(crate) fn chunk_hash_c(
 }
 
 pub(crate) fn chunk_hash_c_inv(
-    hint_in_c: Vec<ElemU256>,
-) -> (ElemFp6, Script, Vec<Hint>) {
+    hint_in_c: Vec<ark_ff::BigInt<4>>,
+) -> (ark_bn254::Fq6, Script, Vec<Hint>) {
     let fvec: Vec<ark_bn254::Fq> = hint_in_c.iter().map(|f| ark_bn254::Fq::from(*f)).collect();
 
     let f = ark_bn254::Fq6::new(
@@ -1216,7 +1216,7 @@ pub(crate) fn chunk_hash_c_inv(
 }
 
 pub(crate) fn chunk_final_verify(
-    hint_in_a: ElemFp6, // 
+    hint_in_a: ark_bn254::Fq6, // 
     hint_in_b: ark_bn254::Fq6,
 ) -> (bool, Script, Vec<Hint>) {
 
@@ -1256,7 +1256,7 @@ pub(crate) fn chunk_final_verify(
 }
 
 pub(crate) fn chunk_verify_fq6_is_on_field(
-    hint_in_c: Vec<ElemU256>,
+    hint_in_c: Vec<ark_ff::BigInt<4>>,
 ) -> (bool, Script, Vec<Hint>) {
     fn tap_verify_fq6_is_on_field() -> Script {
         let ops_scr = script! {
@@ -1305,7 +1305,7 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{bn254::{g1::G1Affine, fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fq6::Fq6, utils::{Hint}}, chunk::{blake3compiled::hash_messages, compile::NUM_PUBS, element::{ElemG2Eval, ElemTraitExt, Element, ElementType}, norm_fp12::{chunk_complete_point_eval_and_mul, chunk_dense_dense_mul, chunk_hinted_square, chunk_init_t4, chunk_point_ops_and_mul, complete_point_eval_and_mul, hinted_square, utils_fq12_mul, utils_fq6_hinted_sd_mul, utils_fq6_ss_mul, verify_pairing}, primitives::{extern_nibbles_to_limbs, hash_fp4, hash_fp6}}, execute_script, execute_script_without_stack_limit, groth16::{constants::LAMBDA, offchain_checker::compute_c_wi}};
+    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fq6::Fq6, g1::G1Affine, utils::Hint}, chunk::{blake3compiled::hash_messages, compile::NUM_PUBS, elements::{DataType, ElemG2Eval, ElementTrait, ElementType}, norm_fp12::{chunk_complete_point_eval_and_mul, chunk_dense_dense_mul, chunk_hinted_square, chunk_init_t4, chunk_point_ops_and_mul, complete_point_eval_and_mul, hinted_square, utils_fq12_mul, utils_fq6_hinted_sd_mul, utils_fq6_ss_mul, verify_pairing}, primitives::{extern_nibbles_to_limbs, hash_fp4, hash_fp6}}, chunker::elements::G1PointType, execute_script, execute_script_without_stack_limit, groth16::{constants::LAMBDA, offchain_checker::compute_c_wi}};
 
     use super::{chunk_frob_fp12, point_ops_and_mul, verify_pairing_scripted};
 
@@ -1316,11 +1316,10 @@ mod test {
         let q = ark_bn254::G2Affine::rand(&mut prng);
 
         let (hint_out, init_t4_tap, hint_script) = chunk_init_t4([q.x.c0, q.x.c1, q.y.c0, q.y.c1]);
+        let hint_out = DataType::G2EvalData(hint_out);
 
         let bitcom_script = script!{
-            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
-                {i}
-            }
+            {hint_out.to_hash().as_hint_type().push()}
             {Fq::toaltstack()}
 
             {Fq::push(q.y.c1)}
@@ -1363,17 +1362,13 @@ mod test {
 
         let power = 2;
         let (hout, hout_scr, hout_hints) = chunk_frob_fp12(f_n.c1, power);
-
-        let preimage_hints = Element::Fp6(f_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
+        let hout = DataType::Fp6Data(hout);
+        let f_n_c1_elem = DataType::Fp6Data(f_n.c1);
 
         let bitcom_scr = script!{
-            for i in extern_nibbles_to_limbs(hout.hashed_output()) {
-                {i}
-            }
+            {hout.to_hash().as_hint_type().push()}
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(f_n.c1.hashed_output()) {
-                {i}
-            }
+            {f_n_c1_elem.to_hash().as_hint_type().push()}
             {Fq::toaltstack()}
         };
 
@@ -1388,7 +1383,7 @@ mod test {
             for h in hout_hints {
                 {h.push()}
             }
-            for h in preimage_hints {
+            for h in f_n_c1_elem.to_witness(ElementType::Fp6) {
                 {h.push()}
             }
             {bitcom_scr}
@@ -1416,9 +1411,11 @@ mod test {
 
         let (hint_out, h_scr, mut mul_hints) = hinted_square(f_n.c1);
         assert_eq!(h_n.c1, hint_out);
+        let f_n_c1 = DataType::Fp6Data(f_n.c1);
+        let h_n_c1 = DataType::Fp6Data(h_n.c1);
 
-        let f6_hints = Element::Fp6(f_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
-        let h6_hints = Element::Fp6(h_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
+        let f6_hints = f_n_c1.to_witness(ElementType::Fp6);
+        let h6_hints = h_n_c1.to_witness(ElementType::Fp6);
         mul_hints.extend_from_slice(&f6_hints);
         mul_hints.extend_from_slice(&h6_hints);
 
@@ -1453,23 +1450,23 @@ mod test {
         let h = f * f;
         let h_n =ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, h.c1/h.c0);
 
-        let (hint_out, h_scr, mut mul_hints) = chunk_hinted_square(f_n.c1);
+        let (hint_out, h_scr, mul_hints) = chunk_hinted_square(f_n.c1);
         assert_eq!(h_n.c1, hint_out);
 
+        let f_n_c1 = DataType::Fp6Data(f_n.c1);
+        let h_n_c1 = DataType::Fp6Data(h_n.c1);
+        let hint_out = DataType::Fp6Data(hint_out);
+
         let mut preimage_hints = vec![];
-        let f6_hints = Element::Fp6(f_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
-        let h6_hints = Element::Fp6(h_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
+        let f6_hints = f_n_c1.to_witness(ElementType::Fp6);
+        let h6_hints = h_n_c1.to_witness(ElementType::Fp6);
         preimage_hints.extend_from_slice(&f6_hints);
         preimage_hints.extend_from_slice(&h6_hints);
 
         let bitcom_scr = script!(
-            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
-                {i}
-            }
+            {hint_out.to_hash().as_hint_type().push()}
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(f_n.c1.hashed_output()) {
-                {i}
-            }
+            {f_n_c1.to_hash().as_hint_type().push()}
             {Fq::toaltstack()}
         );
 
@@ -1515,26 +1512,25 @@ mod test {
         let (hint_out, h_scr, mul_hints) = chunk_dense_dense_mul(f_n.c1, g_n.c1);
         assert_eq!(h_n.c1, hint_out);
 
+        let f_n_c1 = DataType::Fp6Data(f_n.c1);
+        let g_n_c1 = DataType::Fp6Data(g_n.c1);
+        let h_n_c1 = DataType::Fp6Data(h_n.c1);
+        let hint_out = DataType::Fp6Data(hint_out);
+
         let mut preimage_hints = vec![];
-        let f6_hints = Element::Fp6(f_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
-        let g6_hints = Element::Fp6(g_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
-        let h6_hints = Element::Fp6(h_n.c1).get_hash_preimage_as_hints(ElementType::Fp6);
+        let f6_hints = f_n_c1.to_witness(ElementType::Fp6);
+        let g6_hints = g_n_c1.to_witness(ElementType::Fp6);
+        let h6_hints = h_n_c1.to_witness(ElementType::Fp6);
         preimage_hints.extend_from_slice(&f6_hints);
         preimage_hints.extend_from_slice(&g6_hints);
         preimage_hints.extend_from_slice(&h6_hints);
 
         let bitcom_scr = script!(
-            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
-                {i}
-            }
+            {hint_out.to_hash().as_hint_type().push()}
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(g_n.c1.hashed_output()) {
-                {i}
-            }
+            {g_n_c1.to_hash().as_hint_type().push()}
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(f_n.c1.hashed_output()) {
-                {i}
-            }
+            {f_n_c1.to_hash().as_hint_type().push()}
             {Fq::toaltstack()}
         );
 
@@ -1787,16 +1783,14 @@ mod test {
 
         let (hint_out, ops_scr, ops_hints) = chunk_complete_point_eval_and_mul(inp);
 
-        let preimage_hints =  Element::G2Eval(inp).get_hash_preimage_as_hints(ElementType::G2EvalMul);
+        let inp = DataType::G2EvalData(inp);
+        let hint_out = DataType::Fp6Data(hint_out);
+        let preimage_hints =  inp.to_witness(ElementType::G2EvalMul);
 
         let bitcom_scr = script!(
-            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
-                {i}
-            }
+            {hint_out.to_hash().as_hint_type().push()}
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(inp.hashed_output()) {
-                {i}
-            }
+            {inp.to_hash().as_hint_type().push()}
             {Fq::toaltstack()}
         );
 
@@ -1851,35 +1845,31 @@ mod test {
 
         let t4 = ElemG2Eval {t: t4, p2le:[ark_bn254::Fq2::ONE; 2], ab: ark_bn254::Fq6::ONE, apb: [ark_bn254::Fq2::ONE; 2], res_hint: ark_bn254::Fq6::ONE};
         let (hint_out, ops_scr, ops_hints) = chunk_point_ops_and_mul(is_dbl, is_frob, ate_bit, t4, p4, Some(q4), p3, t3, Some(q3), p2, t2, Some(q2));
+
+        let t4 = DataType::G2EvalData(t4);
+        let hint_out = DataType::G2EvalData(hint_out);
+        let p4 = DataType::G1Data(p4);
+        let p3 = DataType::G1Data(p3);
+        let p2 = DataType::G1Data(p2);
      
         let mut preimage_hints = vec![];
-        preimage_hints.extend_from_slice(&Element::G2Eval(t4).get_hash_preimage_as_hints(ElementType::G2EvalPoint));
-        preimage_hints.extend_from_slice(&Element::G1(p4).get_hash_preimage_as_hints(ElementType::G1));
-        preimage_hints.extend_from_slice(&Element::G1(p3).get_hash_preimage_as_hints(ElementType::G1));
-        preimage_hints.extend_from_slice(&Element::G1(p2).get_hash_preimage_as_hints(ElementType::G1));
+        preimage_hints.extend_from_slice(&t4.to_witness(ElementType::G2EvalPoint));
+        preimage_hints.extend_from_slice(&p4.to_witness(ElementType::G1));
+        preimage_hints.extend_from_slice(&p3.to_witness(ElementType::G1));
+        preimage_hints.extend_from_slice(&p2.to_witness(ElementType::G1));
 
         // chunk_point_eval_and_mul(hint_out);
 
         let bitcom_scr = script!(
-            for i in extern_nibbles_to_limbs(hint_out.hashed_output()) {
-                {i}
-            }
+            {hint_out.to_hash().as_hint_type().push()}
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(p2.hashed_output()) {
-                {i}
-            }
+            {p2.to_hash().as_hint_type().push()}
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(p3.hashed_output()) {
-                {i}
-            }
+            {p3.to_hash().as_hint_type().push()}
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(p4.hashed_output()) {
-                {i}
-            }
+            {p4.to_hash().as_hint_type().push()}
             {Fq::toaltstack()}
-            for i in extern_nibbles_to_limbs(t4.hashed_output()) {
-                {i}
-            }
+            {t4.to_hash().as_hint_type().push()}
             {Fq::toaltstack()}
 
             if !is_dbl {

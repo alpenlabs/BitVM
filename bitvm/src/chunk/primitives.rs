@@ -12,7 +12,7 @@ use crate::{
     treepp::*,
 };
 
-use super::wots::{wots_compact_checksig_verify_with_pubkey, WOTSPubKey};
+use super::wots::{checksig_verify_to_limbs, WOTSPubKey};
 
 pub(crate) type HashBytes = [u8; 64];
 
@@ -59,7 +59,7 @@ pub(crate) fn get_bitcom_signature_as_witness(sig: &mut Sig, tup: Vec<Link>) -> 
 }
 
 pub(crate) fn wots_locking_script(link: Link, link_ids: &HashMap<u32, WOTSPubKey>) -> Script {
-    wots_compact_checksig_verify_with_pubkey(link_ids.get(&link.0).unwrap())
+    checksig_verify_to_limbs(link_ids.get(&link.0).unwrap())
 }
 
 pub(crate) fn gen_bitcom(
@@ -87,6 +87,11 @@ pub(crate) fn unpack_limbs_to_nibbles() -> Script {
 pub fn pack_nibbles_to_limbs() -> Script {
     U256::transform_limbsize(4,29)
 }
+
+pub fn pack_bytes_to_limbs() -> Script {
+    U256::transform_limbsize(8,29)
+}
+
 
 pub(crate) fn hash_fp2() -> Script {
     script! {
@@ -188,23 +193,6 @@ pub(crate) fn extern_nibbles_to_limbs(nibble_array: [u8; 64]) -> [u32; 9] {
     limbs.try_into().unwrap()
 }
 
-fn nib_to_byte_array(digits: &[u8]) -> Vec<u8> {
-    let mut msg_bytes = Vec::with_capacity(digits.len() / 2);
-
-    for nibble_pair in digits.chunks(2) {
-        let byte = (nibble_pair[0] << 4) | (nibble_pair[1] & 0b00001111);
-        msg_bytes.push(byte);
-    }
-
-    fn le_to_be_byte_array(byte_array: Vec<u8>) -> Vec<u8> {
-        assert!(byte_array.len() % 4 == 0, "Byte array length must be a multiple of 4");
-        byte_array
-            .chunks(4) // Process each group of 4 bytes (one u32)
-            .flat_map(|chunk| chunk.iter().rev().cloned()) // Reverse each chunk
-            .collect()
-    }
-    le_to_be_byte_array(msg_bytes)
-}
 
 fn replace_first_n_with_zero(hex_string: &str, n: usize) -> String {
     let mut result = String::new();
@@ -236,6 +224,24 @@ pub(crate) fn extern_hash_nibbles(msgs: Vec<[u8; 64]>) -> [u8; 64] {
             .chars()
             .map(|c| c.to_digit(16).expect("Invalid hex character") as u8) // Convert each char to a nibble
             .collect()
+    }
+
+    fn nib_to_byte_array(digits: &[u8]) -> Vec<u8> {
+        let mut msg_bytes = Vec::with_capacity(digits.len() / 2);
+    
+        for nibble_pair in digits.chunks(2) {
+            let byte = (nibble_pair[0] << 4) | (nibble_pair[1] & 0b00001111);
+            msg_bytes.push(byte);
+        }
+    
+        fn le_to_be_byte_array(byte_array: Vec<u8>) -> Vec<u8> {
+            assert!(byte_array.len() % 4 == 0, "Byte array length must be a multiple of 4");
+            byte_array
+                .chunks(4) // Process each group of 4 bytes (one u32)
+                .flat_map(|chunk| chunk.iter().rev().cloned()) // Reverse each chunk
+                .collect()
+        }
+        le_to_be_byte_array(msg_bytes)
     }
 
     fn extern_hash_fp_var(fqs: Vec<[u8; 64]>) -> [u8;64] {

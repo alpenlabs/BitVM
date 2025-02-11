@@ -1,7 +1,7 @@
-use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq}, hash::blake3_u4_compact::blake3_u4_compact, treepp::*};
+use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq}, chunk::elements::ElementTrait, hash::blake3_u4_compact::blake3_u4_compact, treepp::*};
 use bitcoin_script_stack::stack::StackTracker;
 
-use super::{element::ElementType, primitives::{ hash_fp2, hash_fp6, new_hash_g2acc, new_hash_g2acc_with_hash_t, new_hash_g2acc_with_hashed_le}};
+use super::{elements::ElementType, primitives::{ hash_fp2, hash_fp6, new_hash_g2acc, new_hash_g2acc_with_hash_t, new_hash_g2acc_with_hashed_le}};
 
 
 fn wrap_scr(scr: Script) -> Script {
@@ -103,6 +103,8 @@ pub fn hash_messages(elem_types: Vec<ElementType>) -> Script {
     }
     loop_script
 }
+
+
 
 #[cfg(test)]
 mod test {

@@ -1,7 +1,6 @@
 pub mod api;
 mod blake3compiled;
 pub mod compile;
-pub mod element;
 pub mod elements;
 // #[allow(unused_variables)]
 mod taps_msm;
@@ -15,5 +14,5 @@ pub mod assert;
 pub mod segment;
 // #[allow(unused_variables)]
 mod taps_premiller;
-mod assigner;
-mod assigners;
+pub mod assigner;
+// mod assigners;
