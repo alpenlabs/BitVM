@@ -6,6 +6,8 @@ exclude = ["tests"]
 
 
 [dependencies]
+bitvm-common.workspace = true
+
 bitcoin-script.workspace = true
 bitcoin.workspace = true
 hex.workspace = true
@@ -30,6 +32,7 @@ ark-std.workspace = true
 ark-crypto-primitives.workspace = true
 ark-relations.workspace = true
 tqdm.workspace = true
+tracing.workspace = true
 regex.workspace = true
 
 [features]

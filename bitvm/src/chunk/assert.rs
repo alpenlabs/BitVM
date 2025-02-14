@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use ark_ec::CurveGroup;
 use bitcoin_script::script;
+use tracing::{debug, error, info};
 
 use crate::{bn254::utils::Hint, chunk::{elements::CompressedStateObject, taps_point_ops::get_hint_for_add_with_frob, primitives::{get_bitcom_signature_as_witness, HashBytes, Sig, SigData}, segment::*}, execute_script, groth16::g16::{Signatures, N_TAPLEAVES}, treepp};
 
@@ -104,9 +105,8 @@ pub(crate) fn groth16_generate_segments(
     let mut f_acc = gcinv.clone();
 
     for j in (1..ATE_LOOP_COUNT.len()).rev() {
-        if !skip_evaluation {
-            println!("itr {:?}", j);
-        }
+        debug!(iteration = %j, "ate loop");
+
         let ate = ATE_LOOP_COUNT[j - 1];
         let sq = wrap_hint_squaring(skip_evaluation, all_output_hints.len(), &f_acc);
         push_compare_or_return!(sq);
@@ -301,17 +301,18 @@ pub(crate) fn script_exec(
         let exec_result = execute_script(total_script);
         if exec_result.final_stack.len() > 1 {
             for i in 0..exec_result.final_stack.len() {
-                println!("{i:} {:?}", exec_result.final_stack.get(i));
+                let stack_content = exec_result.final_stack.get(i);
+                debug!(stack_index = %i, ?stack_content, "disprove execution result");
             }
         }
         if !exec_result.success {
             if exec_result.final_stack.len() != 1 {
-                println!("final {:?}", i);
-                println!("final {:?}", segments[i].scr_type);
-                // assert!(false);
+                error!(aux_hint_index = %i, final_script_type = ?segments[i].scr_type, "final stack length is not one");
             }
         } else {
-            println!("disprove script {}: tapindex {}, {:?}",i,tap_script_index, segments[i].scr_type);
+            let disprove_script_index = i;
+            let script_type = segments[i].scr_type;
+            info!(%disprove_script_index, %tap_script_index, ?script_type, "generated disprove script hint");
             let disprove_hint = (
                 tap_script_index,
                 hint_script,

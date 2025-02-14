@@ -28,7 +28,7 @@ pub(crate) struct Segment {
 /// After the returned `script` and `witness` are executed together, only `OP_FALSE` left on the stack.
 /// If operator gives a wrong intermediate value, `OP_TRUE` will left on the stack and challenger will finish the slash.
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ScriptType {
     NonDeterministic,
     MSM(u32),
