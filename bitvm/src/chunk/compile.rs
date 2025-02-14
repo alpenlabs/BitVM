@@ -157,7 +157,7 @@ pub(crate) fn partial_scripts_from_segments(segments: &Vec<Segment>) -> Vec<tree
 
     for i in 0..segments.len() {
         let seg= &segments[i];
-        let scr_type = seg.scr_type.clone();
+        let scr_type = seg.scr_type;
         if scr_type == ScriptType::NonDeterministic {
             continue;
         }

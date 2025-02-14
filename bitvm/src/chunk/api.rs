@@ -14,6 +14,7 @@ use ark_ec::bn::Bn;
 use ark_ec::pairing::Pairing;
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::Field;
+use tracing::info;
 
 use super::assert::script_exec;
 
@@ -119,9 +120,9 @@ pub fn generate_assertions(
     };
 
     let mut segments: Vec<Segment> = vec![];
-    println!("generating assertions as prover");
+    info!("generating assertions as prover");
     let success = groth16_generate_segments(false, &mut segments, eval_ins.to_raw(), pubs, &mut None);
-    println!("segments len {}", segments.len());
+    info!(size = segments.len(), "generated groth16 segments");
     assert!(success);
     
     collect_raw_assertion_data_from_segments(segments)
@@ -142,15 +143,17 @@ pub fn validate_assertions(
     let intermediates = get_intermediate_hashes(&asserts);
 
     let mut segments: Vec<Segment> = vec![];
-    println!("generating assertions to validate");
+    info!("generating assertions to validate");
     let passed = groth16_generate_segments(false, &mut segments, eval_ins, extract_public_params(vk), &mut Some(intermediates));
     if passed {
-        println!("assertion passed, running full script execution now");
+        info!("assertion passed, running full script execution now");
         let exec_result = script_exec(segments, signed_asserts, disprove_scripts);
         //assert!(exec_result.is_none());
         return exec_result;
     }
-    println!("assertion failed, return faulty script segments acc {:?} at {:?}", segments.len(), segments[segments.len()-1].scr_type);
+    let num_segment = segments.len();
+    let script_type = segments[num_segment - 1].scr_type;
+    info!(%num_segment, ?script_type, "assertion failed");
     let exec_result = script_exec(segments, signed_asserts, disprove_scripts);
     assert!(exec_result.is_some());
     exec_result
