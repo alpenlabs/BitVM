@@ -17,6 +17,12 @@ pub struct WinternitzSecret {
     parameters: Parameters,
 }
 
+impl WinternitzSecret {
+    pub fn secret_key(&self) -> Vec<u8> {
+        self.secret_key.clone()
+    }
+}
+
 // Bits per digit
 pub const LOG_D: u32 = 4;
 

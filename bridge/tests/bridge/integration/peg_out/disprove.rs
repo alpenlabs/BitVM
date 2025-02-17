@@ -1,9 +1,9 @@
+use std::{collections::HashMap, time::Duration};
+
 use bitcoin::{Address, Amount, OutPoint};
+use bitvm::{chunk::api::{api_get_assertions_from_signature, api_get_signature_from_assertion, type_conversion_utils::{utils_raw_witnesses_from_signatures, utils_signatures_from_raw_witnesses}, Assertions, NUM_PUBS, NUM_U160, NUM_U256}, signatures::signing_winternitz::WinternitzSecret};
 use bridge::{
-    connectors::{base::TaprootConnector, connector_c::get_commit_from_assert_commit_tx},
-    graphs::base::DUST_AMOUNT,
-    scripts::generate_pay_to_pubkey_script_address,
-    transactions::{
+    commitments::CommitmentMessageId, connectors::{base::TaprootConnector, connector_c::get_commit_from_assert_commit_tx}, graphs::base::DUST_AMOUNT, scripts::generate_pay_to_pubkey_script_address, transactions::{
         assert_transactions::{
             assert_commit_1::AssertCommit1Transaction, assert_commit_2::AssertCommit2Transaction,
             assert_final::AssertFinalTransaction, utils::sign_assert_tx_with_groth16_proof,
@@ -16,9 +16,11 @@ use bridge::{
         disprove::DisproveTransaction,
         pre_signed::PreSignedTransaction,
         pre_signed_musig2::PreSignedMusig2Transaction,
-    },
+    }
 };
 use num_traits::ToPrimitive;
+use rand::Rng;
+use tokio::time::sleep;
 
 use crate::bridge::{
     assert::helper::create_and_mine_assert_initial_tx,
@@ -28,6 +30,7 @@ use crate::bridge::{
     setup::{setup_test_full, INITIAL_AMOUNT},
 };
 
+// RUST_MIN_STACK=10485760 RUST_BACKTRACE=full cargo test --package bridge --test mod -- bridge::integration::peg_out::disprove::test_disprove_success --exact --nocapture
 #[tokio::test]
 async fn test_disprove_success() {
     // TODO: remove lock script cache
@@ -97,7 +100,8 @@ async fn test_disprove_success() {
 
     // gen incorrect proof and witness
     let (witness_for_commit1, witness_for_commit2) =
-        sign_assert_tx_with_groth16_proof(&config.commitment_secrets, &config.incorrect_proof);
+    sign_assert_tx_with_groth16_proof(&config.commitment_secrets, &config.correct_proof);
+    let (witness_for_commit1, witness_for_commit2) = test_util_to_corrupt_signature(&witness_for_commit1, &witness_for_commit2, config.commitment_secrets);
 
     // assert commit 1
     let mut vout_base = 1; // connector E
@@ -133,6 +137,9 @@ async fn test_disprove_success() {
         assert_commit_1_result.err()
     );
 
+    let timeout = Duration::from_secs(15 as u64);
+    sleep(timeout).await;
+
     // assert commit 2
     vout_base += config.assert_commit_connectors_e_1.connectors_num(); // connector E
 
@@ -167,6 +174,9 @@ async fn test_disprove_success() {
         "error: {:?}",
         assert_commit_2_result.err()
     );
+
+    let timeout = Duration::from_secs(15 as u64);
+    sleep(timeout).await;
 
     // assert final
     let vout_0 = 0; // connector D
@@ -228,6 +238,9 @@ async fn test_disprove_success() {
         assert_final_result.err()
     );
 
+    let timeout = Duration::from_secs(15 as u64);
+    sleep(timeout).await;
+
     // disprove
     let vout = 1;
 
@@ -240,7 +253,7 @@ async fn test_disprove_success() {
         .generate_disprove_witness(
             assert_commit_1_witness,
             assert_commit_2_witness,
-            &config.incorrect_proof.vk,
+            &config.correct_proof.vk,
         )
         .unwrap();
     // let script_index = 1;
@@ -273,6 +286,9 @@ async fn test_disprove_success() {
 
     let secret_nonces_0 = disprove.push_nonces(&config.verifier_0_context);
     let secret_nonces_1 = disprove.push_nonces(&config.verifier_1_context);
+
+    let timeout = Duration::from_secs(15 as u64);
+    sleep(timeout).await;
 
     disprove.pre_sign(
         &config.verifier_0_context,
@@ -307,6 +323,9 @@ async fn test_disprove_success() {
     println!("Disprove tx result: {disprove_result:?}");
     assert!(disprove_result.is_ok());
 
+    let timeout = Duration::from_secs(15 as u64);
+    sleep(timeout).await;
+    
     // reward balance
     let reward_utxos = config
         .client_0
@@ -323,3 +342,64 @@ async fn test_disprove_success() {
     assert!(reward_utxo.is_some());
     assert_eq!(reward_utxo.unwrap().value, disprove_tx.output[1].value);
 }
+
+
+    // Corrupt assertion and sign it
+fn test_util_to_corrupt_signature(witness_for_commit1: &Vec<Vec<Vec<u8>>>, witness_for_commit2: &Vec<Vec<Vec<u8>>>, config_secrets: HashMap<CommitmentMessageId, WinternitzSecret>) -> (Vec<Vec<Vec<u8>>>, Vec<Vec<Vec<u8>>>) {
+    let mut all_raw_witness = vec![];
+    all_raw_witness.extend_from_slice(witness_for_commit1);
+    all_raw_witness.extend_from_slice(witness_for_commit2);
+    let all_sigs = utils_signatures_from_raw_witnesses(&all_raw_witness);
+    let mut all_asserts = api_get_assertions_from_signature(all_sigs);
+    corrupt_at_random_index(&mut all_asserts);
+
+    let mut sorted_secrets: Vec<(u32, String)> = vec![];
+    config_secrets
+        .clone()
+        .into_iter()
+        .for_each(|(k, v)| {
+            if let CommitmentMessageId::Groth16IntermediateValues((name, _)) = k {
+                let index = u32::from_str_radix(&name, 10).unwrap();
+                sorted_secrets.push((index, hex::encode(v.secret_key())));
+            }
+        });
+    sorted_secrets.sort_by(|a, b| a.0.cmp(&b.0));
+    let secrets = sorted_secrets.iter().map(|f| f.1.clone()).collect();
+
+    let sigs = api_get_signature_from_assertion(&all_asserts, secrets);
+    let sigs_raw = utils_raw_witnesses_from_signatures(&sigs);
+    let witness_for_commit1 = sigs_raw[0..300].to_vec();
+    let witness_for_commit2 = sigs_raw[300..].to_vec();
+    fn corrupt_at_random_index(proof_asserts: &mut Assertions) {
+        let mut rng = rand::thread_rng();
+        let index = rng.gen_range(0..NUM_PUBS + NUM_U256 + NUM_U160);
+        let mut scramble: [u8; 32] = [0u8; 32];
+        scramble[16] = 37;
+        let mut scramble2: [u8; 20] = [0u8; 20];
+        scramble2[10] = 37;
+        println!("demo: manually corrupt assertion at index at {:?}", index);
+        if index < NUM_PUBS {
+            if index == 0 {
+                if proof_asserts.0[0] == scramble {
+                    scramble[16] += 1;
+                }
+                proof_asserts.0[0] = scramble;
+            } 
+        } else if index < NUM_PUBS + NUM_U256 {
+            let index = index - NUM_PUBS;
+            if proof_asserts.1[index] == scramble {
+                scramble[16] += 1;
+            }
+            proof_asserts.1[index] = scramble;
+        } else if index < NUM_PUBS + NUM_U256+NUM_U160 {
+            let index = index - NUM_PUBS - NUM_U256;
+            if proof_asserts.2[index] == scramble2 {
+                scramble2[10] += 1;
+            }
+            proof_asserts.2[index] = scramble2;
+        }
+    }
+    return (witness_for_commit1, witness_for_commit2)
+}
+
+

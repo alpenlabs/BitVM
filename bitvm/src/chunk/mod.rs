@@ -6,12 +6,12 @@ mod elements;
 
 pub mod api;
 mod api_runtime_utils;
-pub mod api_compiletime_utils;
+mod api_compiletime_utils;
 
-pub mod g16_runner_core;
-pub mod g16_runner_utils;
+mod g16_runner_core;
+mod g16_runner_utils;
 
-pub mod assigner;
+mod assigner;
 
 mod taps_msm;
 mod taps_point_ops;
