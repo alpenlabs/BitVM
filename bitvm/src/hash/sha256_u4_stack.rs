@@ -732,6 +732,11 @@ pub fn sha256_stack(
     stack.get_script()
 }
 
+pub fn sha256_stack_64bytes() -> Script{
+    let mut stack = StackTracker::new();
+    sha256_stack(&mut stack, 64, true, true)
+}
+
 #[cfg(test)]
 mod tests {
     use bitcoin_script::Script as StructuredScript;
