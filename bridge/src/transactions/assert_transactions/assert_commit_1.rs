@@ -11,7 +11,7 @@ use super::{
     },
     utils::AssertCommit1ConnectorsE,
 };
-use bitvm::{chunker::common::RawWitness, execute_raw_script_with_inputs};
+use bitvm::{chunk::api::RawWitness, execute_raw_script_with_inputs};
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Clone)]
 pub struct AssertCommit1Transaction {

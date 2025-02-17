@@ -43,10 +43,10 @@ use crate::{
     },
 };
 
-use bitvm::chunker::disprove_execution::RawProof;
-use bitvm::signatures::signing_winternitz::{
+// use bitvm::chunker::disprove_execution::RawProof;
+use bitvm::{chunk::api::RawProof, signatures::signing_winternitz::{
     WinternitzPublicKey, WinternitzSecret, WinternitzSigningInputs,
-};
+}};
 
 use super::{
     super::{

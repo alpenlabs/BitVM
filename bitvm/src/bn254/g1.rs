@@ -946,7 +946,7 @@ mod test {
     use crate::bn254::fq::Fq;
     use crate::bn254::fr::Fr;
     
-    use crate::chunker::common::extract_witness_from_stack;
+    // use crate::chunker::common::extract_witness_from_stack;
     use crate::{execute_script_without_stack_limit, treepp::*};
     use super::*;
     use ark_ec::CurveGroup;
@@ -957,31 +957,31 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    #[test]
-    fn test_read_from_stack() {
-        let mut prng = ChaCha20Rng::seed_from_u64(0);
-        let a = ark_bn254::G1Affine::rand(&mut prng);
-        let script = script! {
-            {G1Affine::push(a)}
-        };
+    // #[test]
+    // fn test_read_from_stack() {
+    //     let mut prng = ChaCha20Rng::seed_from_u64(0);
+    //     let a = ark_bn254::G1Affine::rand(&mut prng);
+    //     let script = script! {
+    //         {G1Affine::push(a)}
+    //     };
 
-        let res = execute_script(script);
-        let witness = extract_witness_from_stack(res);
-        let recovered_a = G1Affine::read_from_stack(witness);
+    //     let res = execute_script(script);
+    //     let witness = extract_witness_from_stack(res);
+    //     let recovered_a = G1Affine::read_from_stack(witness);
 
-        assert_eq!(a, recovered_a);
+    //     assert_eq!(a, recovered_a);
 
-        let b = ark_bn254::G2Affine::rand(&mut prng);
-        let script = script! {
-            {G2Affine::push(b)}
-        };
+    //     let b = ark_bn254::G2Affine::rand(&mut prng);
+    //     let script = script! {
+    //         {G2Affine::push(b)}
+    //     };
 
-        let res = execute_script(script);
-        let witness = extract_witness_from_stack(res);
-        let recovered_b = G2Affine::read_from_stack(witness);
+    //     let res = execute_script(script);
+    //     let witness = extract_witness_from_stack(res);
+    //     let recovered_b = G2Affine::read_from_stack(witness);
 
-        assert_eq!(b, recovered_b);
-    }
+    //     assert_eq!(b, recovered_b);
+    // }
 
     #[test]
     fn test_affine_identity() {

@@ -33,11 +33,11 @@ use bridge::{
 };
 
 use bitvm::{
-    chunker::disprove_execution::RawProof,
-    signatures::{
+    // chunker::disprove_execution::RawProof,
+    chunk::api::RawProof, signatures::{
         signing_winternitz::{WinternitzPublicKey, WinternitzSecret},
         winternitz::Parameters,
-    },
+    }
 };
 
 pub const INITIAL_AMOUNT: u64 = 2 << 20; // 2097152

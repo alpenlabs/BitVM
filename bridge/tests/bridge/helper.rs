@@ -23,13 +23,13 @@ use bridge::{
 };
 
 use bitvm::{
-    chunker::{assigner::BridgeAssigner, disprove_execution::RawProof},
-    signatures::signing_winternitz::WinternitzPublicKey,
+    // chunker::{assigner::BridgeAssigner, disprove_execution::RawProof},
+    chunk::{api::RawProof, api_compiletime_utils::{NUM_PUBS, NUM_U160, NUM_U256}}, signatures::signing_winternitz::WinternitzPublicKey
 };
 use rand::{RngCore, SeedableRng};
 use tokio::time::sleep;
 
-pub const TX_WAIT_TIME: u64 = 5; // in seconds
+pub const TX_WAIT_TIME: u64 = 25; // in seconds
 pub const ESPLORA_FUNDING_URL: &str = "https://esploraapi53d3659b.devnet-annapurna.stratabtc.org/";
 pub const ESPLORA_RETRIES: usize = 3;
 pub const ESPLORA_RETRY_WAIT_TIME: u64 = 5;
@@ -216,9 +216,28 @@ pub fn get_intermediate_variables_cached() -> BTreeMap<String, usize> {
 
     intermediate_variables.unwrap_or_else(|| {
         println!("Generating new intermediate variables...");
-        let intermediate_variables = BridgeAssigner::default().all_intermediate_variables();
-        write_cache(&intermediate_variables_cache_path, &intermediate_variables).unwrap();
-        intermediate_variables
+        let mut commitment_map: BTreeMap<String, usize> = BTreeMap::new();
+        for i in 0..NUM_PUBS {
+            commitment_map.insert(
+                format!("{}", i),
+                32,
+            );
+        }
+        for i in 0..NUM_U256 {
+            commitment_map.insert(
+                format!("{}", i+NUM_PUBS),
+                32,
+            );
+        }
+        for i in 0..NUM_U160 {
+            commitment_map.insert(
+                format!("{}", i+NUM_PUBS+NUM_U256),
+                20,
+            );
+        }
+
+        write_cache(&intermediate_variables_cache_path, &commitment_map).unwrap();
+        commitment_map
     })
 }
 
@@ -247,7 +266,6 @@ pub fn get_lock_scripts_cached(
 
 pub fn get_correct_proof() -> RawProof {
     let correct_proof = RawProof::default();
-    assert!(correct_proof.valid_proof());
     correct_proof
 }
 

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use bitcoin::{Address, Amount, OutPoint};
 use bridge::{
     connectors::{base::TaprootConnector, connector_c::get_commit_from_assert_commit_tx},
@@ -19,6 +21,7 @@ use bridge::{
     },
 };
 use num_traits::ToPrimitive;
+use tokio::time::sleep;
 
 use crate::bridge::{
     assert::helper::create_and_mine_assert_initial_tx,
@@ -132,6 +135,10 @@ async fn test_disprove_success() {
         "error: {:?}",
         assert_commit_1_result.err()
     );
+    // println!("sleeping");
+    // let timeout = Duration::from_secs(15 as u64);
+    // sleep(timeout).await;
+    // println!("slept 15 secs");
 
     // assert commit 2
     vout_base += config.assert_commit_connectors_e_1.connectors_num(); // connector E
@@ -167,6 +174,10 @@ async fn test_disprove_success() {
         "error: {:?}",
         assert_commit_2_result.err()
     );
+    // println!("sleeping");
+    // let timeout = Duration::from_secs(15 as u64);
+    // sleep(timeout).await;
+    // println!("slept 15 secs");
 
     // assert final
     let vout_0 = 0; // connector D
@@ -227,6 +238,10 @@ async fn test_disprove_success() {
         "error: {:?}",
         assert_final_result.err()
     );
+    // println!("sleeping");
+    // let timeout = Duration::from_secs(15 as u64);
+    // sleep(timeout).await;
+    // println!("slept 15 secs");
 
     // disprove
     let vout = 1;
@@ -273,6 +288,10 @@ async fn test_disprove_success() {
 
     let secret_nonces_0 = disprove.push_nonces(&config.verifier_0_context);
     let secret_nonces_1 = disprove.push_nonces(&config.verifier_1_context);
+    // println!("sleeping");
+    // let timeout = Duration::from_secs(15 as u64);
+    // sleep(timeout).await;
+    // println!("slept 15 secs");
 
     disprove.pre_sign(
         &config.verifier_0_context,
@@ -307,6 +326,11 @@ async fn test_disprove_success() {
     println!("Disprove tx result: {disprove_result:?}");
     assert!(disprove_result.is_ok());
 
+    // println!("sleeping");
+    // let timeout = Duration::from_secs(15 as u64);
+    // sleep(timeout).await;
+    // println!("slept 15 secs");
+    
     // reward balance
     let reward_utxos = config
         .client_0

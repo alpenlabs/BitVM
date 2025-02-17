@@ -27,13 +27,7 @@ use serde::{
 };
 
 use bitvm::{
-    chunker::{
-        assigner::BridgeAssigner,
-        chunk_groth16_verifier::groth16_verify_to_segments,
-        common::RawWitness,
-        disprove_execution::{disprove_exec, RawProof},
-    },
-    signatures::signing_winternitz::WinternitzPublicKey,
+    chunk::{api::{api_generate_full_tapscripts, api_generate_partial_script, script_to_witness, utils_signatures_from_raw_witnesses, utils_typed_pubkey_from_raw, validate_assertions, PublicKeys, RawProof, RawWitness}, api_compiletime_utils::{NUM_PUBS, NUM_U160, NUM_U256}}, signatures::{signing_winternitz::WinternitzPublicKey, wots_api::{wots160, wots256}}
 };
 
 // Specialized for assert leaves currently.
@@ -186,28 +180,28 @@ impl ConnectorC {
         commit_2_witness: Vec<RawWitness>,
         vk: &ZkProofVerifyingKey,
     ) -> Result<(usize, RawWitness), Error> {
-        let pks = self
-            .commitment_public_keys
+        let mut pks: Vec<WinternitzPublicKey> = vec![];
+        self.commitment_public_keys
             .clone()
             .into_iter()
-            .map(|(k, v)| {
-                (
-                    match k {
-                        CommitmentMessageId::Groth16IntermediateValues((name, _)) => name,
-                        _ => String::new(),
-                    },
-                    v,
-                )
-            })
-            .collect();
-        let mut assigner = BridgeAssigner::new_watcher(pks);
-        // merge commit1 and commit2
-        disprove_exec(
-            &mut assigner,
-            vec![commit_1_witness, commit_2_witness],
-            vk.clone(),
-        )
-        .ok_or(Error::Chunker(ChunkerError::InvalidProof))
+            .for_each(|(k, v)| {
+                if let CommitmentMessageId::Groth16IntermediateValues(_) = k {
+                    pks.push(v);
+                }
+            });
+        
+        let sigs = utils_signatures_from_raw_witnesses(&commit_1_witness);
+        let pubs = utils_typed_pubkey_from_raw(pks.iter().map(|f| f).collect::<Vec<&WinternitzPublicKey>>());
+        
+        let locs: Vec<bitcoin_script::builder::StructuredScript> = self.lock_scripts.iter().map(|f| bitcoin_script::builder::StructuredScript::new("").push_script(f.clone())).collect();
+        let locs = locs.try_into().unwrap();
+        let exec_res = validate_assertions(vk, sigs, pubs, &locs);
+        if exec_res.is_some() {
+            let exec_res = exec_res.unwrap();
+            let wit: RawWitness =  script_to_witness(exec_res.1);
+            return Ok((exec_res.0, wit));
+        }
+        todo!()
     }
 
     pub fn cache_id(
@@ -264,33 +258,20 @@ pub fn generate_assert_leaves(
 ) -> Vec<ScriptBuf> {
     println!("Generating new lock scripts...");
     // hash map to btree map
-    let pks = commits_public_keys
+    let mut pks: Vec<WinternitzPublicKey> = vec![];
+    commits_public_keys
         .clone()
         .into_iter()
-        .map(|(k, v)| {
-            (
-                match k {
-                    CommitmentMessageId::Groth16IntermediateValues((name, _)) => name,
-                    _ => String::new(),
-                },
-                v,
-            )
-        })
-        .collect();
-    let mut bridge_assigner = BridgeAssigner::new_watcher(pks);
+        .for_each(|(k, v)| {
+            if let CommitmentMessageId::Groth16IntermediateValues(_) = k {
+                pks.push(v);
+            }
+        });
     let default_proof = RawProof::default(); // mock a default proof to generate scripts
-
-    let segments = groth16_verify_to_segments(
-        &mut bridge_assigner,
-        &default_proof.public,
-        &default_proof.proof,
-        &default_proof.vk,
-    );
-
-    let mut locks = Vec::with_capacity(1000);
-    for segment in segments {
-        locks.push(segment.script(&bridge_assigner).compile());
-    }
+    let partial_scripts = api_generate_partial_script(&default_proof.vk);
+    let pks: PublicKeys = utils_typed_pubkey_from_raw(commits_public_keys.iter().map(|f| f.1).collect::<Vec<&WinternitzPublicKey>>());
+    let locks= api_generate_full_tapscripts(pks, &partial_scripts);
+    let locks = locks.into_iter().map(|f| f.compile()).collect();
     locks
 }
 
