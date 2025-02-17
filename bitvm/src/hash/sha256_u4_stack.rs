@@ -732,9 +732,9 @@ pub fn sha256_stack(
     stack.get_script()
 }
 
-pub fn sha256_stack_64bytes() -> Script{
+pub fn sha256_get_script(num_bytes: u32) -> Script{
     let mut stack = StackTracker::new();
-    sha256_stack(&mut stack, 64, true, true)
+    sha256_stack(&mut stack, num_bytes, true, true)
 }
 
 #[cfg(test)]
