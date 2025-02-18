@@ -190,7 +190,6 @@ impl ConnectorC {
                     sorted_pks.push((index, v));
                 }
             });
-        
         sorted_pks.sort_by(|a, b| a.0.cmp(&b.0));
         let sorted_pks = sorted_pks.iter().map(|f| &f.1).collect::<Vec<&WinternitzPublicKey>>();
 
@@ -199,10 +198,7 @@ impl ConnectorC {
         commit_witness.extend_from_slice(&commit_2_witness);
         
         let sigs = utils_signatures_from_raw_witnesses(&commit_witness);
-        
-        
         let pubs = utils_typed_pubkey_from_raw(sorted_pks);
-        
         let locs: Vec<bitcoin_script::builder::StructuredScript> = self.lock_scripts.iter().map(|f| bitcoin_script::builder::StructuredScript::new("").push_script(f.clone())).collect();
         let locs = locs.try_into().unwrap();
         let exec_res = validate_assertions(vk, sigs, pubs, &locs);
