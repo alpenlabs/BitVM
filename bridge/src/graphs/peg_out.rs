@@ -43,7 +43,6 @@ use crate::{
     },
 };
 
-// use bitvm::chunker::disprove_execution::RawProof;
 use bitvm::{chunk::api::type_conversion_utils::RawProof, signatures::signing_winternitz::{
     WinternitzPublicKey, WinternitzSecret, WinternitzSigningInputs,
 }};

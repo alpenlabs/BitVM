@@ -154,9 +154,8 @@ impl ConnectorC {
         commitment_public_keys: &BTreeMap<CommitmentMessageId, WinternitzPublicKey>,
         lock_scripts_cache_id: Option<String>,
     ) -> Self {
-        let mut file_path = PathBuf::new();
         let lock_scripts_cache = lock_scripts_cache_id.and_then(|cache_id| {
-            file_path = get_lock_scripts_cache_path(&cache_id);
+            let file_path = get_lock_scripts_cache_path(&cache_id);
             read_cache(&file_path).unwrap_or_else(|e| {
                 eprintln!(
                     "Failed to read lock scripts cache from expected location: {}",
@@ -166,17 +165,11 @@ impl ConnectorC {
             })
         });
 
-        let locks = lock_scripts_cache.unwrap_or_else(|| {
-            let lock_scripts = generate_assert_leaves(commitment_public_keys);
-            println!("Write to cache");
-            write_cache(&file_path, &lock_scripts).unwrap();
-            lock_scripts
-        });
-
         ConnectorC {
             network,
             operator_taproot_public_key: *operator_taproot_public_key,
-            lock_scripts: locks,
+            lock_scripts: lock_scripts_cache
+                .unwrap_or_else(|| generate_assert_leaves(commitment_public_keys)),
             commitment_public_keys: commitment_public_keys.clone(),
         }
     }

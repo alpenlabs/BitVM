@@ -95,7 +95,7 @@ pub fn generate_signatures(
     println!("generate_signatures; get_assertion_from_segments");
     let assn = get_assertion_from_segments(&segments);
     println!("generate_signatures; get_signature_from_assertion");
-    let sigs = get_signature_from_assertion(assn, secrets.clone());
+    let sigs = get_signature_from_assertion(&assn, secrets.clone());
     println!("generate_signatures; get_pubkeys");
     let pubkeys = get_pubkeys(secrets);
 
@@ -141,7 +141,7 @@ pub fn validate_assertions(
     exec_result
 }
 
-pub fn api_get_signature_from_assertion(assn: Assertions, secrets: Vec<String>)-> Signatures {
+pub fn api_get_signature_from_assertion(assn: &Assertions, secrets: Vec<String>)-> Signatures {
     get_signature_from_assertion(assn, secrets)
 }
 
@@ -216,7 +216,7 @@ pub mod type_conversion_utils {
     }
     
     
-    pub fn utils_raw_witnesses_from_signatures(signatures: Signatures) -> Vec<RawWitness> {
+    pub fn utils_raw_witnesses_from_signatures(signatures: &Signatures) -> Vec<RawWitness> {
         // Helper: Convert a signature (which can be converted into Vec<([u8;20], u8)>)
         // back into its RawWitness representation.
         fn sig_to_raw_witness<T>(signature: T) -> RawWitness
@@ -340,7 +340,7 @@ mod test {
         corrupt_at_random_index(&mut proof_asserts);
 
 
-        let corrupt_signed_asserts = get_signature_from_assertion(proof_asserts, secrets);
+        let corrupt_signed_asserts = get_signature_from_assertion(&proof_asserts, secrets);
         let disprove_scripts: [Script; NUM_TAPS] = disprove_scripts.try_into().unwrap();
 
         let invalid_tap = validate_assertions(&vk, corrupt_signed_asserts, pubkeys, &disprove_scripts);

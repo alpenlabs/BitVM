@@ -74,7 +74,7 @@ pub fn sign_assert_tx_with_groth16_proof(
 
     let sigs = generate_signatures(proof.proof.clone(), proof.public.clone(), &proof.vk, secrets);
 
-    let raw = utils_raw_witnesses_from_signatures(sigs);
+    let raw = utils_raw_witnesses_from_signatures(&sigs);
 
     let raw1 = raw[0..300].to_vec();
     let raw2 = raw[300..].to_vec();
@@ -99,7 +99,7 @@ pub fn groth16_commitment_secrets_to_public_keys(
 
     let mut secrets_vec = vec![];
     for (message_id, secret) in commitment_secrets.iter() {
-        if let CommitmentMessageId::Groth16IntermediateValues((name, value)) = message_id {
+        if let CommitmentMessageId::Groth16IntermediateValues((name, _)) = message_id {
             let index = u32::from_str_radix(name, 10).unwrap();
             secrets_vec.push((index, (message_id, secret)));
         }

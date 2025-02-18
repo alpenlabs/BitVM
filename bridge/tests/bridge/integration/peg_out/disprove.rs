@@ -100,7 +100,7 @@ async fn test_disprove_success() {
     // gen incorrect proof and witness
     let (witness_for_commit1, witness_for_commit2) =
     sign_assert_tx_with_groth16_proof(&config.commitment_secrets, &config.correct_proof);
-    let (witness_for_commit1, witness_for_commit2) = test_util_to_corrupt_signature(witness_for_commit1, witness_for_commit2, config.commitment_secrets);
+    let (witness_for_commit1, witness_for_commit2) = test_util_to_corrupt_signature(&witness_for_commit1, &witness_for_commit2, config.commitment_secrets);
 
     // assert commit 1
     let mut vout_base = 1; // connector E
@@ -350,9 +350,10 @@ async fn test_disprove_success() {
 
 
     // Corrupt assertion and sign it
-fn test_util_to_corrupt_signature(witness_for_commit1: Vec<Vec<Vec<u8>>>, witness_for_commit2: Vec<Vec<Vec<u8>>>, config_secrets: HashMap<CommitmentMessageId, WinternitzSecret>) -> (Vec<Vec<Vec<u8>>>, Vec<Vec<Vec<u8>>>) {
-    let mut all_raw_witness = witness_for_commit1.clone();
-    all_raw_witness.extend_from_slice(&witness_for_commit2);
+fn test_util_to_corrupt_signature(witness_for_commit1: &Vec<Vec<Vec<u8>>>, witness_for_commit2: &Vec<Vec<Vec<u8>>>, config_secrets: HashMap<CommitmentMessageId, WinternitzSecret>) -> (Vec<Vec<Vec<u8>>>, Vec<Vec<Vec<u8>>>) {
+    let mut all_raw_witness = vec![];
+    all_raw_witness.extend_from_slice(witness_for_commit1);
+    all_raw_witness.extend_from_slice(witness_for_commit2);
     let all_sigs = utils_signatures_from_raw_witnesses(&all_raw_witness);
     let mut all_asserts = api_get_assertions_from_signature(all_sigs);
     corrupt_at_random_index(&mut all_asserts);
@@ -370,8 +371,8 @@ fn test_util_to_corrupt_signature(witness_for_commit1: Vec<Vec<Vec<u8>>>, witnes
     sorted_secrets.sort_by(|a, b| a.0.cmp(&b.0));
     let secrets = sorted_secrets.iter().map(|f| f.1.clone()).collect();
 
-    let sigs = api_get_signature_from_assertion(all_asserts, secrets);
-    let sigs_raw = utils_raw_witnesses_from_signatures(sigs);
+    let sigs = api_get_signature_from_assertion(&all_asserts, secrets);
+    let sigs_raw = utils_raw_witnesses_from_signatures(&sigs);
     let witness_for_commit1 = sigs_raw[0..300].to_vec();
     let witness_for_commit2 = sigs_raw[300..].to_vec();
     fn corrupt_at_random_index(proof_asserts: &mut Assertions) {

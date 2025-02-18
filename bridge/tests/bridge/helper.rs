@@ -23,13 +23,12 @@ use bridge::{
 };
 
 use bitvm::{
-    // chunker::{assigner::BridgeAssigner, disprove_execution::RawProof},
     chunk::{api::type_conversion_utils::RawProof, api::{NUM_PUBS, NUM_U160, NUM_U256}}, signatures::signing_winternitz::WinternitzPublicKey
 };
 use rand::{RngCore, SeedableRng};
 use tokio::time::sleep;
 
-pub const TX_WAIT_TIME: u64 = 25; // in seconds
+pub const TX_WAIT_TIME: u64 = 15; // in seconds
 pub const ESPLORA_FUNDING_URL: &str = "https://esploraapi53d3659b.devnet-annapurna.stratabtc.org/";
 pub const ESPLORA_RETRIES: usize = 3;
 pub const ESPLORA_RETRY_WAIT_TIME: u64 = 5;

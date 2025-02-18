@@ -244,7 +244,7 @@ pub(crate) fn get_segments_from_groth16_proof(
 
 // wots sign byte array using secrets
 // mirror of get_assertions_from_signature
-pub(crate) fn get_signature_from_assertion(assn: Assertions, secrets: Vec<String>) -> Signatures {
+pub(crate) fn get_signature_from_assertion(assn: &Assertions, secrets: Vec<String>) -> Signatures {
     println!("get_signature_from_assertion");
     // sign and return Signatures
     let (ps, fs, hs) = (assn.0, assn.1, assn.2);
@@ -552,7 +552,7 @@ mod test {
         println!("get_signature_from_assertion");
 
         let secrets = (0..NUM_PUBS+NUM_U256+NUM_U160).map(|idx| format!("{:?}{:04x}", MOCK_SECRET, idx)).collect::<Vec<String>>();
-        let signed_assts = get_signature_from_assertion(assts, secrets.clone());
+        let signed_assts = get_signature_from_assertion(&assts, secrets.clone());
         println!("get_assertions_from_signature");
         let new_assts = get_assertions_from_signature(signed_assts);
         assert_eq!(assts, new_assts);
