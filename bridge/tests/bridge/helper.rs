@@ -24,7 +24,7 @@ use bridge::{
 
 use bitvm::{
     // chunker::{assigner::BridgeAssigner, disprove_execution::RawProof},
-    chunk::{api::type_conversion_utils::RawProof, api_compiletime_utils::{NUM_PUBS, NUM_U160, NUM_U256}}, signatures::signing_winternitz::WinternitzPublicKey
+    chunk::{api::type_conversion_utils::RawProof, api::{NUM_PUBS, NUM_U160, NUM_U256}}, signatures::signing_winternitz::WinternitzPublicKey
 };
 use rand::{RngCore, SeedableRng};
 use tokio::time::sleep;

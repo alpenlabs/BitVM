@@ -18,8 +18,7 @@ use crate::{bn254::utils::Hint, chunk::{primitives::HashBytes, g16_runner_utils:
 
 
 use super::api::{Assertions, PublicKeys, Signatures};
-use super::api_compiletime_utils::NUM_TAPS;
-use super::{api_compiletime_utils::{NUM_PUBS, NUM_U160, NUM_U256}, elements::CompressedStateObject, primitives::{ SigData}, wrap_wots::{wots160_sig_to_byte_array, wots256_sig_to_byte_array}};
+use super::{api::{NUM_PUBS, NUM_U160, NUM_U256, NUM_TAPS}, elements::CompressedStateObject, primitives::{ SigData}, wrap_wots::{wots160_sig_to_byte_array, wots256_sig_to_byte_array}};
 
 // Segments are collected in the order [PublicInputSegment, ProofInputSegments, IntermediateHashSegments, FinalScriptSegment]
 // mirror of the function get_segments_from_assertion()

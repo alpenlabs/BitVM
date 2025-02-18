@@ -5,7 +5,7 @@ use bitcoin_script::script;
 use crate::chunk::{elements::CompressedStateObject, taps_point_ops::get_hint_for_add_with_frob, primitives::HashBytes, g16_runner_utils::*};
 
 
-use super::{assigner::*, api_compiletime_utils::{ATE_LOOP_COUNT, NUM_PUBS}, elements::{DataType, ElementType}};
+use super::{assigner::*, api::{ATE_LOOP_COUNT, NUM_PUBS}, elements::{DataType, ElementType}};
 
 fn compare(hint_out: &DataType, claimed_assertions: &mut Option<Vec<HashBytes>>) -> Option<bool> {
     if claimed_assertions.is_none() {
@@ -284,7 +284,7 @@ mod test {
     use bitcoin_script::script;
     use num_bigint::BigUint;
 
-    use crate::{chunk::{api_compiletime_utils::NUM_PUBS, taps_point_ops::chunk_point_ops_and_multiply_line_evals_step_1}, groth16::offchain_checker::compute_c_wi};
+    use crate::{chunk::{api::NUM_PUBS, taps_point_ops::chunk_point_ops_and_multiply_line_evals_step_1}, groth16::offchain_checker::compute_c_wi};
 
     use super::{groth16_generate_segments, InputProof, PublicParams, Segment};
 

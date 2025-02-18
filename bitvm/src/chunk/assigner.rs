@@ -1,5 +1,5 @@
 use ark_ff::{Field, PrimeField};
-use super::{api_compiletime_utils::{NUM_PUBS}};
+use super::{api::{NUM_PUBS}};
 
 #[derive(Debug)]
 pub(crate) struct InputProof {

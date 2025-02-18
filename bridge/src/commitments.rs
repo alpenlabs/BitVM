@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoEnumIterator};
 
-use bitvm::{chunk::api_compiletime_utils::{NUM_PUBS, NUM_U160, NUM_U256}, signatures::signing_winternitz::WinternitzSecret};
+use bitvm::{chunk::api::{NUM_PUBS, NUM_U160, NUM_U256}, signatures::signing_winternitz::WinternitzSecret};
 
 use super::{
     constants::{

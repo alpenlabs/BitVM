@@ -1,14 +1,20 @@
 use crate::chunk::api_runtime_utils::{execute_script_from_signature, get_assertion_from_segments, get_assertions_from_signature, get_pubkeys, get_segments_from_assertion, get_segments_from_groth16_proof, get_signature_from_assertion};
-use crate::chunk::api_compiletime_utils::{ append_bitcom_locking_script_to_partial_scripts, generate_partial_script, partial_scripts_from_segments, NUM_TAPS};
+use crate::chunk::api_compiletime_utils::{ append_bitcom_locking_script_to_partial_scripts, generate_partial_script, partial_scripts_from_segments};
 
 use crate::signatures::wots_api::{wots160, wots256};
 use crate::treepp::*;
 use ark_bn254::Bn254;
-use ark_ec::bn::Bn;
-use rand::Rng;
+use ark_ec::bn::{Bn, BnConfig};
 
-use super::api_compiletime_utils::{NUM_PUBS, NUM_U160, NUM_U256};
 use super::api_runtime_utils::execute_script_from_assertion;
+
+pub const ATE_LOOP_COUNT: &[i8] = ark_bn254::Config::ATE_LOOP_COUNT;
+pub const NUM_PUBS: usize = 1;
+pub const NUM_U256: usize = 20;
+pub const NUM_U160: usize = 380;
+const VALIDATING_TAPS: usize = 1;
+const HASHING_TAPS: usize = NUM_U160;
+pub const NUM_TAPS: usize = HASHING_TAPS + VALIDATING_TAPS; 
 
 pub type PublicInputs = [ark_bn254::Fr; NUM_PUBS];
 
@@ -112,74 +118,6 @@ pub fn generate_signatures(
     sigs
 }
 
-pub fn generate_signatures_corrupt(
-    proof: ark_groth16::Proof<Bn<ark_bn254::Config>>,
-    scalars: Vec<ark_bn254::Fr>,
-    vk: &ark_groth16::VerifyingKey<Bn254>,
-    secrets: Vec<String>,
-) -> Signatures {
-    println!("generate_signatures; get_segments_from_groth16_proof");
-    let (success, segments) = get_segments_from_groth16_proof(proof, scalars, vk);
-    assert!(success);
-    println!("generate_signatures; get_assertion_from_segments");
-    let assn = get_assertion_from_segments(&segments);
-    println!("generate_signatures; get_signature_from_assertion");
-    let sigs = get_signature_from_assertion(assn, secrets.clone());
-    println!("generate_signatures; get_pubkeys");
-    let pubkeys = get_pubkeys(secrets.clone());
-
-    println!("generate_signatures; partial_scripts_from_segments");
-    let partial_scripts: Vec<Script> = partial_scripts_from_segments(&segments).into_iter().collect();
-    let partial_scripts: [Script; NUM_TAPS] = partial_scripts.try_into().unwrap();
-    println!("generate_signatures; append_bitcom_locking_script_to_partial_scripts");
-    let disprove_scripts = append_bitcom_locking_script_to_partial_scripts( pubkeys, partial_scripts.to_vec());
-    let disprove_scripts: [Script; NUM_TAPS] = disprove_scripts.try_into().unwrap();
-
-    println!("generate_signatures; execute_script_from_signature");
-    let exec_res = execute_script_from_signature(&segments, sigs, &disprove_scripts);
-    if exec_res.is_some() {
-        let fault = exec_res.unwrap();
-        println!("execute_script_from_assertion return fault at script index {}", fault.0);
-        panic!();
-    } else {
-        println!("generate_signatures; validated signatures by executing all scripts");
-    }
-    let mut asst = get_assertions_from_signature(sigs);
-    fn corrupt_at_random_index(proof_asserts: &mut Assertions) {
-        let mut rng = rand::thread_rng();
-        let index = rng.gen_range(0..NUM_PUBS + NUM_U256 + NUM_U160);
-        let mut scramble: [u8; 32] = [0u8; 32];
-        scramble[16] = 37;
-        let mut scramble2: [u8; 20] = [0u8; 20];
-        scramble2[10] = 37;
-        println!("demo: manually corrupt assertion at index at {:?}", index);
-        if index < NUM_PUBS {
-            if index == 0 {
-                if proof_asserts.0[0] == scramble {
-                    scramble[16] += 1;
-                }
-                proof_asserts.0[0] = scramble;
-            } 
-        } else if index < NUM_PUBS + NUM_U256 {
-            let index = index - NUM_PUBS;
-            if proof_asserts.1[index] == scramble {
-                scramble[16] += 1;
-            }
-            proof_asserts.1[index] = scramble;
-        } else if index < NUM_PUBS + NUM_U256+NUM_U160 {
-            let index = index - NUM_PUBS - NUM_U256;
-            if proof_asserts.2[index] == scramble2 {
-                scramble2[10] += 1;
-            }
-            proof_asserts.2[index] = scramble2;
-        }
-    }
-    corrupt_at_random_index(&mut asst);
-    let sigs_corrupt = get_signature_from_assertion(asst, secrets);
-    sigs_corrupt
-}
-
-
 // Step 4
 // validate signed assertions
 // returns index of disprove script generated in Step 2 
@@ -203,9 +141,16 @@ pub fn validate_assertions(
     exec_result
 }
 
+pub fn api_get_signature_from_assertion(assn: Assertions, secrets: Vec<String>)-> Signatures {
+    get_signature_from_assertion(assn, secrets)
+}
+
+pub fn api_get_assertions_from_signature(signed_asserts: Signatures) -> Assertions {
+    get_assertions_from_signature(signed_asserts)
+}
 
 pub mod type_conversion_utils {
-    use crate::{chunk::api_compiletime_utils::{NUM_PUBS, NUM_U160, NUM_U256}, execute_script, signatures::{signing_winternitz::WinternitzPublicKey, wots_api::{wots160, wots256}}, treepp::Script};
+    use crate::{chunk::api::{NUM_PUBS, NUM_U160, NUM_U256}, execute_script, signatures::{signing_winternitz::WinternitzPublicKey, wots_api::{wots160, wots256}}, treepp::Script};
     use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
     use crate::chunk::api::Signatures;
 
@@ -360,7 +305,7 @@ mod test {
     use crate::chunk::api_runtime_utils::{get_pubkeys, get_signature_from_assertion};
     use crate::treepp::Script;
 
-    use crate::{chunk::{api::{api_generate_full_tapscripts, api_generate_partial_script, generate_signatures, validate_assertions, Assertions}, api_compiletime_utils::{NUM_PUBS, NUM_TAPS, NUM_U160, NUM_U256}, api_runtime_utils::get_assertions_from_signature}, execute_script};
+    use crate::{chunk::{api::{api_generate_full_tapscripts, api_generate_partial_script, generate_signatures, validate_assertions, Assertions}, api::{NUM_PUBS, NUM_TAPS, NUM_U160, NUM_U256}, api_runtime_utils::get_assertions_from_signature}, execute_script};
 
 
     #[test]
@@ -450,4 +395,5 @@ mod test {
 
 
     }
+
 }
