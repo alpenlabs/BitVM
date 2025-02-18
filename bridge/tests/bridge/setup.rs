@@ -34,7 +34,7 @@ use bridge::{
 
 use bitvm::{
     // chunker::disprove_execution::RawProof,
-    chunk::api::RawProof, signatures::{
+    chunk::api::type_conversion_utils::RawProof, signatures::{
         signing_winternitz::{WinternitzPublicKey, WinternitzSecret},
         winternitz::Parameters,
     }

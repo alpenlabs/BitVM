@@ -7,7 +7,7 @@ use crate::{
 };
 
 use bitvm::{
-    chunk::api::{generate_signatures, generate_signatures_corrupt, utils_raw_witnesses_from_signatures, RawProof, RawWitness}, signatures::signing_winternitz::{WinternitzPublicKey, WinternitzSecret}
+    chunk::api::{generate_signatures, generate_signatures_corrupt, type_conversion_utils::{utils_raw_witnesses_from_signatures, RawProof, RawWitness}}, signatures::signing_winternitz::{WinternitzPublicKey, WinternitzSecret}
 };
 
 /// The number of connector e is related to the number of intermediate values.

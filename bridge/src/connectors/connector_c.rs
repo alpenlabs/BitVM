@@ -27,7 +27,7 @@ use serde::{
 };
 
 use bitvm::{
-    chunk::{api::{api_generate_full_tapscripts, api_generate_partial_script, script_to_witness, utils_signatures_from_raw_witnesses, utils_typed_pubkey_from_raw, validate_assertions, PublicKeys, RawProof, RawWitness}, api_compiletime_utils::{NUM_PUBS, NUM_U160, NUM_U256}}, signatures::{signing_winternitz::WinternitzPublicKey, wots_api::{wots160, wots256}}
+    chunk::{api::{api_generate_full_tapscripts, api_generate_partial_script, type_conversion_utils::script_to_witness, type_conversion_utils::utils_signatures_from_raw_witnesses, type_conversion_utils::utils_typed_pubkey_from_raw, validate_assertions, PublicKeys, type_conversion_utils::RawProof, type_conversion_utils::RawWitness}, api_compiletime_utils::{NUM_PUBS, NUM_U160, NUM_U256}}, signatures::{signing_winternitz::WinternitzPublicKey, wots_api::{wots160, wots256}}
 };
 
 // Specialized for assert leaves currently.

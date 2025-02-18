@@ -279,7 +279,7 @@ mod test {
 
     use ark_bn254::Bn254;
     use ark_ec::{bn::BnConfig, pairing::Pairing, AffineRepr, CurveGroup};
-    use ark_ff::{AdditiveGroup, Field, One, Zero};
+    use ark_ff::{AdditiveGroup, Field};
     use ark_serialize::CanonicalDeserialize;
     use bitcoin_script::script;
     use num_bigint::BigUint;
@@ -348,7 +348,7 @@ mod test {
     }
 
     // rust version of pairing verification check with normalized (1 + a. J) representation
-    fn verify_pairing(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::G2Affine>, gc: ark_bn254::Fq12,  p1q1: ark_bn254::Fq6) {
+    fn verify_pairing(ps: Vec<ark_bn254::G1Affine>, qs: Vec<ark_bn254::G2Affine>, gc: ark_bn254::Fq12, s: ark_bn254::Fq12, p1q1: ark_bn254::Fq6) {
         let beta_12x = BigUint::from_str(
             "21575463638280843010398324269430826099269044274347216827212613867836435027261",
         )
@@ -468,8 +468,8 @@ mod test {
             f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
         }
 
-        // f *= s;
-        // f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
+        f *= s;
+        f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1/f.c0);
 
         for i in 0..num_pairings {
             let mut q = qs[i];
@@ -831,42 +831,19 @@ mod test {
         );
 
         // precompute c, s
-        let exponent = BigUint::from_str("3826012083221516404361177618099101452601370102101857375939641323500413828963548732631606127109928335391486269835248115567295543670978343842696745095390551900083417947176155339526671171096668140796376284132404088790397708732149067636209362921713149019003098685656873932201095191409344473556978777152433937491539618868266670175910034219855978006040577107668751459024888125325253965179")
-        .expect("Failed to parse exponent");
-
         let mut g = Bn254::multi_miller_loop_affine([p1, p2, p3, p4], [q1, q2, q3, q4]).0;
         let fixed_p1q1 = Bn254::multi_miller_loop_affine([p1], [q1]).0;
-   
         let fixed_p1q1 = fixed_p1q1.c1/fixed_p1q1.c0;
         if g.c1 != ark_bn254::Fq6::ZERO {
             g = ark_bn254::Fq12::new( ark_bn254::Fq6::ONE, g.c1/g.c0);
         }
-
-        let c = fq12_pow(g, &exponent);
+        let (c, wi) = compute_c_wi(g);
 
         // actual scripted verification
-        verify_pairing(vec![p2, p3, p4], vec![q2, q3, q4], c, fixed_p1q1);
-        // verify_pairing_scripted(vec![p2, p3, p4], vec![q2, q3, q4], c, wi, fixed_p1q1);
+        verify_pairing(vec![p2, p3, p4], vec![q2, q3, q4], c, wi, fixed_p1q1);
+        verify_pairing_scripted(vec![p2, p3, p4], vec![q2, q3, q4], c, wi, fixed_p1q1);
 
     }
 
-
-    /// Exponentiates an Fq12 element by a BigUint exponent using the square‐and‐multiply algorithm.
-    fn fq12_pow(element: ark_bn254::Fq12, exponent: &BigUint) -> ark_bn254::Fq12 {
-        let mut result = ark_bn254::Fq12::one();
-        let mut base = element;
-        let mut exp = exponent.clone();
-
-        while exp > BigUint::zero() {
-            // If the least-significant bit is 1, multiply the result by the base.
-            if &exp & BigUint::one() == BigUint::one() {
-                result *= base;
-            }
-            base = base.square();
-            // Shift the exponent to process the next bit.
-            exp >>= 1;
-        }
-        result
-    }
-
+    
 }

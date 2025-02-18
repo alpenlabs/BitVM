@@ -333,14 +333,12 @@ mod test {
         let elem = super::DataType::Fp6Data(fld);
 
         let preim = elem.to_witness(ElementType::Fp6);
-        let check_output_bit = 1;
         let scr = script!(
             for p in preim {
                 {p.push()}
             }
             {elem.to_hash().as_hint_type().push()}
             {Fq::toaltstack()}
-            {check_output_bit}
             {hash_messages(vec![ElementType::Fp6])}
         );
         let res = execute_script(scr);

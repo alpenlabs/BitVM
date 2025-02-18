@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use bitcoin::{Address, Amount, OutPoint};
-use bitvm::chunk::api::{utils_signatures_from_raw_witnesses, RawWitness};
 use bridge::{
     connectors::{base::TaprootConnector, connector_c::get_commit_from_assert_commit_tx},
     graphs::base::DUST_AMOUNT,
@@ -9,7 +8,7 @@ use bridge::{
     transactions::{
         assert_transactions::{
             assert_commit_1::AssertCommit1Transaction, assert_commit_2::AssertCommit2Transaction,
-            assert_final::AssertFinalTransaction, utils::{sign_assert_tx_with_groth16_proof, sign_corrupt_assert_tx_with_groth16_proof},
+            assert_final::AssertFinalTransaction, utils::{sign_corrupt_assert_tx_with_groth16_proof},
         },
         base::{
             BaseTransaction, Input, MIN_RELAY_FEE_ASSERT_COMMIT1, MIN_RELAY_FEE_ASSERT_COMMIT2,
