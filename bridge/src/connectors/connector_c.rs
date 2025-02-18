@@ -5,13 +5,15 @@ use std::{
 };
 
 use crate::{
-    client::client::BRIDGE_DATA_FOLDER_NAME,
+    client::files::BRIDGE_DATA_DIRECTORY_NAME,
     commitments::CommitmentMessageId,
     common::ZkProofVerifyingKey,
     connectors::base::*,
     error::{ChunkerError, ConnectorError, Error},
     transactions::base::Input,
-    utils::{read_cache, remove_script_and_control_block_from_witness, write_cache},
+    utils::{
+        cleanup_cache_files, read_cache, remove_script_and_control_block_from_witness, write_cache,
+    },
 };
 use bitcoin::{
     hashes::{hash160, Hash},
@@ -40,12 +42,14 @@ pub struct DisproveLeaf {
     pub unlock: UnlockWitness,
 }
 
-const CACHE_FOLDER_NAME: &str = "cache";
+const CACHE_DIRECTORY_NAME: &str = "cache";
+const LOCK_SCRIPTS_FILE_PREFIX: &str = "lock_scripts_";
+const MAX_CACHE_FILES: u32 = 90; //~1GB in total, based on lock scripts cache being 11MB each
 
 fn get_lock_scripts_cache_path(cache_id: &str) -> PathBuf {
-    let lock_scripts_file_name = format!("lock_scripts_{}.json", cache_id);
-    Path::new(BRIDGE_DATA_FOLDER_NAME)
-        .join(CACHE_FOLDER_NAME)
+    let lock_scripts_file_name = format!("{LOCK_SCRIPTS_FILE_PREFIX}{}.bin", cache_id);
+    Path::new(BRIDGE_DATA_DIRECTORY_NAME)
+        .join(CACHE_DIRECTORY_NAME)
         .join(lock_scripts_file_name)
 }
 
@@ -53,7 +57,7 @@ fn get_lock_scripts_cache_path(cache_id: &str) -> PathBuf {
 pub struct ConnectorC {
     pub network: Network,
     pub operator_taproot_public_key: XOnlyPublicKey,
-    pub lock_scripts: Vec<ScriptBuf>,
+    pub lock_scripts_bytes: Vec<Vec<u8>>, // using primitive type for binary serialization, convert to ScriptBuf when using it
     commitment_public_keys: BTreeMap<CommitmentMessageId, WinternitzPublicKey>,
 }
 
@@ -75,8 +79,15 @@ impl Serialize for ConnectorC {
 
         let lock_scripts_cache_path = get_lock_scripts_cache_path(&cache_id);
         if !lock_scripts_cache_path.exists() {
-            write_cache(&lock_scripts_cache_path, &self.lock_scripts).map_err(SerError::custom)?;
+            write_cache(&lock_scripts_cache_path, &self.lock_scripts_bytes)
+                .map_err(SerError::custom)?;
         }
+
+        cleanup_cache_files(
+            LOCK_SCRIPTS_FILE_PREFIX,
+            get_lock_scripts_cache_path(&cache_id).parent().unwrap(),
+            MAX_CACHE_FILES,
+        );
 
         c.end()
     }
@@ -156,19 +167,20 @@ impl ConnectorC {
     ) -> Self {
         let lock_scripts_cache = lock_scripts_cache_id.and_then(|cache_id| {
             let file_path = get_lock_scripts_cache_path(&cache_id);
-            read_cache(&file_path).unwrap_or_else(|e| {
-                eprintln!(
-                    "Failed to read lock scripts cache from expected location: {}",
-                    e
-                );
-                None
-            })
+            read_cache(&file_path)
+                .inspect_err(|e| {
+                    eprintln!(
+                        "Failed to read lock scripts cache from expected location: {}",
+                        e
+                    );
+                })
+                .ok()
         });
 
         ConnectorC {
             network,
             operator_taproot_public_key: *operator_taproot_public_key,
-            lock_scripts: lock_scripts_cache
+            lock_scripts_bytes: lock_scripts_cache
                 .unwrap_or_else(|| generate_assert_leaves(commitment_public_keys)),
             commitment_public_keys: commitment_public_keys.clone(),
         }
@@ -199,7 +211,7 @@ impl ConnectorC {
         
         let sigs = utils_signatures_from_raw_witnesses(&commit_witness);
         let pubs = utils_typed_pubkey_from_raw(sorted_pks);
-        let locs: Vec<bitcoin_script::builder::StructuredScript> = self.lock_scripts.iter().map(|f| bitcoin_script::builder::StructuredScript::new("").push_script(f.clone())).collect();
+        let locs: Vec<bitcoin_script::builder::StructuredScript> = self.lock_scripts_bytes.clone().into_iter().map(|f| bitcoin_script::builder::StructuredScript::new("").push_script(ScriptBuf::from_bytes(f))).collect();
         let locs = locs.try_into().unwrap();
         let exec_res = validate_assertions(vk, sigs, pubs, &locs);
         if exec_res.is_some() {
@@ -228,22 +240,25 @@ impl ConnectorC {
 impl TaprootConnector for ConnectorC {
     fn generate_taproot_leaf_script(&self, leaf_index: u32) -> ScriptBuf {
         let index = leaf_index.to_usize().unwrap();
-        if index >= self.lock_scripts.len() {
+        if index >= self.lock_scripts_bytes.len() {
             panic!("Invalid leaf index.")
         }
-        self.lock_scripts[index].clone()
+        ScriptBuf::from_bytes(self.lock_scripts_bytes[index].clone())
     }
 
     fn generate_taproot_leaf_tx_in(&self, leaf_index: u32, input: &Input) -> TxIn {
         let index = leaf_index.to_usize().unwrap();
-        if index >= self.lock_scripts.len() {
+        if index >= self.lock_scripts_bytes.len() {
             panic!("Invalid leaf index.")
         }
         generate_default_tx_in(input)
     }
 
     fn generate_taproot_spend_info(&self) -> TaprootSpendInfo {
-        let script_weights = self.lock_scripts.iter().map(|script| (1, script.clone()));
+        let script_weights = self
+            .lock_scripts_bytes
+            .iter()
+            .map(|b| (1, ScriptBuf::from_bytes(b.clone())));
 
         TaprootBuilder::with_huffman_tree(script_weights)
             .expect("Unable to add assert leaves")
@@ -261,7 +276,7 @@ impl TaprootConnector for ConnectorC {
 
 pub fn generate_assert_leaves(
     commits_public_keys: &BTreeMap<CommitmentMessageId, WinternitzPublicKey>,
-) -> Vec<ScriptBuf> {
+) -> Vec<Vec<u8>> {
     println!("Generating new lock scripts...");
     // hash map to btree map
     let mut sorted_pks: Vec<(u32, WinternitzPublicKey)> = vec![];
@@ -282,7 +297,7 @@ pub fn generate_assert_leaves(
     let partial_scripts = api_generate_partial_script(&default_proof.vk);
     let pks: PublicKeys = utils_typed_pubkey_from_raw(sorted_pks);
     let locks= api_generate_full_tapscripts(pks, &partial_scripts);
-    let locks = locks.into_iter().map(|f| f.compile()).collect();
+    let locks = locks.into_iter().map(|f| f.compile().into_bytes()).collect();
     locks
 }
 
