@@ -415,7 +415,7 @@ mod test {
     use crate::bn254::fp254impl::Fp254Impl;
     use crate::bn254::fq::Fq;
     use crate::treepp::*;
-    // use crate::chunker::common::extract_witness_from_stack;
+    use crate::chunker::common::extract_witness_from_stack;
     use ark_ff::Field;
     use ark_std::UniformRand;
     use ark_ff::AdditiveGroup;
@@ -426,23 +426,23 @@ mod test {
     use rand_chacha::ChaCha20Rng;
     use super::*;
 
-    // #[test]
-    // fn test_read_from_stack() {
-    //     let _m = BigUint::from_str_radix(Fq::MODULUS, 16).unwrap();
-    //     let mut prng = ChaCha20Rng::seed_from_u64(0);
-    //     let a: BigUint = prng.sample(RandomBits::new(254));
+    #[test]
+    fn test_read_from_stack() {
+        let _m = BigUint::from_str_radix(Fq::MODULUS, 16).unwrap();
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let a: BigUint = prng.sample(RandomBits::new(254));
 
-    //     let script = script! {
-    //         { Fq::push_u32_le(&a.to_u32_digits()) }
-    //     };
+        let script = script! {
+            { Fq::push_u32_le(&a.to_u32_digits()) }
+        };
 
-    //     let res = execute_script(script);
-    //     let witness = extract_witness_from_stack(res);
+        let res = execute_script(script);
+        let witness = extract_witness_from_stack(res);
 
-    //     let u32s = Fq::read_u32_le(witness);
-    //     let read_a = BigUint::from_slice(&u32s);
-    //     assert_eq!(read_a, a);
-    // }
+        let u32s = Fq::read_u32_le(witness);
+        let read_a = BigUint::from_slice(&u32s);
+        assert_eq!(read_a, a);
+    }
 
     #[test]
     fn test_add() {
