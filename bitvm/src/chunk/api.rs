@@ -13,6 +13,7 @@ use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};
 use ark_ff::Field;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use bitcoin::ScriptBuf;
+use rand::Rng;
 
 use super::api_compiletime_utils::{NUM_PUBS, NUM_U160, NUM_U256};
 use super::api_runtime_utils::{execute_script_from_assertion};
@@ -62,11 +63,14 @@ pub fn utils_signatures_from_raw_witnesses(raw_wits: &Vec<RawWitness>) -> Signat
         bsigs.push(a);
     }
     let mut csigs = vec![];
-    for i in 0..NUM_PUBS {
+    for i in 0..NUM_U160 {
         let a: wots160::Signature = raw_witness_to_sig(raw_wits[i + NUM_PUBS + NUM_U256].clone()).try_into().unwrap();
         csigs.push(a);
     }
-    (asigs.try_into().unwrap(), bsigs.try_into().unwrap(), csigs.try_into().unwrap())
+    let asigs = asigs.try_into().unwrap();
+    let bsigs = bsigs.try_into().unwrap();
+    let csigs = csigs.try_into().unwrap();
+    (asigs, bsigs, csigs)
 }
 
 
@@ -252,6 +256,73 @@ pub fn generate_signatures(
         println!("generate_signatures; validated signatures by executing all scripts");
     }
     sigs
+}
+
+pub fn generate_signatures_corrupt(
+    proof: ark_groth16::Proof<Bn<ark_bn254::Config>>,
+    scalars: Vec<ark_bn254::Fr>,
+    vk: &ark_groth16::VerifyingKey<Bn254>,
+    secrets: Vec<String>,
+) -> Signatures {
+    println!("generate_signatures; get_segments_from_groth16_proof");
+    let (success, segments) = get_segments_from_groth16_proof(proof, scalars, vk);
+    assert!(success);
+    println!("generate_signatures; get_assertion_from_segments");
+    let assn = get_assertion_from_segments(&segments);
+    println!("generate_signatures; get_signature_from_assertion");
+    let sigs = get_signature_from_assertion_from_secrets(assn, secrets.clone());
+    println!("generate_signatures; get_pubkeys");
+    let pubkeys = get_pubkeys_from_secrets(secrets.clone());
+
+    println!("generate_signatures; partial_scripts_from_segments");
+    let partial_scripts: Vec<Script> = partial_scripts_from_segments(&segments).into_iter().collect();
+    let partial_scripts: [Script; NUM_TAPS] = partial_scripts.try_into().unwrap();
+    println!("generate_signatures; append_bitcom_locking_script_to_partial_scripts");
+    let disprove_scripts = append_bitcom_locking_script_to_partial_scripts( pubkeys, partial_scripts.to_vec());
+    let disprove_scripts: [Script; NUM_TAPS] = disprove_scripts.try_into().unwrap();
+
+    println!("generate_signatures; execute_script_from_signature");
+    let exec_res = execute_script_from_signature(&segments, sigs, &disprove_scripts);
+    if exec_res.is_some() {
+        let fault = exec_res.unwrap();
+        println!("execute_script_from_assertion return fault at script index {}", fault.0);
+        panic!();
+    } else {
+        println!("generate_signatures; validated signatures by executing all scripts");
+    }
+    let mut asst = get_assertions_from_signature(sigs);
+    fn corrupt_at_random_index(proof_asserts: &mut Assertions) {
+        let mut rng = rand::thread_rng();
+        let index = rng.gen_range(0..NUM_PUBS + NUM_U256 + NUM_U160);
+        let mut scramble: [u8; 32] = [0u8; 32];
+        scramble[16] = 37;
+        let mut scramble2: [u8; 20] = [0u8; 20];
+        scramble2[10] = 37;
+        println!("demo: manually corrupt assertion at index at {:?}", index);
+        if index < NUM_PUBS {
+            if index == 0 {
+                if proof_asserts.0[0] == scramble {
+                    scramble[16] += 1;
+                }
+                proof_asserts.0[0] = scramble;
+            } 
+        } else if index < NUM_PUBS + NUM_U256 {
+            let index = index - NUM_PUBS;
+            if proof_asserts.1[index] == scramble {
+                scramble[16] += 1;
+            }
+            proof_asserts.1[index] = scramble;
+        } else if index < NUM_PUBS + NUM_U256+NUM_U160 {
+            let index = index - NUM_PUBS - NUM_U256;
+            if proof_asserts.2[index] == scramble2 {
+                scramble2[10] += 1;
+            }
+            proof_asserts.2[index] = scramble2;
+        }
+    }
+    corrupt_at_random_index(&mut asst);
+    let sigs_corrupt = get_signature_from_assertion_from_secrets(asst, secrets);
+    sigs_corrupt
 }
 
 
