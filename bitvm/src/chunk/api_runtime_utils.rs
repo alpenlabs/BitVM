@@ -551,7 +551,9 @@ mod test {
         const MOCK_SECRET: &str = "a238982ce17ac813d505a5b40b665d404e9528e7";
         println!("get_signature_from_assertion");
 
-        let secrets = (0..NUM_PUBS+NUM_U256+NUM_U160).map(|idx| format!("{:?}{:04x}", MOCK_SECRET, idx)).collect::<Vec<String>>();
+        
+
+        let secrets = (0..NUM_PUBS+NUM_U256+NUM_U160).map(|idx| format!("{MOCK_SECRET}{:04x}", idx)).collect::<Vec<String>>();
         let signed_assts = get_signature_from_assertion(&assts, secrets.clone());
         println!("get_assertions_from_signature");
         let new_assts = get_assertions_from_signature(signed_assts);

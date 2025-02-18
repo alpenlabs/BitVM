@@ -323,7 +323,7 @@ mod test {
 
         println!("STEP 1 GENERATE TAPSCRIPTS");
         let secret_key: &str = "a138982ce17ac813d505a5b40b665d404e9528e7";
-        let secrets = (0..NUM_PUBS+NUM_U256+NUM_U160).map(|idx| format!("{:?}{:04x}", secret_key, idx)).collect::<Vec<String>>();
+        let secrets = (0..NUM_PUBS+NUM_U256+NUM_U160).map(|idx| format!("{secret_key}{:04x}", idx)).collect::<Vec<String>>();
         let pubkeys = get_pubkeys(secrets.clone());
 
         let partial_scripts = api_generate_partial_script(&vk);
