@@ -330,7 +330,7 @@ mod test {
         let disprove_scripts = api_generate_full_tapscripts(pubkeys, &partial_scripts);
 
         println!("STEP 2 GENERATE SIGNED ASSERTIONS");
-        let proof_sigs = generate_signatures(proof, scalars.to_vec(), &vk, vec![secret_key.to_string()]);
+        let proof_sigs = generate_signatures(proof, scalars.to_vec(), &vk, secrets.clone());
 
         println!("num assertion; 256-bit numbers {}", NUM_PUBS + NUM_U256);
         println!("num assertion; 160-bit numbers {}", NUM_U160);

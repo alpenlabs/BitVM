@@ -2,7 +2,7 @@ use bitcoin::Amount;
 
 use bridge::{
     graphs::base::FEE_AMOUNT, scripts::generate_pay_to_pubkey_script_address,
-    transactions::base::Input,
+    transactions::{base::Input, kick_off_2::MIN_RELAY_FEE_AMOUNT},
 };
 
 use crate::bridge::{
@@ -19,7 +19,7 @@ async fn test_sync() {
     config.client_0.sync().await;
 
     println!("Modify data and save");
-    let amount = Amount::from_sat(INITIAL_AMOUNT + FEE_AMOUNT + 1);
+    let amount = Amount::from_sat(INITIAL_AMOUNT + FEE_AMOUNT + 1 + MIN_RELAY_FEE_AMOUNT);
     let faucet = Faucet::new(FaucetType::EsploraRegtest);
     let address = generate_pay_to_pubkey_script_address(
         config.depositor_context.network,
