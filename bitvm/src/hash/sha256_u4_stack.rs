@@ -760,6 +760,21 @@ mod tests {
         let x = sha256_stack(&mut stack, 64, true, true);
         println!("sha 64 bytes: {}", x.len());
         println!("max stack: {}", stack.get_max_stack_size());
+
+        let mut stack = StackTracker::new();
+        let x = sha256_stack(&mut stack, 64, true, false);
+        println!("sha 64 bytes: {}", x.len());
+        println!("max stack: {}", stack.get_max_stack_size());
+
+        let mut stack = StackTracker::new();
+        let x = sha256_stack(&mut stack, 64, false, true);
+        println!("sha 64 bytes: {}", x.len());
+        println!("max stack: {}", stack.get_max_stack_size());
+
+        let mut stack = StackTracker::new();
+        let x = sha256_stack(&mut stack, 64, false, false);
+        println!("sha 64 bytes: {}", x.len());
+        println!("max stack: {}", stack.get_max_stack_size());
     }
 
     #[test]
