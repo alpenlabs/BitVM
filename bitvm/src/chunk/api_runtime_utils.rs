@@ -10,6 +10,8 @@ use crate::bn254::fq::Fq;
 use crate::chunk::g16_runner_core::groth16_generate_segments;
 use crate::chunk::assigner::{InputProof, InputProofRaw, PublicParams};
 use crate::chunk::api_compiletime_utils::partial_scripts_from_segments;
+use crate::chunker::common::extract_witness_from_stack;
+use crate::execute_script_with_inputs;
 use crate::groth16::offchain_checker::compute_c_wi;
 use crate::signatures::wots_api::{wots160, wots256, SignatureImpl};
 use crate::treepp::Script;
@@ -329,23 +331,19 @@ fn utils_collect_mul_hints_per_segment(segments: &Vec<Segment>) -> Vec<Vec<Hint>
     aux_hints
 }
 
-fn utils_execute_chunked_g16(aux_hints: Vec<Vec<Hint>>, bc_hints: Vec<Script>, segments: &Vec<Segment>, disprove_scripts: &[Script; NUM_TAPS]) -> Option<(usize, Script)> {
+fn utils_execute_chunked_g16(aux_hints: Vec<Vec<Hint>>, bc_hints: Vec<Vec<Vec<u8>>>, segments: &Vec<Segment>, disprove_scripts: &[Script; NUM_TAPS]) -> Option<(usize, Script)> {
     let mut tap_script_index = 0;
     for i in 0..aux_hints.len() {
         if segments[i].scr_type == ScriptType::NonDeterministic  {
             continue;
         }
-        let hint_script = script!{
-            for h in &aux_hints[i] {
-                {h.push()}
-            }
-            {bc_hints[i].clone()}
-        };
+        let mut aux_witness: Vec<Vec<u8>> = aux_hints[i].iter().map(|h| h.as_witness()).flatten().collect();
+        aux_witness.extend_from_slice(&bc_hints[i]);
+
         let total_script = script!{
-            {hint_script.clone()}
             {disprove_scripts[tap_script_index].clone()}
         };
-        let exec_result = execute_script(total_script);
+        let exec_result = execute_script_with_inputs(total_script, aux_witness);
         if exec_result.final_stack.len() > 1 {
             for i in 0..exec_result.final_stack.len() {
                 println!("{i:} {:?}", exec_result.final_stack.get(i));
@@ -361,7 +359,7 @@ fn utils_execute_chunked_g16(aux_hints: Vec<Vec<Hint>>, bc_hints: Vec<Script>, s
             println!("disprove script {}: tapindex {}, {:?}",i,tap_script_index, segments[i].scr_type);
             let disprove_hint = (
                 tap_script_index,
-                hint_script,
+                script!(),
             );
             return Some(disprove_hint);
         }
@@ -374,7 +372,7 @@ pub(crate) fn execute_script_from_assertion(segments: &Vec<Segment>, assts: Asse
 
     // if there is partial disprove script; with no locking script; i can directly push hashes
     // segments and assertions
-    fn collect_wots_msg_as_witness_per_segment(segments: &Vec<Segment>, assts: Assertions) -> Vec<Script> {
+    fn collect_wots_msg_as_witness_per_segment(segments: &Vec<Segment>, assts: Assertions) -> Vec<Vec<Vec<u8>>> {
         let bitcom_msg = utils_deserialize_assertions(assts);
         let mut bitcom_msg_arr = vec![];
         bitcom_msg_arr.extend_from_slice(&bitcom_msg.0);
@@ -407,9 +405,11 @@ pub(crate) fn execute_script_from_assertion(segments: &Vec<Segment>, assts: Asse
                     {Fq::toaltstack()}
                 ); // Altstack: [outputhash, inputN-1Hash, ..., input0Hash]
             }  
+            let wit = extract_witness_from_stack(execute_script(bc_hint));
 
-            all_bc_hints.push(bc_hint);
+            all_bc_hints.push(wit);
         }
+
         all_bc_hints
     }
 
@@ -428,7 +428,7 @@ pub(crate) fn execute_script_from_signature(segments: &Vec<Segment>, signed_asst
     
     // if there is a disprove script; with locking script; i can use bitcom witness
     // segments and signatures
-    fn collect_wots_sig_as_witness_per_segment(segments: &Vec<Segment>, signed_asserts: Signatures) -> Vec<Script> {
+    fn collect_wots_sig_as_witness_per_segment(segments: &Vec<Segment>, signed_asserts: Signatures) -> Vec<Vec<Vec<u8>>> {
         let scalar_sigs: Vec<SigData> = signed_asserts.0.iter().map(|f| SigData::Sig256(*f)).collect();
         let felts_sigs: Vec<SigData> = signed_asserts.1.iter().map(|f| SigData::Sig256(*f)).collect();
         let hash_sigs: Vec<SigData> = signed_asserts.2.iter().map(|f| SigData::Sig160(*f)).collect();
@@ -452,17 +452,14 @@ pub(crate) fn execute_script_from_signature(segments: &Vec<Segment>, signed_asst
                 index_of_bitcommitted_msg.push(sec_out.0);
             }
 
-            let mut sig_preimages = script!();
+            let mut sig_preimages = vec![];
             for index in index_of_bitcommitted_msg {
                 let sig_data = &bitcom_sig_arr[index as usize];
-                let sig_preimage = match sig_data {
-                    SigData::Sig160(signature) => signature.to_compact_script(),
-                    SigData::Sig256(signature) => signature.to_compact_script(),
+                let sig_preimage: Vec<Vec<u8>> = match sig_data {
+                    SigData::Sig160(signature) => signature.iter().map(|f| f.0.to_vec()).collect(),
+                    SigData::Sig256(signature) => signature.iter().map(|f| f.0.to_vec()).collect(),
                 };
-                sig_preimages = script!(
-                    {sig_preimages}
-                    {sig_preimage}
-                );
+                sig_preimages.extend_from_slice(&sig_preimage);
             }
             bitcom_sig_as_witness.push(sig_preimages);
         }

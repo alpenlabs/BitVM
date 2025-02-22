@@ -443,7 +443,7 @@ mod test {
         assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1);
 
         let mut op_scripts = vec![];
-        println!("load scripts from file");
+        println!("load scripts from files");
         for index in 0..N_TAPLEAVES {
             let read = read_scripts_from_file(&format!("bridge_data/chunker_data/fullnode_{index}.json"));
             let read_scr = read.get(&(index as u32)).unwrap();
