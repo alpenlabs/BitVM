@@ -997,71 +997,69 @@ mod test {
             &vk,
             sigs,
             bitvm_cache.pubkeys,
-            &disprove_scripts.try_into().unwrap(),
+            &disprove_scripts.clone().try_into().unwrap(),
         );
-        println!("y: {:?}", y);
-        // print!("]'\n");
-        // println!("txs: {:?}", txs);
-        return;
+        assert!(y.is_none());
 
-        // let pubkeys = bitvm_cache.pubkeys;
-        // let proof_sigs = bitvm_cache.signatures;
-        // let disprove_scripts = bitvm_cache.disprove_scripts;
+        let pubkeys = bitvm_cache.pubkeys;
+        let proof_sigs = bitvm_cache.signatures;
+        //let disprove_scripts = bitvm_cache.disprove_scripts;
+        let mut proof_asserts = get_assertions_from_signature(proof_sigs);
 
-        // corrupt_at_random_index(&mut proof_asserts);
+        corrupt_at_random_index(&mut proof_asserts);
 
-        // let corrupt_signed_asserts = get_signature_from_assertion(&proof_asserts, secrets);
-        // let disprove_scripts: [Script; NUM_TAPS] = disprove_scripts.try_into().unwrap();
+        let corrupt_signed_asserts = get_signature_from_assertion(&proof_asserts, secrets);
+        let disprove_scripts: [Script; NUM_TAPS] = disprove_scripts.try_into().unwrap();
 
-        // let invalid_tap =
-        //     validate_assertions(&vk, corrupt_signed_asserts, pubkeys, &disprove_scripts);
-        // assert!(invalid_tap.is_some());
-        // let (index, hint_script) = invalid_tap.unwrap();
-        // println!("STEP 4 EXECUTING DISPROVE SCRIPT at index {}", index);
-        // let scr = script!(
-        //     {hint_script.clone()}
-        //     {disprove_scripts[index].clone()}
-        // );
-        // let res = execute_script(scr);
-        // if res.final_stack.len() > 1 {
-        //     println!("Stack ");
-        //     for i in 0..res.final_stack.len() {
-        //         println!("{i:} {:?}", res.final_stack.get(i));
-        //     }
-        // }
+        let invalid_tap =
+            validate_assertions(&vk, corrupt_signed_asserts, pubkeys, &disprove_scripts);
+        assert!(invalid_tap.is_some());
+        let (index, hint_script) = invalid_tap.unwrap();
+        println!("STEP 4 EXECUTING DISPROVE SCRIPT at index {}", index);
+        let scr = script!(
+            {hint_script.clone()}
+            {disprove_scripts[index].clone()}
+        );
+        let res = execute_script(scr);
+        if res.final_stack.len() > 1 {
+            println!("Stack ");
+            for i in 0..res.final_stack.len() {
+                println!("{i:} {:?}", res.final_stack.get(i));
+            }
+        }
 
-        // assert_eq!(res.final_stack.len(), 1);
-        // assert!(res.success);
-        // println!("DONE");
+        assert_eq!(res.final_stack.len(), 1);
+        assert!(res.success);
+        println!("DONE");
 
-        // fn corrupt_at_random_index(proof_asserts: &mut Assertions) {
-        //     let mut rng = rand::thread_rng();
-        //     let index = rng.gen_range(0..NUM_PUBS + NUM_U256 + NUM_U160);
-        //     let mut scramble: [u8; 32] = [0u8; 32];
-        //     scramble[16] = 37;
-        //     let mut scramble2: [u8; 20] = [0u8; 20];
-        //     scramble2[10] = 37;
-        //     println!("demo: manually corrupt assertion at index at {:?}", index);
-        //     if index < NUM_PUBS {
-        //         if index == 0 {
-        //             if proof_asserts.0[0] == scramble {
-        //                 scramble[16] += 1;
-        //             }
-        //             proof_asserts.0[0] = scramble;
-        //         }
-        //     } else if index < NUM_PUBS + NUM_U256 {
-        //         let index = index - NUM_PUBS;
-        //         if proof_asserts.1[index] == scramble {
-        //             scramble[16] += 1;
-        //         }
-        //         proof_asserts.1[index] = scramble;
-        //     } else if index < NUM_PUBS + NUM_U256 + NUM_U160 {
-        //         let index = index - NUM_PUBS - NUM_U256;
-        //         if proof_asserts.2[index] == scramble2 {
-        //             scramble2[10] += 1;
-        //         }
-        //         proof_asserts.2[index] = scramble2;
-        //     }
-        // }
+        fn corrupt_at_random_index(proof_asserts: &mut Assertions) {
+            let mut rng = rand::thread_rng();
+            let index = rng.gen_range(0..NUM_PUBS + NUM_U256 + NUM_U160);
+            let mut scramble: [u8; 32] = [0u8; 32];
+            scramble[16] = 37;
+            let mut scramble2: [u8; 20] = [0u8; 20];
+            scramble2[10] = 37;
+            println!("demo: manually corrupt assertion at index at {:?}", index);
+            if index < NUM_PUBS {
+                if index == 0 {
+                    if proof_asserts.0[0] == scramble {
+                        scramble[16] += 1;
+                    }
+                    proof_asserts.0[0] = scramble;
+                }
+            } else if index < NUM_PUBS + NUM_U256 {
+                let index = index - NUM_PUBS;
+                if proof_asserts.1[index] == scramble {
+                    scramble[16] += 1;
+                }
+                proof_asserts.1[index] = scramble;
+            } else if index < NUM_PUBS + NUM_U256 + NUM_U160 {
+                let index = index - NUM_PUBS - NUM_U256;
+                if proof_asserts.2[index] == scramble2 {
+                    scramble2[10] += 1;
+                }
+                proof_asserts.2[index] = scramble2;
+            }
+        }
     }
 }
