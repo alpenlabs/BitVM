@@ -13,6 +13,7 @@ use crate::signatures::wots_api::{wots160, wots256};
 use crate::treepp::*;
 use ark_bn254::Bn254;
 use ark_ec::bn::{Bn, BnConfig};
+use ark_ff::UniformRand;
 use bitcoin::key::Keypair;
 use bitcoin::opcodes::all::OP_CHECKSIGVERIFY;
 use bitcoin::taproot::{LeafVersion, TaprootBuilder, TaprootSpendInfo};
@@ -21,6 +22,8 @@ use bitcoin::{
     TapTweakHash, Transaction, XOnlyPublicKey,
 };
 use bitcoin_script::builder;
+use rand::SeedableRng;
+use rand_chacha::ChaCha20Rng;
 use secp256k1::{schnorr, SECP256K1};
 use serde::{Deserialize, Serialize};
 use type_conversion_utils::utils_raw_witnesses_from_signatures;
@@ -101,15 +104,23 @@ pub fn generate_assertions(
 
 // Alternate Step 3
 // given public and runtime parameters (proof and scalars) generate Assertions
-pub fn generate_signatures(
+pub fn generate_signatures_demo(
     proof: ark_groth16::Proof<Bn<ark_bn254::Config>>,
     scalars: Vec<ark_bn254::Fr>,
     vk: &ark_groth16::VerifyingKey<Bn254>,
     secrets: Vec<String>,
 ) -> Signatures {
     println!("generate_signatures; get_segments_from_groth16_proof");
-    let (success, segments) = get_segments_from_groth16_proof(proof, scalars, vk);
-    assert!(success);
+
+    println!("corrupting proof for demo");
+    let mut incorrect_proof = proof.clone();
+    let mut prng = ChaCha20Rng::seed_from_u64(0);
+    incorrect_proof.c = ark_bn254::G1Affine::rand(&mut prng);
+
+    let (success, segments) = get_segments_from_groth16_proof(incorrect_proof, scalars, vk);
+    println!("generate_signatures; get_segments_from_groth16_proof {}", success);
+    assert!(!success);
+    println!("generate_signatures; segments len{}", segments.len());
     println!("generate_signatures; get_assertion_from_segments");
     let assn = get_assertion_from_segments(&segments);
     println!("generate_signatures; get_signature_from_assertion");
@@ -135,7 +146,7 @@ pub fn generate_signatures(
             "execute_script_from_assertion return fault at script index {}",
             fault.0
         );
-        panic!();
+        // panic!();
     } else {
         println!("generate_signatures; validated signatures by executing all scripts");
     }
@@ -760,7 +771,7 @@ mod test {
     // };
     use crate::chunk::api_runtime_utils::{get_pubkeys, get_signature_from_assertion};
     use crate::groth16::constants::S;
-    use crate::groth16::g16::{get_operator_taproot_address, BitVMCache};
+    use crate::groth16::g16::{generate_signatures_demo, get_operator_taproot_address, BitVMCache};
     use crate::treepp::Script;
     use ark_bn254::Bn254;
     use ark_serialize::CanonicalDeserialize;
@@ -860,7 +871,7 @@ mod test {
             Ok(bitvm_cache) => bitvm_cache,
             Err(_) => {
                 let pubkeys = get_pubkeys(secrets.clone());
-                let proof_sigs = generate_signatures(proof, scalars.to_vec(), &vk, secrets.clone());
+                let proof_sigs = generate_signatures_demo(proof, scalars.to_vec(), &vk, secrets.clone());
 
                 // let proof_sigs = bitvm_cache.signatures;
                 // let pubkeys = bitvm_cache.pubkeys;
@@ -1062,4 +1073,258 @@ mod test {
             }
         }
     }
+
+    #[test]
+    fn full_e2e_execution_corrupt_input_proof() {
+        println!("Use mock groth16 proof");
+        let vk_bytes = [
+            115, 158, 251, 51, 106, 255, 102, 248, 22, 171, 229, 158, 80, 192, 240, 217, 99, 162,
+            65, 107, 31, 137, 197, 79, 11, 210, 74, 65, 65, 203, 243, 14, 123, 2, 229, 125, 198,
+            247, 76, 241, 176, 116, 6, 3, 241, 1, 134, 195, 39, 5, 124, 47, 31, 43, 164, 48, 120,
+            207, 150, 125, 108, 100, 48, 155, 137, 132, 16, 193, 139, 74, 179, 131, 42, 119, 25,
+            185, 98, 13, 235, 118, 92, 11, 154, 142, 134, 220, 191, 220, 169, 250, 244, 104, 123,
+            7, 247, 33, 178, 155, 121, 59, 75, 188, 206, 198, 182, 97, 0, 64, 231, 45, 55, 92, 100,
+            17, 56, 159, 79, 13, 219, 221, 33, 39, 193, 24, 36, 58, 105, 8, 70, 206, 176, 209, 146,
+            45, 201, 157, 226, 84, 213, 135, 143, 178, 156, 112, 137, 246, 123, 248, 215, 168, 51,
+            95, 177, 47, 57, 29, 199, 224, 98, 48, 144, 253, 15, 201, 192, 142, 62, 143, 13, 228,
+            89, 51, 58, 6, 226, 139, 99, 207, 22, 113, 215, 79, 91, 158, 166, 210, 28, 90, 218,
+            111, 151, 4, 55, 230, 76, 90, 209, 149, 113, 248, 245, 50, 231, 137, 51, 157, 40, 29,
+            184, 198, 201, 108, 199, 89, 67, 136, 239, 96, 216, 237, 172, 29, 84, 3, 128, 240, 2,
+            218, 169, 217, 118, 179, 34, 226, 19, 227, 59, 193, 131, 108, 20, 113, 46, 170, 196,
+            156, 45, 39, 151, 218, 22, 132, 250, 209, 183, 46, 249, 115, 239, 14, 176, 200, 134,
+            158, 148, 139, 212, 167, 152, 205, 183, 236, 242, 176, 96, 177, 187, 184, 252, 14, 226,
+            127, 127, 173, 147, 224, 220, 8, 29, 63, 73, 215, 92, 161, 110, 20, 154, 131, 23, 217,
+            116, 145, 196, 19, 167, 84, 185, 16, 89, 175, 180, 110, 116, 57, 198, 237, 147, 183,
+            164, 169, 220, 172, 52, 68, 175, 113, 244, 62, 104, 134, 215, 99, 132, 199, 139, 172,
+            108, 143, 25, 238, 201, 128, 85, 24, 73, 30, 186, 142, 186, 201, 79, 3, 176, 185, 70,
+            66, 89, 127, 188, 158, 209, 83, 17, 22, 187, 153, 8, 63, 58, 174, 236, 132, 226, 43,
+            145, 97, 242, 198, 117, 105, 161, 21, 241, 23, 84, 32, 62, 155, 245, 172, 30, 78, 41,
+            199, 219, 180, 149, 193, 163, 131, 237, 240, 46, 183, 186, 42, 201, 49, 249, 142, 188,
+            59, 212, 26, 253, 23, 27, 205, 231, 163, 76, 179, 135, 193, 152, 110, 91, 5, 218, 67,
+            204, 164, 128, 183, 221, 82, 16, 72, 249, 111, 118, 182, 24, 249, 91, 215, 215, 155, 2,
+            0, 0, 0, 0, 0, 0, 0, 212, 110, 6, 228, 73, 146, 46, 184, 158, 58, 94, 4, 141, 241, 158,
+            0, 175, 140, 72, 75, 52, 6, 72, 49, 112, 215, 21, 243, 151, 67, 106, 22, 158, 237, 80,
+            204, 41, 128, 69, 52, 154, 189, 124, 203, 35, 107, 132, 241, 234, 31, 3, 165, 87, 58,
+            10, 92, 252, 227, 214, 99, 176, 66, 118, 22, 177, 20, 120, 198, 252, 236, 7, 148, 207,
+            78, 152, 132, 94, 207, 50, 243, 4, 169, 146, 240, 79, 98, 0, 212, 106, 137, 36, 193,
+            21, 175, 180, 1, 26, 107, 39, 198, 89, 152, 26, 220, 138, 105, 243, 45, 63, 106, 163,
+            80, 74, 253, 176, 207, 47, 52, 7, 84, 59, 151, 47, 178, 165, 112, 251, 161,
+        ]
+        .to_vec();
+        let proof_bytes: Vec<u8> = [
+            162, 50, 57, 98, 3, 171, 250, 108, 49, 206, 73, 126, 25, 35, 178, 148, 35, 219, 98, 90,
+            122, 177, 16, 91, 233, 215, 222, 12, 72, 184, 53, 2, 62, 166, 50, 68, 98, 171, 218,
+            218, 151, 177, 133, 223, 129, 53, 114, 236, 181, 215, 223, 91, 102, 225, 52, 122, 122,
+            206, 36, 122, 213, 38, 186, 170, 235, 210, 179, 221, 122, 37, 74, 38, 79, 0, 26, 94,
+            59, 146, 46, 252, 70, 153, 236, 126, 194, 169, 17, 144, 100, 218, 118, 22, 99, 226,
+            132, 40, 24, 248, 232, 197, 195, 220, 254, 52, 36, 248, 18, 167, 167, 206, 108, 29,
+            120, 188, 18, 78, 86, 8, 121, 217, 144, 185, 122, 58, 12, 34, 44, 6, 233, 80, 177, 183,
+            5, 8, 150, 74, 241, 141, 65, 150, 35, 98, 15, 150, 137, 254, 132, 167, 228, 104, 63,
+            133, 11, 209, 39, 79, 138, 185, 88, 20, 242, 102, 69, 73, 243, 88, 29, 91, 127, 157,
+            82, 192, 52, 95, 143, 49, 227, 83, 19, 26, 108, 63, 232, 213, 169, 64, 221, 159, 214,
+            220, 246, 174, 35, 43, 143, 80, 168, 142, 29, 103, 179, 58, 235, 33, 163, 198, 255,
+            188, 20, 3, 91, 47, 158, 122, 226, 201, 175, 138, 18, 24, 178, 219, 78, 12, 96, 10, 2,
+            133, 35, 230, 149, 235, 206, 1, 177, 211, 245, 168, 74, 62, 25, 115, 70, 42, 38, 131,
+            92, 103, 103, 176, 212, 223, 177, 242, 94, 14,
+        ]
+        .to_vec();
+        let scalar = [
+            232, 255, 255, 239, 147, 245, 225, 67, 145, 112, 185, 121, 72, 232, 51, 40, 93, 88,
+            129, 129, 182, 69, 80, 184, 41, 160, 49, 225, 114, 78, 100, 48,
+        ]
+        .to_vec();
+
+        let proof: ark_groth16::Proof<Bn254> =
+            ark_groth16::Proof::deserialize_uncompressed(&proof_bytes[..]).unwrap();
+        let vk: ark_groth16::VerifyingKey<Bn254> =
+            ark_groth16::VerifyingKey::deserialize_uncompressed(&vk_bytes[..]).unwrap();
+        let scalar: ark_bn254::Fr = ark_bn254::Fr::deserialize_uncompressed(&scalar[..]).unwrap();
+        let scalars = [scalar];
+
+        println!("STEP 1 GENERATE TAPSCRIPTS");
+        let secret_key: &str = "a138982ce17ac813d505a5b40b665d404e9528e7";
+        let secrets = (0..NUM_PUBS + NUM_U256 + NUM_U160)
+            .map(|idx| format!("{secret_key}{:04x}", idx))
+            .collect::<Vec<String>>();
+        let bitvm_cache_result = BitVMCache::load_from_file("bitvm_cache.borsh");
+        let bitvm_cache = match bitvm_cache_result {
+            Ok(bitvm_cache) => bitvm_cache,
+            Err(_) => {
+                let pubkeys = get_pubkeys(secrets.clone());
+                let proof_sigs = generate_signatures_demo(proof, scalars.to_vec(), &vk, secrets.clone());
+
+                // let proof_sigs = bitvm_cache.signatures;
+                // let pubkeys = bitvm_cache.pubkeys;
+
+                let partial_scripts = api_generate_partial_script(&vk);
+                // let mut proof_asserts = get_assertions_from_signature(proof_sigs);
+
+                let disprove_scripts = api_generate_full_tapscripts(pubkeys, &partial_scripts);
+
+                let bitvm_cache = BitVMCache {
+                    pubkeys: pubkeys.clone(),
+                    signatures: proof_sigs.clone(),
+                    disprove_scripts: disprove_scripts
+                        .iter()
+                        .map(|x| x.clone().compile().as_bytes().to_vec())
+                        .collect(),
+                };
+
+                bitvm_cache.save_to_file("bitvm_cache.borsh").unwrap();
+                bitvm_cache
+            }
+        };
+
+        // generate assert addresses
+        use std::str::FromStr;
+        let network = bitcoin::network::Network::Testnet4;
+
+        let operator_secret_key =
+            "d0d5603a31ddbef5ecc1d75b45012704e57121b7eba0c1d7e104863fbf178838";
+        let operator_keypair = bitcoin::key::Keypair::from_str(operator_secret_key).unwrap();
+        let operator_xonly_pubkey = operator_keypair.x_only_public_key().0;
+
+        let (operator_taproot_address, operator_taproot_builder) =
+            get_operator_taproot_address(operator_xonly_pubkey, network);
+
+        let disprove_scripts: Vec<_> = bitvm_cache
+            .disprove_scripts
+            .iter()
+            .map(|x| ScriptBuf::from(x.clone()))
+            .collect();
+
+        println!(
+            "Send funds to operator_taproot_address: {:?}",
+            operator_taproot_address
+        );
+        // return;
+
+        // let funding_outpoint = bitcoin::OutPoint::new(
+        //     Txid::from_str("a17e459d42d6a37a96e53c6a280097517be50349f9346b4867d6436184a31954")
+        //         .unwrap(),
+        //     0,
+        // );
+
+        // let all_txs = get_raw_signed_transactions(
+        //     funding_outpoint,
+        //     bitvm_cache.pubkeys,
+        //     operator_xonly_pubkey,
+        //     operator_keypair,
+        //     bitvm_cache.signatures,
+        //     &disprove_scripts,
+        //     network,
+        // );
+
+        // // print!("testmempoolaccept '[");
+        // for tx in all_txs.iter() {
+        //     println!("/usr/local/bin/bitcoin-cli -regtest -rpcport=48333 -rpcuser=admin -rpcpassword=admin sendrawtransaction {};", hex::encode(bitcoin::consensus::serialize(tx)));
+        // }
+
+        let fetch_from_cache = true;
+        let sigs = if fetch_from_cache {
+            bitvm_cache.signatures
+        } else {
+            let x = utils_raw_witnesses_from_signatures(&bitvm_cache.signatures);
+            println!("x: {:?}", x);
+    
+            let assert_end_txid =
+                Txid::from_str("8ea73a1eee3104d832f6f0868ff2b57103f9091b7e1607dffe214ca8ebc42c87")
+                    .unwrap();
+            let rpc = bitcoincore_rpc::Client::new(
+                "http://localhost:48333",
+                bitcoincore_rpc::Auth::UserPass("admin".to_string(), "admin".to_string()),
+            )
+            .unwrap();
+            let tx = rpc.get_raw_transaction(&assert_end_txid, None).unwrap();
+            println!("tx: {:?}", tx);
+            let mut witnesses = Vec::new();
+            for (i, input) in tx.input.iter().enumerate() {
+                println!("vin: {:?}", input);
+                let input_txid = input.previous_output.txid;
+                let input_tx = rpc.get_raw_transaction(&input_txid, None).unwrap();
+                let witness_elements: Vec<Vec<u8>> = input_tx.input[0]
+                    .witness
+                    .iter()
+                    .map(|w| w.to_vec())
+                    .collect();
+                let witness_elements_without_last_three =
+                    witness_elements[..witness_elements.len() - 3].to_vec();
+                println!("witness: {:?}", witness_elements_without_last_three);
+                if i == 0 {
+                    witnesses.push(witness_elements_without_last_three);
+                } else if i < 5 {
+                    let chunks = witness_elements_without_last_three
+                        .chunks_exact(witness_elements_without_last_three.len() / 5);
+                    let vec_of_chunks: Vec<Vec<Vec<u8>>> = chunks.map(|chunk| chunk.to_vec()).collect();
+                    witnesses.extend(vec_of_chunks);
+                } else {
+                    let chunks = witness_elements_without_last_three
+                        .chunks_exact(witness_elements_without_last_three.len() / 10);
+                    let vec_of_chunks: Vec<Vec<Vec<u8>>> = chunks.map(|chunk| chunk.to_vec()).collect();
+                    witnesses.extend(vec_of_chunks);
+                }
+            }
+            println!("witnesses: {:?}", witnesses);
+            println!("Witness length: {}", witnesses.len());
+            let x: Signatures = utils_signatures_from_raw_witnesses(&witnesses);
+            println!("x: {:?}", x);
+            x
+        };
+
+
+        let disprove_scripts: Vec<Script> = disprove_scripts
+        .iter()
+        .map(|x| {
+            let scr = script!();
+            let scr = scr.push_script(x.clone());
+            scr
+        })
+        .collect();
+
+        println!("Disprove scripts len: {}", disprove_scripts.len());
+        println!("Num taps: {}", NUM_TAPS);
+
+        // let y = validate_assertions(
+        //     &vk,
+        //     sigs,
+        //     bitvm_cache.pubkeys,
+        //     &disprove_scripts.clone().try_into().unwrap(),
+        // );
+        // assert!(y.is_none());
+
+        let pubkeys = bitvm_cache.pubkeys;
+        let corrupt_signed_asserts = bitvm_cache.signatures;
+        //let disprove_scripts = bitvm_cache.disprove_scripts;
+        // let mut proof_asserts = get_assertions_from_signature(proof_sigs);
+
+        // // corrupt_at_random_index(&mut proof_asserts);
+
+        // let corrupt_signed_asserts = get_signature_from_assertion(&proof_asserts, secrets);
+        let disprove_scripts: [Script; NUM_TAPS] = disprove_scripts.try_into().unwrap();
+
+        let invalid_tap =
+            validate_assertions(&vk, corrupt_signed_asserts, pubkeys, &disprove_scripts);
+        assert!(invalid_tap.is_some());
+        let (index, hint_script) = invalid_tap.unwrap();
+        println!("STEP 4 EXECUTING DISPROVE SCRIPT at index {}", index);
+        println!("Size of Disprove Txn {}", disprove_scripts[index].len());
+        let scr = script!(
+            {hint_script.clone()}
+            {disprove_scripts[index].clone()}
+        );
+        let res = execute_script(scr);
+        if res.final_stack.len() > 1 {
+            println!("Stack ");
+            for i in 0..res.final_stack.len() {
+                println!("{i:} {:?}", res.final_stack.get(i));
+            }
+        }
+
+        assert_eq!(res.final_stack.len(), 1);
+        assert!(res.success);
+        println!("DONE");
+
+    }
+
+
 }
