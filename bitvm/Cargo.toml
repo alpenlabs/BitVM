@@ -37,6 +37,7 @@ fuzzing = []
 
 [dev-dependencies]
 serde_json.workspace = true
+borsh.workspace = true
 
 [profile.dev]
 opt-level = 3

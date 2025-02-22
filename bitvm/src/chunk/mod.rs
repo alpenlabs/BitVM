@@ -5,8 +5,8 @@ mod primitives;
 mod elements;
 
 pub mod api;
-mod api_runtime_utils;
-mod api_compiletime_utils;
+pub mod api_runtime_utils;
+pub mod api_compiletime_utils;
 
 mod g16_runner_core;
 mod g16_runner_utils;
