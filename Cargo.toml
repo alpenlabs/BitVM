@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.dependencies]
-bitcoin-script = { git = "https://github.com/BitVM/rust-bitcoin-script" }
+bitcoin-script = { git = "https://github.com/alpenlabs/rust-bitcoin-script", rev="0b2407336832e8286bce5c6bf1ae5563cb4fa3b0" }
 bitcoin = { version = "0.32.5", features = ["rand-std"] }
 strum = "0.26"
 strum_macros = "0.26"
@@ -25,7 +25,7 @@ sha2 = "0.10.8"
 tokio = { version = "1.37.0", features = ["full"] }
 esplora-client = { git = "https://github.com/BitVM/rust-esplora-client" }
 serde_json = "1.0.116"
-bitcoin-script-stack = { git = "https://github.com/BitVM/rust-bitcoin-script-stack" }
+bitcoin-script-stack = { git = "https://github.com/alpenlabs/rust-bitcoin-script-stack", rev="0c35a192c9ce23523eb6b6047efb43d198a0153f" }
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 dotenv = "0.15.0"

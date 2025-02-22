@@ -11,7 +11,9 @@ use crate::{
 };
 use ark_ec::{AffineRepr, CurveGroup}; 
 use ark_ff::{AdditiveGroup, Field, Fp12Config, PrimeField};
+use num_bigint::BigUint;
 use std::ops::Neg;
+use std::str::FromStr;
 
 use super::wrap_hasher::hash_messages;
 use super::elements::{ElemG2Eval, ElementType};
@@ -20,13 +22,51 @@ use super::taps_mul::utils_multiply_by_line_eval;
 
 
 pub(crate) fn get_hint_for_add_with_frob(q: ark_bn254::G2Affine, t: ark_bn254::G2Affine, ate: i8) -> ark_bn254::G2Affine {
+    let beta_12x = BigUint::from_str(
+        "21575463638280843010398324269430826099269044274347216827212613867836435027261",
+    )
+    .unwrap();
+    let beta_12y = BigUint::from_str(
+        "10307601595873709700152284273816112264069230130616436755625194854815875713954",
+    )
+    .unwrap();
+    let beta_12 = ark_bn254::Fq2::from_base_prime_field_elems([
+        ark_bn254::Fq::from(beta_12x.clone()),
+        ark_bn254::Fq::from(beta_12y.clone()),
+    ])
+    .unwrap();
+    let beta_13x = BigUint::from_str(
+        "2821565182194536844548159561693502659359617185244120367078079554186484126554",
+    )
+    .unwrap();
+    let beta_13y = BigUint::from_str(
+        "3505843767911556378687030309984248845540243509899259641013678093033130930403",
+    )
+    .unwrap();
+    let beta_13 = ark_bn254::Fq2::from_base_prime_field_elems([
+        ark_bn254::Fq::from(beta_13x.clone()),
+        ark_bn254::Fq::from(beta_13y.clone()),
+    ])
+    .unwrap();
+    let beta_22x = BigUint::from_str(
+        "21888242871839275220042445260109153167277707414472061641714758635765020556616",
+    )
+    .unwrap();
+    let beta_22y = BigUint::from_str("0").unwrap();
+    let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([
+        ark_bn254::Fq::from(beta_22x.clone()),
+        ark_bn254::Fq::from(beta_22y.clone()),
+    ])
+    .unwrap();
+
     let mut qq = q;
     if ate == 1 {
-        let (qdash, _, _) = hinted_mul_by_char_on_q(qq);
-        qq = qdash;
+        qq.x.conjugate_in_place();
+        qq.x *= beta_12;
+        qq.y.conjugate_in_place();
+        qq.y *= beta_13;
     } else if ate == -1 {
-        let (qdash, _, _) = hinted_mul_by_char_on_phi_q(qq);
-        qq = qdash;
+        qq.x *= beta_22;
     }
     
     (t + qq).into_affine()

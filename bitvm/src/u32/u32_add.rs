@@ -114,8 +114,8 @@ mod test {
         println!("u32_len: {}", u32_add_drop(1,0).len());
         let mut rng = rand::thread_rng();
         for _ in 0..1000 {
-            let x = rng.gen();
-            let y = rng.gen_range(0..=u32::MAX - x);
+            let x: u32 = rng.gen();
+            let y: u32 = rng.gen_range(0..=u32::MAX - x);
             let script_add_drop = script! {
                 { u32_push(x) }
                 { u32_push(y) }

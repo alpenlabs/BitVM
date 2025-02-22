@@ -139,7 +139,7 @@ pub fn validate_assertions(
 #[cfg(test)]
 mod test {
     use ark_bn254::Bn254;
-    use ark_serialize::CanonicalDeserialize;
+    use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
     use bitcoin_script::script;
     use rand::Rng;
     use crate::treepp::Script;
@@ -159,6 +159,21 @@ mod test {
         let vk: ark_groth16::VerifyingKey<Bn254> = ark_groth16::VerifyingKey::deserialize_uncompressed(&vk_bytes[..]).unwrap();
         let scalar: ark_bn254::Fr = ark_bn254::Fr::deserialize_uncompressed(&scalar[..]).unwrap();
         let scalars = [scalar];
+
+        fn serialize_data(vk: ark_groth16::VerifyingKey<Bn254>, proof: ark_groth16::Proof<Bn254>, scalar: ark_bn254::Fr) {
+            let mut scalar_vec = vec![];
+            scalar.serialize_compressed(&mut scalar_vec).unwrap();
+            let mut vk_vec = vec![];
+            vk.serialize_compressed(&mut vk_vec).unwrap();
+            let mut proof_vec = vec![];
+            proof.serialize_compressed(&mut proof_vec).unwrap();
+
+            println!("scalar_vec {:?}", scalar_vec);
+            println!("vk_vec {:?}", vk_vec);
+            println!("proof_vec {:?}", proof_vec);
+        }
+
+        serialize_data(vk.clone(), proof.clone(), scalar.clone());
 
         println!("STEP 1 GENERATE TAPSCRIPTS");
         let secret_key: &str = "a138982ce17ac813d505a5b40b665d404e9528e7";

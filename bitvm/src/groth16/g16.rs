@@ -350,10 +350,6 @@ mod test {
         }
         println!("done");
 
-        for i in 0..N_TAPLEAVES {
-            println!("taps_len {}", op_scripts[i].len());
-        }
-
         let ops_scripts: [Script; N_TAPLEAVES] = op_scripts.try_into().unwrap(); //compile_verifier(mock_vk);
 
         let tapscripts = generate_disprove_scripts(mock_pubs, &ops_scripts);
@@ -361,6 +357,14 @@ mod test {
             "tapscript.lens: {:?}",
             tapscripts.clone().map(|script| script.len())
         );
+
+
+        let mut script_cache = HashMap::new();
+        for i in 0..ops_scripts.len() {
+            script_cache.insert(i as u32, vec![tapscripts[i].clone()]);
+        }
+
+        write_scripts_to_separate_files(script_cache, "fullnode");
  
 
     }
@@ -431,6 +435,42 @@ mod test {
         assert!(fault.is_none());
     }
 
+    #[test]
+    fn test_fn_validate_assertions_from_disprove_scripts() {
+        let (_, mock_vk) = mock::compile_circuit();
+        let (proof, public_inputs) = mock::generate_proof();
+
+        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1);
+
+        let mut op_scripts = vec![];
+        println!("load scripts from file");
+        for index in 0..N_TAPLEAVES {
+            let read = read_scripts_from_file(&format!("bridge_data/chunker_data/fullnode_{index}.json"));
+            let read_scr = read.get(&(index as u32)).unwrap();
+            assert_eq!(read_scr.len(), 1);
+            let tap_node = read_scr[0].clone();
+            op_scripts.push(tap_node);
+        }
+        println!("done");
+        let ops_scripts: [Script; N_TAPLEAVES] = op_scripts.try_into().unwrap();
+
+       let mock_pubks = mock_pubkeys(MOCK_SECRET);
+    //    let verifier_scripts = generate_disprove_scripts(mock_pubks, &ops_scripts);
+    println!(
+        "tapscript.lens: {:?}",
+        ops_scripts.clone().map(|script| script.len())
+    );
+
+    //     // let proof_asserts = generate_proof_assertions(mock_vk.clone(), proof, public_inputs);
+        let proof_asserts = read_asserts_from_file("bridge_data/chunker_data/assert.json");
+        let signed_asserts = sign_assertions(proof_asserts);
+    //     let mock_pubks = mock_pubkeys(MOCK_SECRET);
+
+        println!("verify_signed_assertions");
+        let fault = verify_signed_assertions(mock_vk, mock_pubks, signed_asserts, &ops_scripts);
+        assert!(fault.is_none());
+    }
+
     
 
     fn corrupt(proof_asserts: &mut Assertions, random: Option<usize>) {
@@ -495,12 +535,13 @@ mod test {
 
 
         let total = N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES;
-        for i in 0..1{ //total {
+        for i in 201..202 {
             println!("ITERATION {:?}", i);
             let mut proof_asserts = read_asserts_from_file("bridge_data/chunker_data/assert.json");
             corrupt(&mut proof_asserts, Some(i));
             let signed_asserts = sign_assertions(proof_asserts);
-    
+
+            std::env::set_var("BITVM_SKIP_SCRIPT_GEN", "true");
             let fault = verify_signed_assertions(mock_vk.clone(), mock_pubks, signed_asserts, &verifier_scripts);
             assert!(fault.is_some());
             if fault.is_some() {
