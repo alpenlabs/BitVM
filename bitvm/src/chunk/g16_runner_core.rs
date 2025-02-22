@@ -60,17 +60,6 @@ pub(crate) fn groth16_generate_segments(
         }};
     }
 
-    let mut skip_gen = false;
-    match std::env::var("BITVM_SKIP_SCRIPT_GEN") {
-        Ok(val) => {
-            if val.to_lowercase().trim() == "true" {
-                skip_gen = true
-            }
-        },
-        Err(_) => {},
-    }
-    println!("skip_gen  {}", skip_gen);
-
     let vky = pubs.ks_vks;
     let vky0 = pubs.vky0;
 

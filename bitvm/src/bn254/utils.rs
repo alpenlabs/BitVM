@@ -90,7 +90,7 @@ impl Hint {
         pub type T1 = BigIntImpl<{ K1.0 }, { K1.1 }>;
         pub type T2 = BigIntImpl<{ K2.0 }, { K2.1 }>;
         pub type T4 = BigIntImpl<{ K4.0 }, { K4.1 }>;
-        match self {
+        let mut wit = match self {
             Hint::U32(f) => {
                 let fu8 = f.to_le_bytes();
                 vec![fu8.to_vec()]
@@ -112,7 +112,6 @@ impl Hint {
             },
             Hint::U256(num) => {
                 let u32s = bigint_to_u32_limbs(num.clone(), 256);
-                println!("u32swit {:?}", u32s);
                 let u32s_vec = u32s.iter().map(|f| f.to_le_bytes().to_vec()).collect();
                 u32s_vec
             },
@@ -131,7 +130,15 @@ impl Hint {
                 let u32s_vec = u32s.iter().map(|f| f.to_le_bytes().to_vec()).collect();
                 u32s_vec
             },
+        };
+        fn remove_trailing_zeros(mut v: Vec<u8>) -> Vec<u8> {
+            while v.last() == Some(&0) {
+                v.pop();
+            }
+            v
         }
+        // wit = wit.iter().map(|w| remove_trailing_zeros(w.clone())).collect();
+        wit
     }
 }
 
@@ -160,7 +167,7 @@ mod test {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq}, chunker::common::extract_witness_from_stack, execute_script};
+    use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq}, chunker::common::extract_witness_from_stack, execute_raw_script_with_inputs, execute_script, execute_script_with_inputs};
 
     use super::Hint;
 
@@ -188,9 +195,10 @@ mod test {
         let scr = script!(
             {fqh.push()}
         );
+        let scrs = extract_witness_from_stack(execute_script(scr));
 
-        let res = execute_script(scr);
-        let scrs = extract_witness_from_stack(res);
-        assert_eq!(scrs, fqh.as_witness());
+        let scrs2 = extract_witness_from_stack(execute_script_with_inputs(script!(), fqh.as_witness()));
+
+        assert_eq!(scrs, scrs2);
     }
 }
