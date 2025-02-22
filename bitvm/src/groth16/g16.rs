@@ -1,606 +1,787 @@
-use ark_bn254::{Bn254, Fr};
+use std::fs;
 
-use crate::chunk::api::{NUM_PUBS, NUM_TAPS, NUM_U160, NUM_U256};
+use crate::chunk::api_compiletime_utils::{
+    append_bitcom_locking_script_to_partial_scripts, generate_partial_script,
+    partial_scripts_from_segments,
+};
+use crate::chunk::api_runtime_utils::{
+    execute_script_from_assertion, execute_script_from_signature, get_assertion_from_segments, get_assertions_from_signature, get_pubkeys, get_segments_from_assertion, get_segments_from_groth16_proof, get_signature_from_assertion
+};
+
+use crate::signatures::signing_winternitz::winternitz_message_checksig_verify;
 use crate::signatures::wots_api::{wots160, wots256};
-use crate::{chunk, treepp::*};
+use crate::treepp::*;
+use ark_bn254::Bn254;
+use ark_ec::bn::{Bn, BnConfig};
+use bitcoin::key::Keypair;
+use bitcoin::opcodes::all::OP_CHECKSIGVERIFY;
+use bitcoin::taproot::{LeafVersion, TaprootBuilder, TaprootSpendInfo};
+use bitcoin::{
+    witness, Address, Amount, Network, OutPoint, ScriptBuf, TapLeafHash, TapNodeHash, TapSighash,
+    TapTweakHash, Transaction, XOnlyPublicKey,
+};
+use bitcoin_script::builder;
+use secp256k1::{schnorr, SECP256K1};
+use serde::{Deserialize, Serialize};
+use type_conversion_utils::utils_raw_witnesses_from_signatures;
 
-pub const N_VERIFIER_PUBLIC_INPUTS: usize = NUM_PUBS;
-pub const N_VERIFIER_FQS: usize = NUM_U256;
-pub const N_VERIFIER_HASHES: usize = NUM_U160;
-pub const N_TAPLEAVES: usize = NUM_TAPS;
 
-pub type Proof = ark_groth16::Proof<Bn254>;
-pub type VerifyingKey = ark_groth16::VerifyingKey<Bn254>;
+pub const ATE_LOOP_COUNT: &[i8] = ark_bn254::Config::ATE_LOOP_COUNT;
+pub const NUM_PUBS: usize = 1;
+pub const NUM_U256: usize = 20;
+pub const NUM_U160: usize = 380;
+const VALIDATING_TAPS: usize = 1;
+const HASHING_TAPS: usize = NUM_U160;
+pub const NUM_TAPS: usize = HASHING_TAPS + VALIDATING_TAPS;
 
-pub type PublicInputs = [Fr; N_VERIFIER_PUBLIC_INPUTS];
+pub type PublicInputs = [ark_bn254::Fr; NUM_PUBS];
 
 pub type PublicKeys = (
-    [wots256::PublicKey; N_VERIFIER_PUBLIC_INPUTS],
-    [wots256::PublicKey; N_VERIFIER_FQS],
-    [wots160::PublicKey; N_VERIFIER_HASHES],
+    [wots256::PublicKey; NUM_PUBS],
+    [wots256::PublicKey; NUM_U256],
+    [wots160::PublicKey; NUM_U160],
 );
 
 pub type Signatures = (
-    [wots256::Signature; N_VERIFIER_PUBLIC_INPUTS],
-    [wots256::Signature; N_VERIFIER_FQS],
-    [wots160::Signature; N_VERIFIER_HASHES],
+    [wots256::Signature; NUM_PUBS],
+    [wots256::Signature; NUM_U256],
+    [wots160::Signature; NUM_U160],
 );
 
 pub type Assertions = (
-    [[u8; 32]; N_VERIFIER_PUBLIC_INPUTS],
-    [[u8; 32]; N_VERIFIER_FQS],
-    [[u8; 20]; N_VERIFIER_HASHES],
+    [[u8; 32]; NUM_PUBS],
+    [[u8; 32]; NUM_U256],
+    [[u8; 20]; NUM_U160],
 );
 
-pub fn compile_verifier(vk: VerifyingKey) -> [Script; N_TAPLEAVES] {
-    chunk::api::api_generate_partial_script(&vk).try_into().unwrap()
+// Step 1
+// The function takes public parameters (here verifying key) and generates partial script
+// partial script is essentially disprove script minus the bitcommitment locking script
+pub fn api_generate_partial_script(vk: &ark_groth16::VerifyingKey<Bn254>) -> Vec<Script> {
+    generate_partial_script(vk)
 }
 
-pub fn generate_disprove_scripts(
-    public_keys: PublicKeys,
-    partial_disprove_scripts: &[Script; N_TAPLEAVES],
-) -> [Script; N_TAPLEAVES] {
-    chunk::api::api_generate_full_tapscripts(public_keys, partial_disprove_scripts)
-        .try_into()
-        .unwrap()
+// Step 2
+// given public keys and the partial scripts generated in api_generate_partial_script()
+// it generates the complete disprove scripts
+pub fn api_generate_full_tapscripts(
+    inpubkeys: PublicKeys,
+    ops_scripts_per_link: &[Script],
+) -> Vec<Script> {
+    println!("api_generate_full_tapscripts; append_bitcom_locking_script_to_partial_scripts");
+    let taps_per_link =
+        append_bitcom_locking_script_to_partial_scripts(inpubkeys, ops_scripts_per_link.to_vec());
+    assert_eq!(ops_scripts_per_link.len(), taps_per_link.len());
+    taps_per_link
 }
 
-pub fn generate_proof_assertions(vk: VerifyingKey, proof: Proof, public_inputs: PublicInputs) -> Assertions {
-    chunk::api::generate_assertions(proof, public_inputs.to_vec(), &vk)
+// Step 3
+// given public and runtime parameters (proof and scalars) generate Assertions
+pub fn generate_assertions(
+    proof: ark_groth16::Proof<Bn<ark_bn254::Config>>,
+    scalars: Vec<ark_bn254::Fr>,
+    vk: &ark_groth16::VerifyingKey<Bn254>,
+) -> Assertions {
+    let (success, segments) = get_segments_from_groth16_proof(proof, scalars, vk);
+    assert!(success);
+    let assts = get_assertion_from_segments(&segments);
+    let exec_res = execute_script_from_assertion(&segments, assts);
+    if exec_res.is_some() {
+        let fault = exec_res.unwrap();
+        println!(
+            "execute_script_from_assertion return fault at script index {}",
+            fault.0
+        );
+        panic!();
+    } else {
+        println!("generate_assertions; validated assertion by executing all scripts");
+    }
+    assts
 }
 
-pub fn generate_proof_signature(vk: VerifyingKey, proof: Proof, public_inputs: PublicInputs, secret: Vec<String>) -> Signatures {
-    chunk::api::generate_signatures(proof, public_inputs.to_vec(), &vk, secret)
+// Alternate Step 3
+// given public and runtime parameters (proof and scalars) generate Assertions
+pub fn generate_signatures(
+    proof: ark_groth16::Proof<Bn<ark_bn254::Config>>,
+    scalars: Vec<ark_bn254::Fr>,
+    vk: &ark_groth16::VerifyingKey<Bn254>,
+    secrets: Vec<String>,
+) -> Signatures {
+    println!("generate_signatures; get_segments_from_groth16_proof");
+    let (success, segments) = get_segments_from_groth16_proof(proof, scalars, vk);
+    assert!(success);
+    println!("generate_signatures; get_assertion_from_segments");
+    let assn = get_assertion_from_segments(&segments);
+    println!("generate_signatures; get_signature_from_assertion");
+    let sigs = get_signature_from_assertion(&assn, secrets.clone());
+    println!("generate_signatures; get_pubkeys");
+    let pubkeys = get_pubkeys(secrets);
+
+    println!("generate_signatures; partial_scripts_from_segments");
+    let partial_scripts: Vec<Script> = partial_scripts_from_segments(&segments)
+        .into_iter()
+        .collect();
+    let partial_scripts: [Script; NUM_TAPS] = partial_scripts.try_into().unwrap();
+    println!("generate_signatures; append_bitcom_locking_script_to_partial_scripts");
+    let disprove_scripts =
+        append_bitcom_locking_script_to_partial_scripts(pubkeys, partial_scripts.to_vec());
+    let disprove_scripts: [Script; NUM_TAPS] = disprove_scripts.try_into().unwrap();
+
+    println!("generate_signatures; execute_script_from_signature");
+    let exec_res = execute_script_from_signature(&segments, sigs, &disprove_scripts);
+    if exec_res.is_some() {
+        let fault = exec_res.unwrap();
+        println!(
+            "execute_script_from_assertion return fault at script index {}",
+            fault.0
+        );
+        panic!();
+    } else {
+        println!("generate_signatures; validated signatures by executing all scripts");
+    }
+    sigs
 }
 
-/// Validates the groth16 proof assertion signatures and returns a tuple of (tapleaf_index, witness_script) if
-/// the proof is invalid, else returns none
-pub fn verify_signed_assertions(
-    vk: VerifyingKey,
-    public_keys: PublicKeys,
-    signatures: Signatures,
-    disprove_scripts: &[Script; N_TAPLEAVES],
+// Step 4
+// validate signed assertions
+// returns index of disprove script generated in Step 2
+// and the witness required to execute this Disprove Script incase of failure
+pub fn validate_assertions(
+    vk: &ark_groth16::VerifyingKey<Bn254>,
+    signed_asserts: Signatures,
+    _inpubkeys: PublicKeys,
+    disprove_scripts: &[Script; NUM_TAPS],
 ) -> Option<(usize, Script)> {
-    chunk::api::validate_assertions(&vk,signatures,public_keys, disprove_scripts)
+    println!("validate_assertions; get_assertions_from_signature");
+    let asserts = get_assertions_from_signature(signed_asserts);
+    println!("validate_assertions; get_segments_from_assertion");
+    let (success, segments) = get_segments_from_assertion(asserts, vk.clone());
+    if !success {
+        println!("invalid tapscript at segment {}", segments.len());
+    }
+    println!("validate_assertions; execute_script_from_signature");
+    let exec_result = execute_script_from_signature(&segments, signed_asserts, disprove_scripts);
+    assert_eq!(
+        success,
+        exec_result.is_none(),
+        "ensure script execution matches rust execution match"
+    );
+    exec_result
+}
+
+pub fn api_get_signature_from_assertion(assn: &Assertions, secrets: Vec<String>) -> Signatures {
+    get_signature_from_assertion(assn, secrets)
+}
+
+pub fn api_get_assertions_from_signature(signed_asserts: Signatures) -> Assertions {
+    get_assertions_from_signature(signed_asserts)
+}
+
+pub mod type_conversion_utils {
+    use crate::chunk::api::Signatures;
+    use crate::{
+        chunk::api::{NUM_PUBS, NUM_U160, NUM_U256},
+        execute_script,
+        signatures::{
+            signing_winternitz::WinternitzPublicKey,
+            wots_api::{wots160, wots256},
+        },
+        treepp::Script,
+    };
+    use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+
+    use super::PublicKeys;
+
+    pub type RawWitness = Vec<Vec<u8>>;
+
+    #[derive(Clone, Debug, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
+    pub struct RawProof {
+        pub proof: ark_groth16::Proof<ark_bn254::Bn254>,
+        pub public: Vec<ark_bn254::Fr>,
+        pub vk: ark_groth16::VerifyingKey<ark_bn254::Bn254>,
+    }
+
+    impl Default for RawProof {
+        fn default() -> Self {
+            // note this proof shouldn't be used in onchain environment
+            let serialize_data = "687a30a694bb4fb69f2286196ad0d811e702488557c92a923c19499e9c1b3f0105f749dae2cd41b2d9d3998421aa8e86965b1911add198435d50a08892c7cd01a47c01cbf65ccc3b4fc6695671734c3b631a374fbf616e58bcb0a3bd59a9030d7d17433d53adae2232f9ac3caa5c67053d7a728714c81272a8a51507d5c43906010000000000000043a510e31de87bdcda497dfb3ea3e8db414a10e7d4802fc5dddd26e18d2b3a279c3815c2ec66950b63e60c86dc9a2a658e0224d55ea45efe1f633be052dc7d867aff76a9e983210318f1b808aacbbba1dc04b6ac4e6845fa0cc887aeacaf5a068ab9aeaf8142740612ff2f3377ce7bfa7433936aaa23e3f3749691afaa06301fd03f043c097556e7efdf6862007edf3eb868c736d917896c014c54754f65182ae0c198157f92e667b6572ba60e6a52d58cb70dbeb3791206e928ea5e65c6199d25780cedb51796a8a43e40e192d1b23d0cfaf2ddd03e4ade7c327dbc427999244bf4b47b560cf65d672c86ef448eb5061870d3f617bd3658ad6917d0d32d9296020000000000000008f167c3f26c93dbfb91f3077b66bc0092473a15ef21c30f43d3aa96776f352a33622830e9cfcb48bdf8d3145aa0cf364bd19bbabfb3c73e44f56794ee65dc8a";
+            let bytes = hex::decode(serialize_data).unwrap();
+            RawProof::deserialize_compressed(&*bytes).unwrap()
+        }
+    }
+
+    pub fn utils_signatures_from_raw_witnesses(raw_wits: &Vec<RawWitness>) -> Signatures {
+        fn raw_witness_to_sig(sigs: RawWitness) -> Vec<([u8; 20], u8)> {
+            let mut sigs_vec: Vec<([u8; 20], u8)> = Vec::new();
+            for i in (0..sigs.len()).step_by(2) {
+                let preimage: [u8; 20] = if sigs[i].len() == 0 {
+                    [0; 20]
+                } else {
+                    sigs[i].clone().try_into().unwrap()
+                };
+                let digit_arr: [u8; 1] = if sigs[i + 1].len() == 0 {
+                    [0]
+                } else {
+                    sigs[i + 1].clone().try_into().unwrap()
+                };
+                sigs_vec.push((preimage, digit_arr[0]));
+            }
+            sigs_vec
+        }
+
+        assert_eq!(raw_wits.len(), NUM_PUBS + NUM_U256 + NUM_U160);
+        let mut asigs = vec![];
+        for i in 0..NUM_PUBS {
+            let a: wots256::Signature = raw_witness_to_sig(raw_wits[i].clone()).try_into().unwrap();
+            asigs.push(a);
+        }
+        let mut bsigs = vec![];
+        for i in 0..NUM_U256 {
+            let a: wots256::Signature = raw_witness_to_sig(raw_wits[i + NUM_PUBS].clone())
+                .try_into()
+                .unwrap();
+            bsigs.push(a);
+        }
+        let mut csigs = vec![];
+        for i in 0..NUM_U160 {
+            let a: wots160::Signature =
+                raw_witness_to_sig(raw_wits[i + NUM_PUBS + NUM_U256].clone())
+                    .try_into()
+                    .unwrap();
+            csigs.push(a);
+        }
+        let asigs = asigs.try_into().unwrap();
+        let bsigs = bsigs.try_into().unwrap();
+        let csigs = csigs.try_into().unwrap();
+        (asigs, bsigs, csigs)
+    }
+
+    pub fn utils_raw_witnesses_from_signatures(signatures: &Signatures) -> Vec<RawWitness> {
+        // Helper: Convert a signature (which can be converted into Vec<([u8;20], u8)>)
+        // back into its RawWitness representation.
+        fn sig_to_raw_witness<T>(signature: T) -> RawWitness
+        where
+            T: Into<Vec<([u8; 20], u8)>>,
+        {
+            let sig_pairs: Vec<([u8; 20], u8)> = signature.into();
+            let mut raw = Vec::with_capacity(sig_pairs.len() * 2);
+            for (preimage, digit) in sig_pairs {
+                // In the original conversion an empty vector was used to represent [0;20].
+                // So we "invert" that: if preimage is all zeroes, output an empty vector.
+                raw.push(if preimage == [0; 20] {
+                    vec![]
+                } else {
+                    preimage.to_vec()
+                });
+                // Similarly, if the digit is 0 then output an empty vector.
+                raw.push(if digit == 0 { vec![] } else { vec![digit] });
+            }
+            raw
+        }
+
+        // Assume Signatures is a tuple: (asigs, bsigs, csigs) where:
+        // - asigs: Vec<wots256::Signature> of length NUM_PUBS
+        // - bsigs: Vec<wots256::Signature> of length NUM_U256
+        // - csigs: Vec<wots160::Signature> of length NUM_U160 (or NUM_PUBS if they are equal)
+        let (asigs, bsigs, csigs) = signatures;
+        let mut raw_wits = Vec::with_capacity(asigs.len() + bsigs.len() + csigs.len());
+
+        for sig in asigs {
+            raw_wits.push(sig_to_raw_witness(sig));
+        }
+        for sig in bsigs {
+            raw_wits.push(sig_to_raw_witness(sig));
+        }
+        for sig in csigs {
+            raw_wits.push(sig_to_raw_witness(sig));
+        }
+
+        raw_wits
+    }
+
+    pub fn script_to_witness(scr: Script) -> Vec<Vec<u8>> {
+        let res = execute_script(scr);
+        let wit = res.final_stack.0.iter_str().fold(vec![], |mut vector, x| {
+            vector.push(x);
+            vector
+        });
+        wit
+    }
+
+    pub fn utils_typed_pubkey_from_raw(
+        commits_public_keys: Vec<&WinternitzPublicKey>,
+    ) -> PublicKeys {
+        let mut apubs = vec![];
+        let mut bpubs = vec![];
+        let mut cpubs = vec![];
+        for idx in 0..commits_public_keys.len() {
+            let f = commits_public_keys[idx];
+            if idx < NUM_PUBS {
+                let p: wots256::PublicKey = f.public_key.clone().try_into().unwrap();
+                apubs.push(p);
+            } else if idx < NUM_PUBS + NUM_U256 {
+                let p: wots256::PublicKey = f.public_key.clone().try_into().unwrap();
+                bpubs.push(p);
+            } else if idx < NUM_PUBS + NUM_U256 + NUM_U160 {
+                let p: wots160::PublicKey = f.public_key.clone().try_into().unwrap();
+                cpubs.push(p);
+            }
+        }
+
+        let pks: PublicKeys = (
+            apubs.try_into().unwrap(),
+            bpubs.try_into().unwrap(),
+            cpubs.try_into().unwrap(),
+        );
+        pks
+    }
+}
+
+pub fn get_operator_taproot_address(
+    operator_xonly_pubkey: XOnlyPublicKey,
+    network: Network,
+) -> (Address, TaprootSpendInfo) {
+    let builder = TaprootBuilder::new()
+        .finalize(SECP256K1, operator_xonly_pubkey)
+        .unwrap();
+
+    let address = Address::p2tr(SECP256K1, operator_xonly_pubkey, None, network);
+    (address, builder)
+}
+
+pub fn get_aseert_address_from_script(
+    script: Script,
+    operator_xonly_pubkey: XOnlyPublicKey,
+    network: Network,
+) -> (Address, TaprootSpendInfo, ScriptBuf) {
+    let script = script.compile();
+    let builder = TaprootBuilder::new()
+        .add_leaf(0, script.clone())
+        .unwrap()
+        .finalize(SECP256K1, operator_xonly_pubkey)
+        .unwrap();
+
+    let address = Address::p2tr(
+        SECP256K1,
+        operator_xonly_pubkey,
+        builder.merkle_root(),
+        network,
+    );
+
+    (address, builder, script)
+}
+
+pub fn get_disprove_address_from_scripts(
+    scripts: Vec<ScriptBuf>,
+    operator_xonly_pubkey: XOnlyPublicKey,
+    network: Network,
+) -> Address {
+    let num_scripts = scripts.len();
+    let builder = TaprootBuilder::new();
+    let deepest_layer_depth: u8 = ((num_scripts - 1).ilog2() + 1) as u8;
+
+    let num_empty_nodes_in_final_depth = 2_usize.pow(deepest_layer_depth.into()) - num_scripts;
+    let num_nodes_in_final_depth = num_scripts - num_empty_nodes_in_final_depth;
+
+    let builder = (0..num_scripts).fold(builder, |acc, i| {
+        let is_node_in_last_minus_one_depth = (i >= num_nodes_in_final_depth) as u8;
+
+        acc.add_leaf(
+            deepest_layer_depth - is_node_in_last_minus_one_depth,
+            scripts[i].clone(),
+        )
+        .expect("algorithm tested to be correct")
+    });
+
+    let tree_info = builder
+        .finalize(SECP256K1, operator_xonly_pubkey)
+        .expect("algorithm tested to be correct");
+
+    let address = Address::p2tr(
+        SECP256K1,
+        operator_xonly_pubkey,
+        tree_info.merkle_root(),
+        network,
+    );
+
+    address
+}
+
+pub fn get_assert_addresses(
+    pubkeys: PublicKeys,
+    operator_xonly_pubkey: XOnlyPublicKey,
+    network: Network,
+) -> Vec<(Address, TaprootSpendInfo, ScriptBuf)> {
+    let mut assert_addresses = vec![];
+    for i in 0..NUM_PUBS {
+        let script = script! {
+            {operator_xonly_pubkey}
+            OP_CHECKSIGVERIFY
+            {wots256::checksig_verify(pubkeys.0[i])}
+            for _ in 0..32*2 {
+                OP_DROP
+            }
+            OP_TRUE
+        };
+
+        assert_addresses.push(get_aseert_address_from_script(
+            script,
+            operator_xonly_pubkey,
+            network,
+        ));
+    }
+
+    let step = 5;
+    for i in (0..NUM_U256).step_by(step) {
+        let script = script! {
+            {operator_xonly_pubkey}
+            OP_CHECKSIGVERIFY
+            for j in i..i+step {
+                {wots256::checksig_verify(pubkeys.1[j])}
+                for _ in 0..32*2 {
+                    OP_DROP
+                }
+            }
+            OP_TRUE
+        };
+        assert_addresses.push(get_aseert_address_from_script(
+            script,
+            operator_xonly_pubkey,
+            network,
+        ));
+    }
+
+    let step = 10;
+    for i in (0..NUM_U160).step_by(step) {
+        let script = script! {
+            {operator_xonly_pubkey}
+            OP_CHECKSIGVERIFY
+            for j in i..i+step {
+                {wots160::checksig_verify(pubkeys.2[j])}
+                for _ in 0..20*2 {
+                    OP_DROP
+                }
+            }
+            OP_TRUE
+        };
+        assert_addresses.push(get_aseert_address_from_script(
+            script,
+            operator_xonly_pubkey,
+            network,
+        ));
+    }
+    assert_addresses
+}
+
+pub fn sign_with_tweak(
+    keypair: Keypair,
+    sighash: TapSighash,
+    merkle_root: Option<TapNodeHash>,
+) -> schnorr::Signature {
+    use bitcoin::hashes::Hash;
+    SECP256K1.sign_schnorr(
+        &bitcoin::secp256k1::Message::from_digest(*sighash.as_byte_array()),
+        &keypair
+            .add_xonly_tweak(
+                &SECP256K1,
+                &TapTweakHash::from_key_and_tweak(keypair.x_only_public_key().0, merkle_root)
+                    .to_scalar(),
+            )
+            .unwrap(),
+    )
+}
+
+pub fn schnorr_sign(keypair: Keypair, sighash: TapSighash) -> schnorr::Signature {
+    use bitcoin::hashes::Hash;
+    SECP256K1.sign_schnorr(
+        &bitcoin::secp256k1::Message::from_digest(*sighash.as_byte_array()),
+        &keypair,
+    )
+}
+
+pub fn get_mini_assert_tx(
+    index: usize,
+    assert_begin_txid: bitcoin::Txid,
+    operator_taproot_address: &Address,
+    operator_keypair: Keypair,
+    assert_addresses: &[(Address, TaprootSpendInfo, ScriptBuf)],
+    raw_witness: &[Vec<Vec<u8>>],
+) -> Transaction {
+    let mut mini_assert_tx = Transaction {
+        version: bitcoin::transaction::Version::TWO,
+        lock_time: bitcoin::absolute::LockTime::ZERO,
+        input: vec![bitcoin::TxIn {
+            previous_output: OutPoint {
+                txid: assert_begin_txid,
+                vout: index as u32,
+            },
+            script_sig: ScriptBuf::default(),
+            sequence: bitcoin::Sequence::ZERO,
+            witness: bitcoin::Witness::new(),
+        }],
+        output: vec![bitcoin::TxOut {
+            value: Amount::from_sat(330),
+            script_pubkey: operator_taproot_address.script_pubkey(),
+        }],
+    };
+
+    let prevouts = vec![bitcoin::TxOut {
+        value: Amount::from_sat(2_300_000),
+        script_pubkey: assert_addresses[index].0.script_pubkey(),
+    }];
+
+    let mut sighash_cache = bitcoin::sighash::SighashCache::new(mini_assert_tx.clone());
+
+    let sighash = sighash_cache
+        .taproot_script_spend_signature_hash(
+            0,
+            &bitcoin::sighash::Prevouts::All(&prevouts),
+            TapLeafHash::from_script(
+                assert_addresses[index].2.as_script(),
+                LeafVersion::TapScript,
+            ),
+            bitcoin::TapSighashType::Default,
+        )
+        .unwrap();
+
+    let sig = schnorr_sign(operator_keypair, sighash);
+
+    let spend_control_block = assert_addresses[index]
+        .1
+        .control_block(&(assert_addresses[index].2.clone(), LeafVersion::TapScript))
+        .unwrap();
+
+    let mut witness = bitcoin::Witness::new();
+    raw_witness
+        .iter()
+        .rev()
+        .for_each(|raw_witnes| raw_witnes.iter().for_each(|x| witness.push(x.clone())));
+    witness.push(sig.serialize());
+    witness.push(assert_addresses[index].2.as_script());
+    witness.push(spend_control_block.serialize());
+
+    mini_assert_tx.input[0].witness = witness;
+
+    mini_assert_tx
+}
+
+pub fn get_raw_signed_transactions(
+    funding_outpoint: OutPoint,
+    pubkeys: PublicKeys,
+    operator_xonly_pubkey: XOnlyPublicKey,
+    operator_keypair: Keypair,
+    proof_sigs: Signatures,
+    disprove_scripts: &[ScriptBuf],
+    network: Network,
+) -> Vec<Transaction> {
+    use bitcoin::hashes::Hash;
+
+    let (operator_taproot_address, operator_taproot_builder) =
+        get_operator_taproot_address(operator_xonly_pubkey, network);
+    let assert_addresses = get_assert_addresses(pubkeys, operator_xonly_pubkey, network);
+
+    let mut assert_begin_tx = Transaction {
+        version: bitcoin::transaction::Version::TWO,
+        lock_time: bitcoin::absolute::LockTime::ZERO,
+        input: vec![bitcoin::TxIn {
+            previous_output: funding_outpoint,
+            script_sig: ScriptBuf::default(),
+            sequence: bitcoin::Sequence::ZERO,
+            witness: bitcoin::Witness::new(),
+        }],
+        output: assert_addresses
+            .iter()
+            .map(|(address, _, _)| bitcoin::TxOut {
+                value: Amount::from_sat(2_300_000),
+                script_pubkey: address.script_pubkey(),
+            })
+            .collect(),
+    };
+    let prevouts = vec![bitcoin::TxOut {
+        value: Amount::from_sat(100_000_000),
+        script_pubkey: operator_taproot_address.script_pubkey(),
+    }];
+
+    let mut sighash_cache = bitcoin::sighash::SighashCache::new(assert_begin_tx.clone());
+    let sighash = sighash_cache
+        .taproot_key_spend_signature_hash(
+            0,
+            &bitcoin::sighash::Prevouts::All(&prevouts),
+            bitcoin::sighash::TapSighashType::Default,
+        )
+        .unwrap();
+
+    let sig = sign_with_tweak(operator_keypair, sighash, None);
+
+    let mut witness = bitcoin::Witness::new();
+    witness.push(sig.serialize());
+
+    assert_begin_tx.input[0].witness = witness;
+
+    let assert_begin_txid = assert_begin_tx.compute_txid();
+
+    let raw_witness = utils_raw_witnesses_from_signatures(&proof_sigs);
+
+    let mini_assert_tx = get_mini_assert_tx(
+        0,
+        assert_begin_txid,
+        &operator_taproot_address,
+        operator_keypair,
+        &assert_addresses,
+        &raw_witness[0..1],
+    );
+
+    let mut all_txs = vec![assert_begin_tx, mini_assert_tx];
+
+    let step = 5;
+    for i in (0..NUM_U256).step_by(step) {
+        let mini_assert_tx = get_mini_assert_tx(
+            i / step + 1,
+            assert_begin_txid,
+            &operator_taproot_address,
+            operator_keypair,
+            &assert_addresses,
+            &raw_witness[i + NUM_PUBS..i + step + NUM_PUBS],
+        );
+        all_txs.push(mini_assert_tx);
+    }
+
+    let step = 10;
+    for i in (0..NUM_U160).step_by(step) {
+        let mini_assert_tx = get_mini_assert_tx(
+            i / step + 5,
+            assert_begin_txid,
+            &operator_taproot_address,
+            operator_keypair,
+            &assert_addresses,
+            &raw_witness[i + NUM_PUBS + NUM_U256..i + step + NUM_PUBS + NUM_U256],
+        );
+        all_txs.push(mini_assert_tx);
+    }
+
+    let final_tx_inputs = all_txs[1..]
+        .iter()
+        .map(|tx| OutPoint {
+            txid: tx.compute_txid(),
+            vout: 0,
+        })
+        .collect::<Vec<_>>();
+
+    let disprove_address = get_disprove_address_from_scripts(
+        disprove_scripts.to_vec(),
+        operator_xonly_pubkey,
+        network,
+    );
+
+    let mut final_tx = Transaction {
+        version: bitcoin::transaction::Version::TWO,
+        lock_time: bitcoin::absolute::LockTime::ZERO,
+        input: final_tx_inputs
+            .iter()
+            .map(|outpoint| bitcoin::TxIn {
+                previous_output: *outpoint,
+                script_sig: ScriptBuf::default(),
+                sequence: bitcoin::Sequence::ZERO,
+                witness: bitcoin::Witness::new(),
+            })
+            .collect(),
+        output: vec![bitcoin::TxOut {
+            value: Amount::from_sat(330),
+            script_pubkey: disprove_address.script_pubkey(),
+        }],
+    };
+
+    let prevouts = vec![
+        bitcoin::TxOut {
+            value: Amount::from_sat(330),
+            script_pubkey: operator_taproot_address.script_pubkey(),
+        };
+        all_txs.len() - 1
+    ];
+
+    let mut sighash_cache = bitcoin::sighash::SighashCache::new(final_tx.clone());
+    for i in 0..final_tx.input.len() {
+        let sighash = sighash_cache
+            .taproot_key_spend_signature_hash(
+                i,
+                &bitcoin::sighash::Prevouts::All(&prevouts),
+                bitcoin::sighash::TapSighashType::Default,
+            )
+            .unwrap();
+
+        let sig = sign_with_tweak(operator_keypair, sighash, None);
+
+        let mut witness = bitcoin::Witness::new();
+        witness.push(sig.serialize());
+
+        final_tx.input[i].witness = witness;
+    }
+
+    all_txs.push(final_tx);
+
+    all_txs
+}
+
+#[derive(Clone, Debug, borsh::BorshDeserialize, borsh::BorshSerialize)]
+pub struct BitVMCache {
+    pubkeys: PublicKeys,
+    signatures: Signatures,
+    disprove_scripts: Vec<Vec<u8>>,
+}
+
+impl BitVMCache {
+    pub fn save_to_file(&self, path: &str) -> Result<(), std::io::Error> {
+        let serialized = borsh::to_vec(&self).unwrap();
+        fs::write(path, serialized).map_err(|e| {
+            println!("Failed to save BitVM cache: {}", e);
+            e
+        })
+    }
+
+    pub fn load_from_file(path: &str) -> Result<Self, std::io::Error> {
+        let bytes = fs::read(path).map_err(|e| {
+            println!("Failed to read BitVM cache: {}", e);
+            e
+        })?;
+
+        let x = borsh::BorshDeserialize::try_from_slice(&bytes).unwrap();
+        Ok(x)
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
-
-    use ark_ec::{pairing::Pairing, AffineRepr};
-    
-    
+    use crate::chunk::api::type_conversion_utils::{
+        utils_raw_witnesses_from_signatures, utils_signatures_from_raw_witnesses,
+    };
+    use crate::chunk::api::Signatures;
+    // use crate::chunk::api::{
+    //     get_operator_taproot_address, get_raw_signed_transactions, BitVMCache, Signatures,
+    // };
+    use crate::chunk::api_runtime_utils::{get_pubkeys, get_signature_from_assertion};
+    use crate::groth16::constants::S;
+    use crate::groth16::g16::{get_operator_taproot_address, BitVMCache};
+    use crate::treepp::Script;
+    use ark_bn254::Bn254;
     use ark_serialize::CanonicalDeserialize;
-    use bitcoin::ScriptBuf;
+    use bitcoin::hashes::Hash;
+    use bitcoin::{ScriptBuf, Txid};
+    use bitcoin_script::script;
+    use bitcoincore_rpc::RpcApi;
+    // use bitcoincore_rpc::RpcApi;
     use rand::Rng;
 
-    use crate::{chunk::{api::{api_generate_full_tapscripts, api_generate_partial_script, generate_signatures, validate_assertions}, api_runtime_utils::get_pubkeys}, groth16::g16::test::test_utils::{read_scripts_from_file, write_scripts_to_file, write_scripts_to_separate_files}, treepp};
-
-
-    use self::{ test_utils::{read_map_from_file, write_map_to_file}};
-
-    use super::*;
-
-
-    mod test_utils {
-        use crate::treepp::*;
-        use bitcoin::ScriptBuf;
-        use std::collections::HashMap;
-        use std::error::Error;
-        use std::fs::File;
-        use std::io::BufReader;
-        use std::io::Write;
-
-
-        pub(crate) fn write_map_to_file(
-            map: &HashMap<u32, Vec<Vec<u8>>>,
-            filename: &str,
-        ) -> Result<(), Box<dyn Error>> {
-            // Serialize the map to a JSON string
-            let json = serde_json::to_string(map)?;
-
-            // Write the JSON string to a file
-            let mut file = File::create(filename)?;
-            file.write_all(json.as_bytes())?;
-            Ok(())
-        }
-
-        pub(crate) fn read_map_from_file(
-            filename: &str,
-        ) -> Result<HashMap<u32, Vec<Vec<u8>>>, Box<dyn Error>> {
-            let file = File::open(filename)?;
-            let reader = BufReader::new(file);
-            let map = serde_json::from_reader(reader)?;
-            Ok(map)
-        }
-
-        pub fn write_scripts_to_file(sig_cache: HashMap<u32, Vec<Script>>, file: &str) {
-            let mut buf: HashMap<u32, Vec<Vec<u8>>> = HashMap::new();
-            for (k, v) in sig_cache {
-                let vs = v.into_iter().map(|x| x.compile().to_bytes()).collect();
-                buf.insert(k, vs);
-            }
-            write_map_to_file(&buf, file).unwrap();
-        }
-
-        pub fn write_scripts_to_separate_files(sig_cache: HashMap<u32, Vec<Script>>, file: &str) {
-            let mut buf: HashMap<u32, Vec<Vec<u8>>> = HashMap::new();
-            std::fs::create_dir_all("bridge_data/chunker_data")
-                .expect("Failed to create directory structure");
-
-            for (k, v) in sig_cache {
-                let file = format!("bridge_data/chunker_data/{file}_{k}.json");
-                let vs = v.into_iter().map(|x| x.compile().to_bytes()).collect();
-                buf.insert(k, vs);
-                write_map_to_file(&buf, &file).unwrap();
-                buf.clear();
-            }
-        }
-
-        pub fn read_scripts_from_file(file: &str) -> HashMap<u32, Vec<Script>> {
-            let mut scr: HashMap<u32, Vec<Script>> = HashMap::new();
-            let f = read_map_from_file(file).unwrap();
-            for (k, v) in f {
-                let vs: Vec<Script> = v
-                    .into_iter()
-                    .map(|x| {
-                        let sc = script! {};
-                        let bf = ScriptBuf::from_bytes(x);
-                        
-                        sc.push_script(bf)
-                    })
-                    .collect();
-                scr.insert(k, vs);
-            }
-            scr
-        }
-
-    }
-
-    pub mod mock {
-        use super::*;
-        use ark_bn254::Bn254;
-        use ark_crypto_primitives::snark::{CircuitSpecificSetupSNARK, SNARK};
-        use ark_ff::{BigInt, PrimeField};
-        use ark_groth16::{Groth16, ProvingKey};
-        use ark_relations::{lc, r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError}};
-        use ark_std::test_rng;
-        use rand::{RngCore, SeedableRng};
-        
-
-        #[derive(Copy)]
-        struct DummyCircuit<F: PrimeField> {
-            pub a: Option<F>,
-            pub b: Option<F>,
-            pub num_variables: usize,
-            pub num_constraints: usize,
-        }
-        
-        impl<F: PrimeField> Clone for DummyCircuit<F> {
-            fn clone(&self) -> Self {
-                DummyCircuit {
-                    a: self.a,
-                    b: self.b,
-                    num_variables: self.num_variables,
-                    num_constraints: self.num_constraints,
-                }
-            }
-        }
-        
-
-        impl<F: PrimeField> ConstraintSynthesizer<F> for DummyCircuit<F> {
-            fn generate_constraints(self, cs: ConstraintSystemRef<F>) -> Result<(), SynthesisError> {
-                let a = cs.new_witness_variable(|| self.a.ok_or(SynthesisError::AssignmentMissing))?;
-                let b = cs.new_witness_variable(|| self.b.ok_or(SynthesisError::AssignmentMissing))?;
-                let c = cs.new_input_variable(|| {
-                    let a = self.a.ok_or(SynthesisError::AssignmentMissing)?;
-                    let b = self.b.ok_or(SynthesisError::AssignmentMissing)?;
-    
-                    Ok(a * b)
-                })?;
-    
-                for _ in 0..(self.num_variables - 3) {
-                    let _ =
-                        cs.new_witness_variable(|| self.a.ok_or(SynthesisError::AssignmentMissing))?;
-                }
-    
-                for _ in 0..self.num_constraints - 1 {
-                    cs.enforce_constraint(lc!() + a, lc!() + b, lc!() + c)?;
-                }
-    
-                cs.enforce_constraint(lc!(), lc!(), lc!())?;
-    
-                Ok(())
-            }
-        }
-
-        pub fn compile_circuit() -> (ProvingKey<Bn254>, VerifyingKey) {
-            type E = Bn254;
-            let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
-            let (a, b): (u32, u32) = (5, 6);
-            let circuit = DummyCircuit::<<E as Pairing>::ScalarField> {
-                a: Some(<E as Pairing>::ScalarField::from_bigint(BigInt::from(a)).unwrap()),
-                b: Some(<E as Pairing>::ScalarField::from_bigint(BigInt::from(b)).unwrap()),
-                num_variables: 10,
-                num_constraints: 1 << 6,
-            };
-
-            let (pk, vk) = Groth16::<E>::setup(circuit, &mut rng).unwrap();
-            (pk, vk)
-        }
-
-        pub fn generate_proof() -> (Proof, PublicInputs) {
-            type E = Bn254;
-
-            let (a, b): (u32, u32) = (5, 6);
-
-            //let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
-            let circuit = DummyCircuit::<<E as Pairing>::ScalarField> {
-                a: Some(<E as Pairing>::ScalarField::from_bigint(BigInt::from(a)).unwrap()),
-                b: Some(<E as Pairing>::ScalarField::from_bigint(BigInt::from(b)).unwrap()),
-                num_variables: 10,
-                num_constraints: 1 << 6,
-            };
-
-            let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
-
-            let (pk, _) = compile_circuit();
-            let pub_c = circuit.a.unwrap() * circuit.b.unwrap();
-
-            let proof = Groth16::<Bn254>::prove(&pk, circuit, &mut rng).unwrap();
-            let public_inputs = [pub_c];
-
-            (proof, public_inputs)
-        }
-    }
-
-    #[derive(Clone, Debug, borsh::BorshDeserialize, borsh::BorshSerialize)]
-    pub struct BitVMCache {
-        pubkeys: PublicKeys,
-        signatures: Signatures,
-        disprove_scripts: Vec<Vec<u8>>,
-    }
-
-    impl BitVMCache {
-        pub fn save_to_file(&self, path: &str) -> Result<(), std::io::Error> {
-            let serialized = borsh::to_vec(&self).unwrap();
-            std::fs::write(path, serialized).map_err(|e| {
-                println!("Failed to save BitVM cache: {}", e);
-                e
-            })
-        }
-
-        pub fn load_from_file(path: &str) -> Result<Self, std::io::Error> {
-            let bytes = std::fs::read(path).map_err(|e| {
-                println!("Failed to read BitVM cache: {}", e);
-                e
-            })?;
-
-            let x = borsh::BorshDeserialize::try_from_slice(&bytes).unwrap();
-            Ok(x)
-        }
-    }
-
-    const MOCK_SECRET: &str = "a138982ce17ac813d505a5b40b665d404e9528e7";
-
-    fn sign_assertions(assn: Assertions) -> Signatures {
-        let (ps, fs, hs) = (assn.0, assn.1, assn.2);
-        let secret = MOCK_SECRET;
-        
-        let mut psig: Vec<wots256::Signature> = vec![];
-        for i in 0..NUM_PUBS {
-            let psi = wots256::get_signature(&format!("{secret}{:04x}", i), &ps[i]);
-            psig.push(psi);
-        }
-        let psig: [wots256::Signature; NUM_PUBS] = psig.try_into().unwrap();
-
-        let mut fsig: Vec<wots256::Signature> = vec![];
-        for i in 0..fs.len() {
-            let fsi = wots256::get_signature(&format!("{secret}{:04x}", NUM_PUBS + i), &fs[i]);
-            fsig.push(fsi);
-        }
-        let fsig: [wots256::Signature; N_VERIFIER_FQS] = fsig.try_into().unwrap();
-
-        let mut hsig: Vec<wots160::Signature> = vec![];
-        for i in 0..hs.len() {
-            let hsi =
-                wots160::get_signature(&format!("{secret}{:04x}", NUM_PUBS + fs.len() + i), &hs[i]);
-            hsig.push(hsi);
-        }
-        let hsig: [wots160::Signature; N_VERIFIER_HASHES] = hsig.try_into().unwrap();
-
-        
-        (psig, fsig, hsig)
-    }
-
-    // Step 1: Anyone can Generate Operation (mul & hash) part of tapscript: same for all vks
-    #[test]
-    fn test_fn_compile() {
-        let (_, mock_vk) = mock::compile_circuit();
-        
-        assert_eq!(mock_vk.gamma_abc_g1.len(), NUM_PUBS + 1); 
-
-        let ops_scripts = compile_verifier(mock_vk);
-        let mut script_cache = HashMap::new();
-
-        for i in 0..ops_scripts.len() {
-            script_cache.insert(i as u32, vec![ops_scripts[i].clone()]);
-        }
-
-        write_scripts_to_separate_files(script_cache, "tapnode");
-    }
-
-    pub fn mock_pubkeys(mock_secret: &str) -> PublicKeys {
-
-        let mut pubins = vec![];
-        for i in 0..NUM_PUBS {
-            pubins.push(wots256::generate_public_key(&format!("{mock_secret}{:04x}", i)));
-        }
-        let mut fq_arr = vec![];
-        for i in 0..N_VERIFIER_FQS {
-            let p256 = wots256::generate_public_key(&format!("{mock_secret}{:04x}", NUM_PUBS + i));
-            fq_arr.push(p256);
-        }
-        let mut h_arr = vec![];
-        for i in 0..N_VERIFIER_HASHES {
-            let p160 = wots160::generate_public_key(&format!("{mock_secret}{:04x}", N_VERIFIER_FQS + NUM_PUBS + i));
-            h_arr.push(p160);
-        }
-        let wotspubkey: PublicKeys = (
-            pubins.try_into().unwrap(),
-            fq_arr.try_into().unwrap(),
-            h_arr.try_into().unwrap(),
-        );
-        wotspubkey
-    }
-
-    // Step 2: Operator Generates keypairs and broadcasts pubkeys for a Bitvm setup; 
-    // Anyone can create Bitcomm part of tapscript; yields complete tapscript
-    #[test]
-    fn test_fn_generate_tapscripts() {
-        println!("start");
-
-        let (_, mock_vk) = mock::compile_circuit();
-        println!("compiled circuit");
-
-        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1); 
-        let mock_pubs = mock_pubkeys(MOCK_SECRET);
-        let mut op_scripts = vec![];
-
-        println!("load scripts from file");
-        for index in 0..N_TAPLEAVES {
-            let read = read_scripts_from_file(&format!("bridge_data/chunker_data/tapnode_{index}.json"));
-            let read_scr = read.get(&(index as u32)).unwrap();
-            assert_eq!(read_scr.len(), 1);
-            let tap_node = read_scr[0].clone();
-            op_scripts.push(tap_node);
-        }
-        println!("done");
-
-        for i in 0..N_TAPLEAVES {
-            println!("taps_len {}", op_scripts[i].len());
-        }
-
-        let ops_scripts: [Script; N_TAPLEAVES] = op_scripts.try_into().unwrap(); //compile_verifier(mock_vk);
-
-        let tapscripts = generate_disprove_scripts(mock_pubs, &ops_scripts);
-        println!(
-            "tapscript.lens: {:?}",
-            tapscripts.clone().map(|script| script.len())
-        );
- 
-
-    }
-
-    // Step 3: Operator Generates Assertions, Signs it and submit on chain
-    #[test]
-    fn test_fn_generate_assertions() {
-        let (_, mock_vk) = mock::compile_circuit();
-        let (proof, public_inputs) = mock::generate_proof();
-
-        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1);
-        let proof_asserts = generate_proof_assertions(mock_vk, proof, public_inputs);
-        println!("signed_asserts {:?}", proof_asserts);
-   
-        std::fs::create_dir_all("bridge_data/chunker_data")
-        .expect("Failed to create directory structure");
-    
-        write_asserts_to_file(proof_asserts, "bridge_data/chunker_data/assert.json");
-        let _signed_asserts = sign_assertions(proof_asserts);
-    }
-
-    // Step 3: Operator Generates Assertions, Signs it and submit on chain
-    #[test]
-    fn test_fn_generate_signatures() {
-        let (_, mock_vk) = mock::compile_circuit();
-        let (proof, public_inputs) = mock::generate_proof();
-
-        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1);
-        let secrets = (0..NUM_PUBS + NUM_U256 + NUM_U160)
-            .map(|idx| format!("{MOCK_SECRET}{:04x}", idx))
-            .collect::<Vec<String>>();
-        let _ = generate_proof_signature(mock_vk, proof, public_inputs, secrets);
-        //println!("signed_asserts {:?}", proof_asserts);
-    
-        // std::fs::create_dir_all("bridge_data/chunker_data")
-        // .expect("Failed to create directory structure");
-    
-        // write_asserts_to_file(proof_asserts, "bridge_data/chunker_data/assert.json");
-        // let _signed_asserts = sign_assertions(proof_asserts);
-    }
-
-    #[test]
-    fn test_fn_validate_assertions() {
-        let (_, mock_vk) = mock::compile_circuit();
-        let (proof, public_inputs) = mock::generate_proof();
-
-        assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1);
-
-        let mut op_scripts = vec![];
-        println!("load scripts from file");
-        for index in 0..N_TAPLEAVES {
-            let read = read_scripts_from_file(&format!("bridge_data/chunker_data/tapnode_{index}.json"));
-            let read_scr = read.get(&(index as u32)).unwrap();
-            assert_eq!(read_scr.len(), 1);
-            let tap_node = read_scr[0].clone();
-            op_scripts.push(tap_node);
-        }
-        println!("done");
-        let ops_scripts: [Script; N_TAPLEAVES] = op_scripts.try_into().unwrap();
-
-       let mock_pubks = mock_pubkeys(MOCK_SECRET);
-       let verifier_scripts = generate_disprove_scripts(mock_pubks, &ops_scripts);
-
-    //     // let proof_asserts = generate_proof_assertions(mock_vk.clone(), proof, public_inputs);
-        let proof_asserts = read_asserts_from_file("bridge_data/chunker_data/assert.json");
-        let signed_asserts = sign_assertions(proof_asserts);
-    //     let mock_pubks = mock_pubkeys(MOCK_SECRET);
-
-        println!("verify_signed_assertions");
-        let fault = verify_signed_assertions(mock_vk, mock_pubks, signed_asserts, &verifier_scripts);
-        assert!(fault.is_none());
-    }
-
-    
-
-    fn corrupt(proof_asserts: &mut Assertions, random: Option<usize>) {
-        let mut rng = rand::thread_rng();
-
-        // Generate a random number between 1 and 100 (inclusive)
-        let mut index = rng.gen_range(0..N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES);
-        if random.is_some() {
-            index = random.unwrap();
-        }
-        // WARN: KNOWN ISSUE: scramble: [u8; 32] = [255; 32]; fails because tapscripts do not check that the asserted value is a field element 
-        // A 256 bit number is not a field element. For now, this prototype only supports corruption that is still a field element
-        let mut scramble: [u8; 32] = [0u8; 32];
-        scramble[16] = 37;
-        let mut scramble2: [u8; 20] = [0u8; 20];
-        scramble2[10] = 37;
-        println!("corrupted assertion at index {}", index);
-        if index < N_VERIFIER_PUBLIC_INPUTS {
-            if index == 0 {
-                if proof_asserts.0[0] == scramble {
-                    scramble[16] += 1;
-                }
-                proof_asserts.0[0] = scramble;
-            } 
-        } else if index < N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS {
-            let index = index - N_VERIFIER_PUBLIC_INPUTS;
-            if proof_asserts.1[index] == scramble {
-                scramble[16] += 1;
-            }
-            proof_asserts.1[index] = scramble;
-        } else if index < N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES {
-            let index = index - N_VERIFIER_PUBLIC_INPUTS - N_VERIFIER_FQS;
-            if proof_asserts.2[index] == scramble2 {
-                scramble2[10] += 1;
-            }
-            proof_asserts.2[index] = scramble2;
-        }
-    }
-
-    // Step 4: Challenger finds fault given signatures
-    #[test]
-    fn test_fn_disprove_invalid_assertions() {
-        let (_, mock_vk) = mock::compile_circuit();
-        let (proof, public_inputs) = mock::generate_proof();
-
-        assert_eq!(mock_vk.gamma_abc_g1.len(), NUM_PUBS+1); 
-
-        let mut op_scripts = vec![];
-        println!("load scripts from file");
-        for index in 0..N_TAPLEAVES {
-            let read = read_scripts_from_file(&format!("bridge_data/chunker_data/tapnode_{index}.json"));
-            let read_scr = read.get(&(index as u32)).unwrap();
-            assert_eq!(read_scr.len(), 1);
-            let tap_node = read_scr[0].clone();
-            op_scripts.push(tap_node);
-        }
-        println!("done");
-        let ops_scripts: [Script; N_TAPLEAVES] = op_scripts.try_into().unwrap();
-
-        let mock_pubks = mock_pubkeys(MOCK_SECRET);
-        let verifier_scripts = generate_disprove_scripts(mock_pubks, &ops_scripts);
-
-
-        let total = N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + N_VERIFIER_HASHES;
-        for i in 0..1{ //total {
-            println!("ITERATION {:?}", i);
-            let mut proof_asserts = read_asserts_from_file("bridge_data/chunker_data/assert.json");
-            corrupt(&mut proof_asserts, Some(i));
-            let signed_asserts = sign_assertions(proof_asserts);
-    
-            let fault = verify_signed_assertions(mock_vk.clone(), mock_pubks, signed_asserts, &verifier_scripts);
-            assert!(fault.is_some());
-            if fault.is_some() {
-                let (index, hint_script) = fault.unwrap();
-                println!("taproot index {:?}", index);
-                let scr = script!(
-                    {hint_script.clone()}
-                    {verifier_scripts[index].clone()}
-                );
-                let res = execute_script(scr);
-                for i in 0..res.final_stack.len() {
-                    println!("{i:} {:?}", res.final_stack.get(i));
-                }
-                let mut disprove_map: HashMap<u32, Vec<Script>> = HashMap::new();
-                let disprove_f = &format!("bridge_data/chunker_data/disprove_{index}.json");
-                disprove_map.insert(index as u32, vec![hint_script]);
-                write_scripts_to_file(disprove_map, disprove_f);
-                assert!(res.success);
-            }
-        }
-    }
-
-    fn write_asserts_to_file(proof_asserts: Assertions, filename: &str) {
-        //let proof_asserts = mock_asserts();
-        let mut proof_vec: Vec<Vec<u8>> = vec![];
-        for k in proof_asserts.0 {
-            proof_vec.push(k.to_vec());
-        }
-        for k in proof_asserts.1 {
-            proof_vec.push(k.to_vec());
-        }
-        for k in proof_asserts.2 {
-            proof_vec.push(k.to_vec());
-        }
-        let mut obj: HashMap<u32, Vec<Vec<u8>>> = HashMap::new();
-        obj.insert(0, proof_vec);
-
-        write_map_to_file(&obj, filename).unwrap();
-    }
-
-    fn read_asserts_from_file(filename: &str) -> Assertions {
-        let res = read_map_from_file(filename).unwrap();
-        let proof_vec = res.get(&0).unwrap();
-        
-        let mut assert1 = vec![];
-        for i in 0..N_VERIFIER_PUBLIC_INPUTS {
-            let v:[u8;32] = proof_vec[i].clone().try_into().unwrap();
-            assert1.push(v);
-        }
-        let assert1: [[u8; 32]; N_VERIFIER_PUBLIC_INPUTS] = assert1.try_into().unwrap();
-
-        let mut assert2 = vec![];
-        for i in 0..N_VERIFIER_FQS {
-            let v:[u8;32] = proof_vec[N_VERIFIER_PUBLIC_INPUTS + i].clone().try_into().unwrap();
-            assert2.push(v);
-        }
-        let assert2: [[u8; 32]; N_VERIFIER_FQS] = assert2.try_into().unwrap();
-
-        let mut assert3 = vec![];
-        for i in 0..N_VERIFIER_HASHES {
-            let v:[u8;20] = proof_vec[N_VERIFIER_PUBLIC_INPUTS + N_VERIFIER_FQS + i].clone().try_into().unwrap();
-            assert3.push(v);
-        }
-        let assert3: [[u8; 20]; N_VERIFIER_HASHES] = assert3.try_into().unwrap();
-        (assert1, assert2, assert3)
-    }
-
-
-
+    use crate::{
+        chunk::{
+            api::{
+                api_generate_full_tapscripts, api_generate_partial_script, generate_signatures,
+                validate_assertions, Assertions,
+            },
+            api::{NUM_PUBS, NUM_TAPS, NUM_U160, NUM_U256},
+            api_runtime_utils::get_assertions_from_signature,
+        },
+        execute_script,
+    };
 
     #[test]
     fn full_e2e_execution() {
@@ -703,27 +884,184 @@ mod test {
             }
         };
 
-        let x = bitvm_cache.signatures;
-        println!("x: {:?}", x);
+        // generate assert addresses
+        use std::str::FromStr;
+        let network = bitcoin::network::Network::Testnet4;
 
-        let disprove_scripts: Vec<Script> = bitvm_cache.disprove_scripts
+        let operator_secret_key =
+            "d0d5603a31ddbef5ecc1d75b45012704e57121b7eba0c1d7e104863fbf178838";
+        let operator_keypair = bitcoin::key::Keypair::from_str(operator_secret_key).unwrap();
+        let operator_xonly_pubkey = operator_keypair.x_only_public_key().0;
+
+        let (operator_taproot_address, operator_taproot_builder) =
+            get_operator_taproot_address(operator_xonly_pubkey, network);
+
+        let disprove_scripts: Vec<_> = bitvm_cache
+            .disprove_scripts
+            .iter()
+            .map(|x| ScriptBuf::from(x.clone()))
+            .collect();
+
+        println!(
+            "Send funds to operator_taproot_address: {:?}",
+            operator_taproot_address
+        );
+        // return;
+
+        // let funding_outpoint = bitcoin::OutPoint::new(
+        //     Txid::from_str("a17e459d42d6a37a96e53c6a280097517be50349f9346b4867d6436184a31954")
+        //         .unwrap(),
+        //     0,
+        // );
+
+        // let all_txs = get_raw_signed_transactions(
+        //     funding_outpoint,
+        //     bitvm_cache.pubkeys,
+        //     operator_xonly_pubkey,
+        //     operator_keypair,
+        //     bitvm_cache.signatures,
+        //     &disprove_scripts,
+        //     network,
+        // );
+
+        // // print!("testmempoolaccept '[");
+        // for tx in all_txs.iter() {
+        //     println!("/usr/local/bin/bitcoin-cli -regtest -rpcport=48333 -rpcuser=admin -rpcpassword=admin sendrawtransaction {};", hex::encode(bitcoin::consensus::serialize(tx)));
+        // }
+
+        let fetch_from_cache = true;
+        let sigs = if fetch_from_cache {
+            bitvm_cache.signatures
+        } else {
+            let x = utils_raw_witnesses_from_signatures(&bitvm_cache.signatures);
+            println!("x: {:?}", x);
+    
+            let assert_end_txid =
+                Txid::from_str("8ea73a1eee3104d832f6f0868ff2b57103f9091b7e1607dffe214ca8ebc42c87")
+                    .unwrap();
+            let rpc = bitcoincore_rpc::Client::new(
+                "http://localhost:48333",
+                bitcoincore_rpc::Auth::UserPass("admin".to_string(), "admin".to_string()),
+            )
+            .unwrap();
+            let tx = rpc.get_raw_transaction(&assert_end_txid, None).unwrap();
+            println!("tx: {:?}", tx);
+            let mut witnesses = Vec::new();
+            for (i, input) in tx.input.iter().enumerate() {
+                println!("vin: {:?}", input);
+                let input_txid = input.previous_output.txid;
+                let input_tx = rpc.get_raw_transaction(&input_txid, None).unwrap();
+                let witness_elements: Vec<Vec<u8>> = input_tx.input[0]
+                    .witness
+                    .iter()
+                    .map(|w| w.to_vec())
+                    .collect();
+                let witness_elements_without_last_three =
+                    witness_elements[..witness_elements.len() - 3].to_vec();
+                println!("witness: {:?}", witness_elements_without_last_three);
+                if i == 0 {
+                    witnesses.push(witness_elements_without_last_three);
+                } else if i < 5 {
+                    let chunks = witness_elements_without_last_three
+                        .chunks_exact(witness_elements_without_last_three.len() / 5);
+                    let vec_of_chunks: Vec<Vec<Vec<u8>>> = chunks.map(|chunk| chunk.to_vec()).collect();
+                    witnesses.extend(vec_of_chunks);
+                } else {
+                    let chunks = witness_elements_without_last_three
+                        .chunks_exact(witness_elements_without_last_three.len() / 10);
+                    let vec_of_chunks: Vec<Vec<Vec<u8>>> = chunks.map(|chunk| chunk.to_vec()).collect();
+                    witnesses.extend(vec_of_chunks);
+                }
+            }
+            println!("witnesses: {:?}", witnesses);
+            println!("Witness length: {}", witnesses.len());
+            let x: Signatures = utils_signatures_from_raw_witnesses(&witnesses);
+            println!("x: {:?}", x);
+            x
+        };
+
+
+        let disprove_scripts: Vec<Script> = disprove_scripts
             .iter()
             .map(|x| {
-                let mut scr = script!();
-                scr = scr.push_script(ScriptBuf::from_bytes(x.to_vec()));
-                scr
+                script! {
+                    {x.clone().as_bytes().to_vec()}
+                }
             })
             .collect();
 
         println!("Disprove scripts len: {}", disprove_scripts.len());
         println!("Num taps: {}", NUM_TAPS);
-        // println!("Witness length: {}", witnesses.len());
+
         let y = validate_assertions(
             &vk,
-            x,
+            sigs,
             bitvm_cache.pubkeys,
             &disprove_scripts.try_into().unwrap(),
         );
         println!("y: {:?}", y);
+        // print!("]'\n");
+        // println!("txs: {:?}", txs);
+        return;
+
+        // let pubkeys = bitvm_cache.pubkeys;
+        // let proof_sigs = bitvm_cache.signatures;
+        // let disprove_scripts = bitvm_cache.disprove_scripts;
+
+        // corrupt_at_random_index(&mut proof_asserts);
+
+        // let corrupt_signed_asserts = get_signature_from_assertion(&proof_asserts, secrets);
+        // let disprove_scripts: [Script; NUM_TAPS] = disprove_scripts.try_into().unwrap();
+
+        // let invalid_tap =
+        //     validate_assertions(&vk, corrupt_signed_asserts, pubkeys, &disprove_scripts);
+        // assert!(invalid_tap.is_some());
+        // let (index, hint_script) = invalid_tap.unwrap();
+        // println!("STEP 4 EXECUTING DISPROVE SCRIPT at index {}", index);
+        // let scr = script!(
+        //     {hint_script.clone()}
+        //     {disprove_scripts[index].clone()}
+        // );
+        // let res = execute_script(scr);
+        // if res.final_stack.len() > 1 {
+        //     println!("Stack ");
+        //     for i in 0..res.final_stack.len() {
+        //         println!("{i:} {:?}", res.final_stack.get(i));
+        //     }
+        // }
+
+        // assert_eq!(res.final_stack.len(), 1);
+        // assert!(res.success);
+        // println!("DONE");
+
+        // fn corrupt_at_random_index(proof_asserts: &mut Assertions) {
+        //     let mut rng = rand::thread_rng();
+        //     let index = rng.gen_range(0..NUM_PUBS + NUM_U256 + NUM_U160);
+        //     let mut scramble: [u8; 32] = [0u8; 32];
+        //     scramble[16] = 37;
+        //     let mut scramble2: [u8; 20] = [0u8; 20];
+        //     scramble2[10] = 37;
+        //     println!("demo: manually corrupt assertion at index at {:?}", index);
+        //     if index < NUM_PUBS {
+        //         if index == 0 {
+        //             if proof_asserts.0[0] == scramble {
+        //                 scramble[16] += 1;
+        //             }
+        //             proof_asserts.0[0] = scramble;
+        //         }
+        //     } else if index < NUM_PUBS + NUM_U256 {
+        //         let index = index - NUM_PUBS;
+        //         if proof_asserts.1[index] == scramble {
+        //             scramble[16] += 1;
+        //         }
+        //         proof_asserts.1[index] = scramble;
+        //     } else if index < NUM_PUBS + NUM_U256 + NUM_U160 {
+        //         let index = index - NUM_PUBS - NUM_U256;
+        //         if proof_asserts.2[index] == scramble2 {
+        //             scramble2[10] += 1;
+        //         }
+        //         proof_asserts.2[index] = scramble2;
+        //     }
+        // }
     }
 }

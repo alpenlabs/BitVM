@@ -31,13 +31,16 @@ ark-crypto-primitives.workspace = true
 ark-relations.workspace = true
 tqdm.workspace = true
 regex.workspace = true
+secp256k1.workspace = true
+borsh.workspace = true
+bitcoincore-rpc.workspace = true
 
 [features]
 fuzzing = []
 
 [dev-dependencies]
 serde_json.workspace = true
-borsh.workspace = true
+
 
 [profile.dev]
 opt-level = 3
