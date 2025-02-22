@@ -982,13 +982,13 @@ mod test {
 
 
         let disprove_scripts: Vec<Script> = disprove_scripts
-            .iter()
-            .map(|x| {
-                script! {
-                    {x.clone().as_bytes().to_vec()}
-                }
-            })
-            .collect();
+        .iter()
+        .map(|x| {
+            let scr = script!();
+            let scr = scr.push_script(x.clone());
+            scr
+        })
+        .collect();
 
         println!("Disprove scripts len: {}", disprove_scripts.len());
         println!("Num taps: {}", NUM_TAPS);
