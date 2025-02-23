@@ -11,7 +11,10 @@ use crate::{
 };
 use ark_ec::{AffineRepr, CurveGroup}; 
 use ark_ff::{AdditiveGroup, Field, Fp12Config, PrimeField};
+use bitcoin::opcodes::all::{OP_BOOLAND, OP_FROMALTSTACK, OP_TOALTSTACK};
+use num_bigint::BigUint;
 use std::ops::Neg;
+use std::str::FromStr;
 
 use super::wrap_hasher::hash_messages;
 use super::elements::{ElemG2Eval, ElementType};
@@ -19,18 +22,56 @@ use super::primitives::extern_nibbles_to_limbs;
 use super::taps_mul::utils_multiply_by_line_eval;
 
 
-pub(crate) fn get_hint_for_add_with_frob(q: ark_bn254::G2Affine, t: ark_bn254::G2Affine, ate: i8) -> ark_bn254::G2Affine {
+pub(crate) fn frob_q_power(q: ark_bn254::G2Affine, ate: i8) -> ark_bn254::G2Affine {
+    let beta_12x = BigUint::from_str(
+        "21575463638280843010398324269430826099269044274347216827212613867836435027261",
+    )
+    .unwrap();
+    let beta_12y = BigUint::from_str(
+        "10307601595873709700152284273816112264069230130616436755625194854815875713954",
+    )
+    .unwrap();
+    let beta_12 = ark_bn254::Fq2::from_base_prime_field_elems([
+        ark_bn254::Fq::from(beta_12x.clone()),
+        ark_bn254::Fq::from(beta_12y.clone()),
+    ])
+    .unwrap();
+    let beta_13x = BigUint::from_str(
+        "2821565182194536844548159561693502659359617185244120367078079554186484126554",
+    )
+    .unwrap();
+    let beta_13y = BigUint::from_str(
+        "3505843767911556378687030309984248845540243509899259641013678093033130930403",
+    )
+    .unwrap();
+    let beta_13 = ark_bn254::Fq2::from_base_prime_field_elems([
+        ark_bn254::Fq::from(beta_13x.clone()),
+        ark_bn254::Fq::from(beta_13y.clone()),
+    ])
+    .unwrap();
+
+    let beta_22x = BigUint::from_str(
+        "21888242871839275220042445260109153167277707414472061641714758635765020556616",
+    )
+    .unwrap();
+    let beta_22y = BigUint::from_str("0").unwrap();
+    let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([
+        ark_bn254::Fq::from(beta_22x.clone()),
+        ark_bn254::Fq::from(beta_22y.clone()),
+    ])
+    .unwrap();
+
     let mut qq = q;
     if ate == 1 {
-        let (qdash, _, _) = hinted_mul_by_char_on_q(qq);
-        qq = qdash;
+        qq.x.conjugate_in_place();
+        qq.x *= beta_12;
+        qq.y.conjugate_in_place();
+        qq.y *= beta_13;
     } else if ate == -1 {
-        let (qdash, _, _) = hinted_mul_by_char_on_phi_q(qq);
-        qq = qdash;
+        qq.x *= beta_22;
     }
-    
-    (t + qq).into_affine()
 
+    qq
 }
 
 fn utils_point_double_eval(t: ark_bn254::G2Affine, p: ark_bn254::G1Affine) -> ((ark_bn254::G2Affine, (ark_bn254::Fq2, ark_bn254::Fq2)), Script, Vec<Hint>) {
@@ -98,6 +139,7 @@ fn utils_point_double_eval(t: ark_bn254::G2Affine, p: ark_bn254::G1Affine) -> ((
 fn utils_point_add_eval(t: ark_bn254::G2Affine, q4: ark_bn254::G2Affine, p: ark_bn254::G1Affine, is_frob:bool, ate_bit: i8) -> ((ark_bn254::G2Affine, (ark_bn254::Fq2, ark_bn254::Fq2)), Script, Vec<Hint>) {
     let mut hints = vec![];
 
+    // Precompute Q
     let temp_q = q4;
     let (qq, precomp_q_scr, precomp_q_hint) =
     if is_frob {
@@ -118,14 +160,25 @@ fn utils_point_add_eval(t: ark_bn254::G2Affine, q4: ark_bn254::G2Affine, p: ark_
     } else {
         (temp_q, script!(), vec![])
     };
+    hints.extend(precomp_q_hint);
 
+
+    // Point Add
     let t_is_zero = t.is_zero() || (t == ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO)); // t is none or Some(0)
     let q_is_zero = qq.is_zero() || (qq == ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO)); // q is none or Some(0)
+    let is_valid_input = !t_is_zero && !q_is_zero && t != -qq;
 
-    let (alpha, bias) = if !t_is_zero && !q_is_zero && t != -qq { // todo: add if t==q and if t == -q
-        let alpha = (t.y - qq.y) / (t.x - qq.x);
-        let bias = t.y - alpha * t.x;
-        (alpha, bias)
+    // if it's valid input, you can compute line coefficients, else hardcode degenerate values
+    let (alpha, bias) = if is_valid_input { 
+        if t == qq {
+            let alpha = (t.x.square() + t.x.square() + t.x.square()) / (t.y + t.y); 
+            let bias = t.y - alpha * t.x;
+            (alpha, bias)
+        } else {
+            let alpha = (t.y - qq.y) / (t.x - qq.x);
+            let bias = t.y - alpha * t.x;
+            (alpha, bias)
+        }
     } else {
         (ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO)
     };
@@ -135,15 +188,20 @@ fn utils_point_add_eval(t: ark_bn254::G2Affine, q4: ark_bn254::G2Affine, p: ark_
     let (hinted_script2, hint2) = hinted_affine_add_line_empty_elements(t.x, qq.x, alpha, -bias);
     let (hinted_script3, hint3) = hinted_ell_by_constant_affine(p.x, p.y,alpha, -bias);
 
-    let mut add_le0 = alpha;
-    add_le0.mul_assign_by_fp(&p.x);
-    let mut add_le1 = -bias;
-    add_le1.mul_assign_by_fp(&p.y);
+    // if it's valid input, you can compute result, else degenerate values
+    let result = if is_valid_input {
+        let mut add_le0 = alpha;
+        add_le0.mul_assign_by_fp(&p.x);
+        let mut add_le1 = -bias;
+        add_le1.mul_assign_by_fp(&p.y);
+        ((t + qq).into_affine(), (add_le0, add_le1))
+    } else {
+        let zero_pt =  ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO);
+        (zero_pt, (ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO))
+    };
 
-    let result = ((t + qq).into_affine(), (add_le0, add_le1));
-
-    if !t.is_zero() && !qq.is_zero() && t != -qq {
-        hints.extend(precomp_q_hint);
+    // if it's valid input, you need hints to run computation
+    if is_valid_input {
         hints.push(Hint::Fq(alpha.c0));
         hints.push(Hint::Fq(alpha.c1));
         hints.push(Hint::Fq(-bias.c0));
@@ -154,6 +212,19 @@ fn utils_point_add_eval(t: ark_bn254::G2Affine, q4: ark_bn254::G2Affine, p: ark_
         hints.extend(hint3);
     }
 
+    let drop_and_insert_zero = script!(
+        // [.., tx, ty, qx, qy], [px, py]
+        { G2Affine::drop() }
+        {Fq2::fromaltstack()} {Fq2::drop()}
+        // [tx, ty]
+        {Fq2::push(ark_bn254::Fq2::ZERO)}
+        {Fq2::push(ark_bn254::Fq2::ZERO)}
+        // [t, nt]
+        {Fq2::push(ark_bn254::Fq2::ZERO)}
+        {Fq2::push(ark_bn254::Fq2::ZERO)}
+        // [t, nt, le]
+    );
+
     let script = script! {        // tx ty qx qy
         // a, b, tx, ty, qx, qy, px, py
         {Fq2::toaltstack()}
@@ -161,28 +232,34 @@ fn utils_point_add_eval(t: ark_bn254::G2Affine, q4: ark_bn254::G2Affine, p: ark_
         {precomp_q_scr}
         // [qx qy]
         { G2Affine::is_zero_keep_element() }
-        OP_IF
-            { G2Affine::drop() }
+        OP_IF // q == 0
+             // [.., tx, ty, qx, qy], [px, py]
+            {drop_and_insert_zero.clone()}
         OP_ELSE
+            // [t, q]
             { G2Affine::roll(1) }
             { G2Affine::is_zero_keep_element() }
-            OP_IF
-                { G2Affine::drop() }
-            OP_ELSE                                // qx qy tx ty
+            OP_IF // t == 0
+                // [q, t]
+                {G2Affine::roll(1)}
+                {drop_and_insert_zero.clone()}
+            OP_ELSE  
+                // qx qy tx ty                             
                 {G2Affine::copy(1)}
                 // qx qy tx ty qx qy
                 { Fq2::neg(0)}
                 // qx qy tx ty qx -qy
                 {G2Affine::copy(1)}
                 // qx qy tx ty qx -qy tx ty
-                {G2Affine::equal()} 
+                {G2Affine::equal()} // q = -t ?
                 // qx qy tx ty 0/1
-                OP_IF // qx == tx
-                    {G2Affine::drop()}
-                    {G2Affine::drop()}
-                    {Fq2::push(ark_bn254::Fq2::ZERO)}
-                    {Fq2::push(ark_bn254::Fq2::ZERO)}
+                OP_IF // q == -t
+                    // [q, t]
+                    {G2Affine::roll(1)}
+                    // [t, q]
+                    {drop_and_insert_zero}
                 OP_ELSE
+                    // [qx, qy, tx, ty]
                     for _ in 0..Fq::N_LIMBS * 2 {
                         OP_DEPTH OP_1SUB OP_ROLL 
                     }
@@ -207,6 +284,7 @@ fn utils_point_add_eval(t: ark_bn254::G2Affine, q4: ark_bn254::G2Affine, p: ark_
                     {Fq2::fromaltstack()} {Fq2::fromaltstack()}  // tx, ty, le0, le1, x', y'
                     {Fq2::roll(6)} {Fq2::roll(6)}                            // tx, ty, x', y', le
                 OP_ENDIF
+                // [tx, ty, ntx, nty, le]
             OP_ENDIF
         OP_ENDIF
     };
@@ -372,22 +450,28 @@ fn point_ops_and_multiply_line_evals_step_1(
         // [t4, p4, p3, p2, nt4, g+f, fg', p2le]
         {Fq6::copy(4)} 
         // [t4, p4, p3, p2, nt4, g+f, fg', p2le, fg']
-        {Fq6::is_zero()} OP_NOT OP_TOALTSTACK // fg'_is_zero()
+        {Fq6::is_zero()} OP_NOT OP_TOALTSTACK // fg'_is_not_zero()
         // [t4, p4, p3, p2, nt4, g+f, fg', p2le]
         {Fq2::copy(12)} {Fq2::copy(12)} 
          // [t4, p4, p3, p2, nt4, g+f, fg', p2le, g+f]
         {Fq2::push(ark_bn254::Fq2::ZERO)}
-        {Fq6::is_zero()} // g+f.is_zero()
-        OP_NOT
-        OP_FROMALTSTACK 
-        // [g+f.is_not_zero() fg'_is_not_zero()]
-        OP_BOOLAND
+        {Fq6::is_zero()} OP_NOT OP_TOALTSTACK // g+f.is_not_zero()
+        // [t4, p4, p3, p2, nt4, g+f, fg', p2le]
+        {Fq2::copy(16)} {Fq2::copy(16)}
+        // [t4, p4, p3, p2, nt4, g+f, fg', p2le, nt4]
+        {G2Affine::is_zero_keep_element()}
+        OP_NOT OP_TOALTSTACK
+        {G2Affine::drop()}
+        //[t4, p4, p3, p2, nt4, g+f, fg', p2le] [0/1, 0/1, 0/1]
+        OP_FROMALTSTACK OP_FROMALTSTACK OP_FROMALTSTACK
+        // [ .., nt4.is_not_zero() g+f.is_not_zero() fg'_is_not_zero()] []
+        OP_BOOLAND OP_BOOLAND
         OP_IF
-            // g+f.is_not_zero() && fg'.is_not_zero()
+            // none are zero
             {1}
             // [t4, p4, p3, p2, nt4, g+f, fg', p2le, {1}]
         OP_ELSE  
-            // g+f.is_zero() || fg'.is_zero() 
+            // at least one is zero
             {0}
             // [t4, p4, p3, p2, nt4, g+f, fg', p2le, {0}]
         OP_ENDIF
@@ -408,7 +492,9 @@ fn point_ops_and_multiply_line_evals_step_1(
         // res_hint: res_hint.c1/res_hint.c0,
     };
     
-    let input_is_valid = one_plus_fg_j_sq != ark_bn254::Fq6::ZERO && fpg.c0 != ark_bn254::Fq2::ZERO && fpg.c1 != ark_bn254::Fq2::ZERO;
+    let input_is_valid = one_plus_fg_j_sq != ark_bn254::Fq6::ZERO && 
+    fpg.c0 != ark_bn254::Fq2::ZERO && fpg.c1 != ark_bn254::Fq2::ZERO && 
+    (nt != ark_bn254::G2Affine::zero() && nt != ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO));
 
     (hout, input_is_valid, scr, hints)
 
@@ -702,13 +788,17 @@ pub(crate) fn chunk_init_t4(ts: [ark_ff::BigInt<4>; 4]) -> (ElemG2Eval, bool, Sc
 
 #[cfg(test)]
 mod test {
-    use ark_ff::{AdditiveGroup, BigInt, Field, UniformRand};
+    use std::str::FromStr;
+
+    use ark_ec::AffineRepr;
+    use ark_ff::{AdditiveGroup, BigInt, Field, MontFp, UniformRand};
     use bitcoin_script::script;
+    use num_bigint::BigUint;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
     use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fq2::Fq2, fq6::Fq6, g1::G1Affine, g2::G2Affine, utils::Hint}, chunk::{wrap_hasher::hash_messages, elements::{DataType, ElemG2Eval, ElementType}, taps_point_ops::{chunk_point_ops_and_multiply_line_evals_step_2, chunk_init_t4, chunk_point_ops_and_multiply_line_evals_step_1, point_ops_and_multiply_line_evals_step_2, point_ops_and_multiply_line_evals_step_1, utils_point_add_eval}}, execute_script};
 
-    use super::utils_point_double_eval;
+    use super::{frob_q_power, utils_point_double_eval};
 
 
     #[test]
@@ -769,56 +859,97 @@ mod test {
         let q = ark_bn254::G2Affine::rand(&mut prng);
         let p = ark_bn254::G1Affine::rand(&mut prng);
 
-        let ((r, le), hinted_check_add, hints) = utils_point_add_eval(t, q, p, true, 1);
+        let beta_22x = BigUint::from_str(
+            "21888242871839275220042445260109153167277707414472061641714758635765020556616",
+        )
+        .unwrap();
+        let beta_22y = BigUint::from_str("0").unwrap();
+        let beta_22 = ark_bn254::Fq2::from_base_prime_field_elems([
+            ark_bn254::Fq::from(beta_22x.clone()),
+            ark_bn254::Fq::from(beta_22y.clone()),
+        ])
+        .unwrap();
+        let qb = ark_bn254::G2Affine::new_unchecked(q.x * beta_22, q.y);
 
-        let script = script! {
-            for hint in hints {
-                { hint.push() }
+        let zero = ark_bn254::G2Affine::identity();
+
+        for (t, q, p, frob, ate) in vec![
+                // test vectors
+                (zero, q, p, false, 1), // t = 0 
+                (t, zero, p, false, 1), // q = 0
+                (t, zero, p, false, -1), // q = neg 0 
+                (zero, q, p, false, -1), // t = zero, q = neg
+
+                (zero, q, p, true, 1), // t = 0 
+                (t, zero, p, true, 1), // q = 0
+                (t, zero, p, true, -1), // q = neg 0 
+                (zero, q, p, true, -1), // t = zero, q = neg 
+
+                (t, q, p, false, 1), // add 
+                (t, q, p, false, -1), // neg
+                (t, -t, p, false, 1), // t = -q
+                (t, t, p, false, -1), // t = -q
+                (t, t, p, false, 1), // t = q
+                (t, -t, p, false, -1), // t = q
+                (t, q, p, true, 1), // frob pow 1 
+                (t, q, p, true, -1), // frob pow 2
+                (qb, q, p, true, -1), // frob pow 2
+                (qb, -q, p, true, -1), // frob pow 2
+            ] {
+            let ((r, le), hinted_check_add, hints) = utils_point_add_eval(t, q, p, frob, ate);
+
+            let script = script! {
+                for hint in hints {
+                    { hint.push() }
+                }
+    
+                { Fq2::push(t.x) }
+                { Fq2::push(t.y) }
+                { Fq2::push(q.x) }
+                { Fq2::push(q.y) }
+                { G1Affine::push(p) }
+                { hinted_check_add.clone() }
+                // [x']
+    
+    
+                {Fq2::push(le.1)}
+                {Fq2::equalverify()}
+                {Fq2::push(le.0)}
+                {Fq2::equalverify()}
+    
+                {Fq2::push(r.y)}
+                {Fq2::equalverify()}
+                {Fq2::push(r.x)}
+                {Fq2::equalverify()}
+                
+                
+                {Fq2::push(t.y)}
+                {Fq2::equalverify()}
+    
+                {Fq2::push(t.x)}
+                {Fq2::equalverify()}
+                // []
+                OP_TRUE
+                // [OP_TRUE]
+            };
+            let exec_result = execute_script(script);
+            if exec_result.final_stack.len() > 1 {
+                for i in 0..exec_result.final_stack.len() {
+                    println!("{i:} {:?}", exec_result.final_stack.get(i));
+                }
             }
-
-            { Fq2::push(t.x) }
-            { Fq2::push(t.y) }
-            { Fq2::push(q.x) }
-            { Fq2::push(q.y) }
-            { G1Affine::push(p) }
-            { hinted_check_add.clone() }
-            // [x']
-
-
-            {Fq2::push(le.1)}
-            {Fq2::equalverify()}
-            {Fq2::push(le.0)}
-            {Fq2::equalverify()}
-
-            {Fq2::push(r.y)}
-            {Fq2::equalverify()}
-            {Fq2::push(r.x)}
-            {Fq2::equalverify()}
-            
-            
-            {Fq2::push(t.y)}
-            {Fq2::equalverify()}
-
-            {Fq2::push(t.x)}
-            {Fq2::equalverify()}
-            // []
-            OP_TRUE
-            // [OP_TRUE]
-        };
-        let exec_result = execute_script(script);
-        if exec_result.final_stack.len() > 1 {
-            for i in 0..exec_result.final_stack.len() {
-                println!("{i:} {:?}", exec_result.final_stack.get(i));
-            }
+            assert!(exec_result.success);
+            assert!(exec_result.final_stack.len() == 1);
+            println!(
+                "utils_point_add_eval disprovable(false) {} @ {} stack; r.is_inf({})",
+                hinted_check_add.len(),
+                exec_result.stats.max_nb_stack_items,
+                r.is_zero() || (r.x == ark_bn254::Fq2::ZERO && r.y == ark_bn254::Fq2::ZERO)
+            );
         }
-        assert!(exec_result.success);
-        assert!(exec_result.final_stack.len() == 1);
-        println!(
-            "utils_point_add_eval disprovable(false) {} @ {} stack",
-            hinted_check_add.len(),
-            exec_result.stats.max_nb_stack_items
-        );
+
     }
+
 
     
 
@@ -988,7 +1119,7 @@ mod test {
         let p2 = ark_bn254::G1Affine::rand(&mut prng);
 
         let is_dbl = false;
-        let is_frob: Option<bool> = Some(true);
+        let is_frob: Option<bool> = Some(false);
         let ate_bit: Option<i8> = Some(1);
 
         assert_eq!(is_dbl, is_frob.is_none() && ate_bit.is_none());
@@ -1068,8 +1199,6 @@ mod test {
         println!("point_ops_and_multiply_line_evals_step_1 disprovable(true) script {} stack {:?}", tap_len, res.stats.max_nb_stack_items);
     }
 
-
-        
     #[test]
     fn test_point_ops_and_multiply_line_evals_step_2_invalid_input() {
         let is_dbl = true;
@@ -1374,5 +1503,6 @@ mod test {
         assert!(res.final_stack.len() == 1);
         println!("chunk_point_ops_and_multiply_line_evals_step_1 disprovable(true) script {} stack {:?}", tap_len, res.stats.max_nb_stack_items);
     }
+
 
 }
