@@ -333,14 +333,14 @@ mod test {
         let elem = super::DataType::Fp6Data(fld);
 
         let preim = elem.to_witness(ElementType::Fp6);
-        let scr = script!(
+        let scr = script!{
             for p in preim {
                 {p.push()}
             }
             {elem.to_hash().as_hint_type().push()}
             {Fq::toaltstack()}
             {hash_messages(vec![ElementType::Fp6])}
-        );
+        };
         let res = execute_script(scr);
         assert!(!res.success && res.final_stack.len() == 1);
     }

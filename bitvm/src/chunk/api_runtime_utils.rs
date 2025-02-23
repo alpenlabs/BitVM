@@ -397,15 +397,15 @@ pub(crate) fn execute_script_from_assertion(segments: &Vec<Segment>, assts: Asse
             index_of_bitcommitted_msg.extend_from_slice(&sec_in);
             // index_of_bitcom_msg => [output, inputn-1, ..input0]
 
-            let mut bc_hint = script!();
+            let mut bc_hint = script! {};
             for skey in index_of_bitcommitted_msg {
                 let bcelem = bitcom_msg_arr[skey as usize].clone();
                 let h = bcelem.as_hint_type();
-                bc_hint = script!(
+                bc_hint = script!{
                     {bc_hint}
                     {h.push()}
                     {Fq::toaltstack()}
-                ); // Altstack: [outputhash, inputN-1Hash, ..., input0Hash]
+                }; // Altstack: [outputhash, inputN-1Hash, ..., input0Hash]
             }  
 
             all_bc_hints.push(bc_hint);
@@ -452,17 +452,17 @@ pub(crate) fn execute_script_from_signature(segments: &Vec<Segment>, signed_asst
                 index_of_bitcommitted_msg.push(sec_out.0);
             }
 
-            let mut sig_preimages = script!();
+            let mut sig_preimages = script! {};
             for index in index_of_bitcommitted_msg {
                 let sig_data = &bitcom_sig_arr[index as usize];
                 let sig_preimage = match sig_data {
                     SigData::Sig160(signature) => signature.to_compact_script(),
                     SigData::Sig256(signature) => signature.to_compact_script(),
                 };
-                sig_preimages = script!(
+                sig_preimages = script!{
                     {sig_preimages}
                     {sig_preimage}
-                );
+                };
             }
             bitcom_sig_as_witness.push(sig_preimages);
         }

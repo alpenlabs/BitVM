@@ -191,7 +191,7 @@ pub(crate) fn new_hash_g2acc_with_hashed_le() -> Script {
 }
 
 pub(crate) fn new_hash_g2acc() -> Script {
-    script!(
+    script!{
         // [t, le]
         for _ in 0..14 {
             {Fq::toaltstack()}
@@ -205,18 +205,18 @@ pub(crate) fn new_hash_g2acc() -> Script {
         {Fq::fromaltstack()}
         {Fq::roll(1)}
         {hash_fp2()}
-    )
+    }
 }
 
 pub(crate) fn new_hash_g2acc_with_hash_t() -> Script {
-    script!(
+    script!{
         // [le, ht]
         {Fq::toaltstack()}
         {hash_fp14()}
         {Fq::fromaltstack()}
         {Fq::roll(1)}
         {hash_fp2()}
-    )
+    }
 }
 
 

@@ -183,10 +183,10 @@ mod test {
         assert!(invalid_tap.is_some());
         let (index, hint_script) = invalid_tap.unwrap();
         println!("STEP 4 EXECUTING DISPROVE SCRIPT at index {}", index);
-        let scr = script!(
+        let scr = script!{
             {hint_script.clone()}
             {disprove_scripts[index].clone()}
-        );
+        };
         let res = execute_script(scr);
         if res.final_stack.len() > 1 {
             println!("Stack ");

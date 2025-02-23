@@ -114,13 +114,13 @@ mod test {
 
         let sig_witness = signature.to_compact_script();
         let pub_key = WOTSPubKey::P256(wots256::generate_public_key(secret));
-        let scr = script!(
+        let scr = script! {
             {sig_witness}
             {checksig_verify_to_limbs(&pub_key)}
             {a.as_hint_type().push()}
             {Fq::equalverify(1, 0)}
             OP_TRUE
-        );
+        };
         let tap_len = scr.len();
         let res = execute_script(scr);
         assert!(res.success && res.final_stack.len() == 1);
@@ -146,13 +146,13 @@ mod test {
 
         let sig_witness = signature.to_compact_script();
         let pub_key = WOTSPubKey::P160(wots160::generate_public_key(secret));
-        let scr = script!(
+        let scr = script! {
             {sig_witness}
             {checksig_verify_to_limbs(&pub_key)}
             {a.as_hint_type().push()}
             {Fq::equalverify(1, 0)}
             OP_TRUE
-        );
+        };
         let tap_len = scr.len();
         let res = execute_script(scr);
         assert!(res.success && res.final_stack.len() == 1);

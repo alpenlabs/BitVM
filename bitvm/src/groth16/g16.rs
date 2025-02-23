@@ -506,10 +506,10 @@ mod test {
             if fault.is_some() {
                 let (index, hint_script) = fault.unwrap();
                 println!("taproot index {:?}", index);
-                let scr = script!(
+                let scr = script!{
                     {hint_script.clone()}
                     {verifier_scripts[index].clone()}
-                );
+                };
                 let res = execute_script(scr);
                 for i in 0..res.final_stack.len() {
                     println!("{i:} {:?}", res.final_stack.get(i));

@@ -50,34 +50,34 @@ pub fn hash_messages(elem_types: Vec<ElementType>) -> Script {
     // Altstack: [Hc, Hb, Ha]
     // Stack: [a, b, c, should_do_output_validity_check_bit]
     let elem_types: Vec<ElementType> = elem_types.into_iter().filter(|et| et.number_of_limbs_of_hashing_preimage() > 0).collect();
-    let mut loop_script = script!();
+    let mut loop_script = script! {};
 
     for msg_index in 0..elem_types.len() {
         // send other elems to altstack
         let mut remaining = elem_types[msg_index+1..].to_vec();
-        let mut from_altstack = script!();
+        let mut from_altstack = script! {};
         for elem_type in &remaining {
-            from_altstack = script!(
+            from_altstack = script! {
                 {from_altstack}
                 for _ in 0..elem_type.number_of_limbs_of_hashing_preimage() {
                     {Fq::fromaltstack()}
                 }
-            );
+            };
         }
         remaining.reverse();
-        let mut to_altstack = script!();
+        let mut to_altstack = script! {};
         for elem_type in &remaining {
-            to_altstack = script!(
+            to_altstack = script! {
                 {to_altstack}
                 for _ in 0..elem_type.number_of_limbs_of_hashing_preimage() {
                     {Fq::toaltstack()}
                 }
-            );
+            };
         }
 
         // hash remaining element
         let elem_type = elem_types[msg_index];
-        let hash_scr = script!(
+        let hash_scr = script! {
             if elem_type == ElementType::Fp6 {
                 {hash_fp6()}
             } else if elem_type == ElementType::G1 {
@@ -89,9 +89,9 @@ pub fn hash_messages(elem_types: Vec<ElementType>) -> Script {
             } else if elem_type == ElementType::G2Eval {
                 {new_hash_g2acc()}
             }
-        );
+        };
 
-        let verify_scr = script!(
+        let verify_scr = script! {
             for _ in 0..Fq::N_LIMBS { 
                 OP_DEPTH OP_1SUB OP_ROLL 
             }
@@ -112,8 +112,8 @@ pub fn hash_messages(elem_types: Vec<ElementType>) -> Script {
                 OP_ENDIF
             }
             OP_VERIFY
-        );
-        loop_script = script!(
+        };
+        loop_script = script! {
             {loop_script}
             OP_TOALTSTACK
             {to_altstack}
@@ -121,7 +121,7 @@ pub fn hash_messages(elem_types: Vec<ElementType>) -> Script {
             {from_altstack}
             OP_FROMALTSTACK
             {verify_scr}
-        );
+        };
     }
     loop_script
 }

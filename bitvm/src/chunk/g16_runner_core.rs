@@ -224,7 +224,7 @@ fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hints: &mut V
         result: (DataType::U256Data(*f), ElementType::ScalarElem),
         hints: vec![],
         scr_type: ScriptType::NonDeterministic,
-        scr: script!(),
+        scr: script! {},
     }).collect();
     all_output_hints.extend_from_slice(&pub_scalars);
 
@@ -235,7 +235,7 @@ fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hints: &mut V
         result: (DataType::U256Data(*f), ElementType::FieldElem),
         hints: vec![],
         scr_type: ScriptType::NonDeterministic,
-        scr: script!(),
+        scr: script! {},
     }).collect();
     all_output_hints.extend_from_slice(&p4vec);
     let (gp4y, gp4x, gp2y, gp2x) = (&p4vec[0], &p4vec[1], &p4vec[2], &p4vec[3]);
@@ -247,7 +247,7 @@ fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hints: &mut V
         result: (DataType::U256Data(*f), ElementType::FieldElem),
         hints: vec![],
         scr_type: ScriptType::NonDeterministic,
-        scr: script!(),
+        scr: script! {},
     }).collect();
     all_output_hints.extend_from_slice(&gc);
 
@@ -258,7 +258,7 @@ fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hints: &mut V
         result: (DataType::U256Data(*f), ElementType::FieldElem),
         hints: vec![],
         scr_type: ScriptType::NonDeterministic,
-        scr: script!(),
+        scr: script! {},
     }).collect();
     all_output_hints.extend_from_slice(&gs);
 
@@ -269,7 +269,7 @@ fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hints: &mut V
         result: (DataType::U256Data(*f), ElementType::FieldElem),
         hints: vec![],
         scr_type: ScriptType::NonDeterministic,
-        scr: script!(),
+        scr: script! {},
     }).collect();
     all_output_hints.extend_from_slice(&temp_q4);
 
@@ -584,7 +584,7 @@ mod test {
         let num_pairings = ps.len();
 
         let mut total_script_size = 0;
-        let mut temp_scr = script!();
+        let mut temp_scr = script! {};
 
         let (mut t4, _, scr, _) = chunk_init_t4([qs[2].x.c0.into(), qs[2].x.c1.into(), qs[2].y.c0.into(), qs[2].y.c1.into()]);
         total_script_size += scr.len();
