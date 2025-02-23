@@ -332,11 +332,13 @@ mod test {
         let fld = ark_bn254::Fq6::rand(&mut prng);
         let elem = super::DataType::Fp6Data(fld);
 
+        let check_output_bit = 1;
         let preim = elem.to_witness(ElementType::Fp6);
         let scr = script!{
             for p in preim {
                 {p.push()}
             }
+            {check_output_bit}
             {elem.to_hash().as_hint_type().push()}
             {Fq::toaltstack()}
             {hash_messages(vec![ElementType::Fp6])}
