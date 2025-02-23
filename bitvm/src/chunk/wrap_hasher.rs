@@ -3,14 +3,15 @@ use bitcoin_script_stack::stack::StackTracker;
 
 use super::{elements::ElementType, primitives::{ hash_fp2, hash_fp6, new_hash_g2acc, new_hash_g2acc_with_hash_t, new_hash_g2acc_with_hashed_le}};
 
+pub const BLAKE3_HASH_LENGTH: usize = 20;
 
 fn wrap_scr(scr: Script) -> Script {
     script! {
         { scr }
-        for _ in 0..(64-40)/2 { OP_2DROP }
-        for _ in 0..40 { OP_TOALTSTACK }
-        for _ in 0..(64-40) { 0 }
-        for _ in 0..40 { OP_FROMALTSTACK  }
+        for _ in 0..(32*2-BLAKE3_HASH_LENGTH*2)/2 { OP_2DROP }
+        for _ in 0..BLAKE3_HASH_LENGTH*2 { OP_TOALTSTACK }
+        for _ in 0..(32*2-BLAKE3_HASH_LENGTH*2) { 0 }
+        for _ in 0..BLAKE3_HASH_LENGTH*2 { OP_FROMALTSTACK  }
     }
 }
 
