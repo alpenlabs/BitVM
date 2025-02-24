@@ -21,8 +21,7 @@ use super::elements::{ElemG2Eval, ElementType};
 use super::primitives::extern_nibbles_to_limbs;
 use super::taps_mul::utils_multiply_by_line_eval;
 
-
-pub(crate) fn frob_q_power(q: ark_bn254::G2Affine, ate: i8) -> ark_bn254::G2Affine {
+pub(crate) fn frob_q_power(q: ark_bn254::G2Affine, power: u8) -> ark_bn254::G2Affine {
     let beta_12x = BigUint::from_str(
         "21575463638280843010398324269430826099269044274347216827212613867836435027261",
     )
@@ -61,14 +60,57 @@ pub(crate) fn frob_q_power(q: ark_bn254::G2Affine, ate: i8) -> ark_bn254::G2Affi
     ])
     .unwrap();
 
+
+    let beta_23x = BigUint::from_str(
+        "21888242871839275222246405745257275088696311157297823662689037894645226208582",
+    )
+    .unwrap();
+    let beta_23y = BigUint::from_str("0").unwrap();
+    let beta_23 = ark_bn254::Fq2::from_base_prime_field_elems([
+        ark_bn254::Fq::from(beta_23x.clone()),
+        ark_bn254::Fq::from(beta_23y.clone()),
+    ])
+    .unwrap();
+
+    let beta_32x = BigUint::from_str(
+        "3772000881919853776433695186713858239009073593817195771773381919316419345261",
+    )
+    .unwrap();
+    let beta_32y = BigUint::from_str("2236595495967245188281701248203181795121068902605861227855261137820944008926").unwrap();
+    let beta_32 = ark_bn254::Fq2::from_base_prime_field_elems([
+        ark_bn254::Fq::from(beta_32x.clone()),
+        ark_bn254::Fq::from(beta_32y.clone()),
+    ])
+    .unwrap();
+
+
+    let beta_33x = BigUint::from_str(
+        "19066677689644738377698246183563772429336693972053703295610958340458742082029",
+    )
+    .unwrap();
+    let beta_33y = BigUint::from_str("18382399103927718843559375435273026243156067647398564021675359801612095278180").unwrap();
+    let beta_33 = ark_bn254::Fq2::from_base_prime_field_elems([
+        ark_bn254::Fq::from(beta_33x.clone()),
+        ark_bn254::Fq::from(beta_33y.clone()),
+    ])
+    .unwrap();
+
+
     let mut qq = q;
-    if ate == 1 {
+    if power == 1 {
         qq.x.conjugate_in_place();
         qq.x *= beta_12;
         qq.y.conjugate_in_place();
         qq.y *= beta_13;
-    } else if ate == -1 {
+    } else if power == 2 {
         qq.x *= beta_22;
+        qq.y *= beta_23;
+    }
+    else if power == 3{
+        qq.x.conjugate_in_place();
+        qq.x *= beta_32;
+        qq.y.conjugate_in_place();
+        qq.y *= beta_33;
     }
 
     qq
@@ -1504,5 +1546,23 @@ mod test {
         println!("chunk_point_ops_and_multiply_line_evals_step_1 disprovable(true) script {} stack {:?}", tap_len, res.stats.max_nb_stack_items);
     }
 
+    #[test]
+    fn test_frob() {
+        let mut prng = ChaCha20Rng::seed_from_u64(0);
+        let p = ark_bn254::G2Affine::rand(&mut prng);
+
+        // compute frob_q_power iteratively
+        let q1 = frob_q_power(p, 1);
+        let q2 = frob_q_power(q1, 1);
+        let q3 = frob_q_power(q2, 1);
+
+        // compute frob_q_power directly
+        let q2d = frob_q_power(p, 2);
+        let q3d = frob_q_power(p, 3);
+
+
+        assert_eq!(q2d, q2);
+        assert_eq!(q3d, q3);
+    }
 
 }
