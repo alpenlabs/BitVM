@@ -152,6 +152,7 @@ mod test {
     use crate::chunk::api_compiletime_utils::{append_bitcom_locking_script_to_partial_scripts, partial_scripts_from_segments};
     use crate::chunk::api_runtime_utils::{execute_script_from_signature, get_assertion_from_segments, get_segments_from_groth16_proof};
     use crate::chunk::wrap_hasher::{BLAKE3_HASH_LENGTH};
+    use crate::chunk::wrap_wots::{byte_array_to_wots160_sig, byte_array_to_wots256_sig};
     use crate::signatures::wots_api::{wots160, wots256};
     use crate::treepp::Script;
 
@@ -475,22 +476,21 @@ mod test {
         
         let mut psig: Vec<wots256::Signature> = vec![];
         for i in 0..NUM_PUBS {
-            let psi = wots256::get_signature(&format!("{secret}{:04x}", i), &ps[i]);
+            let psi = byte_array_to_wots256_sig(&format!("{secret}{:04x}", i), &ps[i]);
             psig.push(psi);
         }
         let psig: [wots256::Signature; NUM_PUBS] = psig.try_into().unwrap();
 
         let mut fsig: Vec<wots256::Signature> = vec![];
         for i in 0..NUM_U256 {
-            let fsi = wots256::get_signature(&format!("{secret}{:04x}", NUM_PUBS + i), &fs[i]);
+            let fsi = byte_array_to_wots256_sig(&format!("{secret}{:04x}", NUM_PUBS + i), &fs[i]);
             fsig.push(fsi);
         }
         let fsig: [wots256::Signature; NUM_U256] = fsig.try_into().unwrap();
 
         let mut hsig: Vec<wots160::Signature> = vec![];
         for i in 0..NUM_U160 {
-            let hsi =
-                wots160::get_signature(&format!("{secret}{:04x}", NUM_PUBS + NUM_U256 + i), &hs[i]);
+            let hsi = byte_array_to_wots160_sig(&format!("{secret}{:04x}", NUM_PUBS + NUM_U256 + i), &hs[i]);
             hsig.push(hsi);
         }
         let hsig: [wots160::Signature; NUM_U160] = hsig.try_into().unwrap();
@@ -716,7 +716,7 @@ mod test {
     
 
 
-        let total = NUM_PUBS + NUM_U256 + NUM_U160;
+        let _total = NUM_PUBS + NUM_U256 + NUM_U160;
         for i in 0..1{ //total {
             println!("ITERATION {:?}", i);
             let mut proof_asserts = read_asserts_from_file("bridge_data/chunker_data/assert.json");
