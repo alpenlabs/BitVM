@@ -206,7 +206,7 @@ impl DataType {
             }
             _ => {
                 println!("Unhandled ElementType {:?} ", elem_type);
-                panic!()
+                unreachable!();
             }
         }
     }

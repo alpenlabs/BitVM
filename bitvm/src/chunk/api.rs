@@ -61,19 +61,22 @@ pub fn generate_assertions(
     proof: ark_groth16::Proof<Bn<ark_bn254::Config>>,
     scalars: Vec<ark_bn254::Fr>,
     vk: &ark_groth16::VerifyingKey<Bn254>,
-) -> Assertions {
+) -> Result<Assertions, String> {
     let (success, segments) = get_segments_from_groth16_proof(proof, scalars, vk);
+    if !success {
+        return Err(format!("generate_assertions; get_segments_from_groth16_proof; success false; num_aggregated segments {}", segments.len()));
+    }
     assert!(success);
     let assts = get_assertion_from_segments(&segments);
     let exec_res = execute_script_from_assertion(&segments, assts);
-    if exec_res.is_some() {
-        let fault = exec_res.unwrap();
-        println!("execute_script_from_assertion return fault at script index {}", fault.0);
-        panic!();
+
+    if let Some(fault) = exec_res {
+        println!("generate_assertions; execute_script_from_assertion return fault at script index {}", fault.0);
+        return Err(format!("generate_assertions; execute_script_from_assertion return fault at script index {}", fault.0));
     } else {
         println!("generate_assertions; validated assertion by executing all scripts");
     }
-    assts
+    return Ok(assts);
 }
 
 
@@ -84,10 +87,12 @@ pub fn generate_signatures(
     scalars: Vec<ark_bn254::Fr>,
     vk: &ark_groth16::VerifyingKey<Bn254>,
     secret: &str,
-) -> Signatures {
+) -> Result<Signatures, String> {
     println!("generate_signatures; get_segments_from_groth16_proof");
     let (success, segments) = get_segments_from_groth16_proof(proof, scalars, vk);
-    assert!(success);
+    if !success {
+        return Err(format!("generate_signatures; get_segments_from_groth16_proof; success false; num_aggregated segments {}", segments.len()));
+    }
     println!("generate_signatures; get_assertion_from_segments");
     let assn = get_assertion_from_segments(&segments);
     println!("generate_signatures; get_signature_from_assertion");
@@ -104,14 +109,13 @@ pub fn generate_signatures(
 
     println!("generate_signatures; execute_script_from_signature");
     let exec_res = execute_script_from_signature(&segments, sigs, &disprove_scripts);
-    if exec_res.is_some() {
-        let fault = exec_res.unwrap();
-        println!("execute_script_from_assertion return fault at script index {}", fault.0);
-        panic!();
+    if let Some(fault) = exec_res {
+        println!("generate_signatures; execute_script_from_assertion return fault at script index {}", fault.0);
+        return Err(format!("generate_signatures; execute_script_from_assertion return fault at script index {}", fault.0));
     } else {
-        println!("generate_signatures; validated signatures by executing all scripts");
+        println!("generate_signatures; validated assertion by executing all scripts");
     }
-    sigs
+    Ok(sigs)
 }
 
 // Step 4
@@ -309,7 +313,7 @@ mod test {
         let disprove_scripts = api_generate_full_tapscripts(pubkeys, &partial_scripts);
 
         println!("STEP 2 GENERATE SIGNED ASSERTIONS");
-        let proof_sigs = generate_signatures(proof, scalars.to_vec(), &vk, secret_key);
+        let proof_sigs = generate_signatures(proof, scalars.to_vec(), &vk, secret_key).unwrap();
 
         println!("num assertion; 256-bit numbers {}", NUM_PUBS + NUM_U256);
         println!("num assertion; 160-bit numbers {}", NUM_U160);
@@ -420,7 +424,6 @@ mod test {
                     "execute_script_from_assertion return fault at script index {}",
                     fault.0
                 );
-                // panic!();
             } else {
                 println!("generate_signatures; validated signatures by executing all scripts");
             }
@@ -572,7 +575,7 @@ mod test {
 
 
         assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1);
-        let proof_asserts = generate_assertions(proof, public_inputs.to_vec(), &mock_vk);
+        let proof_asserts = generate_assertions(proof, public_inputs.to_vec(), &mock_vk).unwrap();
         println!("signed_asserts {:?}", proof_asserts);
     
         std::fs::create_dir_all("bridge_data/chunker_data")

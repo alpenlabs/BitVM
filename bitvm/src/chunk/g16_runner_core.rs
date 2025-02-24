@@ -69,22 +69,18 @@ fn compare(hint_out: &DataType, claimed_assertions: &mut Option<Vec<HashBytes>>)
     if claimed_assertions.is_none() {
         return None;
     }
-    
-    fn get_hash(claimed_assertions: &mut Option<Vec<HashBytes>>) -> HashBytes {
-        if let Some(claimed_assertions) = claimed_assertions {
-            claimed_assertions.pop().unwrap()
-        } else {
-            panic!()
-        }
-    }
     assert!(!hint_out.output_is_field_element());
+
     let hint_out_hash = hint_out.to_hash();
-    let mut matches = false;
-    if let CompressedStateObject::Hash(hash) = hint_out_hash {
-        matches = get_hash(claimed_assertions) == hash;
+    let matches = if let CompressedStateObject::Hash(hash) = hint_out_hash {
+        if let Some(claimed_assertions) = claimed_assertions {
+            claimed_assertions.pop().unwrap() == hash
+        } else {
+            unreachable!(); // verified that claimed_assertions is_some()
+        }
     } else {
-        panic!()
-    }
+       unreachable!(); // verified that hint_out is hash above
+    };
     
     Some(matches) 
 }
@@ -105,7 +101,7 @@ pub(crate) fn groth16_generate_segments(
                         return false;
                     }
                 } else {
-                    panic!();
+                    unreachable!();
                 }
             } else if $seg.is_valid_input == false {
                 return false;
