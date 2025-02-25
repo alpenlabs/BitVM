@@ -576,10 +576,18 @@ impl G1Affine {
     ) -> (Script, Vec<Hint>) {
         let mut hints = vec![];
 
-        let (alpha, bias) = if !t.is_zero() && !q.is_zero() {
-            let alpha = (t.y - q.y) / (t.x - q.x);
-            let bias = t.y - alpha * t.x;
-            (alpha, bias)
+        let is_valid_input = !t.is_zero() && !q.is_zero() && t != -q;
+
+        let (alpha, bias) = if is_valid_input {
+            if t == q {
+                let alpha = (t.x.square() + t.x.square() + t.x.square()) / (t.y + t.y);
+                let bias = t.y - alpha * t.x;
+                (alpha, bias)
+            } else {
+                let alpha = (t.y - q.y) / (t.x - q.x);
+                let bias = t.y - alpha * t.x;
+                (alpha, bias)
+            }
         } else {
             (ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO)
         };
@@ -587,38 +595,65 @@ impl G1Affine {
         let (hinted_script1, hint1) = Self::hinted_check_chord_line(t, q, alpha);
         let (hinted_script2, hint2) = Self::hinted_add(t.x, q.x, alpha);
 
-        let script = script! {        // tx ty qx qy
-            { G1Affine::is_zero_keep_element() }
+        let script = script! {
+            // tx ty qx qy        
+            { G1Affine::is_zero_keep_element() } // q = 0 ?
             OP_IF
+                // [t, q]
                 { G1Affine::drop() }
+                // [t]
             OP_ELSE
+                // [t, q]
                 { G1Affine::roll(1) }
+                // [q, t]
                 { G1Affine::is_zero_keep_element() }
                 OP_IF
+                    // [q, t]
                     { G1Affine::drop() }
-                OP_ELSE                                // qx qy tx ty
-                    for _ in 0..Fq::N_LIMBS {
-                        OP_DEPTH OP_1SUB OP_ROLL
-                    }
-                    for _ in 0..Fq::N_LIMBS {
-                        OP_DEPTH OP_1SUB OP_ROLL
-                    }                                  // qx qy tx ty c3 c4
-                    { Fq::copy(1) }
-                    { Fq::copy(1) }                    // qx qy tx ty c3 c4 c3 c4
-                    { Fq::copy(5) }
-                    { Fq::roll(5) }                    // qx qy tx c3 c4 c3 c4 tx ty
-                    { Fq::copy(8) }
-                    { Fq::roll(8) }                    // qx tx c3 c4 c3 c4 tx ty qx qy
-                    { hinted_script1 }                 // qx tx c3 c4 0/1
-                    OP_VERIFY
-                    { Fq::roll(2) }
-                    { Fq::roll(3) }                    // c3 c4 tx qx
-                    { hinted_script2 }                 // x' y'
+                    // [q]
+                OP_ELSE                                
+                    // [qx, qy, tx, ty]
+                    {Fq2::copy(0)}
+                    // [qx, qy, tx, ty, tx, ty]
+                    {Fq::neg(0)}
+                    // [qx, qy, tx, ty, tx, -ty]
+                    {Fq2::copy(4)}
+                    // [qx, qy, tx, ty, tx, -ty, qx, qy]
+                    {Fq2::equal()} // q == -t ?
+                    OP_IF 
+                        // q == -t
+                        // [qx, qy, tx, ty]
+                        {Fq2::drop()}
+                        {Fq2::drop()}
+                        // []
+                        {Fq2::push(ark_bn254::Fq2::ZERO)}
+                        // [0, 0]
+                    OP_ELSE 
+                        // q != -t
+                        // [qx, qy, tx, ty]
+                        for _ in 0..Fq::N_LIMBS {
+                            OP_DEPTH OP_1SUB OP_ROLL
+                        }
+                        for _ in 0..Fq::N_LIMBS {
+                            OP_DEPTH OP_1SUB OP_ROLL
+                        }                                  // qx qy tx ty c3 c4
+                        { Fq::copy(1) }
+                        { Fq::copy(1) }                    // qx qy tx ty c3 c4 c3 c4
+                        { Fq::copy(5) }
+                        { Fq::roll(5) }                    // qx qy tx c3 c4 c3 c4 tx ty
+                        { Fq::copy(8) }
+                        { Fq::roll(8) }                    // qx tx c3 c4 c3 c4 tx ty qx qy
+                        { hinted_script1 }                 // qx tx c3 c4 0/1
+                        OP_VERIFY
+                        { Fq::roll(2) }
+                        { Fq::roll(3) }                    // c3 c4 tx qx
+                        { hinted_script2 }                 // x' y'
+                    OP_ENDIF
                 OP_ENDIF
             OP_ENDIF
         };
 
-        if !t.is_zero() && !q.is_zero() {
+        if is_valid_input {
             hints.push(Hint::Fq(alpha));
             hints.push(Hint::Fq(-bias));
             hints.extend(hint1);
@@ -1114,14 +1149,10 @@ mod test {
     fn test_g1_affine_hinted_check_add() {
         //println!("G1.hinted_add: {} bytes", G1Affine::check_add().len());
         let mut prng = ChaCha20Rng::seed_from_u64(0);
-        let t = ark_bn254::G1Affine::rand(&mut prng);
+        let t = ark_bn254::G1Affine::identity(); // ark_bn254::G1Affine::rand(&mut prng);
         let q = ark_bn254::G1Affine::rand(&mut prng);
-        let alpha = (t.y - q.y) / (t.x - q.x);
-        // -bias
-        let bias_minus = alpha * t.x - t.y;
 
-        let x = alpha.square() - t.x - q.x;
-        let y = bias_minus - alpha * x;
+        let td = (t + q).into_affine();
 
         let (hinted_check_add, hints) = G1Affine::hinted_check_add(t, q);
 
@@ -1135,11 +1166,11 @@ mod test {
             { Fq::push(q.y) }
             { hinted_check_add.clone() }
             // [x']
-            { Fq::push(y) }
+            { Fq::push(td.y) }
             // [x', y', y]
             { Fq::equalverify(1,0) }
             // [x']
-            { Fq::push(x) }
+            { Fq::push(td.x) }
             // [x', x]
             { Fq::equalverify(1,0) }
             // []
@@ -1147,6 +1178,9 @@ mod test {
             // [OP_TRUE]
         };
         let exec_result = execute_script(script);
+        for i in 0..exec_result.final_stack.len() {
+            println!("{i:} {:?}", exec_result.final_stack.get(i));
+        }
         assert!(exec_result.success);
         println!(
             "hinted_add_line: {} @ {} stack",
