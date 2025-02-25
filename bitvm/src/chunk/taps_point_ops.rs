@@ -107,7 +107,7 @@ pub(crate) fn frob_q_power(q: ark_bn254::G2Affine, ate: i8) -> ark_bn254::G2Affi
 fn utils_point_double_eval(t: ark_bn254::G2Affine, p: ark_bn254::G1Affine) -> ((ark_bn254::G2Affine, (ark_bn254::Fq2, ark_bn254::Fq2)), Script, Vec<Hint>) {
     let mut hints = vec![];
 
-    let t_is_zero = t.is_zero() || (t == ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO)); // t is none or Some(0)
+    let t_is_zero = t.is_zero(); // t is none or Some(0)
     let is_valid_input = !t_is_zero;
     let (alpha, bias) = if is_valid_input {
         let alpha = (t.x.square() + t.x.square() + t.x.square()) / (t.y + t.y); 
@@ -128,7 +128,7 @@ fn utils_point_double_eval(t: ark_bn254::G2Affine, p: ark_bn254::G1Affine) -> ((
         dbl_le1.mul_assign_by_fp(&p.y);
         ((t + t).into_affine(), (dbl_le0, dbl_le1))
     } else {
-        let zero_pt =  ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO);
+        let zero_pt =  ark_bn254::G2Affine::identity();
         (zero_pt, (ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO))
     };
      
@@ -222,8 +222,8 @@ fn utils_point_add_eval(t: ark_bn254::G2Affine, q4: ark_bn254::G2Affine, p: ark_
 
 
     // Point Add
-    let t_is_zero = t.is_zero() || (t == ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO)); // t is none or Some(0)
-    let q_is_zero = qq.is_zero() || (qq == ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO)); // q is none or Some(0)
+    let t_is_zero = t.is_zero(); // t is none or Some(0)
+    let q_is_zero = qq.is_zero(); // q is none or Some(0)
     let is_valid_input = !t_is_zero && !q_is_zero && t != -qq;
 
     // if it's valid input, you can compute line coefficients, else hardcode degenerate values
@@ -254,7 +254,7 @@ fn utils_point_add_eval(t: ark_bn254::G2Affine, q4: ark_bn254::G2Affine, p: ark_
         add_le1.mul_assign_by_fp(&p.y);
         ((t + qq).into_affine(), (add_le0, add_le1))
     } else {
-        let zero_pt =  ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO);
+        let zero_pt =  ark_bn254::G2Affine::identity();
         (zero_pt, (ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO))
     };
 
@@ -563,15 +563,9 @@ fn point_ops_and_multiply_line_evals_step_1(
         {input_validity_scr}
     };
 
-    let hout = ElemG2Eval{
-        t: nt,
-        p2le: [t2le_a, t2le_b],
-        one_plus_ab_j_sq: one_plus_fg_j_sq, 
-        a_plus_b: [fpg.c0, fpg.c1],
-    };
+    let hout = ElemG2Eval::new(nt, [fpg.c0, fpg.c1],one_plus_fg_j_sq,[t2le_a, t2le_b] ); 
     
-    let input_is_valid = one_plus_fg_j_sq != ark_bn254::Fq6::ZERO && 
-    (nt != ark_bn254::G2Affine::zero() && nt != ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::ZERO, ark_bn254::Fq2::ZERO));
+    let input_is_valid = one_plus_fg_j_sq != ark_bn254::Fq6::ZERO && hout.t() != ark_bn254::G2Affine::zero();
 
     (hout, input_is_valid, scr, hints)
 
@@ -582,12 +576,13 @@ pub(crate) fn chunk_point_ops_and_multiply_line_evals_step_1(
     is_dbl: bool, is_frob: Option<bool>, ate_bit: Option<i8>,
     t4: ElemG2Eval, p4: ark_bn254::G1Affine, 
     q4: Option<ark_bn254::G2Affine>,
+    
     p3: ark_bn254::G1Affine,
     t3: ark_bn254::G2Affine, q3: Option<ark_bn254::G2Affine>,
     p2: ark_bn254::G1Affine,
     t2: ark_bn254::G2Affine, q2: Option<ark_bn254::G2Affine>,
 ) -> (ElemG2Eval, bool, Script, Vec<Hint> ) {
-    let (hint_out, is_valid, ops_scr, hints) = point_ops_and_multiply_line_evals_step_1(is_dbl, is_frob, ate_bit, t4.t, p4, q4, p3, t3, q3, p2, t2, q2);
+    let (hint_out, is_valid, ops_scr, hints) = point_ops_and_multiply_line_evals_step_1(is_dbl, is_frob, ate_bit, t4.t(), p4, q4, p3, t3, q3, p2, t2, q2);
     let pre_hash_scr = script! {
         // [t4, p4, p3, p2, nt4, F, 0/1] [outhash, p2hash, p3hash, p4hash, in_t4hash, ht4_le]
         {Fq::fromaltstack()}
@@ -777,21 +772,19 @@ pub(crate) fn chunk_init_t4(ts: [ark_ff::BigInt<4>; 4]) -> (ElemG2Eval, bool, Sc
 
     let are_valid_fps = ts.iter().filter(|f| **f < ark_bn254::Fq::MODULUS).count() == ts.len();
 
-    let mut t4: ElemG2Eval =  ElemG2Eval {
-        t: mock_t,
-        p2le: [ark_bn254::Fq2::ZERO; 2],
-        one_plus_ab_j_sq: ark_bn254::Fq6::ZERO,
-        a_plus_b: [ark_bn254::Fq2::ZERO; 2],
+   
+    let t4 = if are_valid_fps {
+        let temp_t = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(ts[0].into(), ts[1].into()), ark_bn254::Fq2::new(ts[2].into(), ts[3].into()));
+        ElemG2Eval::new(temp_t, [ark_bn254::Fq2::ZERO; 2],  ark_bn254::Fq6::ZERO,  [ark_bn254::Fq2::ZERO; 2])
+    } else {
+        ElemG2Eval::new(mock_t, [ark_bn254::Fq2::ZERO; 2],  ark_bn254::Fq6::ZERO,  [ark_bn254::Fq2::ZERO; 2])
     };
-    if are_valid_fps {
-        t4.t = ark_bn254::G2Affine::new_unchecked(ark_bn254::Fq2::new(ts[0].into(), ts[1].into()), ark_bn254::Fq2::new(ts[2].into(), ts[3].into()));
-    }
     
-    let (on_curve_scr, on_curve_hints) = G2Affine::hinted_is_on_curve(t4.t.x, t4.t.y);
+    let (on_curve_scr, on_curve_hints) = G2Affine::hinted_is_on_curve(t4.t().x, t4.t().y);
     if are_valid_fps {
         hints.extend_from_slice(&on_curve_hints);
     }
-    let is_valid_input = are_valid_fps && t4.t.is_on_curve(); 
+    let is_valid_input = are_valid_fps && t4.t().is_on_curve() && !t4.t().is_zero(); 
 
     let aux_hash_le = t4.hash_le(); // aux_hash_le doesn't include t4.t, is constant, so hash_le can be hardcoded
 
@@ -1019,7 +1012,7 @@ mod test {
                 "utils_point_add_eval disprovable(false) {} @ {} stack; r.is_inf({})",
                 hinted_check_add.len(),
                 exec_result.stats.max_nb_stack_items,
-                r.is_zero() || (r.x == ark_bn254::Fq2::ZERO && r.y == ark_bn254::Fq2::ZERO)
+                r.is_zero()
             );
         }
 
@@ -1149,9 +1142,9 @@ mod test {
             {Fq2::equalverify()}
             {Fq2::push(hint_out.a_plus_b[0])}
             {Fq2::equalverify()}
-            {Fq2::push(hint_out.t.y)}
+            {Fq2::push(hint_out.t().y)}
             {Fq2::equalverify()}
-            {Fq2::push(hint_out.t.x)}
+            {Fq2::push(hint_out.t().x)}
             {Fq2::equalverify()}
             {G1Affine::push(p2)}
             {Fq2::equalverify()}
@@ -1246,9 +1239,9 @@ mod test {
             {Fq2::equalverify()}
             {Fq2::push(hint_out.a_plus_b[0])}
             {Fq2::equalverify()}
-            {Fq2::push(hint_out.t.y)}
+            {Fq2::push(hint_out.t().y)}
             {Fq2::equalverify()}
-            {Fq2::push(hint_out.t.x)}
+            {Fq2::push(hint_out.t().x)}
             {Fq2::equalverify()}
             {G1Affine::push(p2)}
             {Fq2::equalverify()}
@@ -1292,7 +1285,8 @@ mod test {
         let p2 = ark_bn254::G1Affine::rand(&mut prng);
 
         
-        let t4 = ElemG2Eval {t: t4, p2le:[ark_bn254::Fq2::ONE; 2], one_plus_ab_j_sq: ark_bn254::Fq6::ONE, a_plus_b: [ark_bn254::Fq2::ONE; 2]};
+        let t4 = ElemG2Eval::new(t4, [ark_bn254::Fq2::ONE; 2],  ark_bn254::Fq6::ONE, [ark_bn254::Fq2::ONE; 2]);
+
         let (mut inp, is_valid_input, _, _) = chunk_point_ops_and_multiply_line_evals_step_1(is_dbl, None, None, t4, p4, Some(q4), p3, t3, Some(q3), p2, t2, Some(q2));
         assert!(is_valid_input);
 
@@ -1367,7 +1361,7 @@ mod test {
         let q2 = ark_bn254::G2Affine::rand(&mut prng);
         let p2 = ark_bn254::G1Affine::rand(&mut prng);
 
-        let t4 = ElemG2Eval {t: t4, p2le:[ark_bn254::Fq2::ONE; 2], one_plus_ab_j_sq: ark_bn254::Fq6::ONE, a_plus_b: [ark_bn254::Fq2::ONE; 2]};
+        let t4 = ElemG2Eval::new(t4, [ark_bn254::Fq2::ONE; 2],  ark_bn254::Fq6::ONE, [ark_bn254::Fq2::ONE; 2]);
         let (inp, is_valid_input, _, _) = chunk_point_ops_and_multiply_line_evals_step_1(is_dbl, None, None, t4, p4, Some(q4), p3, t3, Some(q3), p2, t2, Some(q2));
         assert!(is_valid_input);
 
@@ -1434,7 +1428,7 @@ mod test {
         let q2 = ark_bn254::G2Affine::rand(&mut prng);
         let p2 = ark_bn254::G1Affine::rand(&mut prng);
 
-        let t4 = ElemG2Eval {t: t4, p2le:[ark_bn254::Fq2::ONE; 2], one_plus_ab_j_sq: ark_bn254::Fq6::ONE, a_plus_b: [ark_bn254::Fq2::ONE; 2]};
+        let t4 = ElemG2Eval::new(t4, [ark_bn254::Fq2::ONE; 2],  ark_bn254::Fq6::ONE, [ark_bn254::Fq2::ONE; 2]);
         let (inp, is_valid_input,_, _) = chunk_point_ops_and_multiply_line_evals_step_1(is_dbl, None, None, t4, p4, Some(q4), p3, t3, Some(q3), p2, t2, Some(q2));
         assert!(is_valid_input);
 
@@ -1510,7 +1504,7 @@ mod test {
         let q2 = ark_bn254::G2Affine::rand(&mut prng);
         let p2 = ark_bn254::G1Affine::rand(&mut prng);
 
-        let t4 = ElemG2Eval {t: t4, p2le:[ark_bn254::Fq2::ONE; 2], one_plus_ab_j_sq: ark_bn254::Fq6::ONE, a_plus_b: [ark_bn254::Fq2::ONE; 2]};
+        let t4 = ElemG2Eval::new(t4, [ark_bn254::Fq2::ONE; 2],  ark_bn254::Fq6::ONE, [ark_bn254::Fq2::ONE; 2]);
         let (hint_out, is_valid_input, ops_scr, ops_hints) = chunk_point_ops_and_multiply_line_evals_step_1(is_dbl, is_frob, ate_bit, t4, p4, Some(q4), p3, t3, Some(q3), p2, t2, Some(q2));
         assert!(is_valid_input);
 

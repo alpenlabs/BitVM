@@ -1,7 +1,8 @@
 use std::str::FromStr;
 
 use crate::{bn254::utils::Hint, chunk::{helpers::{extern_bigint_to_nibbles, extern_hash_nibbles, extern_nibbles_to_bigint}, wrap_hasher::{BLAKE3_HASH_LENGTH}}};
-use ark_ff::Field;
+use ark_ec::AffineRepr;
+use ark_ff::{AdditiveGroup, Field};
 use num_bigint::{BigInt, BigUint};
 use std::fmt::Debug;
 
@@ -297,7 +298,7 @@ fn as_hints_g1type_g1data(r: ark_bn254::G1Affine) -> Vec<Hint> {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct ElemG2Eval {
     /// G2 point accumulator of Miller's Algorithm
-    pub(crate) t: ark_bn254::G2Affine,
+    t: ark_bn254::G2Affine,
 
     // We have,
     // A <- (1 + a), B <- (1 + b), C <- (1 + c), C = A x B
@@ -319,9 +320,22 @@ pub struct ElemG2Eval {
     pub(crate) p2le: [ark_bn254::Fq2;2],
 }
 
+
 impl ElemG2Eval {
     pub(crate) fn hash_t(&self) -> HashBytes {
         extern_hash_fps(vec![self.t.x.c0, self.t.x.c1, self.t.y.c0, self.t.y.c1])
+    }
+
+    pub(crate) fn new(t: ark_bn254::G2Affine, a_plus_b: [ark_bn254::Fq2;2], one_plus_ab_j_sq: ark_bn254::Fq6, p2le: [ark_bn254::Fq2;2] ) -> Self {
+        let mut new_t = t;
+        if !t.is_zero() && t.x == ark_bn254::Fq2::ZERO && t.y == ark_bn254::Fq2::ZERO {
+            new_t = ark_bn254::G2Affine::identity();
+        } 
+        Self { t: new_t, a_plus_b, one_plus_ab_j_sq, p2le }
+    }
+
+    pub(crate) fn t(&self) -> ark_bn254::G2Affine {
+        self.t
     }
 
     pub(crate) fn hash_le(&self) -> HashBytes {

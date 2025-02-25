@@ -502,7 +502,7 @@ pub(crate) fn wrap_chunk_final_verify(
         (is_valid, scr, op_hints) = chunk_final_verify(
             a,
             fixedacc_const,
-            t4.t,
+            t4.t(),
             q4,
         );
 

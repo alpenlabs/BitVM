@@ -12,7 +12,6 @@ use crate::{
     treepp::*,
 };
 use ark_ff::{AdditiveGroup, Field, PrimeField};
-use bitcoin::opcodes::all::{OP_BOOLAND, OP_FROMALTSTACK, OP_TOALTSTACK};
 use core::ops::Neg;
 
 use super::wrap_hasher::hash_utils::{hash_fp6, hash_g2acc_with_hashed_le};
@@ -709,11 +708,11 @@ mod test {
 
         let q4 = ark_bn254::G2Affine::rand(&mut prng);
         let t = frob_q_power(q4, 3).neg();
-        let t4 = ElemG2Eval {t, p2le:[ark_bn254::Fq2::ONE; 2], one_plus_ab_j_sq: ark_bn254::Fq6::ONE, a_plus_b: [ark_bn254::Fq2::ONE; 2]};
+        let t4 = ElemG2Eval::new(t, [ark_bn254::Fq2::ONE; 2], ark_bn254::Fq6::ONE, [ark_bn254::Fq2::ONE; 2]);
 
 
 
-        let (is_valid, tap_scr, mut hint_script) = chunk_final_verify(f.c1, g.c1, t4.t, q4);
+        let (is_valid, tap_scr, mut hint_script) = chunk_final_verify(f.c1, g.c1, t4.t(), q4);
         assert!(is_valid);
 
         let f_c1 = DataType::Fp6Data(f.c1);
@@ -759,5 +758,4 @@ mod test {
         assert!(res.final_stack.len() == 1);
         println!("chunk_final_verify: disprovable(false) script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
-
 }
