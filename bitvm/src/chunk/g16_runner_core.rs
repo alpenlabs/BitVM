@@ -6,7 +6,7 @@ use bitcoin_script::script;
 use crate::{bn254::g1::G1Affine, chunk::{elements::CompressedStateObject, g16_runner_utils::*, taps_point_ops::frob_q_power}};
 
 
-use super::{api_compiletime_utils::{ATE_LOOP_COUNT, NUM_PUBS}, elements::{DataType, ElementType, HashBytes}};
+use super::{api::NUM_PUBS, api_compiletime_utils::ATE_LOOP_COUNT, elements::{DataType, ElementType, HashBytes}};
 
 
 #[derive(Debug)]
@@ -367,7 +367,7 @@ mod test {
     use bitcoin_script::script;
     use num_bigint::BigUint;
 
-    use crate::{chunk::{api_compiletime_utils::NUM_PUBS, g16_runner_core::ks_to_kds, taps_point_ops::{chunk_point_ops_and_multiply_line_evals_step_1, frob_q_power}}, groth16::offchain_checker::compute_c_wi};
+    use crate::{chunk::{api::NUM_PUBS, g16_runner_core::ks_to_kds, taps_point_ops::{chunk_point_ops_and_multiply_line_evals_step_1, frob_q_power}}, groth16::offchain_checker::compute_c_wi};
 
     use super::{groth16_generate_segments, InputProof, PublicParams, Segment};
 

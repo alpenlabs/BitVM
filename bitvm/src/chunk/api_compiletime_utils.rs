@@ -16,6 +16,7 @@ use std::ops::Neg;
 use crate::bn254::fp254impl::Fp254Impl;
 use crate::bn254::fq::Fq;
 use crate::bn254::g1::G1Affine;
+use crate::chunk::api::{NUM_PUBS, NUM_TAPS};
 use crate::chunk::elements::ElementType;
 use crate::{treepp};
 
@@ -26,12 +27,12 @@ use super::wrap_wots::checksig_verify_to_limbs;
 use super::{g16_runner_core::{groth16_generate_segments}, g16_runner_utils::{ScriptType, Segment}, wrap_wots::WOTSPubKey};
 
 pub const ATE_LOOP_COUNT: &[i8] = ark_bn254::Config::ATE_LOOP_COUNT;
-pub const NUM_PUBS: usize = 1;
-pub const NUM_U256: usize = 14+(4*NUM_PUBS);
-pub const NUM_U160: usize = 378+3;
-const VALIDATING_TAPS: usize = 1;
-const HASHING_TAPS: usize = NUM_U160;
-pub const NUM_TAPS: usize = HASHING_TAPS + VALIDATING_TAPS; 
+// pub const NUM_PUBS: usize = 1;
+// pub const NUM_U256: usize = 14+(4*NUM_PUBS);
+// pub const NUM_U160: usize = 378+3;
+// const VALIDATING_TAPS: usize = 1;
+// const HASHING_TAPS: usize = NUM_U160;
+// pub const NUM_TAPS: usize = HASHING_TAPS + VALIDATING_TAPS; 
 
 pub(crate) struct Vkey {
     pub(crate) q2: ark_bn254::G2Affine,
@@ -86,7 +87,7 @@ pub(crate) fn append_bitcom_locking_script_to_partial_scripts(
 ) ->  Vec<bitcoin_script::Script> {
     println!("append_bitcom_locking_script_to_partial_scripts; generage_segments_using_mock_vk_and_mock_proof");
     // mock_vk can be used because generating locking_script doesn't depend upon values or partial scripts; it's only a function of pubkey and ordering of input/outputs
-    let mock_segments = generage_segments_using_mock_vk_and_mock_proof();
+    let mock_segments = generate_segments_using_mock_vk_and_mock_proof();
 
     println!("append_bitcom_locking_script_to_partial_scripts; bitcom_scripts_from_segments");
     let bitcom_scripts: Vec<treepp::Script> = bitcom_scripts_from_segments(&mock_segments, inpubkeys).into_iter().filter(|f| f.len() > 0).collect();
@@ -129,7 +130,7 @@ fn generate_segments_using_mock_proof(vk: Vkey, skip_evaluation: bool) -> Vec<Se
     segments
 }
 
-fn generage_segments_using_mock_vk_and_mock_proof() -> Vec<Segment> {
+pub(crate) fn generate_segments_using_mock_vk_and_mock_proof() -> Vec<Segment> {
     let mock_vk = Vkey {
         q2: ark_bn254::G2Affine::identity(),
         q3: ark_bn254::G2Affine::identity(),
