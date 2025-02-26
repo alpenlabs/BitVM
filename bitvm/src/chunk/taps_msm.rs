@@ -35,154 +35,93 @@ pub(crate) fn chunk_msm(window: usize, input_ks: Vec<ark_ff::BigInt<4>>, qs: Vec
 
     let mut chunk_scripts = vec![];
     for (msm_tap_index, chunk) in chunks.iter().enumerate() {
-        let ops_script = 
-        if msm_tap_index == 0 {
-            script! {
-                {G1Affine::push( ark_bn254::G1Affine::new_unchecked(ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO))}
-                for _ in 0..num_pubs {
-                    {Fr::fromaltstack()}
-                }
-
-                // [hints, G1Acc, k2, k1, k0]
-                for i in 0..num_pubs {
-                    {Fr::roll(i as u32)}
-                }
-
-                // [hints, G1Acc, k0, k1, k2]
-                for _ in 0..num_pubs {
-                    {Fr::copy(num_pubs as u32 -1)}
-                }
-
-                // [hints,G1Acc, k0, k1, k2, k0, k1, k2]
-                for _ in 0..num_pubs {
-                    { Fr::push_hex(Fr::MODULUS) }
-                    { U254::lessthan(1, 0) } // a < p
-                    OP_TOALTSTACK
-                }
-                {1}
-                for _ in 0..num_pubs {
-                    OP_FROMALTSTACK
-                    OP_BOOLAND
-                }
-
-                // [hints, G1Acc, k0, k1, k2, 0/1]
-                OP_IF
-                    // [hints, G1Acc, k0, k1, k2]
-                    for _ in 0..num_pubs {
-                        {Fr::fromaltstack()} //OP_FROMALTSTACK
-                        {Fr::push_one()} {Fr::equal(1, 0)}
-                        {Fr::fromaltstack()}
-
-                        {Fr::fromaltstack()} //OP_FROMALTSTACK
-                        {Fr::push_one()} {Fr::equal(1, 0)}
-                        {Fr::fromaltstack()}
-                    }
-                    {chunk.1.clone()}
-                    //M: [G1AccDash]
-                    //A: [G1AccDashHash]
-                    {1}
-                OP_ELSE 
-                    // [G1Acc, k0, k1, k2]
-                    for _ in 0..num_pubs {
-                        {Fr::drop()}
-                    }
-                    {G1Affine::drop()}
-                    for _ in 0..num_pubs {
-                        {Fr::fromaltstack()} //OP_FROMALTSTACK
-                        {Fr::drop()}
-                        {Fr::fromaltstack()}
-                        {Fr::drop()}
-
-                        {Fr::fromaltstack()} //OP_FROMALTSTACK
-                        {Fr::drop()}
-                        {Fr::fromaltstack()}
-                        {Fr::drop()}
-                    }  
-                    // [] [G1AccDashHash]
-                    {Fq::push(ark_bn254::Fq::ONE)}
-                    {Fq::push(ark_bn254::Fq::ZERO)}
-                    //M: [Mock_G1AccDash]
-                    //A: [G1AccDashHash]
-                    {0}
-                OP_ENDIF
+        let ops_script = script! {
+            // Optionally push G1Affine if msm_tap_index == 0.
+            if msm_tap_index == 0 {
+                {G1Affine::push(ark_bn254::G1Affine::new_unchecked(
+                    ark_bn254::Fq::ZERO,
+                    ark_bn254::Fq::ZERO,
+                ))}
             }
-        } else {
-            script! {
-                // [hints, G1Acc] [G1AccDashHash, G1AccHash]
+            // [hints, G1Acc] [G1AccDashHash, Option<G1AccHash>, sd2, sd1, sd0, k2, k1, k0]
+            for _ in 0..num_pubs {
+                {Fr::fromaltstack()}
+            }
+            // [hints, G1Acc, k0, k1, k2] [sd2, sd1, sd0]
+            for _ in 0..num_pubs {
+                {Fr::copy(num_pubs as u32 - 1)}
+            }
+            for _ in 0..num_pubs {
+                {Fr::push_hex(Fr::MODULUS)}
+                {U254::lessthan(1, 0)} // a < p
+                OP_TOALTSTACK
+            }
+            {1}
+            for _ in 0..num_pubs {
+                OP_FROMALTSTACK
+                OP_BOOLAND
+            }
+        
+            // [hints, G1Acc, k0, k1, k2, {0/1}] [G1AccDashHash, Option<G1AccHash>, sd2, sd1, sd0]
+            OP_IF
+                // [hints, G1Acc, k0, k1, k2] [G1AccDashHash, Option<G1AccHash>, sd2, sd1, sd0]
                 for _ in 0..num_pubs {
                     {Fr::fromaltstack()}
+                    {Fr::push_one()} {Fr::equal(1, 0)}
+                    {Fr::fromaltstack()}
+        
+                    {Fr::fromaltstack()}
+                    {Fr::push_one()} {Fr::equal(1, 0)}
+                    {Fr::fromaltstack()}
                 }
-                for i in 0..num_pubs {
-                    {Fr::roll(i as u32)}
-                }
-                // [hints, G1Acc, k0, k1, k2]     
-                for _ in 0..num_pubs {
-                    {Fr::copy(num_pubs as u32 -1)}
-                }
-
-                for _ in 0..num_pubs {
-                    { Fr::push_hex(Fr::MODULUS) }
-                    { U254::lessthan(1, 0) } // a < p
-                    OP_TOALTSTACK
-                }
-                {1}
-                for _ in 0..num_pubs {
-                    OP_FROMALTSTACK
-                    OP_BOOLAND
-                }
-
-                // [hints, G1Acc, k0, k1, k2, 0/1] [G1AccDashHash, G1AccHash]
-                OP_IF
-
-                    for _ in 0..num_pubs {
-                        {Fr::fromaltstack()} //OP_FROMALTSTACK
-                        {Fr::push_one()} {Fr::equal(1, 0)}
-                        {Fr::fromaltstack()}
-
-                        {Fr::fromaltstack()} //OP_FROMALTSTACK
-                        {Fr::push_one()} {Fr::equal(1, 0)}
-                        {Fr::fromaltstack()}
-                    }   
-                     
-                    // [hints, G1Acc, k0, k1, k2]
-                    for _ in 0..Fq::N_LIMBS*2 {
-                        {num_pubs as u32 * (3*Fr::N_LIMBS + 2) + (2*Fq::N_LIMBS - 1)} OP_PICK
-                    }
-                    {Fq2::toaltstack()}
-                    // [hints, G1Acc, k0, k1, k2] [G1AccDashHash, G1AccHash, G1Acc]
+                // [hints, G1Acc, k0, k1, k2, sd0, sd1, sd2] [G1AccDashHash, Option<G1AccHash>]
+                if msm_tap_index == 0 {
+                    // [hints, G1Acc, k0, k1, k2, sd0, sd1, sd2] [G1AccDashHash]
                     {chunk.1.clone()}
-                    //M: [G1AccDash]
-                    //A: [G1AccDashHash, G1AccHash, G1Acc]
+                    // [G1AccDash] [G1AccDashHash]
+                } else {
+                    // [hints, G1Acc, k0, k1, k2, sd0, sd1, sd2] [G1AccDashHash, G1AccHash]
+                    for _ in 0..(Fq::N_LIMBS * 2) {
+                        {num_pubs as u32 * (3 * Fr::N_LIMBS + 2) + (2 * Fq::N_LIMBS - 1)} OP_PICK
+                    }
+                    // [hints, G1Acc, k0, k1, k2, sd0, sd1, sd2, G1Acc] [G1AccDashHash, G1AccHash]
+                    {Fq2::toaltstack()}
+                    // [hints, G1Acc, k0, k1, k2, sd0, sd1, sd2] [G1AccDashHash, G1AccHash, G1Acc]
+                    {chunk.1.clone()}
+                    // [G1AccDash] [G1AccDashHash, G1AccHash, G1Acc]
                     {Fq2::fromaltstack()}
-                    // [G1AccDash, G1Acc] [G1AccDashHash, G1AccHash]
                     {Fq2::roll(2)}
                     // [G1Acc, G1AccDash] [G1AccDashHash, G1AccHash]
-                    {1}
-                    // [G1Acc, G1AccDash, 1] [G1AccDashHash, G1AccHash]
-                OP_ELSE 
-                    // [G1Acc, k0, k1, k2]
-                    for _ in 0..num_pubs {
-                        {Fr::drop()}
-                    }
-                    for _ in 0..num_pubs {
-                        {Fr::fromaltstack()} //OP_FROMALTSTACK
-                        {Fr::drop()}
-                        {Fr::fromaltstack()}
-                        {Fr::drop()}
-
-                        {Fr::fromaltstack()} //OP_FROMALTSTACK
-                        {Fr::drop()}
-                        {Fr::fromaltstack()}
-                        {Fr::drop()}
-                    }  
-                    {Fq::push(ark_bn254::Fq::ONE)}
-                    {Fq::push(ark_bn254::Fq::ZERO)}
-                    // [G1Acc, Mock_G1AccDash] [G1AccDashHash, G1AccHash]
-                    {0}
-                    // [G1Acc, Mock_G1AccDash, 0] [G1AccDashHash, G1AccHash]
-                OP_ENDIF
-            }
-            // [G1Acc, Mock_G1AccDash, 1/0] [G1AccDashHash, G1AccHash]
+                }
+                {1}
+            OP_ELSE
+                // [G1Acc, k0, k1, k2] [G1AccDashHash, Option<G1AccHash>, sd2, sd1, sd0]
+                for _ in 0..num_pubs {
+                    {Fr::drop()}
+                }
+                // [G1Acc] [G1AccDashHash, Option<G1AccHash>, sd2, sd1, sd0]
+                if msm_tap_index == 0 {
+                    {G1Affine::drop()}
+                }
+                // [Option<G1Acc>] [G1AccDashHash, Option<G1AccHash>, sd2, sd1, sd0]
+                for _ in 0..num_pubs {
+                    {Fr::fromaltstack()}
+                    {Fr::drop()}
+                    {Fr::fromaltstack()}
+                    {Fr::drop()}
+                    {Fr::fromaltstack()}
+                    {Fr::drop()}
+                    {Fr::fromaltstack()}
+                    {Fr::drop()}
+                }
+                // [Option<G1Acc>] [G1AccDashHash, Option<G1AccHash>]
+                {Fq::push(ark_bn254::Fq::ONE)}
+                {Fq::push(ark_bn254::Fq::ZERO)}
+                // [Option<G1Acc>, Mock_G1AccDash] [G1AccDashHash, Option<G1AccHash>]
+                {0}
+                // [Option<G1Acc>, Mock_G1AccDash, {0}] [G1AccDashHash, Option<G1AccHash>]
+            OP_ENDIF
+            // [Option<G1Acc>, Mock_G1AccDash, {0}] [G1AccDashHash, Option<G1AccHash>]; Option<> = None if msm_chunk_index = 0
         };
 
         let _hash_script = script! {
@@ -616,7 +555,7 @@ mod test {
                     {Fr::toaltstack()}
                 }
 
-                for scalar in scalars.clone() {
+                for scalar in scalars.clone().into_iter().rev() {
                     {Hint::U256(scalar.into()).push()}
                     {Fr::toaltstack()}  
                 }
