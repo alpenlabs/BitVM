@@ -11,6 +11,7 @@ use crate::{
 };
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{AdditiveGroup, Field, PrimeField};
+use bitcoin::opcodes::all::OP_FROMALTSTACK;
 
 use super::wrap_hasher::hash_messages;
 use super::elements::{ ElementType};
@@ -27,10 +28,20 @@ pub(crate) fn chunk_msm(window: usize, input_ks: Vec<ark_ff::BigInt<4>>, qs: Vec
         ks = input_ks.clone();
     }
 
-    let chunks = G1Affine::hinted_scalar_mul_by_constant_g1(ks.into_iter().map(|f| f.into()).collect(), qs.clone(), window as u32);
+    let ks: Vec<ark_bn254::Fr> = ks.into_iter().map(|f| f.into()).collect();
+    let chunks = G1Affine::hinted_scalar_mul_by_constant_g1(ks.clone(), qs.clone(), window as u32);
 
     // [G1AccDashHash, G1AccHash, k0, k1, k2]
     // [hints, G1Acc]
+
+    // let mut dec_hints = vec![];
+    // ks.into_iter().for_each(|s| {
+    //     let ((s0, k0), (s1, k1)) = G1Affine::calculate_scalar_decomposition(s.into());
+    //     dec_hints.push(Hint::U32(s0 as u32));
+    //     dec_hints.push(Hint::Fr(k0));
+    //     dec_hints.push(Hint::U32(s1 as u32));
+    //     dec_hints.push(Hint::Fr(k1));
+    // });
 
     let mut chunk_scripts = vec![];
     for (msm_tap_index, chunk) in chunks.iter().enumerate() {
@@ -41,10 +52,12 @@ pub(crate) fn chunk_msm(window: usize, input_ks: Vec<ark_ff::BigInt<4>>, qs: Vec
                 for _ in 0..num_pubs {
                     {Fr::fromaltstack()}
                 }
+
                 // [hints, G1Acc, k2, k1, k0]
                 for i in 0..num_pubs {
                     {Fr::roll(i as u32)}
                 }
+
                 // [hints, G1Acc, k0, k1, k2]
                 for _ in 0..num_pubs {
                     {Fr::copy(num_pubs as u32 -1)}
@@ -65,6 +78,12 @@ pub(crate) fn chunk_msm(window: usize, input_ks: Vec<ark_ff::BigInt<4>>, qs: Vec
                 // [hints, G1Acc, k0, k1, k2, 0/1]
                 OP_IF
                     // [hints, G1Acc, k0, k1, k2]
+                    for _ in 0..num_pubs {
+                        OP_FROMALTSTACK
+                        {Fr::fromaltstack()}
+                        OP_FROMALTSTACK
+                        {Fr::fromaltstack()}
+                    }
                     {chunk.1.clone()}
                     //M: [G1AccDash]
                     //A: [G1AccDashHash]
@@ -110,12 +129,21 @@ pub(crate) fn chunk_msm(window: usize, input_ks: Vec<ark_ff::BigInt<4>>, qs: Vec
 
                 // [hints, G1Acc, k0, k1, k2, 0/1] [G1AccDashHash, G1AccHash]
                 OP_IF
+
+                    {Fq2::copy(num_pubs as u32)}
+                    for _ in 0..num_pubs {
+                        OP_FROMALTSTACK
+                        {Fr::fromaltstack()}
+                        OP_FROMALTSTACK
+                        {Fr::fromaltstack()}
+                    }    
                     // [hints, G1Acc, k0, k1, k2]
-                    {Fq2::copy(num_pubs as u32)}          
+                    for _ in 0..Fq::N_LIMBS*2 {
+                        {num_pubs as u32 * (2*Fr::N_LIMBS + 2) + (2*Fq::N_LIMBS - 1)} OP_ROLL
+                    }
                     {Fq2::toaltstack()}
                     // [hints, G1Acc, k0, k1, k2] [G1AccDashHash, G1AccHash, G1Acc]
                     {chunk.1.clone()}
-
                     //M: [G1AccDash]
                     //A: [G1AccDashHash, G1AccHash, G1Acc]
                     {Fq2::fromaltstack()}
@@ -218,6 +246,7 @@ mod test {
     use super::*;
     use ark_ff::{BigInt, Field, UniformRand};
     
+    use bitcoin::opcodes::all::OP_TOALTSTACK;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
@@ -441,6 +470,18 @@ mod test {
         let window = 7;
         let hints_msm = chunk_msm(window, scalars.clone(), qs.clone());
 
+
+        let mut dec_hints = vec![];
+        scalars.clone().into_iter().for_each(|s| {
+            let ((s0, k0), (s1, k1)) = G1Affine::calculate_scalar_decomposition(s.into());
+            dec_hints.push(Hint::U32(s0 as u32));
+            dec_hints.push(Hint::Fr(k0));
+            dec_hints.push(Hint::U32(s1 as u32));
+            dec_hints.push(Hint::Fr(k1));
+        });
+        dec_hints.reverse();
+        // [k1 s1 k0, s0]
+
         for msm_chunk_index in 0..hints_msm.len() {
             let input_is_valid = hints_msm[msm_chunk_index].1;
             assert!(input_is_valid);
@@ -459,11 +500,22 @@ mod test {
                     {Fq::toaltstack()}
                 }
 
+                for hi in 0..dec_hints.len() {
+                    {dec_hints[hi].push()}
+                    if hi%2 == 0 {
+                        {Fr::toaltstack()}
+                    } else {
+                        OP_TOALTSTACK
+                    }
+                }
+
+
                 for scalar in &scalars {
                     {Fr::push(ark_bn254::Fr::from(*scalar))}
                     {Fr::toaltstack()}  
                 }
             };
+            
     
             let mut op_hints = vec![];
             if msm_chunk_index > 0 {
@@ -494,6 +546,11 @@ mod test {
             };
     
             let res = execute_script(script);
+            if res.final_stack.len() > 0 {
+                for i in 0..res.final_stack.len() {
+                    println!("{i:} {:?}", res.final_stack.get(i));
+                }
+            }
             assert!(!res.success);
             assert!(res.final_stack.len() == 1);
 
@@ -530,6 +587,10 @@ mod test {
                     {hint_in.to_hash().as_hint_type().push()}
                     {Fq::toaltstack()}
                 }
+
+                // for h in &dec_hints {
+                //     {h.push()}
+                // }
 
                 for scalar in scalars.clone() {
                     {Hint::U256(scalar.into()).push()}

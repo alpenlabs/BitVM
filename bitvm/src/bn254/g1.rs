@@ -261,21 +261,13 @@ impl G1Affine {
         let k2signr = k2.sign();
 
 
-        let mut k1sign: u8 = 0;
-        if k1signr == Sign::Plus {
-            k1sign = 1;
-        } else if k1signr == Sign::Minus {
-            k1sign = 2;
-        } else {
+        let mut k1sign: u8 = 1;
+        if k1signr == Sign::Minus {
             k1sign = 0;
         }
 
-        let mut k2sign: u8 = 0;
-        if k2signr == Sign::Plus {
-            k2sign = 1;
-        } else if k2signr == Sign::Minus {
-            k2sign = 2;
-        } else {
+        let mut k2sign: u8 = 1;
+        if k2signr == Sign::Minus {
             k2sign = 0;
         }
 
@@ -321,7 +313,7 @@ impl G1Affine {
             // [s0, s1, k0, k1 * lambda]
             OP_FROMALTSTACK
             // [s0, k0, k1 * lambda, s1]
-            {2} OP_EQUAL
+            {0} OP_EQUAL
             OP_IF
                 {Fr::neg(0)}
             OP_ENDIF
@@ -330,7 +322,7 @@ impl G1Affine {
             // [k, s0, k0]
             {Fr::N_LIMBS} OP_ROLL
             // [k, k0, s0]
-            {2} OP_EQUAL
+            {0} OP_EQUAL
             OP_IF
                 {Fr::neg(0)}
             OP_ENDIF
@@ -420,10 +412,10 @@ impl G1Affine {
             glv_scalars.push(k0);
             glv_scalars.push(k1);
 
-            loop_hints.push(Hint::U32(s0 as u32));
-            loop_hints.push(Hint::Fr(k0));
-            loop_hints.push(Hint::U32(s1 as u32));
-            loop_hints.push(Hint::Fr(k1));
+            // loop_hints.push(Hint::U32(s0 as u32));
+            // loop_hints.push(Hint::Fr(k0));
+            // loop_hints.push(Hint::U32(s1 as u32));
+            // loop_hints.push(Hint::Fr(k1));
         });
 
 
@@ -432,11 +424,11 @@ impl G1Affine {
         loop_scripts = script!(
             {loop_scripts}
              // [SD0, SD1, G1Acc, K0, K1]
-            for _ in 0..g16_scalars.len() {
-                for _ in 0..segment_len { // bring acc from top of stack
-                    OP_DEPTH OP_1SUB OP_ROLL 
-                }
-            }
+            // for _ in 0..g16_scalars.len() {
+            //     for _ in 0..segment_len { // bring acc from top of stack
+            //         OP_DEPTH OP_1SUB OP_ROLL 
+            //     }
+            // }
             // [G1Acc, K0, K1, SD0, SD1]
         );
         // [G1Acc, K0, K1, 0s0, 0k0, 0s1, 0k1,    1s0, 1k0, 1s1, 1k1]
@@ -534,7 +526,7 @@ impl G1Affine {
                 // [s0, Px0, Py0]
                 {Fq::toaltstack()} {Fq::toaltstack()}
                 // [s0]
-                {2} OP_NUMEQUAL
+                {0} OP_NUMEQUAL
                 // if s0 is negative, negate P
                 OP_IF 
                     {Fr::fromaltstack()} 
@@ -1200,7 +1192,7 @@ mod test {
 
         let dec = G1Affine::calculate_scalar_decomposition(k);
         let  ((is_k1_positive, k1), (is_k2_positive, k2)) = dec;
-        let (is_k1_positive, is_k2_positive) = (is_k1_positive != 2, is_k2_positive != 2);
+        let (is_k1_positive, is_k2_positive) = (is_k1_positive == 1, is_k2_positive == 1);
 
         if is_k1_positive && is_k2_positive {
             assert_eq!(k1 + k2 * lambda, k);
@@ -1266,6 +1258,15 @@ mod test {
                 window as u32,
             );
 
+        let mut dec_hints = vec![];
+        g16_scalars.iter().for_each(|s| {
+            let ((s0, k0), (s1, k1)) = G1Affine::calculate_scalar_decomposition(*s);
+            dec_hints.push(Hint::U32(s0 as u32));
+            dec_hints.push(Hint::Fr(k0));
+            dec_hints.push(Hint::U32(s1 as u32));
+            dec_hints.push(Hint::Fr(k1));
+        });
+
         let mut prev_acc = ark_bn254::G1Affine::new_unchecked(ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO);
         for (itr, (output_acc, scalar_mul_affine_script, hints)) in all_loop_info.iter().enumerate() {
             
@@ -1277,6 +1278,9 @@ mod test {
                 {G1Affine::push(prev_acc)}
                 for scalar in g16_scalars.iter() {
                     { Fr::push(*scalar) } // scalar bit committed
+                }
+                for h in &dec_hints {
+                    {h.push()}
                 }
                 { scalar_mul_affine_script.clone() }
                 {Fq::push(output_acc.x)}
