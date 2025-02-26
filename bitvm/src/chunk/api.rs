@@ -11,8 +11,8 @@ use super::api_runtime_utils::{execute_script_from_assertion, get_pubkeys, get_s
 use super::wrap_hasher::BLAKE3_HASH_LENGTH;
 
 pub const NUM_PUBS: usize = 1;
-pub const NUM_U256: usize = 14;
-pub const NUM_U160: usize = 378;
+pub const NUM_U256: usize = 14+(4*NUM_PUBS);
+pub const NUM_U160: usize = 378+3;
 const VALIDATING_TAPS: usize = 1;
 const HASHING_TAPS: usize = NUM_U160;
 pub const NUM_TAPS: usize = HASHING_TAPS + VALIDATING_TAPS; 
