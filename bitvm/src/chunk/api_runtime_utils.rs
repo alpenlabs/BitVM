@@ -8,7 +8,7 @@ use bitcoin_script::script;
 use crate::bn254::fp254impl::Fp254Impl;
 use crate::bn254::fq::Fq;
 use crate::chunk::elements::HashBytes;
-use crate::chunk::g16_runner_core::{groth16_generate_segments, InputProof, InputProofRaw, PublicParams};
+use crate::chunk::g16_runner_core::{groth16_generate_segments, ks_to_kds, InputProof, InputProofRaw, PublicParams};
 use crate::chunk::api_compiletime_utils::partial_scripts_from_segments;
 use crate::chunk::wrap_wots::{byte_array_to_wots160_sig, byte_array_to_wots256_sig};
 use crate::groth16::offchain_checker::compute_c_wi;
@@ -145,8 +145,20 @@ pub(crate) fn get_segments_from_assertion(assertions: Assertions, vk: ark_groth1
             numfqs[step], numfqs[step+1],
             numfqs[step+2], numfqs[step+3],
         ];
-    
-        let eval_ins: InputProofRaw = InputProofRaw { p2, p4, q4, c, ks };
+
+        let mut step = step + 4;
+        let mut kdvecs: Vec<[ark_ff::BigInt<4>; 4]> = vec![];
+        for _ in 0..NUM_PUBS {
+            let kds = [
+                numfqs[step], numfqs[step+1],
+                numfqs[step+2], numfqs[step+3],
+            ];
+            kdvecs.push(kds);
+            step += 4;
+        }
+        let kds: [[ark_ff::BigInt<4>;4]; NUM_PUBS] = kdvecs.try_into().unwrap();
+
+        let eval_ins: InputProofRaw = InputProofRaw { p2, p4, q4, c, ks, kds };
         Some(eval_ins)
     }
 
@@ -229,6 +241,7 @@ pub(crate) fn get_segments_from_groth16_proof(
         q4,
         c: c.c1/c.c0,
         ks: msm_scalar.clone(),
+        kds: ks_to_kds(msm_scalar.try_into().unwrap()),
     };
 
     let pubs: PublicParams = PublicParams {

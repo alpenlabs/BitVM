@@ -1,9 +1,9 @@
 
 
 
-use crate::{bn254::{fp254impl::Fp254Impl, fr::Fr, utils::Hint}, chunk::taps_msm::chunk_msm};
+use crate::{bn254::{fp254impl::Fp254Impl, fq::Fq, fr::Fr, g1::G1Affine, utils::Hint}, chunk::{taps_msm::chunk_msm, wrap_hasher::hash_messages}, execute_script};
 
-use super::{elements::{DataType, ElemG2Eval, ElementType}, taps_ext_miller::*, taps_msm::chunk_hash_p, taps_mul::{chunk_dense_dense_mul, chunk_fq12_square}, taps_point_ops::{chunk_init_t4, chunk_point_ops_and_multiply_line_evals_step_1, chunk_point_ops_and_multiply_line_evals_step_2}};
+use super::{api_compiletime_utils::NUM_PUBS, elements::{DataType, ElemG2Eval, ElementType}, taps_ext_miller::*, taps_msm::chunk_hash_p, taps_mul::{chunk_dense_dense_mul, chunk_fq12_square}, taps_point_ops::{chunk_init_t4, chunk_point_ops_and_multiply_line_evals_step_1, chunk_point_ops_and_multiply_line_evals_step_2}};
 use ark_ff::{AdditiveGroup, Field};
 use bitcoin_script::script;
 
@@ -286,6 +286,7 @@ pub(crate) fn wrap_hint_msm(
     segment_id: usize,
     scalars: Vec<Segment>,
     pub_vky: Vec<ark_bn254::G1Affine>,
+    pub_kds: [[Segment; 4]; NUM_PUBS],
 ) -> Vec<Segment> {
     let mut scalar_input_segment_info: Vec<(SegmentID, ElementType)> = vec![];
     let hint_scalars: Vec<ark_ff::BigInt<4>> = scalars
@@ -296,16 +297,31 @@ pub(crate) fn wrap_hint_msm(
     })
     .collect();
 
-    let mut window = 7;
-    if hint_scalars.len() == 2 {
-        window = 5;
-    }
+    let mut scalar_decompos_segment_info: Vec<(SegmentID, ElementType)> = vec![];
+    pub_kds.map(|kd| {
+        kd.map(|f| {
+            scalar_decompos_segment_info.push((f.id, ElementType::ScalarElem));
+        })
+    });
+    scalar_decompos_segment_info.reverse();
+
+    let mut dec_hints = vec![];
+    hint_scalars.clone().into_iter().for_each(|s| {
+        let ((s0, k0), (s1, k1)) = G1Affine::calculate_scalar_decomposition(s.into());
+        dec_hints.push(Hint::Fr(ark_bn254::Fr::from(s0)));
+        dec_hints.push(Hint::Fr(k0));
+        dec_hints.push(Hint::Fr(ark_bn254::Fr::from(s1)));
+        dec_hints.push(Hint::Fr(k1));
+    });
+    dec_hints.reverse();
+
+    let mut window = 6;
 
     let num_chunks = (Fr::N_BITS + 2 * window - 1)/(2 * window);
     let mut segments = vec![];
     let mut prev_input = ark_bn254::G1Affine::new_unchecked(ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO);
     if !skip {
-        let houts = chunk_msm(window as usize, hint_scalars, pub_vky.clone());
+        let houts = chunk_msm(window as usize, hint_scalars.clone(), pub_vky.clone());
         assert_eq!(houts.len() as u32, num_chunks);
         for (msm_chunk_index, (hout_msm, is_valid_input, scr, op_hints)) in houts.into_iter().enumerate() {
             let mut input_segment_info: Vec<(SegmentID, ElementType)> = vec![];
@@ -313,6 +329,7 @@ pub(crate) fn wrap_hint_msm(
                 let prev_msm_id = (segment_id + msm_chunk_index -1) as u32;
                 input_segment_info.push((prev_msm_id, ElementType::G1));
             }
+            input_segment_info.extend_from_slice(&scalar_decompos_segment_info);
             input_segment_info.extend_from_slice(&scalar_input_segment_info);
 
             // if msm_chunk_index > 0 {
@@ -325,9 +342,49 @@ pub(crate) fn wrap_hint_msm(
                 is_valid_input,
                 parameter_ids: input_segment_info, 
                 result: (DataType::G1Data(hout_msm), ElementType::G1), 
-                hints: op_hints, scr_type: ScriptType::MSM(msm_chunk_index as u32),
-                scr,
+                hints: op_hints.clone(), scr_type: ScriptType::MSM(msm_chunk_index as u32),
+                scr: scr.clone(),
             });
+
+
+            if msm_chunk_index == 0 {
+                println!("Execute MSM");
+                assert!(is_valid_input);
+                let hint_out = DataType::G1Data(hout_msm);
+                let bitcom_scr = script!{
+                    {hint_out.to_hash().as_hint_type().push()}
+                    {Fq::toaltstack()}
+    
+                    for hi in 0..dec_hints.len() {
+                        {dec_hints[hi].push()}
+                        {Fr::toaltstack()}
+                    }
+    
+                    for scalar in &hint_scalars {
+                        {Fr::push(ark_bn254::Fr::from(*scalar))}
+                        {Fr::toaltstack()}  
+                    }
+                };
+    
+    
+                let script = script! {
+                    for h in &op_hints {
+                        {h.push()}
+                    }
+                    {bitcom_scr}
+                    {scr}
+                    {hash_messages(vec![ElementType::G1])}
+                };
+    
+                let res = execute_script(script);
+                if res.final_stack.len() > 1 {
+                    for i in 0..res.final_stack.len() {
+                        println!("{i:} {:?}", res.final_stack.get(i));
+                    }
+                }
+                assert!(!res.success);
+                assert!(res.final_stack.len() == 1);
+            }
         }
     } else {
         let hout_msm: ark_bn254::G1Affine = ark_bn254::G1Affine::identity();
@@ -337,6 +394,7 @@ pub(crate) fn wrap_hint_msm(
                 let prev_msm_id = segment_id as u32 + msm_chunk_index -1;
                 input_segment_info.push((prev_msm_id, ElementType::G1));
             }
+            input_segment_info.extend_from_slice(&scalar_decompos_segment_info);
             input_segment_info.extend_from_slice(&scalar_input_segment_info);
 
             segments.push(Segment { 

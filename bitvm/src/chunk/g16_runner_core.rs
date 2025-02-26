@@ -1,9 +1,9 @@
 
 use ark_ec::CurveGroup;
-use ark_ff::{Field, PrimeField};
+use ark_ff::{AdditiveGroup, Field, PrimeField};
 use bitcoin_script::script;
 
-use crate::chunk::{elements::CompressedStateObject, taps_point_ops::frob_q_power, g16_runner_utils::*};
+use crate::{bn254::g1::G1Affine, chunk::{elements::CompressedStateObject, g16_runner_utils::*, taps_point_ops::frob_q_power}};
 
 
 use super::{api_compiletime_utils::{ATE_LOOP_COUNT, NUM_PUBS}, elements::{DataType, ElementType, HashBytes}};
@@ -25,6 +25,26 @@ pub(crate) struct InputProof {
     pub(crate) q4: ark_bn254::G2Affine,
     pub(crate) c: ark_bn254::Fq6,
     pub(crate) ks: Vec<ark_bn254::Fr>,
+    pub(crate) kds: [[ark_bn254::Fr;4]; NUM_PUBS],
+}
+
+pub(crate) fn ks_to_kds(ks: [ark_bn254::Fr; NUM_PUBS]) -> [[ark_bn254::Fr;4]; NUM_PUBS] {
+    let kds: Vec<[ark_bn254::Fr;4]> = ks.iter().map(|f| {
+        let ((s0, k0), (s1, k1)) = G1Affine::calculate_scalar_decomposition(*f);
+        let s0 = if s0 == 1 {
+            ark_bn254::Fr::ONE
+        } else {
+            ark_bn254::Fr::ZERO
+        };
+        let s1 = if s1 == 1 {
+            ark_bn254::Fr::ONE
+        } else {
+            ark_bn254::Fr::ZERO
+        };
+        let res: [ark_bn254::Fr;4] = [s0, k0, s1, k1];
+        res
+    }).collect();
+    kds.try_into().unwrap()
 }
 
 impl InputProof {
@@ -40,12 +60,19 @@ impl InputProof {
         let c: Vec<ark_ff::BigInt<4>> = self.c.to_base_prime_field_elements().map(|f| f.into_bigint()).collect();
         let ks: Vec<ark_ff::BigInt<4>> = self.ks.iter().map(|f| f.into_bigint()).collect();
 
+        let kds: Vec<[ark_ff::BigInt<4>;4]> = self.kds.iter().map(|f| {
+            let (s0, k0, s1, k1) = (f[0], f[1], f[2], f[3]);
+            let res: [ark_ff::BigInt<4>;4] = [s0.into_bigint(), k0.into_bigint(), s1.into_bigint(), k1.into_bigint()];
+            res
+        }).collect();
+
         InputProofRaw {
             p2: [p2x, p2y],
             p4: [p4x, p4y],
             q4: [q4x0, q4x1, q4y0, q4y1],
             c: c.try_into().unwrap(),
             ks: ks.try_into().unwrap(),
+            kds: kds.try_into().unwrap(),
         }
     }
 }
@@ -57,6 +84,7 @@ pub(crate) struct InputProofRaw {
     pub(crate) q4: [ark_ff::BigInt<4>; 4],
     pub(crate) c: [ark_ff::BigInt<4>; 6],
     pub(crate) ks: [ark_ff::BigInt<4>; NUM_PUBS],
+    pub(crate) kds:  [[ark_ff::BigInt<4>;4]; NUM_PUBS],
 }
 
 
@@ -112,7 +140,7 @@ pub(crate) fn groth16_generate_segments(
     let vky = pubs.ks_vks;
     let vky0 = pubs.vky0;
 
-    let (gp2, gp4, gq4, gc, pub_scalars) = raw_input_proof_to_segments(eval_ins, all_output_hints);
+    let (gp2, gp4, gq4, gc, pub_scalars, pub_kds) = raw_input_proof_to_segments(eval_ins, all_output_hints);
     let (gp2x, gp2y) = (gp2[0].clone(), gp2[1].clone());
     let (gp4x, gp4y) = (gp4[0].clone(), gp4[1].clone());
     let (q4xc0, q4xc1, q4yc0, q4yc1) = (gq4[0].clone(), gq4[1].clone(), gq4[2].clone(), gq4[3].clone());
@@ -126,7 +154,7 @@ pub(crate) fn groth16_generate_segments(
     let p2 = wrap_hints_precompute_p(skip_evaluation, all_output_hints.len(), &gp2y, &gp2x);
     push_compare_or_return!(p2);
 
-    let msms = wrap_hint_msm(skip_evaluation, all_output_hints.len(), pub_scalars.clone(), vky.clone());
+    let msms = wrap_hint_msm(skip_evaluation, all_output_hints.len(), pub_scalars.clone(), vky.clone(), pub_kds);
     for msm in &msms {
         push_compare_or_return!(msm);
     }
@@ -260,7 +288,7 @@ pub(crate) fn groth16_generate_segments(
     is_valid == ark_ff::BigInt::<4>::one()
 }
 
-fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hints: &mut Vec<Segment>) -> ([Segment;2], [Segment;2], [Segment;4], [Segment;6], [Segment; NUM_PUBS]) {
+fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hints: &mut Vec<Segment>) -> ([Segment;2], [Segment;2], [Segment;4], [Segment;6], [Segment; NUM_PUBS], [[Segment; 4]; NUM_PUBS]) {
     let pub_scalars: Vec<Segment> = eval_ins.ks.iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         parameter_ids: vec![],
@@ -295,7 +323,7 @@ fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hints: &mut V
     }).collect();
     all_output_hints.extend_from_slice(&gc);
 
-    let temp_q4: Vec<Segment> = [eval_ins.q4[0], eval_ins.q4[1], eval_ins.q4[2], eval_ins.q4[3]].iter().enumerate().map(|(idx, f)| Segment {
+    let gq4: Vec<Segment> = [eval_ins.q4[0], eval_ins.q4[1], eval_ins.q4[2], eval_ins.q4[3]].iter().enumerate().map(|(idx, f)| Segment {
         id: (all_output_hints.len() + idx) as u32,
         parameter_ids: vec![],
         is_valid_input: true,
@@ -304,9 +332,27 @@ fn raw_input_proof_to_segments(eval_ins: InputProofRaw, all_output_hints: &mut V
         scr_type: ScriptType::NonDeterministic,
         scr: script! {},
     }).collect();
-    all_output_hints.extend_from_slice(&temp_q4);
+    all_output_hints.extend_from_slice(&gq4);
 
-    ([gp2x.clone(), gp2y.clone()], [gp4x.clone(), gp4y.clone()], temp_q4.try_into().unwrap(), gc.try_into().unwrap(), pub_scalars.try_into().unwrap())
+    let mut pubs_kds: Vec<[Segment; 4]> = vec![];
+    for i in 0..NUM_PUBS {
+        let eval_ins_kds = eval_ins.kds[i];
+        let temp_kds: Vec<Segment> = [eval_ins_kds[0], eval_ins_kds[1], eval_ins_kds[2], eval_ins_kds[3]].iter().enumerate().map(|(idx, f)| Segment {
+            id: (all_output_hints.len() + idx) as u32,
+            parameter_ids: vec![],
+            is_valid_input: true,
+            result: (DataType::U256Data(*f), ElementType::ScalarElem),
+            hints: vec![],
+            scr_type: ScriptType::NonDeterministic,
+            scr: script! {},
+        }).collect();
+        all_output_hints.extend_from_slice(&temp_kds);
+        let temp_kds: [Segment; 4] = temp_kds.try_into().unwrap();
+        pubs_kds.push(temp_kds);
+    }
+    let pubs_kds: [[Segment; 4]; NUM_PUBS] = pubs_kds.try_into().unwrap();
+
+    ([gp2x.clone(), gp2y.clone()], [gp4x.clone(), gp4y.clone()], gq4.try_into().unwrap(), gc.try_into().unwrap(), pub_scalars.try_into().unwrap(), pubs_kds)
 }
 
 
@@ -321,7 +367,7 @@ mod test {
     use bitcoin_script::script;
     use num_bigint::BigUint;
 
-    use crate::{chunk::{api_compiletime_utils::NUM_PUBS, taps_point_ops::{chunk_point_ops_and_multiply_line_evals_step_1, frob_q_power}}, groth16::offchain_checker::compute_c_wi};
+    use crate::{chunk::{api_compiletime_utils::NUM_PUBS, g16_runner_core::ks_to_kds, taps_point_ops::{chunk_point_ops_and_multiply_line_evals_step_1, frob_q_power}}, groth16::offchain_checker::compute_c_wi};
 
     use super::{groth16_generate_segments, InputProof, PublicParams, Segment};
 
@@ -366,6 +412,7 @@ mod test {
             q4,
             c: c.c1/c.c0,
             ks: msm_scalar.clone(),
+            kds: ks_to_kds(msm_scalar.try_into().unwrap()),
         };
 
         let eval_ins_raw = eval_ins.to_raw();

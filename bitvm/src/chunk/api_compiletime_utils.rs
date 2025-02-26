@@ -6,7 +6,7 @@ use ark_bn254::Bn254;
 use ark_ec::bn::BnConfig;
 use ark_ec::pairing::Pairing;
 use ark_ec::{AffineRepr, CurveGroup};
-use ark_ff::Field;
+use ark_ff::{AdditiveGroup, Field};
 use bitcoin_script::script;
 use num_bigint::BigUint;
 use treepp::Script;
@@ -15,19 +15,20 @@ use std::ops::Neg;
 
 use crate::bn254::fp254impl::Fp254Impl;
 use crate::bn254::fq::Fq;
+use crate::bn254::g1::G1Affine;
 use crate::chunk::elements::ElementType;
 use crate::{treepp};
 
 use super::api::PublicKeys;
-use super::g16_runner_core::{InputProof, PublicParams};
+use super::g16_runner_core::{ks_to_kds, InputProof, PublicParams};
 use super::wrap_hasher::hash_messages;
 use super::wrap_wots::checksig_verify_to_limbs;
 use super::{g16_runner_core::{groth16_generate_segments}, g16_runner_utils::{ScriptType, Segment}, wrap_wots::WOTSPubKey};
 
 pub const ATE_LOOP_COUNT: &[i8] = ark_bn254::Config::ATE_LOOP_COUNT;
 pub const NUM_PUBS: usize = 1;
-pub const NUM_U256: usize = 14;
-pub const NUM_U160: usize = 378;
+pub const NUM_U256: usize = 14+(4*NUM_PUBS);
+pub const NUM_U160: usize = 378+3;
 const VALIDATING_TAPS: usize = 1;
 const HASHING_TAPS: usize = NUM_U160;
 pub const NUM_TAPS: usize = HASHING_TAPS + VALIDATING_TAPS; 
@@ -119,7 +120,8 @@ fn generate_segments_using_mock_proof(vk: Vkey, skip_evaluation: bool) -> Vec<Se
     let g2 = t2;
     let fr : ark_ff::BigInt<4> = ark_ff::BigInt::from(1u64);
     let c = ark_bn254::Fq6::ONE;
-    let mocked_eval_ins: InputProof = InputProof { p2: g1, p4: g1, q4: g2, c, ks: vec![fr.into()] };
+    let kds = ks_to_kds([ark_bn254::Fr::ONE; NUM_PUBS]);
+    let mocked_eval_ins: InputProof = InputProof { p2: g1, p4: g1, q4: g2, c, ks: vec![fr.into()], kds};
 
     // public values known at compile time
     let pubs: PublicParams = PublicParams { q2: vk.q2, q3: vk.q3, fixed_acc: vk.p1q1.c1/vk.p1q1.c0, ks_vks: vk.p3vk, vky0: vk.vky0 };
