@@ -261,23 +261,15 @@ impl G1Affine {
         let k2signr = k2.sign();
 
 
-        let mut k1sign: u8 = 0;
-        if k1signr == Sign::Plus {
-            k1sign = 1;
-        } else if k1signr == Sign::Minus {
-            k1sign = 2;
-        } else {
+        let mut k1sign: u8 = 1;
+        if k1signr == Sign::Minus {
             k1sign = 0;
         }
 
-        let mut k2sign: u8 = 0;
-        if k2signr == Sign::Plus {
-            k2sign = 1;
-        } else if k2signr == Sign::Minus {
-            k2sign = 2;
-        } else {
+        let mut k2sign: u8 = 1;
+        if k2signr == Sign::Minus {
             k2sign = 0;
-        }
+        } 
 
         (
             (k1sign , ark_bn254::Fr::from(k1_abs)),
@@ -321,7 +313,7 @@ impl G1Affine {
             // [s0, s1, k0, k1 * lambda]
             OP_FROMALTSTACK
             // [s0, k0, k1 * lambda, s1]
-            {2} OP_EQUAL
+            {0} OP_EQUAL
             OP_IF
                 {Fr::neg(0)}
             OP_ENDIF
@@ -330,7 +322,7 @@ impl G1Affine {
             // [k, s0, k0]
             {Fr::N_LIMBS} OP_ROLL
             // [k, k0, s0]
-            {2} OP_EQUAL
+            {0} OP_EQUAL
             OP_IF
                 {Fr::neg(0)}
             OP_ENDIF
@@ -342,6 +334,14 @@ impl G1Affine {
             {Fr::equal(1, 0)} OP_VERIFY
         };
         (scr, mul_hints)
+    }
+
+    pub(crate) fn size_of_glv_decomposed_scalar() -> u32 {
+        // size of decomposed scalar is less than half the size i.e. less than equals 127 bits
+        let half_len = (Fr::N_BITS + 1)/2;
+        // we iterate over slightly more bits i.e. 128 bits
+        // to ensure solution (k0, k1) exist over the bounded space
+        half_len + 1
     }
 
     // Hint: [G1Acc, ScalarDecomposition_0, ScalarDecomposition_1,.., ScalarDecomposition_i, ]
@@ -363,7 +363,7 @@ impl G1Affine {
 
         let mut g1acc: ark_bn254::G1Affine = ark_bn254::G1Affine::zero();
         let mut i = 0;
-        let num_bits = (Fr::N_BITS + 1)/2;
+        let num_bits = Self::size_of_glv_decomposed_scalar();
         while i < num_bits {
             let (loop_result, loop_scripts, loop_hints)= Self::hinted_scalar_mul_by_constant_g1_ith_step(&mut g1acc, g16_scalars.clone(), g16_bases.clone(), window, i/window);
             i += window;
@@ -416,14 +416,9 @@ impl G1Affine {
 
         let mut glv_scalars: Vec<ark_bn254::Fr> = vec![];
         g16_scalars.iter().for_each(|s| {
-            let ((s0, k0), (s1, k1)) = Self::calculate_scalar_decomposition(*s);
+            let ((_, k0), (_, k1)) = Self::calculate_scalar_decomposition(*s);
             glv_scalars.push(k0);
             glv_scalars.push(k1);
-
-            loop_hints.push(Hint::U32(s0 as u32));
-            loop_hints.push(Hint::Fr(k0));
-            loop_hints.push(Hint::U32(s1 as u32));
-            loop_hints.push(Hint::Fr(k1));
         });
 
 
@@ -432,11 +427,11 @@ impl G1Affine {
         loop_scripts = script!(
             {loop_scripts}
              // [SD0, SD1, G1Acc, K0, K1]
-            for _ in 0..g16_scalars.len() {
-                for _ in 0..segment_len { // bring acc from top of stack
-                    OP_DEPTH OP_1SUB OP_ROLL 
-                }
-            }
+            // for _ in 0..g16_scalars.len() {
+            //     for _ in 0..segment_len { // bring acc from top of stack
+            //         OP_DEPTH OP_1SUB OP_ROLL 
+            //     }
+            // }
             // [G1Acc, K0, K1, SD0, SD1]
         );
         // [G1Acc, K0, K1, 0s0, 0k0, 0s1, 0k1,    1s0, 1k0, 1s1, 1k1]
@@ -482,7 +477,7 @@ impl G1Affine {
 
         
         let i = ith_step * window;
-        let num_bits = (Fr::N_BITS + 1)/2; // glv scalar has half of total bits 
+        let num_bits = Self::size_of_glv_decomposed_scalar();
         let depth = min(num_bits - i, window);
 
         // double(step-size) point
@@ -534,7 +529,7 @@ impl G1Affine {
                 // [s0, Px0, Py0]
                 {Fq::toaltstack()} {Fq::toaltstack()}
                 // [s0]
-                {2} OP_NUMEQUAL
+                {0} OP_NUMEQUAL
                 // if s0 is negative, negate P
                 OP_IF 
                     {Fr::fromaltstack()} 
@@ -1200,7 +1195,7 @@ mod test {
 
         let dec = G1Affine::calculate_scalar_decomposition(k);
         let  ((is_k1_positive, k1), (is_k2_positive, k2)) = dec;
-        let (is_k1_positive, is_k2_positive) = (is_k1_positive != 2, is_k2_positive != 2);
+        let (is_k1_positive, is_k2_positive) = (is_k1_positive == 1, is_k2_positive == 1);
 
         if is_k1_positive && is_k2_positive {
             assert_eq!(k1 + k2 * lambda, k);
@@ -1227,6 +1222,8 @@ mod test {
             k2.into_bigint().num_bits()
         );
 
+        println!("{} and {}", is_k1_positive, is_k2_positive);
+
         let (dec_scr, hints) = G1Affine::hinted_scalar_decomposition(k);
         let scr = script!{
             for hint in hints {
@@ -1242,6 +1239,9 @@ mod test {
         };
 
         let res = execute_script(scr);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
         println!("max stack {:?}", res.stats.max_nb_stack_items);
         assert!(res.final_stack.len() == 1);
         assert!(res.success);
@@ -1266,6 +1266,15 @@ mod test {
                 window as u32,
             );
 
+        let mut scalar_decomp_hints = vec![];
+        g16_scalars.iter().for_each(|s| {
+            let ((s0, k0), (s1, k1)) = G1Affine::calculate_scalar_decomposition(*s);
+            scalar_decomp_hints.push(Hint::U32(s0 as u32));
+            scalar_decomp_hints.push(Hint::Fr(k0));
+            scalar_decomp_hints.push(Hint::U32(s1 as u32));
+            scalar_decomp_hints.push(Hint::Fr(k1));
+        });
+
         let mut prev_acc = ark_bn254::G1Affine::new_unchecked(ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO);
         for (itr, (output_acc, scalar_mul_affine_script, hints)) in all_loop_info.iter().enumerate() {
             
@@ -1277,6 +1286,9 @@ mod test {
                 {G1Affine::push(prev_acc)}
                 for scalar in g16_scalars.iter() {
                     { Fr::push(*scalar) } // scalar bit committed
+                }
+                for h in &scalar_decomp_hints {
+                    {h.push()} // bit comitted scalar decomposition hints
                 }
                 { scalar_mul_affine_script.clone() }
                 {Fq::push(output_acc.x)}

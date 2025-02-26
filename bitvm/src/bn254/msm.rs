@@ -228,6 +228,15 @@ pub fn hinted_msm_with_constant_bases_affine(
         acc = (acc + trivial_bases[i]).into_affine();
     }
 
+    let mut scalar_decomp_hints = vec![];
+    msm_scalars.iter().for_each(|s| {
+        let ((s0, k0), (s1, k1)) = G1Affine::calculate_scalar_decomposition(*s);
+        scalar_decomp_hints.push(Hint::U32(s0 as u32));
+        scalar_decomp_hints.push(Hint::Fr(k0));
+        scalar_decomp_hints.push(Hint::U32(s1 as u32));
+        scalar_decomp_hints.push(Hint::Fr(k1));
+    });
+
     // Gather scripts
     let script = script! {
         for i in 0..msm_chunk_scripts.len() {
@@ -241,6 +250,10 @@ pub fn hinted_msm_with_constant_bases_affine(
             // Scalar_i: groth16 public inputs bitcommited input irl
             for msm_scalar in &msm_scalars {
                 {Fr::push(*msm_scalar)}
+            }
+
+            for h in &scalar_decomp_hints {
+                {h.push()}
             }
             // [ScalarDecomposition_0, ScalarDecomposition_1,.., ScalarDecomposition_i,    G1Acc, Scalar_0, Scalar_1,..Scalar_i, ]
             {msm_chunk_scripts[i].clone()}
