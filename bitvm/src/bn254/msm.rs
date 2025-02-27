@@ -1,176 +1,13 @@
+use std::str::FromStr;
+
 use super::utils::Hint;
 use crate::bn254::fp254impl::Fp254Impl;
 use crate::bn254::{g1::G1Affine, fr::Fr};
 use crate::treepp::*;
 use ark_ec::{AdditiveGroup, AffineRepr, CurveGroup};
-use ark_ff::{BigInteger, Field, PrimeField};
-
-pub fn affine_double_line_coeff(
-    t: &mut ark_bn254::G1Affine,
-) -> (ark_bn254::Fq, ark_bn254::Fq) {
-    // alpha = 3 * t.x ^ 2 / 2 * t.y ^ 2
-    // bias = t.y - alpha * t.x
-    let alpha = (t.x.square() + t.x.square() + t.x.square()) / (t.y + t.y);
-    let bias = t.y - alpha * t.x;
-
-    // update T
-    // T.x = alpha^2 - 2 * t.x
-    // T.y = -bias - alpha * T.x
-    let tx = alpha.square() - t.x - t.x;
-    t.y = -bias - alpha * tx;
-    t.x = tx;
-
-    (alpha, -bias)
-}
-
-pub fn affine_add_line_coeff(
-    t: &mut ark_bn254::G1Affine,
-    p: ark_bn254::G1Affine,
-) -> (ark_bn254::Fq, ark_bn254::Fq) {
-    // alpha = (t.y - q.y) / (t.x - q.x)
-    // bias = t.y - alpha * t.x
-    let alpha = (t.y - p.y) / (t.x - p.x);
-    let bias = t.y - alpha * t.x;
-
-    // update T
-    // T.x = alpha^2 - t.x - q.x
-    // T.y = -bias - alpha * T.x
-    let tx = alpha.square() - t.x - p.x;
-    t.y = -bias - alpha * tx;
-    t.x = tx;
-
-    (alpha, -bias)
-}
-
-pub fn collect_scalar_mul_coeff(
-    base: ark_bn254::G1Affine,
-    scalar: ark_bn254::Fr,
-    i_step: u32,
-) -> (
-    Vec<(ark_bn254::Fq, ark_bn254::Fq)>,
-    Vec<ark_bn254::G1Affine>,
-    Vec<ark_bn254::G1Affine>,
-) {
-    if scalar == ark_bn254::Fr::ONE {
-        (vec![], vec![], vec![])
-    } else {
-        // precomputed lookup table (affine)
-        let mut p_mul: Vec<ark_bn254::G1Affine> = Vec::new();
-        p_mul.push(ark_bn254::G1Affine::zero());
-        for _ in 1..(1 << i_step) {
-            p_mul.push((*p_mul.last().unwrap() + base).into_affine());
-        }
-
-        // split into chunks
-        let chunks = scalar
-            .into_bigint()
-            .to_bits_be()
-            .iter()
-            .map(|b| if *b { 1_u8 } else { 0_u8 })
-            .skip(256 - crate::bn254::fr::Fr::N_BITS as usize)
-            .collect::<Vec<_>>()
-            .chunks(i_step as usize)
-            .map(|slice| slice.iter().fold(0, |acc, &b| (acc << 1) + b as u32))
-            .collect::<Vec<u32>>();
-        assert!(!chunks.is_empty());
-
-        // query lookup table, then double/add based on that
-        let mut line_coeff = vec![];
-        let mut step_points = vec![];
-        let mut trace = vec![];
-        let mut t = p_mul[chunks[0] as usize];
-        // for check variables
-        let mut acc = ark_bn254::G1Projective::from(p_mul[chunks[0] as usize]);
-        let mut s = ark_ff::BigInt::<4>::from(chunks[0]);
-        trace.push(p_mul[chunks[0] as usize]);
-        chunks.iter().skip(1).enumerate().for_each(|(idx, query)| {
-            let depth = if (idx == chunks.len() - 2)
-                && (crate::bn254::fr::Fr::N_BITS % i_step != 0)
-            {
-                crate::bn254::fr::Fr::N_BITS % i_step
-            } else {
-                i_step
-            };
-            for _ in 0..depth {
-                let tmp = t;
-                let double_coeff = if t.is_zero() {(ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO)} else {affine_double_line_coeff(&mut t)};
-                line_coeff.push(double_coeff);
-                step_points.push(tmp);
-                assert_eq!(
-                    tmp.y().unwrap_or(ark_bn254::Fq::ZERO) - double_coeff.0 * tmp.x().unwrap_or(ark_bn254::Fq::ZERO) + double_coeff.1,
-                    ark_bn254::Fq::ZERO
-                );
-                acc.double_in_place();
-                trace.push(acc.into_affine());
-                s <<= 1;
-            }
-
-            let add_coeffs = if p_mul[*query as usize].is_zero() {
-                (ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO)
-            } else if t.is_zero() {
-                t = p_mul[*query as usize];
-                (ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO)
-            } else {
-                affine_add_line_coeff(&mut t, p_mul[*query as usize])
-            };
-            line_coeff.push(add_coeffs);
-            // FOR DEBUG
-            acc += ark_bn254::G1Projective::from(p_mul[*query as usize]);
-            trace.push(acc.into_affine());
-            // TODO: zero point can be ignored
-            // if p_mul[*query as usize] != ark_bn254::G1Projective::ZERO {
-            //     line_coeff.push(affine_add_line_coeff(&mut t, p_mul[*query as usize]));
-            //     // FOR DEBUG
-            //     acc += ark_bn254::G1Projective::from(p_mul[*query as usize]);
-            // }
-
-            // FOR DEBUG
-            s.add_with_carry(&ark_ff::BigInt::<4>::from(*query));
-        });
-        assert_eq!(s, scalar.into_bigint());
-        assert_eq!(acc.into_affine(), (base * scalar).into_affine());
-
-        // return line coefficients of single scalar mul
-        (line_coeff, step_points, trace)
-    }
-}
-
-// line coefficients, denoted as tuple (alpha, bias), for the purpose of affine mode of MSM
-#[allow(clippy::type_complexity)]
-pub fn prepare_msm_input(
-    bases: &[ark_bn254::G1Affine],
-    scalars: &[ark_bn254::Fr],
-    i_step: u32,
-) -> (
-    Vec<(
-        Vec<(ark_bn254::Fq, ark_bn254::Fq)>,
-        Vec<ark_bn254::G1Affine>,
-        Vec<ark_bn254::G1Affine>,
-    )>,
-    Vec<(ark_bn254::Fq, ark_bn254::Fq)>,
-) {
-    let groups = bases
-        .iter()
-        .zip(scalars)
-        .collect::<Vec<_>>();
-
-    // inner part
-    let inner_coeffs = groups
-        .clone()
-        .into_iter()
-        .map(|(&base, &scalar)| collect_scalar_mul_coeff(base, scalar, i_step))
-        .collect::<Vec<_>>();
-
-    // outer part
-    let mut acc = (*groups[0].0 * *groups[0].1).into_affine();
-    let outer_coeffs = groups
-        .into_iter()
-        .skip(1)
-        .map(|(&base, &scalar)| affine_add_line_coeff(&mut acc, (base * scalar).into_affine()))
-        .collect::<Vec<_>>();
-
-    (inner_coeffs, outer_coeffs)
-}
+use ark_ff::{BigInteger, Field, One, PrimeField};
+use std::ops::{AddAssign, Div, Neg, Rem};
+use num_traits::Signed;
 
 pub fn hinted_msm_with_constant_bases_affine(
     bases: &[ark_bn254::G1Affine],
@@ -274,6 +111,158 @@ pub fn hinted_msm_with_constant_bases_affine(
 }
 
 
+pub(crate) struct ScalarDecomposition {
+    s0: ark_bn254::Fr,
+    k0: ark_bn254::Fr,
+    s1: ark_bn254::Fr,
+    k1: ark_bn254::Fr
+}
+
+pub(crate) fn calculate_scalar_decomposition(
+    k: ark_bn254::Fr,
+) -> ScalarDecomposition {
+    let scalar: num_bigint::BigInt = k.into_bigint().into();
+
+    let scalar_decomp_coeffs: [(bool, num_bigint::BigUint); 4] = [
+        (false, num_bigint::BigUint::from_str("147946756881789319000765030803803410728").unwrap()),
+        (true, num_bigint::BigUint::from_str("9931322734385697763").unwrap()),
+        (false, num_bigint::BigUint::from_str("9931322734385697763").unwrap()),
+        (false, num_bigint::BigUint::from_str("147946756881789319010696353538189108491").unwrap()),
+    ];
+    
+    let coeff_bigints: [num_bigint::BigInt; 4] = scalar_decomp_coeffs.map(|x| {
+        num_bigint::BigInt::from_biguint(if x.0 { num_bigint::Sign::Plus } else { num_bigint::Sign::Minus }, x.1)
+    });
+
+    let [n11, n12, n21, n22] = coeff_bigints;
+
+    let r = num_bigint::BigInt::from_biguint(num_bigint::Sign::Plus, num_bigint::BigUint::from(ark_bn254::Fr::MODULUS));
+
+    // beta = vector([k,0]) * self.curve.N_inv
+    // The inverse of N is 1/r * Matrix([[n22, -n12], [-n21, n11]]).
+    // so β = (k*n22, -k*n12)/r
+
+    let beta_1 = {
+        let mut div = (&scalar * &n22).div(&r);
+        let rem = (&scalar * &n22).rem(&r);
+        if (&rem + &rem) > r {
+            div.add_assign(num_bigint::BigInt::one());
+        }
+        div
+    };
+    let beta_2 = {
+        let mut div = (&scalar * &n12.clone().neg()).div(&r);
+        let rem = (&scalar * &n12.clone().neg()).rem(&r);
+        if (&rem + &rem) > r {
+            div.add_assign(num_bigint::BigInt::one());
+        }
+        div
+    };
+
+    // b = vector([int(beta[0]), int(beta[1])]) * self.curve.N
+    // b = (β1N11 + β2N21, β1N12 + β2N22) with the signs!
+    //   = (b11   + b12  , b21   + b22)   with the signs!
+
+    // b1
+    let b11 = &beta_1 * &n11;
+    let b12 = &beta_2 * &n21;
+    let b1 = b11 + b12;
+
+    // b2
+    let b21 = &beta_1 * &n12;
+    let b22 = &beta_2 * &n22;
+    let b2 = b21 + b22;
+
+    let k1 = &scalar - b1;
+    let k1_abs = num_bigint::BigUint::try_from(k1.abs()).unwrap();
+
+    // k2
+    let k2 = -b2;
+    let k2_abs = num_bigint::BigUint::try_from(k2.abs()).unwrap();
+
+    let k1signr = k1.sign();
+    let k2signr = k2.sign();
+
+
+    let mut k1sign = ark_bn254::Fr::ONE;
+    if k1signr == num_bigint::Sign::Minus {
+        k1sign = ark_bn254::Fr::ZERO;
+    }
+
+    let mut k2sign = ark_bn254::Fr::ONE;
+    if k2signr == num_bigint::Sign::Minus {
+        k2sign = ark_bn254::Fr::ZERO;
+    }
+
+    ScalarDecomposition {
+        s0: k1sign,
+        k0: ark_bn254::Fr::from(k1_abs),
+        s1: k2sign,
+        k1: ark_bn254::Fr::from(k2_abs)
+    }
+}
+
+
+fn hinted_fr_mul_by_constant(a: ark_bn254::Fr, constant: &ark_bn254::Fr) -> (Script, Vec<Hint>) {
+    let mut hints = Vec::new();
+    let x = num_bigint::BigInt::from_str(&a.to_string()).unwrap();
+    let y = num_bigint::BigInt::from_str(&constant.to_string()).unwrap();
+    let modulus = &Fr::modulus_as_bigint();
+    let q = (x * y) / modulus;
+
+    let script = script! {
+        for _ in 0..Fr::N_LIMBS {
+            OP_DEPTH OP_1SUB OP_ROLL // hints
+        }
+        { Fr::roll(1) }
+        { Fr::push(*constant) }
+        { Fr::tmul() }
+    };
+    hints.push(Hint::BigIntegerTmulLC1(q));
+    (script, hints)
+}
+
+fn verify_glv_scalar_decomposition_is_valid(k: ark_bn254::Fr) -> (Script, Vec<Hint>) {
+    let lambda: ark_bn254::Fr = ark_bn254::Fr::from(num_bigint::BigUint::from_str("21888242871839275217838484774961031246154997185409878258781734729429964517155").unwrap());
+    let decomposition = calculate_scalar_decomposition(k);
+    let k1 = decomposition.k1;
+    let (mul_scr, mul_hints) = hinted_fr_mul_by_constant(k1, &lambda);
+    let scr = script!{
+        // [s0, k0, s1, k1, k]
+        {Fr::toaltstack()}
+        // [s0, k0, s1, k1] [k]
+        {Fr::copy(0)}
+        {mul_scr}
+        // [s0, k0, s1, k1, k1.l] [k]
+        {Fr::copy(2)}
+        // [s0, k0, s1, k1, k1.l, s1] [k]
+        {Fr::is_zero(0)}
+        OP_IF
+            {Fr::neg(0)}
+        OP_ENDIF
+        // [s0, k0, s1, k1, s1.k1.l] [k]
+        {Fr::toaltstack()}
+        // [s0, k0, s1, k1] [k, s1.k1.l]
+        {Fr::copy(2)}
+        // [s0, k0, s1, k1, k0] [k, s1.k1.l]
+        {Fr::copy(4)}
+        // [s0, k0, s1, k1, k0, s0] [k, s1.k1.l]
+        {Fr::is_zero(0)}
+        OP_IF
+            {Fr::neg(0)}
+        OP_ENDIF
+        // [s0, k0, s1, k1, s0.k0] [k, s1.k1.l]
+        {Fr::fromaltstack()}
+        // [s0, k0, s1, k1, s0.k0, s1.k1.l] [k]
+        {Fr::add(1, 0)}
+        // [s0, k0, s1, k1, k'] [k]
+        {Fr::fromaltstack()}
+        {Fr::equal(1, 0)}
+    };
+    (scr, mul_hints)
+}
+
+
 
 #[cfg(test)]
 mod test {
@@ -282,6 +271,8 @@ mod test {
     use crate::execute_script_without_stack_limit;
     use ark_ec::{CurveGroup, VariableBaseMSM};
     use ark_std::{end_timer, start_timer, test_rng, UniformRand};
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
 
     #[test]
     fn test_hinted_msm_with_constant_bases_affine_script() {
@@ -317,4 +308,69 @@ mod test {
         end_timer!(start);
         assert!(exec_result.success);
     }
+
+
+
+    #[test]
+    fn test_hinted_scalar_decomposition() {
+        let mut prng = ChaCha20Rng::seed_from_u64(1);
+        let lambda: ark_bn254::Fr = ark_bn254::Fr::from(num_bigint::BigUint::from_str("21888242871839275217838484774961031246154997185409878258781734729429964517155").unwrap());
+        let k = ark_bn254::Fr::rand(&mut prng);
+
+        let dec = calculate_scalar_decomposition(k);
+        let (is_s0_positive, is_s1_positive) = (dec.s0 == ark_bn254::Fr::ONE, dec.s1 == ark_bn254::Fr::ONE);
+        let (k0, k1) = (dec.k0, dec.k1);
+
+        if is_s0_positive && is_s1_positive {
+            assert_eq!(k0 + k1 * lambda, k);
+        }
+        if is_s0_positive && !is_s1_positive {
+            assert_eq!(k0 - k1 * lambda, k);
+        }
+        if !is_s0_positive && is_s1_positive {
+            assert_eq!(-k0 + k1 * lambda, k);
+        }
+        if !is_s0_positive && !is_s1_positive {
+            assert_eq!(-k0 - k1 * lambda, k);
+        }
+        // check if k1 and k2 are indeed small.
+        let expected_max_bits = (ark_bn254::Fr::MODULUS_BIT_SIZE + 1) / 2;
+        assert!(
+            k0.into_bigint().num_bits() <= expected_max_bits,
+            "k1 has {} bits",
+            k0.into_bigint().num_bits()
+        );
+        assert!(
+            k1.into_bigint().num_bits() <= expected_max_bits,
+            "k2 has {} bits",
+            k1.into_bigint().num_bits()
+        );
+
+        let (dec_scr, hints) = verify_glv_scalar_decomposition_is_valid(k);
+        let scr = script!{
+            for hint in hints {
+                {hint.push()}
+            }
+            for v in vec![dec.s0, dec.k0, dec.s1, dec.k1, k] {
+                {Fr::push(v)}
+            }
+            {dec_scr}
+            OP_VERIFY
+            for v in vec![dec.s0, dec.k0, dec.s1, dec.k1].iter().rev() {
+                {Fr::push(*v)}
+                {Fr::equalverify(1, 0)}
+            }
+            OP_TRUE
+        };
+
+        let res = execute_script(scr);
+        for i in 0..res.final_stack.len() {
+            println!("{i:} {:?}", res.final_stack.get(i));
+        }
+        println!("max stack {:?}", res.stats.max_nb_stack_items);
+        assert!(res.final_stack.len() == 1);
+        assert!(res.success);
+    }
+
+
 }

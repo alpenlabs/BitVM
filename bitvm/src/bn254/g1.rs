@@ -277,6 +277,7 @@ impl G1Affine {
         )
     }
 
+
     fn hinted_fr_mul_by_constant(a: ark_bn254::Fr, constant: &ark_bn254::Fr) -> (Script, Vec<Hint>) {
         let mut hints = Vec::new();
         let x = BigInt::from_str(&a.to_string()).unwrap();
@@ -336,6 +337,7 @@ impl G1Affine {
         (scr, mul_hints)
     }
 
+    
     // Hint: [G1Acc, ScalarDecomposition_0, ScalarDecomposition_1,.., ScalarDecomposition_i, ]
     // Stack: [Hint, ...., Scalar_0, Scalar_1,..Scalar_i]
     // where 

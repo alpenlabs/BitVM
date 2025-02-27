@@ -296,6 +296,7 @@ pub(crate) fn wrap_hint_msm(
         f.result.0.try_into().unwrap() 
     })
     .collect();
+    scalar_input_segment_info.reverse();
 
     let mut scalar_decompos_segment_info: Vec<(SegmentID, ElementType)> = vec![];
     pub_kds.map(|kd| {
@@ -315,7 +316,7 @@ pub(crate) fn wrap_hint_msm(
     });
     dec_hints.reverse();
 
-    let mut window = 6;
+    let window = 6;
 
     let num_chunks = (Fr::N_BITS + 2 * window - 1)/(2 * window);
     let mut segments = vec![];
@@ -332,9 +333,6 @@ pub(crate) fn wrap_hint_msm(
             input_segment_info.extend_from_slice(&scalar_decompos_segment_info);
             input_segment_info.extend_from_slice(&scalar_input_segment_info);
 
-            // if msm_chunk_index > 0 {
-                // op_hints.extend_from_slice(&DataType::G1Data(prev_input).get_hash_preimage_as_hints());
-            // }
             prev_input = hout_msm;
 
             segments.push(Segment { 

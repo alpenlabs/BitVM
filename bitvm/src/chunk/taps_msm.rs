@@ -243,7 +243,7 @@ mod test {
 
     #[test]
     fn test_precompute_table() {
-        let window = 8;
+        let window = 16;
         let mut prng = ChaCha20Rng::seed_from_u64(2);
         let q = ark_bn254::G1Affine::rand(&mut prng);
         let mut p_mul: Vec<ark_bn254::G1Affine> = Vec::new();
@@ -487,8 +487,8 @@ mod test {
                     {Fr::toaltstack()}
                 }
 
-                for scalar in &scalars {
-                    {Fr::push(ark_bn254::Fr::from(*scalar))}
+                for scalar in scalars.clone().into_iter().rev() {
+                    {Fr::push(ark_bn254::Fr::from(scalar))}
                     {Fr::toaltstack()}  
                 }
             };
@@ -522,7 +522,7 @@ mod test {
                 {hash_script}
             };
     
-            let res = execute_script_without_stack_limit(script);
+            let res = execute_script(script);
             if res.final_stack.len() > 1 {
                 for i in 0..res.final_stack.len() {
                     println!("{i:} {:?}", res.final_stack.get(i));

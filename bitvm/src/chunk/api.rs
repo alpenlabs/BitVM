@@ -860,13 +860,13 @@ mod test {
         let verifier_scripts = verifier_scripts.try_into().unwrap();
 
 
-        fn corrupt(proof_asserts: &mut Assertions, random: Option<usize>) {
+        fn corrupt(proof_asserts: &mut Assertions, random_assertion_index: Option<usize>) {
             let mut rng = rand::thread_rng();
     
             // Generate a random number between 1 and 100 (inclusive)
             let mut index = rng.gen_range(0..NUM_PUBS + NUM_U256 + NUM_U160);
-            if random.is_some() {
-                index = random.unwrap();
+            if random_assertion_index.is_some() {
+                index = random_assertion_index.unwrap();
             }
             // WARN: KNOWN ISSUE: scramble: [u8; 32] = [255; 32]; fails because tapscripts do not check that the asserted value is a field element 
             // A 256 bit number is not a field element. For now, this prototype only supports corruption that is still a field element
@@ -899,11 +899,11 @@ mod test {
     
 
 
-        let _total = NUM_PUBS + NUM_U256 + NUM_U160;
-        for i in 0..1{ //total {
+        let total = NUM_PUBS + NUM_U256 + NUM_U160;
+        for i in 0..total {
             println!("ITERATION {:?}", i);
             let mut proof_asserts = read_asserts_from_file("bridge_data/chunker_data/assert.json");
-            corrupt(&mut proof_asserts, None);
+            corrupt(&mut proof_asserts, Some(i));
             let signed_asserts = sign_assertions(proof_asserts);
     
             let fault = validate_assertions(&mock_vk, signed_asserts, mock_pubks, &verifier_scripts);
