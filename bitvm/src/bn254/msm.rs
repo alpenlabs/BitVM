@@ -57,6 +57,35 @@ pub fn hinted_msm_with_constant_bases_affine(
 }
 
 
+pub fn dfs_with_constant_mul(
+    index: u32,
+    depth: u32,
+    mask: u32,
+    p_mul: &Vec<ark_bn254::G1Affine>,
+) -> Script {
+    if depth == 0 {
+        return script! {
+            OP_IF
+                { G1Affine::push(p_mul[(mask + (1 << index)) as usize]) }
+            OP_ELSE
+                if mask == 0 {
+                    { G1Affine::push_zero() }
+                } else {
+                    { G1Affine::push(p_mul[mask as usize]) }
+                }
+            OP_ENDIF
+        };
+    }
+
+    script! {
+        OP_IF
+            { dfs_with_constant_mul(index + 1, depth - 1, mask + (1 << index), p_mul) }
+        OP_ELSE
+            { dfs_with_constant_mul(index + 1, depth - 1, mask, p_mul) }
+        OP_ENDIF
+    }
+}
+
 
 fn generate_lookup_tables(q: ark_bn254::G1Affine, window: usize) -> (Vec<Vec<ark_bn254::G1Affine>>, Vec<Script>) {
     let num_tables = (Fr::N_BITS as usize + window - 1)/window;
@@ -71,7 +100,7 @@ fn generate_lookup_tables(q: ark_bn254::G1Affine, window: usize) -> (Vec<Vec<ark
             let entry = (*p_mul.last().unwrap() + doubled_base).into_affine();
             p_mul.push(entry);
         }
-        let p_mul_scr = {G1Affine::dfs_with_constant_mul(0, window as u32 - 1, 0, &p_mul) };
+        let p_mul_scr = {dfs_with_constant_mul(0, window as u32 - 1, 0, &p_mul) };
         all_tables_scr.push(p_mul_scr);
         all_tables.push(p_mul);
     }
@@ -102,6 +131,7 @@ fn get_query_for_table_index(scalar: ark_bn254::Fr, window: usize, index: usize)
     let elem = chunks[index];
 
     let scr = script!{
+        // [scalar]
         {Fr::convert_to_le_bits_toaltstack()}
         {0}
         {0}
@@ -166,7 +196,7 @@ fn accumulate_rows(init_acc: ark_bn254::G1Affine, q: ark_bn254::G1Affine, fq: ar
 }
 
 
-fn g1_msm(bases: Vec<ark_bn254::G1Affine>, scalars: Vec<ark_bn254::Fr>)->  Vec<(ark_bn254::G1Affine, Script, Vec<Hint>)> {
+pub(crate) fn g1_msm(bases: Vec<ark_bn254::G1Affine>, scalars: Vec<ark_bn254::Fr>)->  Vec<(ark_bn254::G1Affine, Script, Vec<Hint>)> {
     assert_eq!(bases.len(), scalars.len());
     let mut prev = ark_bn254::G1Affine::identity();
     let window = 15;
