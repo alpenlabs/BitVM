@@ -1,24 +1,22 @@
 
-use crate::bigint::U254;
+use crate::bigint::{U254, U256};
 use crate::bn254::fq::Fq;
 use crate::bn254::g1::G1Affine;
 use crate::bn254::fr::Fr;
 use crate::bn254::utils::Hint;
-use crate::chunk::api::NUM_PUBS;
 use crate::{
     bn254::fp254impl::Fp254Impl,
     treepp::*,
 };
 use ark_ec::{CurveGroup};
 use ark_ff::{AdditiveGroup, Field, PrimeField};
+use bitcoin::opcodes::all::{OP_FROMALTSTACK, OP_TOALTSTACK};
 
 use super::wrap_hasher::hash_messages;
 use super::elements::{ ElementType};
 use crate::bn254::fq2::Fq2;
 
 pub(crate) fn chunk_msm(window: usize, input_ks: Vec<ark_ff::BigInt<4>>, qs: Vec<ark_bn254::G1Affine>) -> Vec<(ark_bn254::G1Affine, bool, Script, Vec<Hint>)> {
-    assert_eq!(qs.len(), NUM_PUBS);
-    assert_eq!(input_ks.len(), NUM_PUBS);
     let num_pubs = input_ks.len();
 
     let mut ks = (0..num_pubs).map(|_| ark_ff::BigInt::<4>::from(1u64)).collect::<Vec<ark_ff::BigInt::<4>>>();
@@ -29,12 +27,73 @@ pub(crate) fn chunk_msm(window: usize, input_ks: Vec<ark_ff::BigInt<4>>, qs: Vec
 
     let ks: Vec<ark_bn254::Fr> = ks.into_iter().map(|f| f.into()).collect();
     let chunks = G1Affine::hinted_scalar_mul_by_constant_g1(ks.clone(), qs.clone(), window as u32);
+    let decomposed_scalar_bit_len = (Fr::N_BITS + 1)/2;
+    let exclusive_bound_of_decomposed_scalar = ark_ff::BigInt::<4>::from(1u64) << decomposed_scalar_bit_len;
 
-    // [G1AccDashHash, G1AccHash, k0, k1, k2]
-    // [hints, G1Acc]
+    // k0, k1, k2, {s0,d0}, {s1,d1}, {s2,d2}
+    let mut bounds: Vec<ark_ff::BigInt<4>> = vec![];
+    for _ in 0..num_pubs {
+        bounds.push(ark_bn254::Fr::MODULUS);
+    }
+    for _ in 0..num_pubs {
+        bounds.push(ark_ff::BigInt::from(2u64)); // sign
+        bounds.push(exclusive_bound_of_decomposed_scalar); // half_scalar
+        bounds.push(ark_ff::BigInt::from(2u64)); // sign
+        bounds.push(exclusive_bound_of_decomposed_scalar); // half_scalar
+    }
+    bounds.reverse();
+
+
+    let validate_scalars_and_decomps_from_altstack = script!{
+        // [] [.., sd2, sd1, sd0, k2, k1, k0]
+        for _ in 0..num_pubs {
+            {Fr::fromaltstack()}
+        }
+        // [.., k0, k1, k2] [sd2, sd1, sd0]
+        for _ in 0..num_pubs*4 {
+            {Fr::fromaltstack()}
+        }
+        // [.., k0, k1, k2, sd0, sd1, sd2]
+        for i in 0..bounds.len() {
+            {Fr::copy(i as u32)}
+            {U256::push_dec(&bounds[i].to_string())}
+            {U256::lessthan(1, 0)}
+            OP_TOALTSTACK
+        }
+        {1}
+        for _ in 0..bounds.len() {
+            OP_FROMALTSTACK
+            OP_BOOLAND
+        }
+        // [k0, k1, k2, sd0, sd1, sd2, {0/1}] []
+    };
+
+    let convert_decs_on_top_of_stack_to_u32 = script!{
+        // [..., sd0, sd1, sd2]
+        for _ in 0..num_pubs {
+            {Fr::toaltstack()}
+            {Fr::push(ark_bn254::Fr::ONE)}
+            {Fr::equal(1, 0)}
+            OP_TOALTSTACK
+
+            {Fr::toaltstack()}
+            {Fr::push(ark_bn254::Fr::ONE)}
+            {Fr::equal(1, 0)}
+            OP_TOALTSTACK
+        }
+
+        for _ in 0..num_pubs {
+            OP_FROMALTSTACK
+            {Fr::fromaltstack()}
+            OP_FROMALTSTACK
+            {Fr::fromaltstack()}
+        }
+    };
 
     let mut chunk_scripts = vec![];
     for (msm_tap_index, chunk) in chunks.iter().enumerate() {
+        // [G1AccDashHash, Option<G1AccHash>, Decompositions, Scalars]
+        // [hints, Option<G1Acc>]
         let ops_script = script! {
             // Optionally push G1Affine if msm_tap_index == 0.
             if msm_tap_index == 0 {
@@ -44,75 +103,42 @@ pub(crate) fn chunk_msm(window: usize, input_ks: Vec<ark_ff::BigInt<4>>, qs: Vec
                 ))}
             }
             // [hints, G1Acc] [G1AccDashHash, Option<G1AccHash>, sd2, sd1, sd0, k2, k1, k0]
-            for _ in 0..num_pubs {
-                {Fr::fromaltstack()}
-            }
-            // [hints, G1Acc, k0, k1, k2] [sd2, sd1, sd0]
-            for _ in 0..num_pubs {
-                {Fr::copy(num_pubs as u32 - 1)}
-            }
-            for _ in 0..num_pubs {
-                {Fr::push_hex(Fr::MODULUS)}
-                {U254::lessthan(1, 0)} // a < p
-                OP_TOALTSTACK
-            }
-            {1}
-            for _ in 0..num_pubs {
-                OP_FROMALTSTACK
-                OP_BOOLAND
-            }
+            {validate_scalars_and_decomps_from_altstack.clone()}
         
-            // [hints, G1Acc, k0, k1, k2, {0/1}] [G1AccDashHash, Option<G1AccHash>, sd2, sd1, sd0]
+            // [hints, G1Acc, k0, k1, k2, sd0, sd1, sd2 {0/1}] [G1AccDashHash, Option<G1AccHash>]
             OP_IF
-                // [hints, G1Acc, k0, k1, k2] [G1AccDashHash, Option<G1AccHash>, sd2, sd1, sd0]
-                for _ in 0..num_pubs {
-                    {Fr::fromaltstack()}
-                    {Fr::push_one()} {Fr::equal(1, 0)}
-                    {Fr::fromaltstack()}
-        
-                    {Fr::fromaltstack()}
-                    {Fr::push_one()} {Fr::equal(1, 0)}
-                    {Fr::fromaltstack()}
-                }
                 // [hints, G1Acc, k0, k1, k2, sd0, sd1, sd2] [G1AccDashHash, Option<G1AccHash>]
                 if msm_tap_index == 0 {
                     // [hints, G1Acc, k0, k1, k2, sd0, sd1, sd2] [G1AccDashHash]
+                    {convert_decs_on_top_of_stack_to_u32.clone()}
                     {chunk.1.clone()}
                     // [G1AccDash] [G1AccDashHash]
                 } else {
                     // [hints, G1Acc, k0, k1, k2, sd0, sd1, sd2] [G1AccDashHash, G1AccHash]
-                    for _ in 0..(Fq::N_LIMBS * 2) {
-                        {num_pubs as u32 * (3 * Fr::N_LIMBS + 2) + (2 * Fq::N_LIMBS - 1)} OP_PICK
-                    }
+                    {Fq2::copy(5 * num_pubs as u32)}
                     // [hints, G1Acc, k0, k1, k2, sd0, sd1, sd2, G1Acc] [G1AccDashHash, G1AccHash]
                     {Fq2::toaltstack()}
                     // [hints, G1Acc, k0, k1, k2, sd0, sd1, sd2] [G1AccDashHash, G1AccHash, G1Acc]
+                    {convert_decs_on_top_of_stack_to_u32.clone()}
                     {chunk.1.clone()}
                     // [G1AccDash] [G1AccDashHash, G1AccHash, G1Acc]
                     {Fq2::fromaltstack()}
                     {Fq2::roll(2)}
+
                     // [G1Acc, G1AccDash] [G1AccDashHash, G1AccHash]
                 }
                 {1}
             OP_ELSE
-                // [G1Acc, k0, k1, k2] [G1AccDashHash, Option<G1AccHash>, sd2, sd1, sd0]
+                // [G1Acc, k0, k1, k2, sd0, sd1, sd2] [G1AccDashHash, Option<G1AccHash>]
+                for _ in 0..num_pubs*4 {
+                    {Fr::drop()}
+                }
                 for _ in 0..num_pubs {
                     {Fr::drop()}
                 }
-                // [G1Acc] [G1AccDashHash, Option<G1AccHash>, sd2, sd1, sd0]
+                // [G1Acc] [G1AccDashHash, Option<G1AccHash>]
                 if msm_tap_index == 0 {
                     {G1Affine::drop()}
-                }
-                // [Option<G1Acc>] [G1AccDashHash, Option<G1AccHash>, sd2, sd1, sd0]
-                for _ in 0..num_pubs {
-                    {Fr::fromaltstack()}
-                    {Fr::drop()}
-                    {Fr::fromaltstack()}
-                    {Fr::drop()}
-                    {Fr::fromaltstack()}
-                    {Fr::drop()}
-                    {Fr::fromaltstack()}
-                    {Fr::drop()}
                 }
                 // [Option<G1Acc>] [G1AccDashHash, Option<G1AccHash>]
                 {Fq::push(ark_bn254::Fq::ONE)}
@@ -427,7 +453,6 @@ mod test {
         let window = 6;
         let hints_msm = chunk_msm(window, scalars.clone(), qs.clone());
 
-
         let mut dec_hints = vec![];
         scalars.clone().into_iter().for_each(|s| {
             let ((s0, k0), (s1, k1)) = G1Affine::calculate_scalar_decomposition(s.into());
@@ -497,7 +522,7 @@ mod test {
                 {hash_script}
             };
     
-            let res = execute_script(script);
+            let res = execute_script_without_stack_limit(script);
             if res.final_stack.len() > 1 {
                 for i in 0..res.final_stack.len() {
                     println!("{i:} {:?}", res.final_stack.get(i));
@@ -604,5 +629,11 @@ mod test {
 
     }
 
+
+    #[test]
+    fn test_this() {
+        let arf = ark_ff::BigInt::<4>::from(ark_bn254::Fr::MODULUS);
+        println!("arf {:?}", arf.to_string());
+    }
 
 }
