@@ -28,7 +28,7 @@ pub(crate) fn chunk_msm(input_ks: Vec<ark_ff::BigInt<4>>, qs: Vec<ark_bn254::G1A
         ks = input_ks.clone();
     }
 
-    let chunks = msm::g1_msm(qs.clone(), ks.into_iter().map(|f| f.into()).collect());
+    let chunks = msm::g1_multi_scalar_mul(qs.clone(), ks.into_iter().map(|f| f.into()).collect());
 
     // [G1AccDashHash, G1AccHash, k0, k1, k2]
     // [hints, G1Acc]
@@ -417,10 +417,8 @@ mod test {
                     {Fq::toaltstack()}
                 }
 
-                for scalar in &scalars {
-                    {Fr::push(ark_bn254::Fr::from(*scalar))}
-                    {Fr::toaltstack()}  
-                }
+                {Fr::push(ark_bn254::Fr::from(scalar))}
+                {Fr::toaltstack()}  
             };
     
             let mut op_hints = vec![];
@@ -472,7 +470,8 @@ mod test {
     fn test_tap_msm_invalid_inputs_scalar_not_fr() {
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let q = ark_bn254::G1Affine::rand(&mut prng);
-        let scalars = vec![BigInt::one() << 255];
+        let scalar = BigInt::one() << 255;
+        let scalars = vec![scalar];
         let qs = vec![q];
 
         let hints_msm = chunk_msm(scalars.clone(), qs.clone());
@@ -494,11 +493,8 @@ mod test {
                     {hint_in.to_hash().as_hint_type().push()}
                     {Fq::toaltstack()}
                 }
-
-                for scalar in scalars.clone() {
-                    {Hint::U256(scalar.into()).push()}
-                    {Fr::toaltstack()}  
-                }
+                {Hint::U256(scalar.into()).push()}
+                {Fr::toaltstack()}  
             };
     
             let mut op_hints = vec![];
