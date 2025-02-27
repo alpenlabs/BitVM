@@ -15,86 +15,45 @@ pub fn hinted_msm_with_constant_bases_affine(
     println!("use hinted_msm_with_constant_bases_affine");
     assert_eq!(bases.len(), scalars.len());
 
-    let mut hints = Vec::new();
+    let all_rows = g1_msm(bases.to_vec(), scalars.to_vec());
+    let mut all_hints: Vec<Hint> = vec![];
+    let mut prev = ark_bn254::G1Affine::identity();
+    let mut scr = script!();
 
-    let mut trivial_bases = vec![];
-    let mut msm_bases = vec![];
-    let mut msm_scalars = vec![];
-    let mut msm_acc = ark_bn254::G1Affine::identity();
-    for (itr, s) in scalars.iter().enumerate() {
-        if *s == ark_bn254::Fr::ONE {
-            trivial_bases.push(bases[itr]);
-        } else {
-            msm_bases.push(bases[itr]);
-            msm_scalars.push(*s);
-            msm_acc = (msm_acc + (bases[itr] * *s).into_affine()).into_affine();
-        }
-    }    
+    let all_rows_len = all_rows.len();
+    let num_scalars = scalars.len();
+    let psm_len = all_rows.len()/num_scalars;
 
-    // parameters
-    let mut window = 4;
-    if msm_scalars.len() == 1 {
-        window = 7;
-    } else if msm_scalars.len() == 2 {
-        window = 5;
-    }
+    for (idx, (row_out, row_scr, row_hints)) in all_rows.into_iter().enumerate() {
 
-    // MSM
-    let mut acc = ark_bn254::G1Affine::zero();
-    let msm_chunks = G1Affine::hinted_scalar_mul_by_constant_g1(
-        msm_scalars.clone(),
-        msm_bases.clone(),
-        window,
-    );
-    let msm_chunk_hints: Vec<Hint> = msm_chunks.iter().flat_map(|f| f.2.clone()).collect();
-    let msm_chunk_scripts: Vec<Script> = msm_chunks.iter().map(|f| f.1.clone()).collect();
-    let msm_chunk_results: Vec<ark_bn254::G1Affine> = msm_chunks.iter().map(|f| f.0).collect();
-    hints.extend_from_slice(&msm_chunk_hints);
-
-    acc = (acc + msm_acc).into_affine();
-
-    // Additions
-    let mut add_scripts = Vec::new();
-    for i in 0..trivial_bases.len() {
-        // check coeffs before using
-        let (add_script, hint) =
-            G1Affine::hinted_check_add(acc, trivial_bases[i]); // outer_coeffs[i - 1].1
-        add_scripts.push(add_script);
-        hints.extend(hint);
-        acc = (acc + trivial_bases[i]).into_affine();
-    }
-
-    // Gather scripts
-    let script = script! {
-        for i in 0..msm_chunk_scripts.len() {
-            // G1Acc preimage
-            if i == 0 {
-                {G1Affine::push( ark_bn254::G1Affine::new_unchecked(ark_bn254::Fq::ZERO, ark_bn254::Fq::ZERO))}
-            } else {
-                {G1Affine::push(msm_chunk_results[i-1])}
+        all_hints.extend_from_slice(&row_hints);
+        
+        let temp_scr = script!{
+            // [hints, t, scalar]
+            {G1Affine::push(prev)}
+            {Fr::push(scalars[idx/psm_len] )} // fq0, fq1
+            {row_scr}
+            if idx == all_rows_len-1 { // save final output
+                {Fq2::copy(0)}
+                {Fq2::toaltstack()}
             }
-
-            // Scalar_i: groth16 public inputs bitcommited input irl
-            for msm_scalar in &msm_scalars {
-                {Fr::push(*msm_scalar)}
-            }
-            // [ScalarDecomposition_0, ScalarDecomposition_1,.., ScalarDecomposition_i,    G1Acc, Scalar_0, Scalar_1,..Scalar_i, ]
-            {msm_chunk_scripts[i].clone()}
-
-            {G1Affine::push(msm_chunk_results[i])}
+            {G1Affine::push(row_out)}
             {G1Affine::equalverify()}
-        }
-        {G1Affine::push(msm_chunk_results[msm_chunk_results.len()-1])}
-        // tx, ty
-        for i in 0..add_scripts.len() {
-            {G1Affine::push(trivial_bases[i])}
-            {add_scripts[i].clone()}
-        }
-    };
-    //println!("msm is divided into {} chunks ", msm_scripts.len() + add_scripts.len());
+            {G1Affine::push(prev) }
+            {G1Affine::equalverify()}
+            if idx == all_rows_len-1 {
+                {Fq2::fromaltstack()}
+            }
+        };
 
-    (script, hints)
-    // into_affine involving extreem expensive field inversion, X/Z^2 and Y/Z^3, fortunately there's no need to do into_affine any more here
+        scr = script!{
+            {scr}
+            {temp_scr}
+        };
+        prev = row_out;
+    }
+
+    (scr, all_hints)
 }
 
 
@@ -206,6 +165,20 @@ fn accumulate_rows(init_acc: ark_bn254::G1Affine, q: ark_bn254::G1Affine, fq: ar
     all_rows
 }
 
+
+fn g1_msm(bases: Vec<ark_bn254::G1Affine>, scalars: Vec<ark_bn254::Fr>)->  Vec<(ark_bn254::G1Affine, Script, Vec<Hint>)> {
+    assert_eq!(bases.len(), scalars.len());
+    let mut prev = ark_bn254::G1Affine::identity();
+    let window = 15;
+    let mut compile_all_rows = vec![];
+    for i in 0..bases.len() {
+        let all_rows = accumulate_rows(prev, bases[i], scalars[i], window);
+        prev = all_rows[all_rows.len()-1].0;
+        compile_all_rows.extend_from_slice(&all_rows);
+    }
+    compile_all_rows
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -312,21 +285,28 @@ mod test {
         let (msm, hints) = hinted_msm_with_constant_bases_affine(&bases, &scalars);
 
         let start = start_timer!(|| "collect_script");
+        println!("hints {:?}", hints.len());
+        let tap_len = msm.len();
         let script = script! {
             for hint in hints {
                 { hint.push() }
             } 
+            { msm }
 
-            { msm.clone() }
             { G1Affine::push(expect) }
             { G1Affine::equalverify() }
             OP_TRUE
         };
         end_timer!(start);
 
-        println!("hinted_msm_with_constant_bases: = {} bytes", msm.len());
+        println!("hinted_msm_with_constant_bases: = {} bytes", tap_len);
         let start = start_timer!(|| "execute_msm_script");
         let exec_result = execute_script_without_stack_limit(script);
+        if exec_result.final_stack.len() > 1 {
+            for i in 0..exec_result.final_stack.len() {
+                println!("{i:} {:?}", exec_result.final_stack.get(i));
+            }
+        }
         end_timer!(start);
         assert!(exec_result.success);
     }
@@ -346,6 +326,7 @@ mod test {
 
         for (row_out, row_scr, row_hints) in all_rows {
 
+            let tap_len = row_scr.len();
             let scr = script!{
                 // [hints, t, scalar]
                 for h in &row_hints {
@@ -360,6 +341,7 @@ mod test {
                 {G1Affine::equalverify()}
                 OP_TRUE
             };
+
             let res = execute_script(scr);
             if res.final_stack.len() > 1 {
                 for i in 0..res.final_stack.len() {
@@ -367,8 +349,8 @@ mod test {
                 }
             }
             prev = row_out;
-
             assert!(res.success);
+            println!("taplen {:?} max_stat {:?}", tap_len, res.stats.max_nb_stack_items);
         }
 
     }
@@ -379,21 +361,21 @@ mod test {
         let mut prng = ChaCha20Rng::seed_from_u64(1);
         let q0 = ark_bn254::G1Affine::rand(&mut prng);
         let fq0 = ark_bn254::Fr::rand(&mut prng);
-
         let q1 = ark_bn254::G1Affine::rand(&mut prng);
         let fq1 = ark_bn254::Fr::rand(&mut prng);
+        let bases = vec![q0, q1];
+        let scalars = vec![fq0, fq1];
 
-        let window = 15;
-        let mut prev = ark_bn254::G1Affine::identity();
-        let all_rows0 = accumulate_rows(prev, q0, fq0, window);
-        let psm_out = all_rows0[all_rows0.len()-1].0;
+        let num_scalars = scalars.len();
+        let all_rows = g1_msm(bases, scalars.clone());
+        let psm_len = all_rows.len()/num_scalars;
 
-        let all_rows1 = accumulate_rows(psm_out, q1, fq1, window);
-        let calculated_msm = all_rows1[all_rows1.len()-1].0;
         let expected_msm = (q0 * fq0 + q1 * fq1).into_affine();
+        let calculated_msm = all_rows[all_rows.len()-1].0;
         assert_eq!(expected_msm, calculated_msm);
 
-        for (row_out, row_scr, row_hints) in all_rows0 {
+        let mut prev = ark_bn254::G1Affine::identity();
+        for (idx, (row_out, row_scr, row_hints)) in all_rows.into_iter().enumerate() {
 
             let scr = script!{
                 // [hints, t, scalar]
@@ -401,34 +383,7 @@ mod test {
                     {h.push()}
                 }
                 {G1Affine::push(prev)}
-                {Fr::push(fq0)}
-                {row_scr}
-                {G1Affine::push(row_out)}
-                {G1Affine::equalverify()}
-                {G1Affine::push(prev) }
-                {G1Affine::equalverify()}
-                OP_TRUE
-            };
-            let res = execute_script(scr);
-            if res.final_stack.len() > 1 {
-                for i in 0..res.final_stack.len() {
-                    println!("{i:} {:?}", res.final_stack.get(i));
-                }
-            }
-            prev = row_out;
-
-            assert!(res.success);
-        }
-
-        for (row_out, row_scr, row_hints) in all_rows1 {
-
-            let scr = script!{
-                // [hints, t, scalar]
-                for h in &row_hints {
-                    {h.push()}
-                }
-                {G1Affine::push(prev)}
-                {Fr::push(fq1)}
+                {Fr::push(scalars[idx/psm_len] )} // fq0, fq1
                 {row_scr}
                 {G1Affine::push(row_out)}
                 {G1Affine::equalverify()}
