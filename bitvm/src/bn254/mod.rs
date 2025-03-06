@@ -6,6 +6,7 @@ pub mod fr;
 pub mod g1;
 pub mod g2;
 
+#[cfg(test)]
 pub mod pairing;
 
 pub mod ell_coeffs;

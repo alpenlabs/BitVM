@@ -387,6 +387,7 @@ pub fn hinted_ell_by_constant_affine(x: ark_bn254::Fq, y: ark_bn254::Fq, slope: 
 
 }
 
+#[cfg(test)]
 pub fn collect_line_coeffs(
     constants: Vec<G2Prepared>,
 ) -> Vec<Vec<Vec<(ark_bn254::Fq2, ark_bn254::Fq2, ark_bn254::Fq2)>>> {
