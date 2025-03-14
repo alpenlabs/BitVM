@@ -18,6 +18,7 @@ use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::Field;
 use bitcoin::ScriptBuf;
 use bitcoin_script::script;
+use tracing::info;
 
 use super::api::{Assertions, PublicKeys, Signatures, NUM_HASH, NUM_PUBS, NUM_TAPS, NUM_U256};
 use super::elements::CompressedStateObject;
@@ -287,7 +288,7 @@ pub(crate) fn get_segments_from_groth16_proof(
     };
 
     let mut segments: Vec<Segment> = vec![];
-    println!("get_segments_from_groth16_proof; groth16_generate_segments");
+    info!("get_segments_from_groth16_proof; groth16_generate_segments");
     let success =
         groth16_generate_segments(false, &mut segments, eval_ins.to_raw(), pubs, &mut None);
     (success, segments)
@@ -296,7 +297,7 @@ pub(crate) fn get_segments_from_groth16_proof(
 // wots sign byte array using secrets
 // mirror of get_assertions_from_signature
 pub(crate) fn get_signature_from_assertion(assn: Assertions, secrets: Vec<String>) -> Signatures {
-    println!("get_signature_from_assertion");
+    info!("get_signature_from_assertion");
     // sign and return Signatures
     let (ps, fs, hs) = (assn.0, assn.1, assn.2);
 
@@ -330,7 +331,7 @@ pub(crate) fn get_signature_from_assertion(assn: Assertions, secrets: Vec<String
 // decode signature to assertion
 // mirror of get_signature_from_assertion
 pub(crate) fn get_assertions_from_signature(signed_asserts: Signatures) -> Assertions {
-    println!("get_assertions_from_signature");
+    info!("get_assertions_from_signature");
     let mut ks: Vec<[u8; 32]> = vec![];
     for i in 0..NUM_PUBS {
         let nibs = Wots32::signature_to_message(&signed_asserts.0[i]);
@@ -409,17 +410,17 @@ fn utils_execute_chunked_g16(
         let exec_result = execute_script(total_script);
         if exec_result.final_stack.len() > 1 {
             for i in 0..exec_result.final_stack.len() {
-                println!("{i:} {:?}", exec_result.final_stack.get(i));
+                tracing::error!("{i:} {:?}", exec_result.final_stack.get(i));
             }
         }
         if !exec_result.success {
             if exec_result.final_stack.len() != 1 {
-                println!("final {:?}", i);
-                println!("final {:?}", segments[i].scr_type);
-                panic!();
+                tracing::error!("final {:?}", i);
+                tracing::error!("final {:?}", segments[i].scr_type);
+                assert!(false);
             }
         } else {
-            println!(
+            info!(
                 "disprove script {}: tapindex {}, {:?}",
                 i, tap_script_index, segments[i].scr_type
             );
@@ -667,7 +668,7 @@ mod test {
         ]
         .to_vec();
 
-        println!("Preparing Input");
+        info!("Preparing Input");
         let proof: ark_groth16::Proof<Bn254> =
             ark_groth16::Proof::deserialize_uncompressed(&proof_bytes[..]).unwrap();
         let vk: ark_groth16::VerifyingKey<Bn254> =
@@ -676,47 +677,47 @@ mod test {
         let scalars = [scalar];
 
         // generate segments
-        println!("get_segments_from_groth16_proof");
+        info!("get_segments_from_groth16_proof");
         let (success, segments) = get_segments_from_groth16_proof(proof, scalars.to_vec(), &vk);
         assert!(success);
 
         // segments to assertion
-        println!("get_assertion_from_segments");
+        info!("get_assertion_from_segments");
         let assts = get_assertion_from_segments(&segments);
-        println!("execute_script_from_assertion");
+        info!("execute_script_from_assertion");
         let res = execute_script_from_assertion(&segments, assts);
         assert!(res.is_none());
 
-        println!("get_segments_from_assertion");
+        info!("get_segments_from_assertion");
         let (success, new_segments) = get_segments_from_assertion(assts, vk);
         assert!(success);
-        println!("again get_assertion_from_segments");
+        info!("again get_assertion_from_segments");
         let new_assts = get_assertion_from_segments(&new_segments);
-        println!("again execute_script_from_assertion");
+        info!("again execute_script_from_assertion");
         let res = execute_script_from_assertion(&new_segments, new_assts);
         assert!(res.is_none());
 
-        println!("ensure reruns match");
+        info!("ensure reruns match");
         assert_eq!(assts, new_assts);
 
         // get_sig from assts
         const MOCK_SECRET: &str = "a238982ce17ac813d505a5b40b665d404e9528e7";
-        println!("get_signature_from_assertion");
+        info!("get_signature_from_assertion");
         let secrets = (0..NUM_PUBS + NUM_U256 + NUM_HASH)
             .map(|idx| format!("{MOCK_SECRET}{:04x}", idx))
             .collect::<Vec<String>>();
         let signed_assts = get_signature_from_assertion(assts, secrets.clone());
 
-        println!("get_assertions_from_signature");
+        info!("get_assertions_from_signature");
         let new_assts = get_assertions_from_signature(signed_assts.clone());
         assert_eq!(assts, new_assts);
 
-        println!("get_pubkeys");
+        info!("get_pubkeys");
         let secrets = (0..NUM_PUBS + NUM_U256 + NUM_HASH)
             .map(|idx| format!("{MOCK_SECRET}{:04x}", idx))
             .collect::<Vec<String>>();
         let pubkeys = get_pubkeys(secrets);
-        println!("execute_script_from_signature");
+        info!("execute_script_from_signature");
         let partial_scripts: Vec<ScriptBuf> = partial_scripts_from_segments(&segments);
         let disprove_scripts =
             append_bitcom_locking_script_to_partial_scripts(pubkeys, partial_scripts.to_vec());
@@ -724,6 +725,6 @@ mod test {
 
         let res = execute_script_from_signature(&segments, signed_assts, &disprove_scripts);
         assert!(res.is_none());
-        println!("finished test");
+        info!("finished test");
     }
 }
