@@ -4,6 +4,7 @@ use crate::chunk::{
 use ark_ec::CurveGroup;
 use ark_ff::{Field, PrimeField};
 use bitcoin_script::script;
+use tracing::info;
 
 use super::{
     api::NUM_PUBS,
@@ -177,7 +178,7 @@ pub(crate) fn groth16_generate_segments(
 
     for j in (1..ATE_LOOP_COUNT.len()).rev() {
         if !skip_evaluation {
-            println!("Processing {:?}-th iteration of Miller Loop", j);
+            info!("Processing {:?}-th iteration of Miller Loop", j);
         }
         let ate = ATE_LOOP_COUNT[j - 1];
         let sq = wrap_hint_squaring(skip_evaluation, all_output_hints.len(), &f_acc);
@@ -456,6 +457,7 @@ mod test {
     use ark_serialize::CanonicalDeserialize;
     use bitcoin_script::script;
     use num_bigint::BigUint;
+    use tracing::info;
     use std::{ops::Neg, str::FromStr};
 
     use crate::{
@@ -819,7 +821,7 @@ mod test {
 
         for itr in (1..ark_bn254::Config::ATE_LOOP_COUNT.len()).rev() {
             let ate_bit = ark_bn254::Config::ATE_LOOP_COUNT[itr - 1];
-            println!("itr {} ate_bit {}", itr, ate_bit);
+            info!("itr {} ate_bit {}", itr, ate_bit);
             // square
             f = f * f;
             f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1 / f.c0);
@@ -895,7 +897,7 @@ mod test {
                     f = ark_bn254::Fq12::new(ark_bn254::Fq6::ONE, f.c1 / f.c0);
 
                     ts[i] = (t + q).into_affine();
-                    // println!("pair {:?} ts {:?}", i, ts[i]);
+                    // info!("pair {:?} ts {:?}", i, ts[i]);
                 }
 
                 (t4, _, temp_scr, _) = chunk_point_ops_and_multiply_line_evals_step_1(
@@ -1051,7 +1053,7 @@ mod test {
         (g, _, temp_scr, _) = chunk_dense_dense_mul(g, lev);
         total_script_size += temp_scr.len();
 
-        println!("total script size {:?}", total_script_size);
+        info!("total script size {:?}", total_script_size);
 
         let tmp_q2f = frob_q_power(qs[0], -1);
         t2 = (t2 + tmp_q2f).into_affine();

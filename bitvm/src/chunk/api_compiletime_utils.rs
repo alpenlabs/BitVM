@@ -14,9 +14,11 @@ use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::Field;
 use bitcoin_script::script;
 use num_bigint::BigUint;
+use tracing::info;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::ops::Neg;
 use treepp::Script;
+
 
 use super::api::PublicKeys;
 use super::g16_runner_core::{InputProof, PublicParams};
@@ -41,7 +43,7 @@ pub(crate) struct Vkey {
 pub(crate) fn generate_partial_script(
     vk: &ark_groth16::VerifyingKey<Bn254>,
 ) -> Vec<bitcoin_script::Script> {
-    println!("generate_partial_script");
+    info!("generate_partial_script");
     assert!(vk.gamma_abc_g1.len() == NUM_PUBS + 1);
 
     let p1 = vk.alpha_g1;
@@ -65,9 +67,9 @@ pub(crate) fn generate_partial_script(
         vky0,
     };
 
-    println!("generate_partial_script; generate_segments_using_mock_proof");
+    info!("generate_partial_script; generate_segments_using_mock_proof");
     let segments = generate_segments_using_mock_proof(vk, false);
-    println!("generate_partial_script; partial_scripts_from_segments");
+    info!("generate_partial_script; partial_scripts_from_segments");
     let op_scripts: Vec<Script> = partial_scripts_from_segments(&segments)
         .into_iter()
         .collect();
@@ -82,11 +84,11 @@ pub(crate) fn append_bitcom_locking_script_to_partial_scripts(
     inpubkeys: PublicKeys,
     ops_scripts: Vec<bitcoin_script::Script>,
 ) -> Vec<bitcoin_script::Script> {
-    println!("append_bitcom_locking_script_to_partial_scripts; generage_segments_using_mock_vk_and_mock_proof");
+    info!("append_bitcom_locking_script_to_partial_scripts; generage_segments_using_mock_vk_and_mock_proof");
     // mock_vk can be used because generating locking_script doesn't depend upon values or partial scripts; it's only a function of pubkey and ordering of input/outputs
     let mock_segments = generate_segments_using_mock_vk_and_mock_proof();
 
-    println!("append_bitcom_locking_script_to_partial_scripts; bitcom_scripts_from_segments");
+    info!("append_bitcom_locking_script_to_partial_scripts; bitcom_scripts_from_segments");
     let bitcom_scripts: Vec<treepp::Script> =
         bitcom_scripts_from_segments(&mock_segments, inpubkeys)
             .into_iter()

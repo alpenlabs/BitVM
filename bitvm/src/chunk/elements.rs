@@ -230,7 +230,7 @@ impl DataType {
                 as_hints_scalarelemtype_u256data(*r)
             }
             _ => {
-                println!("Unhandled ElementType {:?} ", elem_type);
+                tracing::error!("Unhandled ElementType {:?} ", elem_type);
                 unreachable!();
             }
         }

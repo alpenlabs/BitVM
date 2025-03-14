@@ -11,6 +11,7 @@ use crate::signatures::wots_api::{wots256, wots_hash};
 use crate::treepp::*;
 use ark_bn254::Bn254;
 use ark_ec::bn::Bn;
+use tracing::info;
 
 use super::api_runtime_utils::{
     execute_script_from_assertion, get_pubkeys, get_signature_from_assertion,
@@ -192,7 +193,7 @@ pub fn api_generate_full_tapscripts(
     inpubkeys: PublicKeys,
     ops_scripts_per_link: &[Script],
 ) -> Vec<Script> {
-    println!("api_generate_full_tapscripts; append_bitcom_locking_script_to_partial_scripts");
+    info!("api_generate_full_tapscripts; append_bitcom_locking_script_to_partial_scripts");
     let taps_per_link =
         append_bitcom_locking_script_to_partial_scripts(inpubkeys, ops_scripts_per_link.to_vec());
     assert_eq!(ops_scripts_per_link.len(), taps_per_link.len());
@@ -215,7 +216,7 @@ pub fn generate_assertions(
     let exec_res = execute_script_from_assertion(&segments, assts);
 
     if let Some(fault) = exec_res {
-        println!(
+        tracing::warn!(
             "generate_assertions; execute_script_from_assertion return fault at script index {}",
             fault.0
         );
@@ -224,7 +225,7 @@ pub fn generate_assertions(
             fault.0
         ));
     } else {
-        println!("generate_assertions; validated assertion by executing all scripts");
+        info!("generate_assertions; validated assertion by executing all scripts");
     }
     Ok(assts)
 }
@@ -237,32 +238,32 @@ pub fn generate_signatures(
     vk: &ark_groth16::VerifyingKey<Bn254>,
     secrets: Vec<String>,
 ) -> Result<Signatures, String> {
-    println!("generate_signatures; get_segments_from_groth16_proof");
+    info!("generate_signatures; get_segments_from_groth16_proof");
     let (success, segments) = get_segments_from_groth16_proof(proof, scalars, vk);
     if !success {
         return Err(format!("generate_signatures; get_segments_from_groth16_proof; success false; num_aggregated segments {}", segments.len()));
     }
-    println!("generate_signatures; get_assertion_from_segments");
+    info!("generate_signatures; get_assertion_from_segments");
     let assn = get_assertion_from_segments(&segments);
-    println!("generate_signatures; get_signature_from_assertion");
+    info!("generate_signatures; get_signature_from_assertion");
     let sigs = get_signature_from_assertion(assn, secrets.clone());
-    println!("generate_signatures; get_pubkeys");
+    info!("generate_signatures; get_pubkeys");
     let pubkeys = get_pubkeys(secrets);
 
-    println!("generate_signatures; partial_scripts_from_segments");
+    info!("generate_signatures; partial_scripts_from_segments");
     let partial_scripts: Vec<Script> = partial_scripts_from_segments(&segments)
         .into_iter()
         .collect();
     let partial_scripts: [Script; NUM_TAPS] = partial_scripts.try_into().unwrap();
-    println!("generate_signatures; append_bitcom_locking_script_to_partial_scripts");
+    info!("generate_signatures; append_bitcom_locking_script_to_partial_scripts");
     let disprove_scripts =
         append_bitcom_locking_script_to_partial_scripts(pubkeys, partial_scripts.to_vec());
     let disprove_scripts: [Script; NUM_TAPS] = disprove_scripts.try_into().unwrap();
 
-    println!("generate_signatures; execute_script_from_signature");
+    info!("generate_signatures; execute_script_from_signature");
     let exec_res = execute_script_from_signature(&segments, sigs.clone(), &disprove_scripts);
     if let Some(fault) = exec_res {
-        println!(
+        tracing::warn!(
             "generate_signatures; execute_script_from_assertion return fault at script index {}",
             fault.0
         );
@@ -271,7 +272,7 @@ pub fn generate_signatures(
             fault.0
         ));
     } else {
-        println!("generate_signatures; validated assertion by executing all scripts");
+        info!("generate_signatures; validated assertion by executing all scripts");
     }
     Ok(sigs)
 }
@@ -286,14 +287,14 @@ pub fn validate_assertions(
     _inpubkeys: PublicKeys,
     disprove_scripts: &[Script; NUM_TAPS],
 ) -> Option<(usize, Script)> {
-    println!("validate_assertions; get_assertions_from_signature");
+    info!("validate_assertions; get_assertions_from_signature");
     let asserts = get_assertions_from_signature(signed_asserts.clone());
-    println!("validate_assertions; get_segments_from_assertion");
+    info!("validate_assertions; get_segments_from_assertion");
     let (success, segments) = get_segments_from_assertion(asserts, vk.clone());
     if !success {
-        println!("invalid tapscript at segment {}", segments.len());
+        tracing::warn!("invalid tapscript at segment {}", segments.len());
     }
-    println!("validate_assertions; execute_script_from_signature");
+    info!("validate_assertions; execute_script_from_signature");
     let exec_result = execute_script_from_signature(&segments, signed_asserts, disprove_scripts);
     assert_eq!(
         success,
@@ -313,45 +314,45 @@ pub fn generate_signatures_for_any_proof(
     vk: &ark_groth16::VerifyingKey<Bn254>,
     secrets: Vec<String>,
 ) -> Signatures {
-    println!("generate_signatures; get_segments_from_groth16_proof");
+    info!("generate_signatures; get_segments_from_groth16_proof");
     let (success, mut segments) = get_segments_from_groth16_proof(proof, scalars, vk);
     if segments.len() != NUM_PUBS + NUM_U256 + NUM_HASH + VALIDATING_TAPS {
         let mock_segments = generate_segments_using_mock_vk_and_mock_proof();
         segments.extend_from_slice(&mock_segments[segments.len()..]);
     }
 
-    println!(
+    info!(
         "generate_signatures; get_segments_from_groth16_proof {}",
         success
     );
-    println!("generate_signatures; segments len{}", segments.len());
-    println!("generate_signatures; get_assertion_from_segments");
+    info!("generate_signatures; segments len{}", segments.len());
+    info!("generate_signatures; get_assertion_from_segments");
     let assn = get_assertion_from_segments(&segments);
-    println!("generate_signatures; get_signature_from_assertion");
+    info!("generate_signatures; get_signature_from_assertion");
     let sigs = get_signature_from_assertion(assn, secrets.clone());
-    println!("generate_signatures; get_pubkeys");
+    info!("generate_signatures; get_pubkeys");
     let pubkeys = get_pubkeys(secrets);
 
-    println!("generate_signatures; partial_scripts_from_segments");
+    info!("generate_signatures; partial_scripts_from_segments");
     let partial_scripts: Vec<Script> = partial_scripts_from_segments(&segments)
         .into_iter()
         .collect();
     let partial_scripts: [Script; NUM_TAPS] = partial_scripts.try_into().unwrap();
-    println!("generate_signatures; append_bitcom_locking_script_to_partial_scripts");
+    info!("generate_signatures; append_bitcom_locking_script_to_partial_scripts");
     let disprove_scripts =
         append_bitcom_locking_script_to_partial_scripts(pubkeys, partial_scripts.to_vec());
     let disprove_scripts: [Script; NUM_TAPS] = disprove_scripts.try_into().unwrap();
 
-    println!("generate_signatures; execute_script_from_signature");
+    info!("generate_signatures; execute_script_from_signature");
     let exec_res = execute_script_from_signature(&segments, sigs.clone(), &disprove_scripts);
     if exec_res.is_some() {
         let fault = exec_res.unwrap();
-        println!(
+        tracing::warn!(
             "execute_script_from_assertion return fault at script index {}",
             fault.0
         );
     } else {
-        println!("generate_signatures; validated signatures by executing all scripts");
+        info!("generate_signatures; validated signatures by executing all scripts");
     }
     sigs
 }
@@ -376,6 +377,7 @@ mod test {
         read_asserts_from_file, read_scripts_from_file, write_asserts_to_file,
         write_scripts_to_file, write_scripts_to_separate_files,
     };
+    use tracing::info;
 
     use crate::{
         chunk::{
@@ -521,7 +523,7 @@ mod test {
 
     #[test]
     fn full_e2e_execution() {
-        println!("Use mock groth16 proof");
+        info!("Use mock groth16 proof");
         let vk_bytes = [
             115, 158, 251, 51, 106, 255, 102, 248, 22, 171, 229, 158, 80, 192, 240, 217, 99, 162,
             65, 107, 31, 137, 197, 79, 11, 210, 74, 65, 65, 203, 243, 14, 123, 2, 229, 125, 198,
@@ -586,7 +588,7 @@ mod test {
         let scalar: ark_bn254::Fr = ark_bn254::Fr::deserialize_uncompressed(&scalar[..]).unwrap();
         let scalars = [scalar];
 
-        println!("STEP 1 GENERATE TAPSCRIPTS");
+        info!("STEP 1 GENERATE TAPSCRIPTS");
         let secret_key: &str = "a138982ce17ac813d505a5b40b665d404e9528e7";
         let secrets = (0..NUM_PUBS + NUM_U256 + NUM_HASH)
             .map(|idx| format!("{secret_key}{:04x}", idx))
@@ -596,14 +598,14 @@ mod test {
         let partial_scripts = api_generate_partial_script(&vk);
         let disprove_scripts = api_generate_full_tapscripts(pubkeys, &partial_scripts);
 
-        println!("STEP 2 GENERATE SIGNED ASSERTIONS");
+        info!("STEP 2 GENERATE SIGNED ASSERTIONS");
         let proof_sigs =
             generate_signatures(proof, scalars.to_vec(), &vk, secrets.clone()).unwrap();
 
-        println!("num assertion; 256-bit numbers {}", NUM_PUBS + NUM_U256);
-        println!("num assertion; 160-bit numbers {}", NUM_HASH);
+        info!("num assertion; 256-bit numbers {}", NUM_PUBS + NUM_U256);
+        info!("num assertion; 160-bit numbers {}", NUM_HASH);
 
-        println!("STEP 3 CORRUPT AND DISPROVE SIGNED ASSERTIONS");
+        info!("STEP 3 CORRUPT AND DISPROVE SIGNED ASSERTIONS");
         let mut proof_asserts = get_assertions_from_signature(proof_sigs);
         corrupt_at_random_index(&mut proof_asserts);
         let corrupt_signed_asserts = get_signature_from_assertion(proof_asserts, secrets);
@@ -613,22 +615,22 @@ mod test {
             validate_assertions(&vk, corrupt_signed_asserts, pubkeys, &disprove_scripts);
         assert!(invalid_tap.is_some());
         let (index, hint_script) = invalid_tap.unwrap();
-        println!("STEP 4 EXECUTING DISPROVE SCRIPT at index {}", index);
+        info!("STEP 4 EXECUTING DISPROVE SCRIPT at index {}", index);
         let scr = script! {
             {hint_script.clone()}
             {disprove_scripts[index].clone()}
         };
         let res = execute_script(scr);
         if res.final_stack.len() > 1 {
-            println!("Stack ");
+            info!("Stack ");
             for i in 0..res.final_stack.len() {
-                println!("{i:} {:?}", res.final_stack.get(i));
+                info!("{i:} {:?}", res.final_stack.get(i));
             }
         }
 
         assert_eq!(res.final_stack.len(), 1);
         assert!(res.success);
-        println!("DONE");
+        info!("DONE");
 
         fn corrupt_at_random_index(proof_asserts: &mut Assertions) {
             let mut rng = rand::thread_rng();
@@ -637,7 +639,7 @@ mod test {
             scramble[32 / 2] = 37;
             let mut scramble2: [u8; BLAKE3_HASH_LENGTH] = [0u8; BLAKE3_HASH_LENGTH];
             scramble2[BLAKE3_HASH_LENGTH / 2] = 37;
-            println!("demo: manually corrupt assertion at index at {:?}", index);
+            info!("demo: manually corrupt assertion at index at {:?}", index);
             if index < NUM_PUBS {
                 if index == 0 {
                     if proof_asserts.0[0] == scramble {
@@ -728,7 +730,7 @@ mod test {
         let scalar: ark_bn254::Fr = ark_bn254::Fr::deserialize_uncompressed(&scalar[..]).unwrap();
         let scalars = [scalar];
 
-        println!("STEP 1 GENERATE TAPSCRIPTS");
+        info!("STEP 1 GENERATE TAPSCRIPTS");
         let secret_key: &str = "a138982ce17ac813d505a5b40b665d404e9528e7";
         let secrets = (0..NUM_PUBS + NUM_U256 + NUM_HASH)
             .map(|idx| format!("{secret_key}{:04x}", idx))
@@ -740,8 +742,8 @@ mod test {
         let disprove_scripts = api_generate_full_tapscripts(pubkeys, &partial_scripts);
         let disprove_scripts = disprove_scripts.try_into().unwrap();
 
-        println!("STEP 2 GENERATE SIGNED ASSERTIONS");
-        println!("corrupting proof for demo");
+        info!("STEP 2 GENERATE SIGNED ASSERTIONS");
+        info!("corrupting proof for demo");
         let mut incorrect_proof = proof.clone();
         let mut prng = ChaCha20Rng::seed_from_u64(0);
         incorrect_proof.a = ark_bn254::G1Affine::rand(&mut prng);
@@ -752,22 +754,22 @@ mod test {
         let invalid_tap = validate_assertions(&vk, proof_sigs, pubkeys, &disprove_scripts);
         assert!(invalid_tap.is_some());
         let (index, hint_script) = invalid_tap.unwrap();
-        println!("STEP 4 EXECUTING DISPROVE SCRIPT at index {}", index);
+        info!("STEP 4 EXECUTING DISPROVE SCRIPT at index {}", index);
         let scr = script! {
             {hint_script.clone()}
             {disprove_scripts[index].clone()}
         };
         let res = execute_script(scr);
         if res.final_stack.len() > 1 {
-            println!("Stack ");
+            info!("Stack ");
             for i in 0..res.final_stack.len() {
-                println!("{i:} {:?}", res.final_stack.get(i));
+                info!("{i:} {:?}", res.final_stack.get(i));
             }
         }
 
         assert_eq!(res.final_stack.len(), 1);
         assert!(res.success);
-        println!("DONE");
+        info!("DONE");
     }
     fn sign_assertions(assn: Assertions) -> Signatures {
         let (ps, fs, hs) = (assn.0, assn.1, assn.2);
@@ -858,7 +860,7 @@ mod test {
     #[test]
     #[ignore]
     fn test_fn_generate_tapscripts() {
-        println!("start");
+        info!("start");
 
         let vk_bytes = [
             115, 158, 251, 51, 106, 255, 102, 248, 22, 171, 229, 158, 80, 192, 240, 217, 99, 162,
@@ -897,7 +899,7 @@ mod test {
         let mock_vk: ark_groth16::VerifyingKey<Bn254> =
             ark_groth16::VerifyingKey::deserialize_uncompressed(&vk_bytes[..]).unwrap();
 
-        println!("compiled circuit");
+        info!("compiled circuit");
 
         assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1);
         let secrets = (0..NUM_PUBS + NUM_U256 + NUM_HASH)
@@ -907,7 +909,7 @@ mod test {
         let mock_pubs = get_pubkeys(secrets);
         let mut op_scripts = vec![];
 
-        println!("load scripts from file");
+        info!("load scripts from file");
         for index in 0..NUM_TAPS {
             let read =
                 read_scripts_from_file(&format!("bridge_data/chunker_data/tapnode_{index}.json"));
@@ -916,14 +918,14 @@ mod test {
             let tap_node = read_scr[0].clone();
             op_scripts.push(tap_node);
         }
-        println!("done");
+        info!("done");
 
         let ops_scripts: [Script; NUM_TAPS] = op_scripts.try_into().unwrap(); //compile_verifier(mock_vk);
 
         let tapscripts = api_generate_full_tapscripts(mock_pubs, &ops_scripts);
         assert_eq!(tapscripts.len(), NUM_TAPS);
         let tapscripts: [Script; NUM_TAPS] = tapscripts.try_into().unwrap();
-        println!(
+        info!(
             "tapscript.lens: {:?}",
             tapscripts.clone().map(|script| script.len())
         );
@@ -999,7 +1001,7 @@ mod test {
 
         assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1);
         let proof_asserts = generate_assertions(proof, public_inputs.to_vec(), &mock_vk).unwrap();
-        println!("signed_asserts {:?}", proof_asserts);
+        info!("signed_asserts {:?}", proof_asserts);
 
         std::fs::create_dir_all("bridge_data/chunker_data")
             .expect("Failed to create directory structure");
@@ -1081,7 +1083,7 @@ mod test {
             .collect::<Vec<String>>();
         let sigs = generate_signatures(proof, public_inputs.to_vec(), &mock_vk, secrets).unwrap();
         let proof_asserts = get_assertions_from_signature(sigs);
-        println!("signed_asserts {:?}", proof_asserts);
+        info!("signed_asserts {:?}", proof_asserts);
 
         std::fs::create_dir_all("bridge_data/chunker_data")
             .expect("Failed to create directory structure");
@@ -1159,7 +1161,7 @@ mod test {
         assert!(mock_vk.gamma_abc_g1.len() == NUM_PUBS + 1);
 
         let mut op_scripts = vec![];
-        println!("load scripts from file");
+        info!("load scripts from file");
         for index in 0..NUM_TAPS {
             let read =
                 read_scripts_from_file(&format!("bridge_data/chunker_data/tapnode_{index}.json"));
@@ -1168,7 +1170,7 @@ mod test {
             let tap_node = read_scr[0].clone();
             op_scripts.push(tap_node);
         }
-        println!("done");
+        info!("done");
         let ops_scripts: [Script; NUM_TAPS] = op_scripts.try_into().unwrap();
 
         let secrets = (0..NUM_PUBS + NUM_U256 + NUM_HASH)
@@ -1183,7 +1185,7 @@ mod test {
         let signed_asserts = sign_assertions(proof_asserts);
         //     let mock_pubks = mock_pubkeys(MOCK_SECRET);
 
-        println!("verify_signed_assertions");
+        info!("verify_signed_assertions");
         let fault = validate_assertions(&mock_vk, signed_asserts, mock_pubks, &verifier_scripts);
         assert!(fault.is_none());
     }
@@ -1258,7 +1260,7 @@ mod test {
         assert_eq!(mock_vk.gamma_abc_g1.len(), NUM_PUBS + 1);
 
         let mut op_scripts = vec![];
-        println!("load scripts from file");
+        info!("load scripts from file");
         for index in 0..NUM_TAPS {
             let read =
                 read_scripts_from_file(&format!("bridge_data/chunker_data/tapnode_{index}.json"));
@@ -1267,7 +1269,7 @@ mod test {
             let tap_node = read_scr[0].clone();
             op_scripts.push(tap_node);
         }
-        println!("done");
+        info!("done");
         let ops_scripts: [Script; NUM_TAPS] = op_scripts.try_into().unwrap();
 
         let secrets = (0..NUM_PUBS + NUM_U256 + NUM_HASH)
@@ -1288,7 +1290,7 @@ mod test {
             scramble[16] = 37;
             let mut scramble2: [u8; BLAKE3_HASH_LENGTH] = [0u8; BLAKE3_HASH_LENGTH];
             scramble2[BLAKE3_HASH_LENGTH / 2] = 37;
-            println!("corrupted assertion at index {}", index);
+            info!("corrupted assertion at index {}", index);
             if index < NUM_PUBS {
                 if index == 0 {
                     if proof_asserts.0[0] == scramble {
@@ -1313,7 +1315,7 @@ mod test {
 
         let _total = NUM_PUBS + NUM_U256 + NUM_HASH;
         for i in 0.._total {
-            println!("ITERATION {:?}", i);
+            info!("ITERATION {:?}", i);
             let mut proof_asserts = read_asserts_from_file("bridge_data/chunker_data/assert.json");
             corrupt(&mut proof_asserts, Some(i));
             let signed_asserts = sign_assertions(proof_asserts);
@@ -1323,14 +1325,14 @@ mod test {
             assert!(fault.is_some());
             if fault.is_some() {
                 let (index, hint_script) = fault.unwrap();
-                println!("taproot index {:?}", index);
+                info!("taproot index {:?}", index);
                 let scr = script! {
                     {hint_script.clone()}
                     {verifier_scripts[index].clone()}
                 };
                 let res = execute_script(scr);
                 for i in 0..res.final_stack.len() {
-                    println!("{i:} {:?}", res.final_stack.get(i));
+                    info!("{i:} {:?}", res.final_stack.get(i));
                 }
                 let mut disprove_map: HashMap<u32, Vec<Script>> = HashMap::new();
                 let disprove_f = &format!("bridge_data/chunker_data/disprove_{index}.json");

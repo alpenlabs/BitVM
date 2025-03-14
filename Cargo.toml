@@ -9,12 +9,14 @@ members = [
     "final-spv",
     "final-spv/final-spv-guest",
     "prover",
+    "common",
 ]
 
 default-members = [
     "bitvm",
     "bridge",
     "fuzz",
+    "common",
 ]
 
 [workspace.dependencies]
@@ -63,6 +65,9 @@ serial_test = "*"
 tqdm = "0.7"
 secp256k1 = { version = "0.29.1", features = ["global-context"]}
 derive_more = "2.0"
+bitvm-common = { path = "common" }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"]}
 
 [profile.dev]
 opt-level = 3
