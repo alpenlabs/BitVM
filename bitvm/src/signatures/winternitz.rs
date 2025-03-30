@@ -83,9 +83,27 @@ pub fn digit_signature(secret_key: &SecretKey, digit_index: u32, message_digit: 
     *hash.as_byte_array()
 }
 
+/// Returns the signature of a given digit (block), requires the digit index to modify the secret key for each digit
+pub fn digit_signature_with_secrets(secret_keys: Vec<SecretKey>, digit_index: u32, message_digit: u32) -> HashOut {
+    // let mut secret_i = secret_key.clone();
+    // secret_i.push(digit_index as u8);
+    let secret_i = secret_keys[digit_index as usize].clone();
+    let mut hash = hash160::Hash::hash(&secret_i);
+    for _ in 0..message_digit {
+        hash = hash160::Hash::hash(&hash[..]);
+    }
+    *hash.as_byte_array()
+}
+
+
 /// Returns the public key of a given digit (block), requires the digit index to modify the secret key for each digit
 fn public_key_for_digit(ps: &Parameters, secret_key: &SecretKey, digit_index: u32) -> HashOut {
     digit_signature(secret_key, digit_index, ps.d())
+}
+
+/// Returns the public key of a given digit (block), requires the digit index to modify the secret key for each digit
+fn public_key_for_digit_with_secrets(ps: &Parameters, secret_key: Vec<SecretKey>, digit_index: u32) -> HashOut {
+    digit_signature_with_secrets(secret_key, digit_index, ps.d())
 }
 
 /// Returns the public key for the given secret key and the parameters
@@ -93,6 +111,15 @@ pub fn generate_public_key(ps: &Parameters, secret_key: &SecretKey) -> PublicKey
     let mut public_key = PublicKey::with_capacity(ps.total_length() as usize);
     for i in 0..ps.total_length() {
         public_key.push(public_key_for_digit(ps, secret_key, i));
+    }
+    public_key
+}
+
+/// Returns the public key for the given secret key and the parameters
+pub fn generate_public_key_with_secrets(ps: &Parameters, secret_key: Vec<SecretKey>) -> PublicKey {
+    let mut public_key = PublicKey::with_capacity(ps.total_length() as usize);
+    for i in 0..ps.total_length() {
+        public_key.push(public_key_for_digit_with_secrets(ps, secret_key.clone(), i));
     }
     public_key
 }
@@ -132,6 +159,17 @@ pub trait Verifier {
         result
     }
     fn verify_digits(ps: &Parameters, public_key: &PublicKey) -> Script;
+
+    fn sign_digits_with_secrets(ps: &Parameters, secret_key: Vec<SecretKey>, digits: Vec<u32>) -> Witness {
+        let digits = add_message_checksum(ps, digits);
+        let mut result = Witness::new();
+        for i in 0..ps.total_length() {
+            let sig = digit_signature_with_secrets(secret_key.clone(), i, digits[i as usize]);
+            result.push(sig);
+            result.push(u32_to_le_bytes_minimal(digits[i as usize]));
+        }
+        result
+    }
 }
 
 /// This trait covers 2 converters for converting the final message (which is left in the form of blocks): `VoidConverter`, `ToBytesConverter`
@@ -177,9 +215,28 @@ impl<VERIFIER: Verifier, CONVERTER: Converter> Winternitz<VERIFIER, CONVERTER> {
         VERIFIER::sign_digits(ps, secret_key, digits)
     }
 
+    /// Wrapper to sign the digits
+    pub fn sign_digits_with_secrets(
+        &self,
+        ps: &Parameters,
+        secret_key: Vec<SecretKey>,
+        digits: Vec<u32>,
+    ) -> Witness {
+        VERIFIER::sign_digits_with_secrets(ps, secret_key, digits)
+    }
+
     /// Wrapper to sign the message in bytes (converts to digits inside)
     pub fn sign(&self, ps: &Parameters, secret_key: &SecretKey, message_bytes: &[u8]) -> Witness {
         VERIFIER::sign_digits(
+            ps,
+            secret_key,
+            bytes_to_u32s(ps.message_length, ps.block_length, message_bytes),
+        )
+    }
+
+    /// Wrapper to sign the message in bytes (converts to digits inside)
+    pub fn sign_with_secrets(&self, ps: &Parameters, secret_key: Vec<SecretKey>, message_bytes: &[u8]) -> Witness {
+        VERIFIER::sign_digits_with_secrets(
             ps,
             secret_key,
             bytes_to_u32s(ps.message_length, ps.block_length, message_bytes),
