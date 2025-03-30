@@ -221,4 +221,68 @@ mod test {
             );
         }
     }
+
+    fn sign_with_secrets(secret_keys: &[[u8; 20]; wots256::N_DIGITS as usize], msg: &[u8; 32]) -> [[u8;20]; wots256::N_DIGITS as usize] {
+        let sig_with_interleaving_msg = wots256::get_signature_with_secrets(*secret_keys, msg);
+        let msg_sig_compact: Vec<[u8; 20]> = sig_with_interleaving_msg.iter().map(|x| x.0).collect();
+        let msg_sig_compact: [[u8; 20]; wots256::N_DIGITS as usize] = msg_sig_compact.try_into().unwrap();
+        msg_sig_compact
+    }
+
+    #[test]
+    fn test_keags_sign() {
+        let mut prng = ChaCha20Rng::seed_from_u64(99);
+        let secret_keys: [[u8; 20]; 68] = [[1u8; 20]; 68];
+        let mut msg = [0u8; 32];
+        for i in 0..32 {
+            msg[i] = i as u8; //u8::rand(&mut prng);
+        }
+        let pub_key = wots256::generate_public_key_with_secrets(secret_keys);
+        let msg_sig_compact = sign_with_secrets(&secret_keys, &msg);
+
+        let scr = script!{
+            for preimage in msg_sig_compact {
+                {preimage.to_vec()}
+            }
+            {wots256::compact::checksig_verify(pub_key)}
+            {17} 
+        };
+
+        let res = execute_script(scr);
+        for i in 0..res.final_stack.len() {
+            println!("{i:3}: {:?}", res.final_stack.get(i));
+        }
+    }
+
+    #[test]
+    fn test_wots256_sig_to_byte_array_with_secrets() {
+        // wots sig to limbs
+        let mut prng = ChaCha20Rng::seed_from_u64(97);
+        let f = ark_bn254::Fq::rand(&mut prng);
+        let a: ark_ff::BigInt<4> = f.into();
+        let a = CompressedStateObject::U256(a);
+        let a_bytes = a.clone().serialize_to_byte_array();
+
+        let secrets: [[u8; 20]; 68] = [[0u8; 20]; 68];
+        let signature = wots256::get_signature_with_secrets(secrets, &a_bytes);
+
+        let msg_bytes = wots256_sig_to_byte_array(signature);
+        assert_eq!(msg_bytes, a_bytes);
+        let msg = CompressedStateObject::deserialize_from_byte_array(msg_bytes);
+        assert_eq!(a, msg);
+
+        let sig_witness = signature.to_compact_script();
+        let pub_key = WOTSPubKey::P256(wots256::generate_public_key_with_secrets(secrets));
+        let scr = script! {
+            {sig_witness}
+            {checksig_verify_to_limbs(&pub_key)}
+            {a.as_hint_type().push()}
+            {Fq::equalverify(1, 0)}
+            OP_TRUE
+        };
+        let tap_len = scr.len();
+        let res = execute_script(scr);
+        assert!(res.success && res.final_stack.len() == 1);
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+    }
 }

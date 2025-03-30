@@ -106,6 +106,18 @@ macro_rules! impl_wots {
                     raw_witness_to_signature(&sigs)
                 }
 
+                /// Generate a signature for a message using the provided secret.
+                pub fn get_signature_with_secrets(secrets: [[u8;20]; N_DIGITS as usize], msg_bytes: &[u8]) -> Signature {
+                    let secrets_vec = secrets.iter().map(|x| x.to_vec()).collect();
+                    let sigs = WINTERNITZ_MESSAGE_VERIFIER.sign_with_secrets(
+                        &PS,
+                        secrets_vec,
+                        &msg_bytes.to_vec(),
+                    );
+                    assert_eq!(sigs.len(), 2 * N_DIGITS as usize);
+                    raw_witness_to_signature(&sigs)
+                }
+
                 /// Generate a WOTS public key using the provided secret.
                 pub fn generate_public_key(secret: &str) -> PublicKey {
                     let secret_key = match hex::decode(secret) {
@@ -113,6 +125,13 @@ macro_rules! impl_wots {
                         Err(_) => panic!("Invalid hex string for secret"),
                     };
                     let pubkey_vec = winternitz::generate_public_key(&PS, &secret_key);
+                    pubkey_vec.try_into().unwrap()
+                }
+
+                /// Generate a WOTS public key using the provided secrets.
+                pub fn generate_public_key_with_secrets(secrets: [[u8; 20]; N_DIGITS as usize]) -> PublicKey {
+                    let secrets_vec = secrets.iter().map(|x| x.to_vec()).collect();
+                    let pubkey_vec = winternitz::generate_public_key_with_secrets(&PS, secrets_vec);
                     pubkey_vec.try_into().unwrap()
                 }
 
@@ -168,13 +187,24 @@ macro_rules! impl_wots {
                         assert_eq!(sigs.len(), N_DIGITS as usize);
                         raw_witness_to_signature(&sigs)
                     }
+
+                    pub fn get_signature_with_secrets(secrets: [[u8;20]; N_DIGITS as usize], msg_bytes: &[u8]) -> Signature {
+                        let secrets_vec = secrets.iter().map(|x| x.to_vec()).collect();
+                        let sigs = WINTERNITZ_MESSAGE_COMPACT_VERIFIER.sign_with_secrets(
+                            &PS,
+                            secrets_vec,
+                            &msg_bytes.to_vec(),
+                        );
+                        assert_eq!(sigs.len(), N_DIGITS as usize);
+                        raw_witness_to_signature(&sigs)
+                    }
                 }
             }
         }
     };
 }
 const BIGINT_LEN: u32 = 32;
-pub const HASH_LEN: u32 = 16; // bytes, can lower it to value like 16 or 13 lesser acceptable security
+pub const HASH_LEN: u32 = 20; // bytes, can lower it to value like 16 or 13 lesser acceptable security
 
 // Expand the macro for the two variants.
 impl_wots!(wots_hash, HASH_LEN);
