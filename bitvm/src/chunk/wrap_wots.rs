@@ -229,6 +229,16 @@ mod test {
         msg_sig_compact
     }
 
+    fn sign_with_secrets_large(secret_keys: &[[u8; 20]; wots256::N_DIGITS as usize], msg: &[u8; 32]) -> [([u8;20], u8); wots256::N_DIGITS as usize] {
+        let sig_with_interleaving_msg = wots256::get_signature_with_secrets(*secret_keys, msg);
+        sig_with_interleaving_msg
+    }
+
+    fn sign_with_secrets_compact(secret_keys: &[[u8; 20]; wots256::N_DIGITS as usize], msg: &[u8; 32]) -> [[u8;20]; wots256::N_DIGITS as usize] {
+        let msg_sig_compact = wots256::compact::get_signature_with_secrets(*secret_keys, msg);
+        msg_sig_compact
+    }
+
     #[test]
     fn test_keags_sign() {
         let mut prng = ChaCha20Rng::seed_from_u64(99);
@@ -239,6 +249,57 @@ mod test {
         }
         let pub_key = wots256::generate_public_key_with_secrets(secret_keys);
         let msg_sig_compact = sign_with_secrets(&secret_keys, &msg);
+
+        let scr = script!{
+            for preimage in msg_sig_compact {
+                {preimage.to_vec()}
+            }
+            {wots256::compact::checksig_verify(pub_key)}
+            {17} 
+        };
+
+        let res = execute_script(scr);
+        for i in 0..res.final_stack.len() {
+            println!("{i:3}: {:?}", res.final_stack.get(i));
+        }
+    }
+
+    #[test]
+    fn test_keags_sign_large() {
+        let mut prng = ChaCha20Rng::seed_from_u64(99);
+        let secret_keys: [[u8; 20]; 68] = [[1u8; 20]; 68];
+        let mut msg = [0u8; 32];
+        for i in 0..32 {
+            msg[i] = i as u8; //u8::rand(&mut prng);
+        }
+        let pub_key = wots256::generate_public_key_with_secrets(secret_keys);
+        let msg_sig_compact = sign_with_secrets_large(&secret_keys, &msg);
+
+        let scr = script!{
+            for (preimage, msg) in msg_sig_compact {
+                {preimage.to_vec()}
+                {msg}
+            }
+            {wots256::checksig_verify(pub_key)}
+            {17} 
+        };
+
+        let res = execute_script(scr);
+        for i in 0..res.final_stack.len() {
+            println!("{i:3}: {:?}", res.final_stack.get(i));
+        }
+    }
+
+    #[test]
+    fn test_keags_sign_compact() {
+        let mut prng = ChaCha20Rng::seed_from_u64(99);
+        let secret_keys: [[u8; 20]; 68] = [[1u8; 20]; 68];
+        let mut msg = [0u8; 32];
+        for i in 0..32 {
+            msg[i] = i as u8; //u8::rand(&mut prng);
+        }
+        let pub_key = wots256::generate_public_key_with_secrets(secret_keys);
+        let msg_sig_compact = sign_with_secrets_compact(&secret_keys, &msg);
 
         let scr = script!{
             for preimage in msg_sig_compact {
