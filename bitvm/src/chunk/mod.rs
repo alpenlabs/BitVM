@@ -1,5 +1,5 @@
 mod wrap_hasher;
-mod wrap_wots;
+pub mod wrap_wots;
 
 mod elements;
 mod helpers;
