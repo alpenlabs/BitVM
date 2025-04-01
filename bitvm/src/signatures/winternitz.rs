@@ -350,6 +350,17 @@ impl Verifier for BruteforceVerifier {
         }
         result
     }
+
+    fn sign_digits_with_secrets(ps: &Parameters, secret_key: Vec<SecretKey>, digits: Vec<u32>) -> Witness {
+        let digits = add_message_checksum(ps, digits);
+        let mut result = Witness::new();
+        for i in 0..ps.total_length() {
+            let sig = digit_signature_with_secrets(secret_key.clone(), i, digits[i as usize]);
+            result.push(sig);
+        }
+        result
+    }
+    
     /// Expects the signature in the verifier's format, checks and verifies if the given signature is accurate with the given public key, leaving the message (with checksum) on the stack in given order
     fn verify_digits(ps: &Parameters, public_key: &PublicKey) -> Script {
         script! {
