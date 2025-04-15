@@ -229,13 +229,12 @@ impl ConnectorC {
 
         let sigs = utils_signatures_from_raw_witnesses(&commit_witness);
         let pubs = utils_typed_pubkey_from_raw(sorted_pks);
-        let locs: Vec<bitcoin_script::builder::StructuredScript> = self
+        let locs: Vec<ScriptBuf> = self
             .lock_scripts_bytes
             .clone()
             .into_iter()
             .map(|f| {
-                bitcoin_script::builder::StructuredScript::new("")
-                    .push_script(ScriptBuf::from_bytes(f))
+                ScriptBuf::from_bytes(f)
             })
             .collect();
         let locs = locs.try_into().unwrap();
@@ -374,10 +373,10 @@ pub fn generate_assert_leaves(
     let default_proof = RawProof::default(); // mock a default proof to generate scripts
     let partial_scripts = api_generate_partial_script(&default_proof.vk);
     let pks: PublicKeys = utils_typed_pubkey_from_raw(sorted_pks);
-    let locks = api_generate_full_tapscripts(pks, &partial_scripts);
+    let locks =  api_generate_full_tapscripts(pks, &partial_scripts);
     let locks = locks
         .into_iter()
-        .map(|f| f.compile().into_bytes())
+        .map(|f| f.into_bytes())
         .collect();
     locks
 }
