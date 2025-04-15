@@ -43,7 +43,7 @@ pub(crate) struct Vkey {
 
 pub(crate) fn generate_partial_script(
     vk: &ark_groth16::VerifyingKey<Bn254>,
-) -> Vec<ScriptBuf> {
+) -> [ScriptBuf; NUM_TAPS] {
     info!("generate_partial_script");
     assert!(vk.gamma_abc_g1.len() == NUM_PUBS + 1);
 
@@ -74,7 +74,7 @@ pub(crate) fn generate_partial_script(
     let op_scripts: Vec<ScriptBuf> = partial_scripts_from_segments(&segments);
     assert_eq!(op_scripts.len(), NUM_TAPS);
 
-    op_scripts
+    op_scripts.try_into().unwrap()
 }
 
 // we can use mock_vk and mock_proof here because generating bitcommitments only requires knowledge
@@ -82,8 +82,8 @@ pub(crate) fn generate_partial_script(
 // we do not need values at the input or outputs of tapscript
 pub(crate) fn append_bitcom_locking_script_to_partial_scripts(
     inpubkeys: PublicKeys,
-    ops_scripts: Vec<ScriptBuf>,
-) -> Vec<ScriptBuf> {
+    ops_scripts: &[ScriptBuf; NUM_TAPS],
+) -> [ScriptBuf; NUM_TAPS] {
     info!("append_bitcom_locking_script_to_partial_scripts; generage_segments_using_mock_vk_and_mock_proof");
     // mock_vk can be used because generating locking_script doesn't depend upon values or partial scripts; it's only a function of pubkey and ordering of input/outputs
     let mock_segments = generate_segments_using_mock_vk_and_mock_proof();
@@ -99,11 +99,11 @@ pub(crate) fn append_bitcom_locking_script_to_partial_scripts(
         .into_iter()
         .zip(bitcom_scripts)
         .map(|(op_scr, bit_scr)| {
-            let joint_scr = bit_scr.push_script(op_scr);
+            let joint_scr = bit_scr.push_script(op_scr.clone());
             joint_scr.compile()
         })
         .collect();
-    res
+    res.try_into().unwrap()
 }
 
 fn generate_segments_using_mock_proof(vk: Vkey, skip_evaluation: bool) -> Vec<Segment> {

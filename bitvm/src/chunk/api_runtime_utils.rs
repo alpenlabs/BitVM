@@ -713,11 +713,9 @@ mod test {
             .collect::<Vec<String>>();
         let pubkeys = get_pubkeys(secrets);
         info!("execute_script_from_signature");
-        let partial_scripts: Vec<ScriptBuf> = partial_scripts_from_segments(&segments)
-            .into_iter()
-            .collect();
+        let partial_scripts: [ScriptBuf; NUM_TAPS] = partial_scripts_from_segments(&segments).try_into().unwrap();
         let disprove_scripts =
-            append_bitcom_locking_script_to_partial_scripts(pubkeys, partial_scripts.to_vec());
+            append_bitcom_locking_script_to_partial_scripts(pubkeys, &partial_scripts);
         let disprove_scripts: [ScriptBuf; NUM_TAPS] = disprove_scripts.try_into().unwrap();
 
         let res = execute_script_from_signature(&segments, signed_assts, &disprove_scripts);

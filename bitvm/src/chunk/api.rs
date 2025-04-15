@@ -176,7 +176,7 @@ pub mod type_conversion_utils {
 // Step 1
 // The function takes public parameters (here verifying key) and generates partial script
 // partial script is essentially disprove script minus the bitcommitment locking script
-pub fn api_generate_partial_script(vk: &ark_groth16::VerifyingKey<Bn254>) -> Vec<ScriptBuf> {
+pub fn api_generate_partial_script(vk: &ark_groth16::VerifyingKey<Bn254>) -> [ScriptBuf; NUM_TAPS] {
     generate_partial_script(vk)
 }
 
@@ -185,12 +185,12 @@ pub fn api_generate_partial_script(vk: &ark_groth16::VerifyingKey<Bn254>) -> Vec
 // it generates the complete disprove scripts
 pub fn api_generate_full_tapscripts(
     inpubkeys: PublicKeys,
-    ops_scripts_per_link: &[ScriptBuf],
-) -> Vec<ScriptBuf> {
+    ops_scripts_per_link: &[ScriptBuf; NUM_TAPS],
+) -> [ScriptBuf; NUM_TAPS] {
     info!("api_generate_full_tapscripts; append_bitcom_locking_script_to_partial_scripts");
     let taps_per_link =
-        append_bitcom_locking_script_to_partial_scripts(inpubkeys, ops_scripts_per_link.to_vec());
-    assert_eq!(ops_scripts_per_link.len(), taps_per_link.len());
+        append_bitcom_locking_script_to_partial_scripts(inpubkeys, ops_scripts_per_link);
+    assert_eq!(taps_per_link.len(), NUM_TAPS);
     taps_per_link
 }
 
@@ -249,7 +249,7 @@ pub fn generate_signatures(
     let partial_scripts: [ScriptBuf; NUM_TAPS] = partial_scripts.try_into().unwrap();
     info!("generate_signatures; append_bitcom_locking_script_to_partial_scripts");
     let disprove_scripts =
-        append_bitcom_locking_script_to_partial_scripts(pubkeys, partial_scripts.to_vec());
+        append_bitcom_locking_script_to_partial_scripts(pubkeys, &partial_scripts);
     let disprove_scripts: [ScriptBuf; NUM_TAPS] = disprove_scripts.try_into().unwrap();
 
     info!("generate_signatures; execute_script_from_signature");
@@ -332,7 +332,7 @@ pub fn generate_signatures_for_any_proof(
     let partial_scripts: [ScriptBuf; NUM_TAPS] = partial_scripts.try_into().unwrap();
     info!("generate_signatures; append_bitcom_locking_script_to_partial_scripts");
     let disprove_scripts =
-        append_bitcom_locking_script_to_partial_scripts(pubkeys, partial_scripts.to_vec());
+        append_bitcom_locking_script_to_partial_scripts(pubkeys, &partial_scripts);
     let disprove_scripts: [ScriptBuf; NUM_TAPS] = disprove_scripts.try_into().unwrap();
 
     info!("generate_signatures; execute_script_from_signature");
@@ -392,7 +392,6 @@ mod test {
         use crate::chunk::api::NUM_PUBS;
         use crate::chunk::api::NUM_U256;
         use crate::chunk::wrap_hasher::BLAKE3_HASH_LENGTH;
-        use crate::treepp::*;
         use bitcoin::ScriptBuf;
         use std::collections::HashMap;
         use std::error::Error;
