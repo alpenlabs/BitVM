@@ -1301,6 +1301,7 @@ mod test {
         }
 
         let _total = NUM_PUBS + NUM_U256 + NUM_HASH;
+        const RESERVED_SPACE: usize = 16000; // blockreservedweight=8000 + extra (8000)
         for i in 0.._total {
             info!("ITERATION {:?}", i);
             let mut proof_asserts = read_asserts_from_file("bridge_data/chunker_data/assert.json");
@@ -1312,8 +1313,11 @@ mod test {
             assert!(fault.is_some());
             if fault.is_some() {
                 let (index, hint_script) = fault.unwrap();
-                info!("taproot index {:?}", index);
-                let scr = hint_script.clone().push_script(verifier_scripts[index].clone());
+                println!("taproot index {:?}", index);
+                let scr = hint_script
+                    .clone()
+                    .push_script(verifier_scripts[index].clone());
+                assert!(scr.len() < 4_000_000 - RESERVED_SPACE);
                 let res = execute_script(scr);
                 for i in 0..res.final_stack.len() {
                     info!("{i:} {:?}", res.final_stack.get(i));
