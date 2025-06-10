@@ -187,8 +187,8 @@ pub fn api_generate_full_tapscripts(
 ) -> [ScriptBuf; NUM_TAPS] {
     info!("api_generate_full_tapscripts; append_bitcom_locking_script_to_partial_scripts");
     let taps_per_link =
-        append_bitcom_locking_script_to_partial_scripts(inpubkeys, ops_scripts_per_link.to_vec());
-    assert_eq!(ops_scripts_per_link.len(), taps_per_link.len());
+        append_bitcom_locking_script_to_partial_scripts(inpubkeys, ops_scripts_per_link);
+    assert_eq!(taps_per_link.len(), NUM_TAPS);
     taps_per_link
 }
 
@@ -243,12 +243,10 @@ pub fn generate_signatures(
     let pubkeys = get_pubkeys(secrets);
 
     info!("generate_signatures; partial_scripts_from_segments");
-    let partial_scripts: Vec<ScriptBuf> = partial_scripts_from_segments(&segments);
-    let partial_scripts: [ScriptBuf; NUM_TAPS] = partial_scripts.try_into().unwrap();
+    let partial_scripts: [ScriptBuf; NUM_TAPS] = partial_scripts_from_segments(&segments);
     info!("generate_signatures; append_bitcom_locking_script_to_partial_scripts");
     let disprove_scripts =
-        append_bitcom_locking_script_to_partial_scripts(pubkeys, partial_scripts.to_vec());
-    let disprove_scripts: [ScriptBuf; NUM_TAPS] = disprove_scripts.try_into().unwrap();
+        append_bitcom_locking_script_to_partial_scripts(pubkeys, &partial_scripts);
 
     info!("generate_signatures; execute_script_from_signature");
     let exec_res = execute_script_from_signature(&segments, sigs.clone(), &disprove_scripts);
@@ -330,8 +328,7 @@ pub fn generate_signatures_for_any_proof(
     let partial_scripts: [ScriptBuf; NUM_TAPS] = partial_scripts.try_into().unwrap();
     info!("generate_signatures; append_bitcom_locking_script_to_partial_scripts");
     let disprove_scripts =
-        append_bitcom_locking_script_to_partial_scripts(pubkeys, partial_scripts.to_vec());
-    let disprove_scripts: [ScriptBuf; NUM_TAPS] = disprove_scripts.try_into().unwrap();
+        append_bitcom_locking_script_to_partial_scripts(pubkeys, &partial_scripts);
 
     info!("generate_signatures; execute_script_from_signature");
     let exec_res = execute_script_from_signature(&segments, sigs.clone(), &disprove_scripts);

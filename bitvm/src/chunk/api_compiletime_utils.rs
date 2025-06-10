@@ -69,10 +69,9 @@ pub(crate) fn generate_partial_script(vk: &ark_groth16::VerifyingKey<Bn254>) -> 
     info!("generate_partial_script; generate_segments_using_mock_proof");
     let segments = generate_segments_using_mock_proof(vk, false);
     info!("generate_partial_script; partial_scripts_from_segments");
-    let op_scripts: Vec<ScriptBuf> = partial_scripts_from_segments(&segments);
-    assert_eq!(op_scripts.len(), NUM_TAPS);
+    let op_scripts: [ScriptBuf; NUM_TAPS] = partial_scripts_from_segments(&segments);
 
-    op_scripts.try_into().unwrap()
+    op_scripts
 }
 
 // we can use mock_vk and mock_proof here because generating bitcommitments only requires knowledge
@@ -80,7 +79,7 @@ pub(crate) fn generate_partial_script(vk: &ark_groth16::VerifyingKey<Bn254>) -> 
 // we do not need values at the input or outputs of tapscript
 pub(crate) fn append_bitcom_locking_script_to_partial_scripts(
     inpubkeys: PublicKeys,
-    ops_scripts: Vec<ScriptBuf>,
+    ops_scripts: &[ScriptBuf; NUM_TAPS],
 ) -> [ScriptBuf; NUM_TAPS] {
     info!("append_bitcom_locking_script_to_partial_scripts; generage_segments_using_mock_vk_and_mock_proof");
     // mock_vk can be used because generating locking_script doesn't depend upon values or partial scripts; it's only a function of pubkey and ordering of input/outputs
@@ -193,7 +192,7 @@ pub(crate) fn generate_segments_using_mock_vk_and_mock_proof() -> Vec<Segment> {
     generate_segments_using_mock_proof(mock_vk, true)
 }
 
-pub(crate) fn partial_scripts_from_segments(segments: &[Segment]) -> Vec<ScriptBuf> {
+pub(crate) fn partial_scripts_from_segments(segments: &[Segment]) -> [ScriptBuf; NUM_TAPS] {
     fn serialize_element_types(elems: &[ElementType]) -> String {
         // 1. Convert each variant to its string representation.
         let joined = elems
@@ -266,7 +265,7 @@ pub(crate) fn partial_scripts_from_segments(segments: &[Segment]) -> Vec<ScriptB
             );
         }
     }
-    op_scripts
+    op_scripts.try_into().unwrap()
 }
 
 pub(crate) fn bitcom_scripts_from_segments(
