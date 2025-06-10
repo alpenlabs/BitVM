@@ -15,11 +15,10 @@ use ark_ff::Field;
 use bitcoin::ScriptBuf;
 use bitcoin_script::script;
 use num_bigint::BigUint;
-use tracing::info;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::ops::Neg;
+use tracing::info;
 use treepp::Script;
-
 
 use super::api::PublicKeys;
 use super::g16_runner_core::{InputProof, PublicParams};
@@ -41,7 +40,9 @@ pub(crate) struct Vkey {
     pub(crate) vky0: ark_bn254::G1Affine,
 }
 
-pub(crate) fn generate_partial_script(vk: &ark_groth16::VerifyingKey<Bn254>) -> [ScriptBuf; NUM_TAPS] {
+pub(crate) fn generate_partial_script(
+    vk: &ark_groth16::VerifyingKey<Bn254>,
+) -> [ScriptBuf; NUM_TAPS] {
     info!("generate_partial_script");
     assert!(vk.gamma_abc_g1.len() == NUM_PUBS + 1);
 

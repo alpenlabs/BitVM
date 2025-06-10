@@ -727,7 +727,7 @@ pub fn sha256_stack(
 /// Returns a script that computes the SHA-256 hash of an input with the given number of bytes.
 /// Internally uses a nibble-based `StackTracker` approach for constructing the script.
 /// Uses full add table and full xor table for most script efficient variant.
-pub fn sha256_script(num_bytes: u32) -> Script{
+pub fn sha256_script(num_bytes: u32) -> Script {
     let mut stack = StackTracker::new();
     sha256_stack(&mut stack, num_bytes, true, true)
 }

@@ -77,7 +77,11 @@ pub fn digit_signature(secret_key: &SecretKey, digit_index: u32, message_digit: 
 }
 
 /// Returns the signature of a given digit, requires the digit index to modify the secret keys for each digit
-pub fn digit_signature_with_secrets(secret_keys: &[SecretKey], digit_index: u32, message_digit: u32) -> HashOut {
+pub fn digit_signature_with_secrets(
+    secret_keys: &[SecretKey],
+    digit_index: u32,
+    message_digit: u32,
+) -> HashOut {
     let secret_i = secret_keys[digit_index as usize].clone();
     let mut hash = hash160::Hash::hash(&secret_i);
     for _ in 0..message_digit {
@@ -92,7 +96,11 @@ fn public_key_for_digit(ps: &Parameters, secret_key: &SecretKey, digit_index: u3
 }
 
 /// Returns the public key of a given digit, requires the digit index to modify the secret kes for each digit
-fn public_key_for_digit_with_secrets(ps: &Parameters, secret_keys: &[SecretKey], digit_index: u32) -> HashOut {
+fn public_key_for_digit_with_secrets(
+    ps: &Parameters,
+    secret_keys: &[SecretKey],
+    digit_index: u32,
+) -> HashOut {
     digit_signature_with_secrets(secret_keys, digit_index, ps.max_digit())
 }
 
@@ -166,7 +174,11 @@ pub trait Verifier {
     }
 
     // sign_digits given secrets for each of the digits
-    fn sign_digits_with_secrets(ps: &Parameters, secret_keys: &[SecretKey], digits: Vec<u32>) -> Witness {
+    fn sign_digits_with_secrets(
+        ps: &Parameters,
+        secret_keys: &[SecretKey],
+        digits: Vec<u32>,
+    ) -> Witness {
         let digits = add_message_checksum(ps, digits);
         let mut result = Witness::new();
         for i in 0..ps.total_digit_len() {
@@ -270,7 +282,12 @@ impl<VERIFIER: Verifier, CONVERTER: Converter> Winternitz<VERIFIER, CONVERTER> {
     /// ## See
     ///
     /// [`Verifier::sign_digits_with_secrets`]
-    pub fn sign_with_secrets(&self, ps: &Parameters, secret_keys: &[SecretKey], message: &[u8]) -> Witness {
+    pub fn sign_with_secrets(
+        &self,
+        ps: &Parameters,
+        secret_keys: &[SecretKey],
+        message: &[u8],
+    ) -> Witness {
         VERIFIER::sign_digits_with_secrets(
             ps,
             secret_keys,
@@ -476,7 +493,11 @@ impl Verifier for BruteforceVerifier {
     }
 
     // Creates a Winternitz signature for the given `secret_keys` and `digits`
-    fn sign_digits_with_secrets(ps: &Parameters, secret_keys: &[SecretKey], message_digits: Vec<u32>) -> Witness {
+    fn sign_digits_with_secrets(
+        ps: &Parameters,
+        secret_keys: &[SecretKey],
+        message_digits: Vec<u32>,
+    ) -> Witness {
         let digits = add_message_checksum(ps, message_digits);
         let mut result = Witness::new();
         for i in 0..ps.total_digit_len() {

@@ -452,8 +452,8 @@ mod test {
     use ark_serialize::CanonicalDeserialize;
     use bitcoin_script::script;
     use num_bigint::BigUint;
-    use tracing::info;
     use std::{ops::Neg, str::FromStr};
+    use tracing::info;
 
     use crate::{
         bn254::ell_coeffs::BnAffinePairing,

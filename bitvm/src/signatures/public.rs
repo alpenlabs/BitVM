@@ -79,7 +79,8 @@ pub trait Wots {
 
     /// Generates a public key for the given `secret_keys`.
     fn generate_public_key_with_secrets(secret_keys: &[WinternitzSecret]) -> Self::PublicKey {
-        let pubkey_vec = winternitz::generate_public_key_with_secrets(&Self::PARAMETERS, secret_keys);
+        let pubkey_vec =
+            winternitz::generate_public_key_with_secrets(&Self::PARAMETERS, secret_keys);
         match Self::PublicKey::try_from(pubkey_vec) {
             Ok(public_key) => public_key,
             _ => unreachable!(),
@@ -104,7 +105,8 @@ pub trait Wots {
         message: &Self::Message,
     ) -> bitcoin::Witness {
         debug_assert_eq!(secret_keys.len(), Self::TOTAL_DIGIT_LEN as usize);
-        let witness = Self::ALGORITHM.sign_with_secrets(&Self::PARAMETERS, secret_keys, message.as_ref());
+        let witness =
+            Self::ALGORITHM.sign_with_secrets(&Self::PARAMETERS, secret_keys, message.as_ref());
         debug_assert_eq!(witness.len(), 2 * Self::TOTAL_DIGIT_LEN as usize);
         witness
     }
@@ -116,7 +118,10 @@ pub trait Wots {
     }
 
     /// Generates a signature for the given `secret_keys` and `message`.
-    fn sign_with_secrets(secret_keys: &[WinternitzSecret], message: &Self::Message) -> Self::Signature {
+    fn sign_with_secrets(
+        secret_keys: &[WinternitzSecret],
+        message: &Self::Message,
+    ) -> Self::Signature {
         let witness = Self::sign_to_raw_witness_with_secrets(secret_keys, message);
         Self::raw_witness_to_signature(&witness)
     }
@@ -264,7 +269,11 @@ pub trait CompactWots: Wots {
         message: &Self::Message,
     ) -> bitcoin::Witness {
         debug_assert_eq!(secret_keys.len(), Self::TOTAL_DIGIT_LEN as usize);
-        let witness = Self::COMPACT_ALGORITHM.sign_with_secrets(&Self::PARAMETERS, secret_keys, message.as_ref());
+        let witness = Self::COMPACT_ALGORITHM.sign_with_secrets(
+            &Self::PARAMETERS,
+            secret_keys,
+            message.as_ref(),
+        );
         debug_assert_eq!(witness.len(), Self::TOTAL_DIGIT_LEN as usize);
         witness
     }
