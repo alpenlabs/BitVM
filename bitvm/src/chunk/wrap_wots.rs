@@ -58,11 +58,12 @@ mod test {
             helpers::extern_hash_fps,
             wrap_wots::{checksig_verify_to_limbs, WOTSPubKey},
         },
-        execute_script,
+        execute_script, signatures::WinternitzSecret, 
     };
     use ark_ff::{Field, UniformRand};
     use bitcoin::hex::FromHex;
     use bitcoin_script::script;
+    use num_traits::ToBytes;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
@@ -102,6 +103,7 @@ mod test {
         assert!(res.success && res.final_stack.len() == 1);
         println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
     }
+
 
     #[test]
     fn test_wots_hash_sig_to_byte_array() {
@@ -178,4 +180,94 @@ mod test {
             );
         }
     }
+
+
+    #[test]
+    fn test_wots256_sig_to_byte_array_with_secrets() {
+        // wots sig to limbs
+        let mut prng = ChaCha20Rng::seed_from_u64(97);
+        let f = ark_bn254::Fq::rand(&mut prng);
+        let a: ark_ff::BigInt<4> = f.into();
+        let a = CompressedStateObject::U256(a);
+        let a_bytes: [u8; 32] = a
+            .clone()
+            .serialize_to_byte_array()
+            .try_into()
+            .expect("should be 32 bytes");
+
+        let msk =
+            Vec::from_hex("a138982ce17ac813d505a5b40b665d404e9528e7").expect("should be valid hex");
+        let secrets: Vec<WinternitzSecret> = (0..Wots32::TOTAL_DIGIT_LEN).into_iter().map(|a| {
+            let mut tmp = msk.clone();
+            tmp.extend_from_slice(&a.to_be_bytes());
+            tmp
+        }).collect();
+        let signature = Wots32::sign_with_secrets(&secrets, &a_bytes);
+
+        let msg_bytes = Wots32::signature_to_message(&signature);
+        assert_eq!(msg_bytes, a_bytes);
+        let msg = CompressedStateObject::deserialize_from_byte_array(msg_bytes.to_vec());
+        assert_eq!(a, msg);
+
+        let compact_signature_witness = Wots32::compact_sign_to_raw_witness_with_secrets(&secrets, &a_bytes);
+        let pub_key = WOTSPubKey::P256(Wots32::generate_public_key_with_secrets(&secrets));
+        let scr = script! {
+            {compact_signature_witness}
+            {checksig_verify_to_limbs(&pub_key)}
+            {a.as_hint_type().push()}
+            {Fq::equalverify(1, 0)}
+            OP_TRUE
+        };
+        let tap_len = scr.len();
+        let res = execute_script(scr);
+        assert!(res.success && res.final_stack.len() == 1);
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+    }
+
+    #[test]
+    fn test_wots_hash_sig_to_byte_array_with_secrets() {
+        // wots sig to limbs
+        let mut prng = ChaCha20Rng::seed_from_u64(97);
+        let a = ark_bn254::Fq6::rand(&mut prng);
+        let a = extern_hash_fps(
+            a.to_base_prime_field_elements()
+                .collect::<Vec<ark_bn254::Fq>>(),
+        );
+        let a = CompressedStateObject::Hash(a);
+        let a_bytes: [u8; 16] = a
+            .clone()
+            .serialize_to_byte_array()
+            .try_into()
+            .expect("should be 16 bytes");
+
+        let msk =
+            Vec::from_hex("a138982ce17ac813d505a5b40b665d404e9528e7").expect("should be valid hex");
+        let secrets: Vec<WinternitzSecret> = (0..Wots16::TOTAL_DIGIT_LEN).into_iter().map(|a| {
+            let mut tmp = msk.clone();
+            tmp.extend_from_slice(&a.to_be_bytes());
+            tmp
+        }).collect();
+
+        let signature = Wots16::sign_with_secrets(&secrets, &a_bytes);
+        let msg_bytes = Wots16::signature_to_message(&signature);
+        assert_eq!(msg_bytes, a_bytes);
+        let msg = CompressedStateObject::deserialize_from_byte_array(msg_bytes.to_vec());
+        assert_eq!(a, msg);
+
+        let compact_signature_witness = Wots16::compact_sign_to_raw_witness_with_secrets(&secrets, &a_bytes);
+        let pub_key = WOTSPubKey::PHash(Wots16::generate_public_key_with_secrets(&secrets));
+        let scr = script! {
+            {compact_signature_witness}
+            {checksig_verify_to_limbs(&pub_key)}
+            {a.as_hint_type().push()}
+            {Fq::equalverify(1, 0)}
+            OP_TRUE
+        };
+        let tap_len = scr.len();
+        let res = execute_script(scr);
+        assert!(res.success && res.final_stack.len() == 1);
+        println!("script {} stack {}", tap_len, res.stats.max_nb_stack_items);
+    }
+
+
 }

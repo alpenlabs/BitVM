@@ -76,9 +76,24 @@ pub fn digit_signature(secret_key: &SecretKey, digit_index: u32, message_digit: 
     *hash.as_byte_array()
 }
 
+/// Returns the signature of a given digit, requires the digit index to modify the secret keys for each digit
+pub fn digit_signature_with_secrets(secret_keys: &[SecretKey], digit_index: u32, message_digit: u32) -> HashOut {
+    let secret_i = secret_keys[digit_index as usize].clone();
+    let mut hash = hash160::Hash::hash(&secret_i);
+    for _ in 0..message_digit {
+        hash = hash160::Hash::hash(&hash[..]);
+    }
+    *hash.as_byte_array()
+}
+
 /// Returns the public key of a given digit, requires the digit index to modify the secret key for each digit
 fn public_key_for_digit(ps: &Parameters, secret_key: &SecretKey, digit_index: u32) -> HashOut {
     digit_signature(secret_key, digit_index, ps.max_digit())
+}
+
+/// Returns the public key of a given digit, requires the digit index to modify the secret kes for each digit
+fn public_key_for_digit_with_secrets(ps: &Parameters, secret_keys: &[SecretKey], digit_index: u32) -> HashOut {
+    digit_signature_with_secrets(secret_keys, digit_index, ps.max_digit())
 }
 
 /// Returns the public key for the given secret key and the parameters
@@ -86,6 +101,15 @@ pub fn generate_public_key(ps: &Parameters, secret_key: &SecretKey) -> PublicKey
     let mut public_key = PublicKey::with_capacity(ps.total_digit_len() as usize);
     for i in 0..ps.total_digit_len() {
         public_key.push(public_key_for_digit(ps, secret_key, i));
+    }
+    public_key
+}
+
+/// Returns the public key for the given secret key and the parameters
+pub fn generate_public_key_with_secrets(ps: &Parameters, secret_keys: &[SecretKey]) -> PublicKey {
+    let mut public_key = PublicKey::with_capacity(ps.total_digit_len() as usize);
+    for i in 0..ps.total_digit_len() {
+        public_key.push(public_key_for_digit_with_secrets(ps, &secret_keys, i));
     }
     public_key
 }
@@ -135,6 +159,18 @@ pub trait Verifier {
             // FIXME: Do trailing zeroes violate Bitcoin Script's minimum data push requirement?
             //        Maybe the script! macro removes the zeroes.
             //        There is a 1/256 chance that a signature contains a trailing zero.
+            result.push(sig);
+            result.push(u32_to_le_bytes_minimal(digits[i as usize]));
+        }
+        result
+    }
+
+    // sign_digits given secrets for each of the digits
+    fn sign_digits_with_secrets(ps: &Parameters, secret_keys: &[SecretKey], digits: Vec<u32>) -> Witness {
+        let digits = add_message_checksum(ps, digits);
+        let mut result = Witness::new();
+        for i in 0..ps.total_digit_len() {
+            let sig = digit_signature_with_secrets(secret_keys, i, digits[i as usize]);
             result.push(sig);
             result.push(u32_to_le_bytes_minimal(digits[i as usize]));
         }
@@ -223,6 +259,21 @@ impl<VERIFIER: Verifier, CONVERTER: Converter> Winternitz<VERIFIER, CONVERTER> {
         VERIFIER::sign_digits(
             ps,
             secret_key,
+            message_to_digits(ps.message_digit_len, ps.log2_base, message),
+        )
+    }
+
+    /// Creates a Winternitz signature for the given `secret_keys` and `message`.
+    ///
+    /// The message is internally converted into digits.
+    ///
+    /// ## See
+    ///
+    /// [`Verifier::sign_digits_with_secrets`]
+    pub fn sign_with_secrets(&self, ps: &Parameters, secret_keys: &[SecretKey], message: &[u8]) -> Witness {
+        VERIFIER::sign_digits_with_secrets(
+            ps,
+            secret_keys,
             message_to_digits(ps.message_digit_len, ps.log2_base, message),
         )
     }
@@ -419,6 +470,17 @@ impl Verifier for BruteforceVerifier {
         let mut result = Witness::new();
         for i in 0..ps.total_digit_len() {
             let sig = digit_signature(secret_key, i, digits[i as usize]);
+            result.push(sig);
+        }
+        result
+    }
+
+    // Creates a Winternitz signature for the given `secret_keys` and `digits`
+    fn sign_digits_with_secrets(ps: &Parameters, secret_keys: &[SecretKey], message_digits: Vec<u32>) -> Witness {
+        let digits = add_message_checksum(ps, message_digits);
+        let mut result = Witness::new();
+        for i in 0..ps.total_digit_len() {
+            let sig = digit_signature_with_secrets(secret_keys, i, digits[i as usize]);
             result.push(sig);
         }
         result
