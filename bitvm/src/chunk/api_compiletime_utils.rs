@@ -41,7 +41,7 @@ pub(crate) struct Vkey {
     pub(crate) vky0: ark_bn254::G1Affine,
 }
 
-pub(crate) fn generate_partial_script(vk: &ark_groth16::VerifyingKey<Bn254>) -> Vec<ScriptBuf> {
+pub(crate) fn generate_partial_script(vk: &ark_groth16::VerifyingKey<Bn254>) -> [ScriptBuf; NUM_TAPS] {
     info!("generate_partial_script");
     assert!(vk.gamma_abc_g1.len() == NUM_PUBS + 1);
 
@@ -72,7 +72,7 @@ pub(crate) fn generate_partial_script(vk: &ark_groth16::VerifyingKey<Bn254>) -> 
     let op_scripts: Vec<ScriptBuf> = partial_scripts_from_segments(&segments);
     assert_eq!(op_scripts.len(), NUM_TAPS);
 
-    op_scripts
+    op_scripts.try_into().unwrap()
 }
 
 // we can use mock_vk and mock_proof here because generating bitcommitments only requires knowledge
@@ -81,7 +81,7 @@ pub(crate) fn generate_partial_script(vk: &ark_groth16::VerifyingKey<Bn254>) -> 
 pub(crate) fn append_bitcom_locking_script_to_partial_scripts(
     inpubkeys: PublicKeys,
     ops_scripts: Vec<ScriptBuf>,
-) -> Vec<ScriptBuf> {
+) -> [ScriptBuf; NUM_TAPS] {
     info!("append_bitcom_locking_script_to_partial_scripts; generage_segments_using_mock_vk_and_mock_proof");
     // mock_vk can be used because generating locking_script doesn't depend upon values or partial scripts; it's only a function of pubkey and ordering of input/outputs
     let mock_segments = generate_segments_using_mock_vk_and_mock_proof();
@@ -102,7 +102,7 @@ pub(crate) fn append_bitcom_locking_script_to_partial_scripts(
             ScriptBuf::from_bytes(full_script_bytes)
         })
         .collect();
-    res
+    res.try_into().unwrap()
 }
 
 fn generate_segments_using_mock_proof(vk: Vkey, skip_evaluation: bool) -> Vec<Segment> {
