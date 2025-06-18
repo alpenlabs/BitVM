@@ -1,3 +1,5 @@
+#![expect(incomplete_features)]
+#![feature(generic_const_exprs)]
 #[allow(dead_code)]
 // Re-export what is needed to write treepp scripts
 pub mod treepp {

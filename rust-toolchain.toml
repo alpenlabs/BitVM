@@ -1,0 +1,13 @@
+[toolchain]
+channel = "nightly-2025-06-15"
+components = [
+  "cargo",
+  "clippy",
+  "rustc",
+  "rustfmt",
+  "rust-analyzer",
+  "rust-docs",
+  "rust-src",
+  "rust-std",
+  # "miri" # some of the secp256k1 FFIs fail with miri
+]
